@@ -1,0 +1,1076 @@
+HAVOC USERBOT — MASTER ENGINEERING SPECIFICATION
+
+Version 2.0 | 100 Feature Areas | English + Farsi
+
+---
+
+1. PROJECT MISSION
+
+You are an autonomous senior software engineer, Python architect, Telegram API specialist, QA engineer, and technical writer working inside my connected GitHub repository.
+
+Your mission is to build HAVOC, a powerful, modular, intelligent, highly customizable Telegram userbot that operates on my own Telegram account.
+
+HAVOC should feel like a complete personal Telegram operating system rather than a collection of unrelated commands. It should understand context, detect relevant events, automate repetitive tasks, manage information, help me communicate, and adapt to my preferences.
+
+The project must support English and Farsi (Persian) as first-class languages. This applies to commands, help messages, automatic responses, notifications, errors, configuration descriptions, and the user interface presented through Telegram messages.
+
+The goal is a comprehensive, reliable application that can grow over time without requiring a rewrite whenever I want another feature.
+
+Your responsibilities
+
+1. Inspect my connected GitHub repository before making changes.
+2. Understand its existing code, dependencies, branches, conventions, and project structure.
+3. Preserve useful existing work.
+4. Design the architecture and implementation plan.
+5. Implement the features directly in the repository.
+6. Run tests and fix discovered problems.
+7. Document installation, configuration, usage, security, and troubleshooting.
+8. Report what actually works and what remains incomplete.
+
+Do not merely give me a plan, generate a giant untested script, or claim that something works without verifying it. Make real progress in the available environment and continue until the implementation is as complete as practical.
+
+---
+
+2. NON-NEGOTIABLE REQUIREMENTS
+
+- Language: Python 3.11+.
+- Telegram library: Telethon, unless the existing repository has a compelling compatible reason to use another MTProto client.
+- Storage: SQLite initially, with a clean database abstraction that can support another backend later.
+- Asynchronous architecture using asyncio.
+- Testing: pytest.
+- Configuration through environment variables and a local ".env" file.
+- Modular features, reusable utilities, structured logging, and centralized command registration.
+- Full English and Farsi support.
+- Automatic language, message-type, and event detection where appropriate.
+- Reliable persistence across restarts.
+- Sensible security defaults and clear error messages.
+- No secrets committed to Git.
+- Optional AI services must never be mandatory for basic functionality.
+- No paid API should be required for core features.
+- Never replace working functionality with stubs just to claim a feature is complete.
+- Never silently swallow errors that should be reported or investigated.
+- Do not overwrite existing repository content blindly.
+
+This is a userbot for my own Telegram account, not merely a Bot API bot. Implement account authentication appropriately and explain the permissions and risks involved.
+
+Do not implement unsolicited mass messaging, spam campaigns, credential theft, session theft, hidden surveillance, or mechanisms intended to evade Telegram's enforcement systems. Respect Telegram's API rules, flood limits, privacy boundaries, and access controls.
+
+---
+
+3. LANGUAGE AND LOCALIZATION SYSTEM
+
+This is one of the most important requirements.
+
+HAVOC must be bilingual throughout the application, not just translate the help command.
+
+Language requirements
+
+- English ("en").
+- Farsi/Persian ("fa").
+- Automatic language detection.
+- Manual language selection.
+- Per-chat language preferences where appropriate.
+- Per-feature language preferences.
+- User-configurable fallback language.
+- Mixed English/Farsi message handling.
+- Persian-aware text formatting.
+- Proper right-to-left display where supported.
+- Language-aware dates, numbers, and notifications.
+
+Language detection
+
+HAVOC should attempt to detect whether a message is primarily English, Farsi, another supported language, or mixed-language text.
+
+Use a local detection library or a lightweight heuristic where practical. Do not require an AI API for basic language identification.
+
+Detection should consider:
+
+- Persian/Arabic Unicode character ranges.
+- English Latin characters.
+- Text length and confidence.
+- Mixed-language messages.
+- Emojis and punctuation.
+- Messages that contain too little text to classify reliably.
+
+Do not misclassify every message containing one Persian character as Farsi. Use confidence thresholds and preserve the configured fallback when uncertain.
+
+Localization architecture
+
+All user-facing strings should be stored in a centralized localization system rather than scattered throughout feature code.
+
+Provide:
+
+- Translation dictionaries or structured locale files.
+- Translation keys.
+- English fallback for missing translations.
+- Variable interpolation with validation.
+- Pluralization support where needed.
+- Consistent terminology across commands.
+- A localization validation test that detects missing keys.
+- Documentation explaining how to add another language later.
+
+Avoid duplicating entire feature implementations for different languages. One implementation should support multiple locales.
+
+Persian-specific requirements
+
+- Correct Unicode handling.
+- Right-to-left-friendly output.
+- Proper display of Persian text beside English words, numbers, IDs, and URLs.
+- Avoid corrupting punctuation or reversing text incorrectly.
+- Use Persian-friendly date and number formatting where appropriate.
+- Support Persian digits and standard Latin digits.
+- Do not forcibly convert digits unless configured.
+- Preserve original message text during translation or formatting.
+- Test mixed text containing Persian, English, URLs, emojis, and code.
+
+Language commands
+
+Provide commands such as:
+
+- ".lang"
+- ".lang en"
+- ".lang fa"
+- ".lang auto"
+- ".lang status"
+
+Equivalent Persian command aliases or localized command descriptions should be available.
+
+Example:
+
+English:
+"Language changed to English."
+
+Farsi:
+"زبان برنامه به فارسی تغییر کرد."
+
+These are examples of intended behavior, not hard-coded output for every situation.
+
+---
+
+4. AUTOMATIC DETECTION AND CONTEXT ENGINE
+
+HAVOC must proactively detect relevant events and information without turning into an uncontrolled automation engine.
+
+Build a centralized detection pipeline. Features should subscribe to structured events instead of each module independently implementing overlapping message handlers.
+
+Detection capabilities
+
+HAVOC should be able to detect, when supported by available Telegram data:
+
+- Incoming messages.
+- Outgoing messages.
+- Edited messages.
+- Deleted-message events where Telegram actually exposes them.
+- New private conversations.
+- Group messages.
+- Channel posts accessible to the account.
+- Replies and reply chains.
+- Mentions of the account.
+- Direct replies to the account.
+- Message forwarding metadata.
+- Media and attachment types.
+- Links and URLs.
+- Telegram usernames and supported identifiers.
+- Hashtags and command-like text.
+- English and Farsi text.
+- Mixed-language text.
+- Keywords and configured phrases.
+- Repeated messages and duplicate events.
+- Potential message loops.
+- Messages containing likely dates or times.
+- Messages containing reminder-like requests.
+- Potentially urgent messages based on configurable keywords.
+- Configured notification keywords.
+- Changes to accessible chat metadata.
+- Scheduled-job deadlines.
+- Scheduler failures.
+- Network disconnects and reconnects.
+- API rate-limit errors.
+- Invalid configuration.
+- Database errors.
+- Feature-specific failures.
+- Unusual bursts of events that could overload the application.
+
+Do not claim that Telegram exposes data it does not provide. Deleted messages, read receipts, online status, edit history, and other events have API-specific limitations. Document those limitations.
+
+Detection architecture
+
+Every detected event should be normalized into an internal event object containing only the fields needed by subscribers, such as:
+
+- Event type.
+- Chat identifier.
+- Sender identifier when available.
+- Message identifier.
+- Timestamp.
+- Language estimate.
+- Message type.
+- Relevant text, only where required.
+- Detection confidence.
+- Correlation or deduplication identifier.
+
+Keep sensitive information out of diagnostic logs.
+
+The detection engine should support:
+
+- Priorities.
+- Event filtering.
+- Per-feature subscriptions.
+- Deduplication.
+- Cooldowns.
+- Per-chat configuration.
+- Global feature switches.
+- Error isolation.
+- Debug mode.
+- Metrics and diagnostics.
+- Safe shutdown.
+
+Detection must not automatically imply permission to act. For example, detecting a keyword may generate a notification, but it must not automatically send a message unless the corresponding feature is explicitly configured.
+
+---
+
+5. ARCHITECTURE AND REPOSITORY STRUCTURE
+
+Adapt the existing repository rather than forcing an arbitrary structure onto it.
+
+A possible architecture:
+
+havoc/
+  __init__.py
+  main.py
+  config.py
+  client.py
+  database.py
+  migrations.py
+  command_registry.py
+  localization.py
+  language_detection.py
+  event_engine.py
+  scheduler.py
+  permissions.py
+  logging_setup.py
+  feature_manager.py
+  health.py
+
+  features/
+    profile/
+    auto_reply/
+    scheduled_messages/
+    fight_mode/
+    translation/
+    notifications/
+    search/
+    reactions/
+    triggers/
+    reminders/
+    bookmarks/
+    media/
+    formatting/
+    utilities/
+    backup/
+    plugins/
+    analytics/
+    chat_management/
+
+  services/
+    ai_provider.py
+    translation_provider.py
+    storage.py
+    rate_limiter.py
+    cache.py
+
+  utils/
+    text.py
+    time.py
+    parsing.py
+    formatting.py
+    validation.py
+    security.py
+
+  locales/
+    en.json
+    fa.json
+
+tests/
+docs/
+scripts/
+.github/workflows/
+.env.example
+.gitignore
+README.md
+pyproject.toml
+
+This is a reference architecture, not a requirement to create empty directories for every item. Only create components that serve a real purpose.
+
+Engineering principles
+
+- Prefer small, cohesive modules.
+- Avoid circular imports.
+- Use dependency injection where practical.
+- Keep Telegram handlers thin.
+- Put reusable logic in services.
+- Centralize database access.
+- Centralize localization.
+- Centralize rate limiting.
+- Centralize command registration.
+- Separate detection from action.
+- Separate configuration from business logic.
+- Make modules testable without logging into Telegram.
+- Use explicit interfaces and type hints.
+- Avoid giant files and unnecessary abstractions.
+
+---
+
+6. FEATURE CATALOGUE: 100 FEATURE AREAS
+
+Implement these features as integrated modules. Some may share infrastructure, but each feature must have documented behavior, clear configuration, error handling, and appropriate tests.
+
+A. Core infrastructure
+
+1. Telegram account authentication
+
+Implement Telethon login using API credentials, phone number, verification code, and 2FA when required. Support safe session reuse, session validation, recovery instructions, and graceful logout.
+
+2. Modular command registry
+
+Register commands with descriptions, categories, usage examples, aliases, localized help text, argument parsing, and feature ownership. Avoid a massive chain of conditionals.
+
+3. Automatic language detection
+
+Detect English, Farsi, mixed-language text, and uncertain input. Use confidence thresholds and a configurable fallback.
+
+4. Complete localization system
+
+Translate command responses, errors, help, notifications, status output, and setup guidance into English and Farsi.
+
+5. Event detection engine
+
+Normalize Telegram events into structured internal events and route them to interested modules.
+
+6. Persistent settings
+
+Store feature settings, language preferences, command prefix, cooldowns, and other preferences in SQLite.
+
+7. Feature manager
+
+Enable, disable, inspect, and configure features individually. Support a global emergency stop.
+
+8. Persistent scheduler
+
+Run delayed and recurring jobs with timezone support, stored execution state, retries where appropriate, and duplicate prevention.
+
+9. Centralized rate limiter
+
+Use configurable per-operation cooldowns and safe handling of Telegram FloodWait responses.
+
+10. Health and diagnostics service
+
+Track uptime, database health, active jobs, reconnects, recent sanitized errors, and feature status.
+
+B. Profile and account customization
+
+11. Live profile clock
+
+".clock on/off/status" optionally updates the profile name with a configurable clock and timezone. Save and restore the original name. Use conservative intervals and default OFF.
+
+12. Dynamic bio
+
+Create rotating or scheduled bio text, with preview, enable, disable, and reset commands. Preserve the original bio when possible.
+
+13. Profile presets
+
+Save and apply named combinations of profile name, bio, and supported settings. List and delete presets, with confirmation before overwriting current values.
+
+14. Profile scheduler
+
+Schedule profile changes for specific times, weekdays, and timezones. Persist jobs across restarts.
+
+15. Custom profile counters
+
+Display configurable counters in supported profile fields, with increment, reset, and status commands. Validate limits and avoid excessively frequent profile edits.
+
+16. Status rotation
+
+Rotate among configured statuses, short descriptions, or profile presets according to a schedule.
+
+17. Original profile restoration
+
+Keep safe snapshots of profile values changed by HAVOC and provide a command to restore them.
+
+18. Profile change history
+
+Record the time and reason for profile changes initiated by HAVOC, without recording secrets.
+
+19. Profile change safeguards
+
+Prevent invalid lengths, repeated updates, accidental overwrites, and uncontrolled API requests.
+
+20. Profile preview
+
+Preview the proposed name, bio, or preset before applying it.
+
+C. Messaging and communication
+
+21. Smart auto-replies
+
+Configure exact or keyword triggers, responses, per-chat rules, language preferences, cooldowns, and allow/deny lists. Prevent loops and ignore the account's own outgoing messages.
+
+22. Away mode
+
+Set an away message and optional reason. Support language-aware responses, exclusions, per-person cooldowns, and status commands.
+
+23. Scheduled messages
+
+Schedule one-time or recurring messages. List, cancel, and edit jobs where practical. Track execution state to prevent duplicates.
+
+24. Message templates
+
+Save reusable messages by name, preview them, edit them, and send them with validated placeholders such as "{name}", "{date}", and "{time}".
+
+25. Contextual message suggestions
+
+Offer draft replies based on the replied-to message, selected language, and configured tone. Never send automatically unless the user explicitly enables a safe, narrowly scoped rule.
+
+26. Reply helper
+
+Generate several concise response options for a replied-to message, such as friendly, formal, funny, supportive, or direct.
+
+27. Fight Mode
+
+".fight" on a replied-to message generates a contextual comeback. Include sarcastic, dry, clever, playful, dramatic, and blunt styles, configurable intensity, optional AI integration, and offline fallback templates. Show a preview before sending. Avoid threats, targeted slurs, private information, and genuinely dangerous harassment.
+
+28. Language-aware replies
+
+Choose English or Farsi based on the incoming message, chat preference, or configured default. Handle mixed-language input sensibly.
+
+29. Reaction shortcuts
+
+Configure phrase- or event-based reactions with cooldowns, chat scopes, duplicate prevention, and supported-reaction validation.
+
+30. Message formatting toolkit
+
+Format text as bold, italic, monospace, quotes, and spoilers where supported. Escape content correctly and preserve Persian text.
+
+D. Detection and automation
+
+31. Keyword notifications
+
+Watch configured words or phrases and send private notifications to Saved Messages or another explicitly configured destination.
+
+32. Mention detection
+
+Detect accessible messages mentioning the account and optionally summarize or notify about them. Respect Telegram event availability.
+
+33. Reply detection
+
+Detect replies to the account and optionally notify, categorize, or prepare a draft response.
+
+34. Message edit detection
+
+Detect accessible edit events and optionally notify about changes. Do not promise access to complete historical versions.
+
+35. Media-type detection
+
+Recognize photos, videos, documents, audio, voice messages, stickers, animations, and other supported media.
+
+36. Link detection
+
+Extract URLs from accessible message text, identify repeated links, and support configurable link notifications. Never open suspicious links automatically.
+
+37. Message language detection
+
+Identify the likely language of messages and allow language-specific triggers, summaries, and notification rules.
+
+38. Date and time detection
+
+Recognize common date/time patterns in English and Farsi. Present a confirmation before turning ambiguous text into a scheduled job.
+
+39. Reminder-intent detection
+
+Recognize explicit reminder requests when configured. Ask for clarification through a draft or notification if the time or action is ambiguous; do not silently create surprising reminders.
+
+40. Duplicate-event detection
+
+Deduplicate repeated Telegram events and prevent automation loops. Keep bounded caches and persistent identifiers where necessary.
+
+E. Search and information management
+
+41. Message search
+
+Search accessible message history by keyword and supported filters, with pagination and source context.
+
+42. Chat search
+
+Search accessible chats by name or username and show matching results without exposing inaccessible information.
+
+43. Bookmark manager
+
+Bookmark replied-to messages or notes. Support list, search, view, delete, and export/import.
+
+44. Conversation notes
+
+Maintain private notes associated with a chat. Notes must be clearly separate from Telegram messages and stored locally.
+
+45. Contact and chat information
+
+Show metadata available through Telegram, such as chat title, username, and relevant identifiers. Do not expose data that is not accessible.
+
+46. Media information
+
+Inspect a replied-to media item and display supported metadata such as type, size, filename, dimensions, or duration.
+
+47. Explicit media downloader
+
+Download media only when requested. Use safe filenames, configurable size limits, and path-traversal protection.
+
+48. Export selected information
+
+Export user-selected bookmarks, settings, notes, or other supported data to documented formats. Do not bulk-export private conversations by default.
+
+49. Saved Messages assistant
+
+Help organize notes, bookmarks, reminders, and personal messages in Saved Messages using explicit commands.
+
+50. Search result summaries
+
+Optionally summarize search results or selected text using a configured AI provider, with a non-AI fallback that simply presents matching excerpts.
+
+F. Scheduling, reminders, and time
+
+51. Reminders
+
+Create reminders using commands such as ".remind 30m drink water". Support list, edit, complete, and delete operations.
+
+52. Recurring reminders
+
+Support daily, weekly, and other explicitly configured recurrence patterns. Prevent duplicate delivery.
+
+53. Timezone conversion
+
+Convert dates and times between IANA timezones and handle daylight saving time.
+
+54. World clock
+
+Display current times for configured cities or timezone names.
+
+55. Scheduled task manager
+
+List all pending jobs, inspect job details, cancel jobs, and view the next execution time.
+
+56. Missed-job recovery
+
+After restart, identify overdue jobs and apply a configurable policy: execute once, skip, or request confirmation.
+
+57. Reminder delivery preferences
+
+Choose the delivery destination, language, formatting, and optional notification style.
+
+58. Calendar-style overview
+
+Display reminders and scheduled tasks for a selected day or week.
+
+59. Quiet hours
+
+Allow configurable hours when nonessential notifications and automatic replies should be paused.
+
+60. Schedule validation
+
+Detect invalid dates, past times, ambiguous timezone input, and recurrence conflicts before saving jobs.
+
+G. Text, language, and AI utilities
+
+61. Translation
+
+Translate selected text or replied-to messages with a configurable provider. Keep provider credentials optional and explain offline limitations.
+
+62. Translation preview
+
+Show the original and translated text separately before replacing, forwarding, or sending anything.
+
+63. Persian text utilities
+
+Support safe Unicode handling, Persian/Arabic character analysis, digit conversion options, whitespace cleanup, and mixed-direction text formatting.
+
+64. Text cleanup
+
+Normalize excessive whitespace, repeated punctuation, and other configurable formatting issues without silently changing meaning.
+
+65. Text statistics
+
+Calculate word, character, sentence, and line counts, including sensible handling of Persian text.
+
+66. Text transformation
+
+Provide configurable case conversion, text reversal, line sorting, deduplication, and other non-destructive transformations.
+
+67. Jokes and quotes
+
+Provide random jokes, short original quotes, and one-liners from an offline collection. Support English and Farsi entries.
+
+68. Safe calculator
+
+Evaluate basic arithmetic using a restricted parser, never Python "eval()". Validate expressions and reject unsafe syntax.
+
+69. Random utilities
+
+Generate random numbers, UUIDs, and other basic utility results with validated arguments.
+
+70. AI provider abstraction
+
+Support optional AI integrations through a common interface. Configure providers centrally, handle failures and timeouts, and allow offline fallback behavior. Never make core operation depend on paid AI access.
+
+H. Chat controls and organization
+
+71. Per-chat settings
+
+Configure individual features separately for each chat, with inspect, reset, and override commands.
+
+72. Chat allowlists and denylists
+
+Define where automation is permitted or prohibited. Explicit denials should override broader allowlists.
+
+73. Chat-specific language
+
+Choose English, Farsi, or automatic detection for each chat.
+
+74. Chat-specific templates
+
+Associate frequently used templates with selected chats without automatically sending them.
+
+75. Chat-specific notification rules
+
+Set different keywords, exclusions, and notification preferences for different chats.
+
+76. Chat activity summaries
+
+Produce opt-in summaries of accessible activity using simple statistics. Avoid invasive monitoring or unnecessary message retention.
+
+77. Conversation categorization
+
+Allow local labels such as work, personal, study, and important for organizing notes and bookmarks.
+
+78. Quick actions
+
+Provide configurable shortcuts for commonly used commands, templates, bookmarks, and utilities.
+
+79. Command aliases
+
+Create, list, remove, and reset aliases. Prevent alias loops and reserved-command collisions.
+
+80. Custom trigger rules
+
+Define safe text/event patterns and actions. Provide test, list, enable, disable, and delete commands. Never execute arbitrary Python or shell commands from a rule.
+
+I. Operations and reliability
+
+81. Status dashboard
+
+Show uptime, enabled features, pending jobs, database health, integrations, and recent sanitized errors.
+
+82. Structured logging
+
+Use rotating logs and configurable verbosity. Redact credentials, session strings, phone numbers where practical, and private message content.
+
+83. Error reporting
+
+Show useful, localized error messages and sanitized diagnostic details. Keep full stack traces in protected local logs when appropriate.
+
+84. Crash recovery
+
+Handle reconnects, network errors, shutdown, and database failures with bounded retries and backoff.
+
+85. Database migration system
+
+Track schema versions and apply migrations safely without silently destroying existing data.
+
+86. Backup and restore
+
+Export settings, templates, bookmarks, reminders, rules, counters, and other selected application data. Exclude sessions and secrets. Validate imports and confirm destructive changes.
+
+87. Configuration validator
+
+Check required values, invalid settings, unsupported options, missing integrations, and conflicting feature configuration at startup.
+
+88. Plugin loader
+
+Load trusted local Python plugins through a documented interface. Validate plugin metadata, isolate failures, and never download and execute arbitrary code.
+
+89. Performance diagnostics
+
+Measure event-processing latency, queue sizes, database response time, scheduler delays, and memory use where practical. Avoid high-frequency polling.
+
+90. Graceful shutdown and recovery
+
+Stop accepting new work, finish or cancel safe pending tasks, close database connections, and release client resources correctly.
+
+J. Advanced features and extensibility
+
+91. Feature dependency management
+
+Declare dependencies between features and warn when a feature requires an unavailable service or disabled module.
+
+92. Feature usage statistics
+
+Track local counts such as command invocations, successful jobs, failures, and processing latency. Avoid collecting unnecessary personal data.
+
+93. Configurable command prefix
+
+Allow the user to change the prefix and update parsing, aliases, examples, and generated help consistently.
+
+94. Interactive command workflows
+
+Support multi-step configuration through clear prompts, cancellation, timeout handling, and recovery after interrupted setup.
+
+95. Confirmation system
+
+Require confirmation before destructive operations, profile overwrites, bulk changes, or imports that replace existing data.
+
+96. Global emergency stop
+
+Immediately disable automation and scheduled message delivery while preserving settings. Provide an obvious command to inspect and selectively re-enable features.
+
+97. Safe dry-run mode
+
+Allow users to preview planned actions without performing them. Show which feature would act, why it matched, and what action would occur.
+
+98. Backup scheduling
+
+Schedule local backups of application data, use atomic writes, rotate old backups according to configuration, and never include credentials by default.
+
+99. Developer extension API
+
+Document how developers can add commands, event subscribers, localized strings, database migrations, and feature settings without modifying unrelated modules.
+
+100. Self-check and update readiness
+
+Provide a diagnostic self-check for configuration, dependencies, database schema, localization completeness, plugin loading, and scheduler health. Report available version/update information only through a trusted configured source. Never silently execute downloaded updates.
+
+---
+
+7. COMMAND DESIGN
+
+Use a configurable command prefix, defaulting to ".".
+
+Commands should be consistent, easy to discover, and safe to parse. Commands must not activate accidentally inside ordinary conversation.
+
+The command registry should define:
+
+- Command name and aliases.
+- English and Farsi descriptions.
+- Usage syntax and examples.
+- Required arguments.
+- Permissions and feature dependencies.
+- Whether a command changes state.
+- Whether confirmation is required.
+- Whether it supports a replied-to message.
+- Its help category.
+
+Provide at least these command groups:
+
+Core
+
+- ".help"
+- ".help <command>"
+- ".commands"
+- ".status"
+- ".ping"
+- ".diagnostics"
+- ".features"
+- ".feature <name> on/off"
+- ".stop"
+- ".lang en/fa/auto"
+
+Profile
+
+- ".clock on/off/status"
+- ".bio set/on/off/reset"
+- ".preset create/list/apply/delete"
+- ".profile preview/restore"
+
+Messaging
+
+- ".autoreply add/list/on/off"
+- ".away on/off"
+- ".template add/list/send/delete"
+- ".schedule"
+- ".scheduled list/cancel"
+- ".fight"
+- ".translate"
+- ".joke"
+- ".quote"
+
+Detection
+
+- ".watch add/list/remove"
+- ".detect status"
+- ".trigger add/list/test"
+- ".react add/list/remove"
+- ".rules"
+
+Information
+
+- ".search"
+- ".bookmark save/list/search/delete"
+- ".note add/list/delete"
+- ".media info/download"
+- ".textstats"
+- ".calc"
+- ".time"
+- ".convert-time"
+
+Scheduling
+
+- ".remind"
+- ".reminders"
+- ".tasks"
+- ".quiet-hours"
+
+Management
+
+- ".chatsettings"
+- ".alias add/list/remove"
+- ".backup export/import"
+- ".plugins"
+- ".config"
+- ".selfcheck"
+
+Adapt syntax where necessary, but keep all commands documented and consistent in both languages.
+
+---
+
+8. DATABASE AND DATA MODEL
+
+Use SQLite with parameterized queries, foreign keys, short transactions, and a schema migration/version system.
+
+Create appropriate tables for:
+
+- Global settings.
+- Per-chat settings.
+- Language preferences.
+- Profile presets and history.
+- Counters.
+- Message templates.
+- Auto-replies.
+- Scheduled messages.
+- Reminders and recurring reminders.
+- Keyword watches.
+- Reaction rules.
+- Custom triggers.
+- Bookmarks.
+- Private notes.
+- Command aliases.
+- Plugin metadata where appropriate.
+- Job execution state.
+- Diagnostics counters.
+- Feature usage statistics.
+- Other required persistent state.
+
+Do not store full message histories merely to power features that can work without them. Set reasonable retention limits for caches and event data.
+
+Never hold a database transaction open during a network request. Handle migrations, corrupted data, locked databases, and interrupted writes safely.
+
+---
+
+9. SECURITY AND PRIVACY
+
+HAVOC has access to my Telegram account. Treat session security as a major responsibility.
+
+- Store sessions outside version control.
+- Add sessions, ".env", local databases, logs, caches, and backups to ".gitignore".
+- Never expose secrets in logs, command output, CI artifacts, issue comments, or commits.
+- Never print a session string for debugging.
+- Never ask me to commit a session file.
+- Use GitHub Secrets only when a workflow genuinely requires them.
+- Never expose credentials through shell tracing, workflow output, caches, or uploaded artifacts.
+- Do not automatically message large lists of people.
+- Keep automatic replies, away mode, profile changes, and trigger rules OFF until configured.
+- Use allowlists, cooldowns, a global stop switch, and dry-run mode.
+- Do not bypass access restrictions or claim access to inaccessible Telegram data.
+- Do not run untrusted plugin code.
+- Validate file paths and import data.
+- Protect backups containing private information.
+- Provide clear uninstall and data-deletion instructions.
+- No hidden telemetry.
+
+Explain the risks of userbots and the fact that a compromised session can grant account access.
+
+---
+
+10. RELIABILITY AND ERROR HANDLING
+
+Handle at least:
+
+- Invalid configuration.
+- Missing API credentials.
+- Failed login.
+- Expired or invalid sessions.
+- Two-factor authentication errors.
+- Network timeouts.
+- Telegram disconnects.
+- FloodWait responses.
+- Permission failures.
+- Inaccessible chats or messages.
+- Invalid command arguments.
+- Invalid timezones and dates.
+- Database locks and migration errors.
+- Scheduler exceptions.
+- Optional AI or translation provider failures.
+- Invalid plugin metadata.
+- Malformed backups.
+- File permission and disk-space errors.
+- Localization key omissions.
+- Unexpected event-handler exceptions.
+
+Errors should explain what happened, what the user can do, and whether the action was completed. Never falsely report success.
+
+Use bounded retries, exponential backoff where appropriate, idempotency, deduplication, and proper shutdown handling.
+
+---
+
+11. TESTING STRATEGY
+
+Use pytest and mock Telegram network calls. Tests must not require real account credentials.
+
+Test:
+
+- Configuration loading and validation.
+- English/Farsi localization completeness.
+- Language detection and uncertain-language fallback.
+- Persian Unicode and mixed-direction text.
+- Command parsing and aliases.
+- Event normalization and filtering.
+- Duplicate-event prevention.
+- Cooldowns and allowlists.
+- Database migrations and persistence.
+- Scheduler restart behavior.
+- Timezone and daylight-saving conversion.
+- Recurring reminders.
+- Scheduled-job cancellation and duplicate prevention.
+- Safe template interpolation.
+- Safe calculator parsing.
+- Backup/import validation.
+- Media filename and path validation.
+- Fight Mode offline fallback.
+- Optional provider failures.
+- Feature dependency checks.
+- Emergency stop behavior.
+- Plugin failure isolation.
+- Secret redaction.
+- Graceful startup and shutdown.
+
+Add CI to install dependencies and run tests without interactive login or real credentials.
+
+Run the tests, inspect failures, and fix the underlying problems rather than weakening tests to obtain a green result.
+
+---
+
+12. DOCUMENTATION
+
+Create a practical README covering:
+
+1. HAVOC's purpose and features.
+2. Python and operating-system requirements.
+3. Installation and dependency setup.
+4. Obtaining Telegram API credentials through official Telegram channels.
+5. First login and 2FA.
+6. Starting, stopping, and restarting.
+7. English and Farsi configuration.
+8. Automatic language detection and its limitations.
+9. Complete command reference.
+10. Feature configuration and safe defaults.
+11. Optional AI and translation integrations.
+12. Database structure and data retention.
+13. Backups and restoration.
+14. Security and session protection.
+15. Hosting options.
+16. Why GitHub Actions is not a permanent always-on host.
+17. Troubleshooting common problems.
+18. Plugin development.
+19. Testing and contributing.
+20. Uninstall and data deletion.
+21. A feature status table identifying complete, partial, and unimplemented functionality.
+
+Include ".env.example" with placeholder names only.
+
+---
+
+13. IMPLEMENTATION ROADMAP
+
+Phase 1: Repository inspection
+
+Inspect the repository, identify the existing architecture, and determine how the connected environment supports editing, testing, branching, and committing. Provide a short plan, then proceed.
+
+Phase 2: Foundation
+
+Implement configuration, Telethon authentication, database migrations, logging, localization, command registration, event detection, permissions, rate limiting, and scheduling.
+
+Phase 3: Essential features
+
+Implement language selection, profile tools, messaging, search, bookmarks, reminders, notifications, text utilities, and core commands.
+
+Phase 4: Automation and intelligence
+
+Implement contextual detection, auto-replies, event triggers, Fight Mode, language-aware behavior, optional AI integrations, and dry-run mode.
+
+Phase 5: Remaining features
+
+Implement management tools, plugins, backups, diagnostics, advanced scheduling, feature statistics, and developer extension interfaces.
+
+Phase 6: Testing
+
+Add automated tests, run CI-equivalent checks locally where possible, fix failures, and verify behavior without real Telegram credentials.
+
+Phase 7: Documentation and security audit
+
+Review all commands, configuration, localization, secret handling, Git exclusions, file operations, and automation defaults.
+
+Phase 8: Repository delivery
+
+Review the diff. Commit coherent changes if supported and authorized. Do not claim a push or pull request exists unless it was actually created. Report completed work and remaining limitations.
+
+---
+
+14. ACCEPTANCE CRITERIA
+
+HAVOC is ready for delivery when:
+
+- The application can be installed using documented instructions.
+- It authenticates securely to my own Telegram account through Telethon.
+- English and Farsi work across commands, responses, help, notifications, and errors.
+- Automatic language detection works reasonably for English, Farsi, and mixed text.
+- Persian text is handled without corruption.
+- The detection engine routes supported events correctly.
+- The command registry and generated help are functional.
+- Implemented features have validation, safe defaults, and error handling.
+- SQLite data persists across restarts.
+- Scheduled jobs do not execute twice because of reconnects or restarts.
+- Optional integrations can fail without preventing core startup.
+- Tests run without real Telegram credentials.
+- CI does not expose secrets.
+- Sessions and private data are excluded from Git.
+- Documentation accurately identifies completed and incomplete functionality.
+- The final report includes actual test results, changed files, known limitations, and required manual setup.
+
+---
+
+FINAL INSTRUCTION
+
+Begin by inspecting my connected GitHub repository.
+
+Then build HAVOC directly inside it. Preserve existing work, implement the architecture properly, and prioritize real functionality over impressive-looking but empty code.
+
+Treat all 100 feature areas as the complete target specification, not permission to generate 100 superficial placeholders. Implement features in dependency order, maintain a working application throughout development, and document any feature that cannot be completed in the current environment.
+
+Make the application extensible enough that new commands and detection rules can be added without rewriting the entire project.
+
+The finished product should be a reliable, bilingual English/Farsi Telegram userbot with automatic detection, contextual tools, extensive customization, persistent storage, robust automation, comprehensive documentation, and a test suite.
+
+When finished, report:
+
+- What was implemented.
+- Which of the 100 feature areas are complete, partial, or not implemented.
+- The repository files changed.
+- Tests actually executed and their results.
+- Security and hosting limitations.
+- Any manual steps I must complete before running HAVOC.
+
+Do not fabricate successful tests, commits, deployments, or features. Deliver working software, not a performance of working software.
