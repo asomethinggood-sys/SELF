@@ -93,7 +93,10 @@ jobs:
           reply=$(cat .ai-probe.txt)
           printf '%s\n' "$reply"
           echo "::notice::exit $status · ${#reply} bytes of output"
-          echo "status=${status}" >> "$GITHUB_OUTPUT"
+          # Written to the file as well as to the step output: the outputs of a
+          # step with continue-on-error are not always delivered, and the file
+          # is what the next steps read.
+          printf '%s\n' "$status" > .ai-probe.status
           {
             echo "### AI probe"
             echo ""
@@ -116,7 +119,7 @@ jobs:
       - name: What the gateway says to this runner
         # Only when the plain request failed: every generation call spends the
         # free tier's daily allowance (50), and a healthy probe must cost one.
-        if: always() && steps.ask.outputs.status != '0'
+        if: always()
         shell: bash
         env:
           AI_PROVIDER: ${{ steps.ai.outputs.ai_provider }}
@@ -125,18 +128,21 @@ jobs:
           AI_API_KEY: ${{ steps.ai.outputs.ai_api_key }}
         run: |
           set -uo pipefail
-          python scripts/probe_ai.py > .ai-diag.txt 2>&1 || true
+          if grep -qi "AI: FAILED\|Fatal error" .ai-probe.txt 2>/dev/null; then
+            python scripts/probe_ai.py > .ai-diag.txt 2>&1 || true
+          else
+            echo "healthy: no diagnostics needed"
+            : > .ai-diag.txt
+          fi
           cat .ai-diag.txt
 
       - name: Publish the answer where it can be read
         if: always()
         shell: bash
-        env:
-          STATUS: ${{ steps.ask.outputs.status }}
         run: |
           set -uo pipefail
-          python -c 'import json,os,pathlib,datetime;t=pathlib.Path(".ai-probe.txt");r=t.read_text(encoding="utf-8",errors="replace").strip() if t.exists() else "";f=[l.strip() for l in r.splitlines() if "AI: FAILED" in l or "Fatal error" in l];c=int(os.environ.get("STATUS") or 1);rec={"checked_at":datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),"exit_code":c,"ok":c==0 and not f and "Model:" in r,"failure":f[0] if f else "","answer":r};d=pathlib.Path(".ai-diag.txt");rec["diagnostics"]=d.read_text(encoding="utf-8",errors="replace").strip() if d.exists() else "";pathlib.Path(".ai-probe.json").write_text(json.dumps(rec,ensure_ascii=False,indent=2)+"\n",encoding="utf-8");print(rec["ok"])'
-          rm -f .ai-probe.txt .ai-diag.txt
+          python -c 'import json,os,pathlib,datetime;t=pathlib.Path(".ai-probe.txt");r=t.read_text(encoding="utf-8",errors="replace").strip() if t.exists() else "";f=[l.strip() for l in r.splitlines() if "AI: FAILED" in l or "Fatal error" in l];s=pathlib.Path(".ai-probe.status");c=int(s.read_text().strip()) if s.exists() and s.read_text().strip().isdigit() else 1;rec={"checked_at":datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),"exit_code":c,"ok":c==0 and not f and "Model:" in r,"failure":f[0] if f else "","answer":r};d=pathlib.Path(".ai-diag.txt");rec["diagnostics"]=d.read_text(encoding="utf-8",errors="replace").strip() if d.exists() else "";pathlib.Path(".ai-probe.json").write_text(json.dumps(rec,ensure_ascii=False,indent=2)+"\n",encoding="utf-8");print(rec["ok"])'
+          rm -f .ai-probe.txt .ai-diag.txt .ai-probe.status
           git config user.name "HAVOC ai probe"
           git config user.email "probe@users.noreply.github.com"
           git add .ai-probe.json
