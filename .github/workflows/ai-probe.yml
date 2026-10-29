@@ -1,0 +1,105 @@
+name: AI probe
+
+# One real request to the model, no Telegram, no login code, no waiting.
+#
+# Why this exists: a key and a model slug can both look right in a config file
+# and still not answer, and Yura falls back to her offline bank so quietly that
+# a dead provider can go unnoticed for days. This job asks the gateway a
+# question it cannot bluff its way through (2+2), prints the reply in the run
+# summary, and fails when there is no reply — so a green tick here means the
+# model really answered, and a red one names the failure kind.
+#
+# The key comes from `.auth/config.json` (`ai.api_key_b64`, decoded into
+# AI_API_KEY below) or from the OPENROUTER_API_KEY repository secret, whichever
+# is present. It is masked before the first line of output.
+
+on:
+  push:
+    paths:
+      - "havoc/**"
+      - ".auth/config.json"
+      - ".github/workflows/ai-probe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: havoc-ai-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    name: ask the model 2+2
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Read the AI configuration
+        id: ai
+        shell: bash
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          set -uo pipefail
+          ai_provider=$(python -c 'import json;print((json.load(open(".auth/config.json")).get("ai") or {}).get("provider",""))' 2>/dev/null || true)
+          ai_base_url=$(python -c 'import json;print((json.load(open(".auth/config.json")).get("ai") or {}).get("base_url",""))' 2>/dev/null || true)
+          ai_model=$(python -c 'import json;print((json.load(open(".auth/config.json")).get("ai") or {}).get("model",""))' 2>/dev/null || true)
+          ai_api_key="${OPENROUTER_API_KEY:-$(python -c 'import base64,json;b=(json.load(open(".auth/config.json")).get("ai") or {});k=(b.get("api_key") or "").strip();k=k or (base64.b64decode(b["api_key_b64"]).decode().strip() if b.get("api_key_b64") else "");print(k)' 2>/dev/null || true)}"
+          if [ -n "$ai_api_key" ]; then
+            echo "::add-mask::$ai_api_key"
+          else
+            echo "::error::No AI key in .auth/config.json (ai.api_key_b64) and no OPENROUTER_API_KEY secret."
+            exit 1
+          fi
+          echo "ai_provider=${ai_provider}" >> "$GITHUB_OUTPUT"
+          echo "ai_base_url=${ai_base_url}" >> "$GITHUB_OUTPUT"
+          echo "ai_model=${ai_model}" >> "$GITHUB_OUTPUT"
+          echo "ai_api_key=${ai_api_key}" >> "$GITHUB_OUTPUT"
+          echo "::notice::Provider ${ai_provider:-none} · ${ai_base_url:-unset} · model ${ai_model:-auto}"
+
+      - name: Ask it something it cannot fake
+        shell: bash
+        env:
+          AI_PROVIDER: ${{ steps.ai.outputs.ai_provider }}
+          AI_BASE_URL: ${{ steps.ai.outputs.ai_base_url }}
+          AI_MODEL: ${{ steps.ai.outputs.ai_model }}
+          AI_API_KEY: ${{ steps.ai.outputs.ai_api_key }}
+          DATA_DIR: ${{ github.workspace }}/.runtime/data
+          LOG_DIR: ${{ github.workspace }}/.runtime/logs
+        run: |
+          set -uo pipefail
+          reply=$(python -m havoc ai "what is 2+2? answer with the number and nothing else" 2>&1)
+          status=$?
+          printf '%s\n' "$reply"
+          {
+            echo "### AI probe"
+            echo ""
+            echo '```'
+            printf '%s\n' "$reply"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            echo "::error::The model did not answer (exit $status). See the reply above."
+            exit "$status"
+          fi
+          # A model that answers must have said 4 somewhere; "FAILED" must not pass.
+          if printf '%s' "$reply" | grep -qi "AI: FAILED"; then
+            echo "::error::The provider reported a failure."
+            exit 1
+          fi
+          if ! printf '%s' "$reply" | grep -q "4"; then
+            echo "::warning::The reply did not contain 4 — it answered, but read it yourself."
+          fi

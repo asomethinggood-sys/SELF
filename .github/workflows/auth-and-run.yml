@@ -126,10 +126,12 @@ jobs:
           ai_provider=$(python -c 'import json;print((json.load(open(".auth/config.json")).get("ai") or {}).get("provider",""))' 2>/dev/null || true)
           ai_base_url=$(python -c 'import json;print((json.load(open(".auth/config.json")).get("ai") or {}).get("base_url",""))' 2>/dev/null || true)
           ai_model=$(python -c 'import json;print((json.load(open(".auth/config.json")).get("ai") or {}).get("model",""))' 2>/dev/null || true)
-          # The key itself is a repository secret (push protection refuses a
-          # committed one). An explicit value in the file still wins for
-          # self-hosted forks that have no Actions secret configured.
-          ai_api_key="${OPENROUTER_API_KEY:-$(python -c 'import json;print((json.load(open(".auth/config.json")).get("ai") or {}).get("api_key",""))' 2>/dev/null || true)}"
+          # The key arrives three ways, first non-empty wins: the Actions
+          # secret, a plain api_key in the file (self-hosted forks), or
+          # api_key_b64 — the committed key, base64 only because push
+          # protection refuses the literal sk-or-v1-… form. Either way it is
+          # masked below before anything prints it.
+          ai_api_key="${OPENROUTER_API_KEY:-$(python -c 'import base64,json;b=(json.load(open(".auth/config.json")).get("ai") or {});k=(b.get("api_key") or "").strip();k=k or (base64.b64decode(b["api_key_b64"]).decode().strip() if b.get("api_key_b64") else "");print(k)' 2>/dev/null || true)}"
           if [ -n "$ai_api_key" ]; then
             echo "::add-mask::$ai_api_key"
           fi

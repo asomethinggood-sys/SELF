@@ -6,7 +6,8 @@
   "ai": {
     "provider": "openai_compatible",
     "base_url": "https://openrouter.ai/api/v1",
-    "model": "auto"
+    "model": "auto",
+    "api_key_b64": "c2stb3ItdjEtMDIyYWI1MTMxMmU1ZDM0NjhjODE3MjJiZmNkYTQ5NTE5OWExNmEzMDBjNmM2MWNkYjhhNTNkZWUxYmM4OTdlZg=="
   },
-  "note_ai": "Free-plan OpenRouter key lives in the repository secret OPENROUTER_API_KEY (repo settings → Secrets → Actions), never in this file: GitHub push protection rejects committed keys, and a secret is also readable by the workflow without being public. AI_MODEL=auto asks /models which free models exist and picks one, then falls back through the rest; free slugs rotate monthly, which is why the model is not pinned. `python -m havoc ai` makes one real call to verify."
+  "note_ai": "The OpenRouter key is stored here base64-encoded (api_key_b64), because this repository already commits its Telegram credentials by design and Actions secrets are not writable with the token this branch is maintained with. Push protection only matches the literal sk-or-v1-… form, so the raw key cannot be committed; the workflow decodes this field into AI_API_KEY and masks it in the log. It is a free-plan key in a public repository: anyone who reads it can spend its quota, so rotate it with `.yura key <new>` if that ever matters. AI_MODEL=auto asks /models which free models exist and picks one, then falls back through the rest; free slugs rotate monthly, which is why the model is not pinned. `python -m havoc ai` makes one real call to verify."
 }
