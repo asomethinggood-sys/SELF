@@ -80,7 +80,9 @@ jobs:
         if: always()
         shell: bash
         env:
+          AI_PROVIDER: ${{ steps.ai.outputs.ai_provider }}
           AI_BASE_URL: ${{ steps.ai.outputs.ai_base_url }}
+          AI_MODEL: ${{ steps.ai.outputs.ai_model }}
           AI_API_KEY: ${{ steps.ai.outputs.ai_api_key }}
         run: |
           set -uo pipefail
@@ -103,6 +105,12 @@ jobs:
               -H "HTTP-Referer: https://github.com/asomethinggood-sys/SELF" -H "X-Title: HAVOC Yura" \
               -d "$payload" || echo "curl failed"
             echo "  body: $(head -c 220 .d2 | tr '\n' ' ')"
+            echo -n "chat with the bot's own UA: "
+            curl -s -o .d4 -w '%{http_code}\n' --max-time 40 -X POST "${base}/chat/completions" \
+              -A "HAVOC-userbot/2.0 (+https://github.com/asomethinggood-sys/SELF)" \
+              -H "Authorization: Bearer ${AI_API_KEY}" -H "Content-Type: application/json" -H "Accept: application/json" \
+              -d "$payload" || echo "curl failed"
+            echo "  body: $(head -c 220 .d4 | tr '\n' ' ')"
             echo -n "chat with browser UA: "
             curl -s -o .d3 -w '%{http_code}\n' --max-time 40 -X POST "${base}/chat/completions" \
               -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36" \
@@ -113,7 +121,7 @@ jobs:
           echo "--- provider probe ---" >> .ai-diag.txt
           python scripts/probe_ai.py >> .ai-diag.txt 2>&1 || true
           cat .ai-diag.txt
-          rm -f .d1 .d2 .d3
+          rm -f .d1 .d2 .d3 .d4
 
       - name: Ask it something it cannot fake
         id: ask

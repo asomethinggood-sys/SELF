@@ -24,7 +24,7 @@ import sys
 from havoc.config import load_config
 from havoc.persona import system_prompt
 from havoc.services import http as http_module
-from havoc.services.ai_provider import AIProvider
+from havoc.services.ai_provider import AIMessage, AIProvider
 
 
 def _head(text: str, limit: int = 200) -> str:
@@ -54,6 +54,7 @@ async def main() -> int:
     checks: list[dict[str, object]] = report["checks"]  # type: ignore[assignment]
     if not provider.available:
         report["error"] = "provider is not configured (AI_PROVIDER / AI_API_KEY)"
+        report["discovered_models"] = provider.models[:5]
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 1
 
@@ -113,6 +114,37 @@ async def main() -> int:
             ),
         )
     )
+
+    report["discovered_models"] = provider.models[:5]
+    try:
+        reply = await provider.converse([AIMessage("user", "2+2")], max_tokens=16)
+        checks.append({"check": "provider.converse", "status": 200, "ok": True, "detail": _head(reply)})
+        report["active_model"] = provider.active_model
+    except Exception as exc:  # noqa: BLE001 - a probe reports, never raises
+        checks.append(
+            {
+                "check": "provider.converse",
+                "status": None,
+                "ok": False,
+                "detail": _head(f"{type(exc).__name__}: {exc}"),
+            }
+        )
+        report["active_model"] = provider.active_model
+
+    report["discovered_models"] = provider.models[:5]
+    try:
+        reply = await provider.converse([AIMessage("user", "2+2")], max_tokens=16)
+        checks.append({"check": "provider.converse", "status": 200, "ok": True, "detail": _head(reply)})
+    except Exception as exc:  # noqa: BLE001 - a probe reports, never raises
+        checks.append(
+            {
+                "check": "provider.converse",
+                "status": None,
+                "ok": False,
+                "detail": _head(f"{type(exc).__name__}: {exc}"),
+            }
+        )
+    report["active_model"] = provider.active_model
 
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0 if all(check["ok"] for check in checks) else 2
