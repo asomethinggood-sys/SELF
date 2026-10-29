@@ -221,6 +221,7 @@ async def test_discovery_skips_endpoints_that_cannot_chat(monkeypatch) -> None:
             "data": [
                 {"id": "some/embed-model:free"},
                 {"id": "some/vision-vl:free"},
+                {"id": "nvidia/nemotron-3.5-content-safety:free"},
                 {"id": "meta-llama/llama-3.3-70b-instruct:free"},
             ]
         }

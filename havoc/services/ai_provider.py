@@ -52,6 +52,7 @@ NON_CHAT_MARKERS: tuple[str, ...] = (
     "moderation",
     "audio",
     "guard",
+    "safety",
 )
 
 MODEL_PREFERENCES: tuple[str, ...] = (
@@ -62,6 +63,7 @@ MODEL_PREFERENCES: tuple[str, ...] = (
     "deepseek",
     "mistral-large",
     "gpt-oss-120b",
+    "instruct",
     "nemotron",
     "gemini",
 )
