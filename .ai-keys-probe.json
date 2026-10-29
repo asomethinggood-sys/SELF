@@ -1,0 +1,92 @@
+{
+  "keys": [
+    {
+      "provider": "openrouter",
+      "label": "or-1",
+      "key_hint": "sk-or-v1-0…97ef",
+      "length": 73,
+      "checks": [
+        {
+          "check": "GET /models",
+          "status": 200,
+          "body": "{\"data\":[{\"id\":\"particle-ai/particle-1\",\"canonical_slug\":\"particle-ai/particle-1-20261027\",\"hugging_face_id\":null,\"name\":\"Particle AI: Particle-1\",\"created\":1793207893,\"description\":\"Particle-1 is a token-efficient agent"
+        },
+        {
+          "check": "POST /chat/completions (model auto)",
+          "status": 200,
+          "body": "{\"id\":\"gen-1793308387-PsJzcJYBAYZwf9xAP3eK\",\"object\":\"chat.completion\",\"created\":1793308389,\"model\":\"deepseek/deepseek-v4.1-flash-1017\",\"provider\":\"Cohere\",\"system_fingerprint\":\"vllm-0.32.1rc1.dev197+g8e2beaa3b-tp2-3eea1"
+        }
+      ],
+      "free_models": []
+    },
+    {
+      "provider": "openrouter",
+      "label": "or-2",
+      "key_hint": "sk-or-v1-e…8f85",
+      "length": 73,
+      "checks": [
+        {
+          "check": "GET /models",
+          "status": 200,
+          "body": "{\"data\":[{\"id\":\"particle-ai/particle-1\",\"canonical_slug\":\"particle-ai/particle-1-20261027\",\"hugging_face_id\":null,\"name\":\"Particle AI: Particle-1\",\"created\":1793207893,\"description\":\"Particle-1 is a token-efficient agent"
+        },
+        {
+          "check": "POST /chat/completions (model auto)",
+          "status": 200,
+          "body": "{\"id\":\"gen-1793308390-4c9XfRuhLIg5X5LjzCFe\",\"object\":\"chat.completion\",\"created\":1793308390,\"model\":\"deepseek/deepseek-v4.1-flash-1017\",\"provider\":\"InferenceNet\",\"system_fingerprint\":\"inference.net\",\"service_tier\":null,\""
+        }
+      ],
+      "free_models": []
+    },
+    {
+      "provider": "google",
+      "label": "gg-1",
+      "key_hint": "AQ.Ab8RN6K…mzNQ",
+      "length": 53,
+      "checks": [
+        {
+          "check": "GET /v1beta/models",
+          "status": 200,
+          "body": "{ \"models\": [ { \"name\": \"models/gemini-2.5-flash\", \"version\": \"001\", \"displayName\": \"Gemini 2.5 Flash\", \"description\": \"Stable version of Gemini 2.5 Flash, our mid-size multimodal model that supports up to 1 million toke",
+          "count": 0
+        },
+        {
+          "check": "POST :generateContent (gemini-3.5-flash-lite)",
+          "status": 200,
+          "body": "{ \"candidates\": [ { \"content\": { \"parts\": [ { \"text\": \"4\", \"thoughtSignature\": \"EmAKXgFpFH0TZcqdnAsGKubJAjmMK/f2QqHxwYu/PRv/gMRS57zXVR/WnJo8aj+YBAPcv4ulP/NMWsMN+z800xU2Ao2QULOX9OZUYAn/YsJ/Ob/WmgRZBZEwNGe0odDHXhE=\" } ], \""
+        },
+        {
+          "check": "POST /v1beta/openai/chat/completions (gemini-3.5-flash-lite)",
+          "status": 200,
+          "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"4\",\"extra_content\":{\"google\":{\"thought_signature\":\"EmAKXgFpFH0TdUdeTrAg4sfEX0CT9gr203u5lmXASoBqeT5Q1IeEJoCjzAf5eo2qc11DXml7lf4ERtXe5D8gxYHmcyws+OG+R51VO"
+        }
+      ],
+      "models": []
+    },
+    {
+      "provider": "google",
+      "label": "gg-2",
+      "key_hint": "AQ.Ab8RN6K…tAOg",
+      "length": 53,
+      "checks": [
+        {
+          "check": "GET /v1beta/models",
+          "status": 200,
+          "body": "{ \"models\": [ { \"name\": \"models/gemini-2.5-flash\", \"version\": \"001\", \"displayName\": \"Gemini 2.5 Flash\", \"description\": \"Stable version of Gemini 2.5 Flash, our mid-size multimodal model that supports up to 1 million toke",
+          "count": 0
+        },
+        {
+          "check": "POST :generateContent (gemini-3.5-flash-lite)",
+          "status": 200,
+          "body": "{ \"candidates\": [ { \"content\": { \"parts\": [ { \"text\": \"4\", \"thoughtSignature\": \"EmAKXgFpFH0T8COmQTu8sx1hs8Y2X+d992HyAfTLx+jhui1tarpX1oTEGc6oO1eLKpTyMKgU1b5xEKZYy3QEK1Tf3uBLIjUhPbuSkyfBIotE3pCRdIlfnb1djn9E6IkN+CE=\" } ], \""
+        },
+        {
+          "check": "POST /v1beta/openai/chat/completions (gemini-3.5-flash-lite)",
+          "status": 200,
+          "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"4\",\"extra_content\":{\"google\":{\"thought_signature\":\"EmAKXgFpFH0TZ9W1KfBt1FqL/xk6kwscr5VPJJil3CipNpaOE7pEe14f5NpvbmCYd6EJDN6WQ9hYFs95aqv8O+Zmt3DrQ20YqqE98"
+        }
+      ],
+      "models": []
+    }
+  ]
+}
