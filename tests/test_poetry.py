@@ -222,6 +222,51 @@ def test_shaping_joins_persian_letters() -> None:
     assert shaped.strip()
 
 
+def test_a_line_is_drawn_one_glyph_at_a_time() -> None:
+    """The fix for the mirrored card, asserted instead of described.
+
+    A whole-string ``draw.text`` reaches libraqm when Pillow was built with it,
+    and raqm runs bidi over text that is already in visual order. Drawing each
+    glyph ourselves is what makes the card identical with and without raqm, so
+    this test fails if anyone ever hands a line back to the layout engine.
+    """
+    calls: list[tuple[str, float]] = []
+
+    class FakeDraw:
+        def text(self, xy, text, *, font, fill):  # noqa: A002 - mirrors Pillow
+            calls.append((text, xy[0]))
+
+    class FakeFont:
+        def getlength(self, text):
+            return 10.0 * len(text)
+
+    fal_image._draw_line(FakeDraw(), "سلام", FakeFont(), 5.0, 9, (0, 0, 0))
+    shaped = fal_image._shape("سلام")
+    assert [text for text, _ in calls] == list(shaped)
+    assert all(len(text) == 1 for text, _ in calls), "a whole line reached draw.text"
+    assert [x for _, x in calls] == [5.0 + 10.0 * index for index in range(len(shaped))]
+
+
+def test_width_is_the_sum_of_the_glyph_advances() -> None:
+    class FakeFont:
+        def getlength(self, text):
+            return 7.5 * len(text)
+
+    text = "فال حافظ"
+    assert fal_image._width(None, text, FakeFont()) == 7.5 * len(fal_image._shape(text))
+
+
+def test_the_card_does_not_change_when_raqm_exists(monkeypatch) -> None:
+    """The production container has raqm; this one does not. Same bytes or bust."""
+    usable, reason = fal_image.available()
+    if not usable:
+        pytest.skip(f"card rendering unavailable: {reason}")
+    reading = corpus.sample_fal(reading_id=42)
+    without = fal_image.render_fal(reading)
+    monkeypatch.setattr(fal_image, "has_raqm", lambda: True)
+    assert fal_image.render_fal(reading) == without
+
+
 # ---------------------------------------------------------------------------
 # .roast
 # ---------------------------------------------------------------------------
