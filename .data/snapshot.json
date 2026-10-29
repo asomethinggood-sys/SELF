@@ -1,6 +1,6 @@
 {
   "app": "havoc",
-  "created_at": "2026-10-29T22:14:33+00:00",
+  "created_at": "2026-10-29T22:19:35+00:00",
   "last_restore": {
     "counts": {
       "bookmarks": 1,
@@ -168,13 +168,13 @@
       },
       {
         "key": "ai.usage",
-        "updated_at": "2026-10-29T22:10:34+00:00",
-        "value": "{\"2b9beacf67a2|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-29\",\"count\":7},\"e8bfd373256a|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-29\",\"count\":6}}"
+        "updated_at": "2026-10-29T22:19:29+00:00",
+        "value": "{\"2b9beacf67a2|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-29\",\"count\":8},\"e8bfd373256a|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-29\",\"count\":8}}"
       },
       {
         "key": "ai.health",
-        "updated_at": "2026-10-29T22:10:34+00:00",
-        "value": "{\"2b9beacf67a2\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":7,\"failures\":0},\"e8bfd373256a\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":6,\"failures\":0}}"
+        "updated_at": "2026-10-29T22:19:29+00:00",
+        "value": "{\"2b9beacf67a2\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":8,\"failures\":0},\"e8bfd373256a\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":8,\"failures\":0}}"
       },
       {
         "key": "clock.timezone",
