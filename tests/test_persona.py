@@ -487,16 +487,27 @@ def test_the_call_hint_is_present_in_both_languages(language: str) -> None:
 # ---------------------------------------------------------------------------
 # The key, stored without publishing it
 # ---------------------------------------------------------------------------
+def _patch_probe(monkeypatch, outcome: tuple[bool, str]) -> None:
+    """Never touch the network from a test. The outcome is scripted instead.
+
+    Both the single-provider class and the rotating router are patched: which one
+    ``runtime.ai`` is depends on whether credentials exist, and a test should not
+    care.
+    """
+    from havoc.services.ai_provider import AIProvider
+    from havoc.services.ai_router import AIRouter
+
+    async def _probe(self, **kwargs):
+        return outcome
+
+    monkeypatch.setattr(AIProvider, "probe", _probe)
+    monkeypatch.setattr(AIRouter, "probe", _probe)
+
+
 @pytest.fixture
 def no_network_probe(monkeypatch):
-    """Never touch the network from a test. The outcome is scripted instead."""
-    from havoc.services.ai_provider import AIProvider
-
-    async def _ok(self, *, max_tokens: int = 8):
-        return True, "ok"
-
-    monkeypatch.setattr(AIProvider, "probe", _ok)
-    return _ok
+    _patch_probe(monkeypatch, (True, "ok"))
+    return True
 
 
 async def test_the_key_command_stores_the_key_and_deletes_the_message(
@@ -518,7 +529,9 @@ async def test_the_key_survives_a_restart(runtime, config, no_network_probe) -> 
 
     restarted = await Runtime.create(config, runtime.logger)
     assert restarted.ai.available is True
-    assert restarted.ai._api_key == "sk-or-v1-persisted"
+    # Whatever holds the credentials, the key the owner pasted is still there.
+    keys = [credential.key for credential in getattr(restarted.ai, "credentials", [])]
+    assert "sk-or-v1-persisted" in keys
     await restarted.db.close()
 
 
@@ -530,12 +543,7 @@ async def test_the_key_command_reports_state_without_a_value(runtime) -> None:
 async def test_a_saved_key_is_actually_tried_and_the_answer_is_shown(
     runtime, monkeypatch
 ) -> None:
-    from havoc.services.ai_provider import AIProvider
-
-    async def _ok(self, *, max_tokens: int = 8):
-        return True, "ok"
-
-    monkeypatch.setattr(AIProvider, "probe", _ok)
+    _patch_probe(monkeypatch, (True, "ok"))
     await invoke(runtime, ".yura key sk-or-v1-probed")
     text = html.unescape(last_text(runtime))
     assert "ok" in text
@@ -544,12 +552,7 @@ async def test_a_saved_key_is_actually_tried_and_the_answer_is_shown(
 
 async def test_a_saved_key_that_fails_is_reported_as_failing(runtime, monkeypatch) -> None:
     """The whole complaint: the card said "live" while nothing answered."""
-    from havoc.services.ai_provider import AIProvider
-
-    async def _dead(self, *, max_tokens: int = 8):
-        return False, "network: [SSL: CERTIFICATE_VERIFY_FAILED]"
-
-    monkeypatch.setattr(AIProvider, "probe", _dead)
+    _patch_probe(monkeypatch, (False, "network: [SSL: CERTIFICATE_VERIFY_FAILED]"))
     await invoke(runtime, ".yura key sk-or-v1-deadkey")
     text = html.unescape(last_text(runtime))
     assert "network" in text

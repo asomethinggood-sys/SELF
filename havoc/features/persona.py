@@ -220,16 +220,25 @@ async def _key_command(ctx: CommandContext, words: list[str]) -> str:
             answer += "\n" + ui.note(escape(truncate(chat.last_error, 160)))
         return answer
 
-    await ctx.store.set_setting("ai.api_key", value)
-    from ..services.ai_provider import AIProvider
+    from ..services.ai_router import AIRouter
 
-    runtime.ai = AIProvider(
-        base_url=runtime.config.ai_base_url,
-        api_key=value,
-        model=runtime.config.ai_model,
-        timeout=runtime.config.ai_timeout,
-        enabled=True,
-    )
+    if isinstance(runtime.ai, AIRouter):
+        # The rotating setup takes the key into its rotation instead of replacing
+        # it: one more credential, billed and health-checked like the others.
+        credential = await runtime.ai.add_key("auto", value)
+        provider = credential.provider
+    else:
+        await ctx.store.set_setting("ai.api_key", value)
+        from ..services.ai_provider import AIProvider
+
+        runtime.ai = AIProvider(
+            base_url=runtime.config.ai_base_url,
+            api_key=value,
+            model=runtime.config.ai_model,
+            timeout=runtime.config.ai_timeout,
+            enabled=True,
+        )
+        provider = "provider"
     try:
         await runtime.sender.delete(ctx.chat_id, ctx.message.id)
     except Exception as exc:  # noqa: BLE001 - a failed delete must not lose the key
@@ -238,11 +247,12 @@ async def _key_command(ctx: CommandContext, words: list[str]) -> str:
     worked, detail = await runtime.ai.probe()
     if chat is not None:
         chat.last_error = "" if worked else detail
+    model = getattr(runtime.ai, "active_model", "") or runtime.config.ai_model
     if worked:
-        return ctx.t("yura.key_saved", model=runtime.config.ai_model) + "\n" + ui.note(
+        return ctx.t("yura.key_saved", model=f"{provider} · {model}") + "\n" + ui.note(
             escape(ctx.t("yura.key_verified", reply=detail))
         )
-    return ctx.t("yura.key_saved", model=runtime.config.ai_model) + "\n" + ui.note(
+    return ctx.t("yura.key_saved", model=f"{provider} · {model}") + "\n" + ui.note(
         escape(ctx.t("yura.key_unverified", error=truncate(detail, 160)))
     )
 

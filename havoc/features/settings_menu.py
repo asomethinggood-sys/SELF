@@ -18,7 +18,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-from .. import ui
+from .. import ai_models, ui
 from ..command_registry import Command, CommandContext
 from ..utils.formatting import escape
 
@@ -259,6 +259,24 @@ class Menu:
                 hint_key="settings.quiet_hint",
             ),
             Item(
+                key="ai",
+                icon="◈",
+                title_key="settings.ai",
+                value=_ai_value,
+                # Built once, from the catalogue: `auto` first, then every model
+                # that is actually available on the free plan, then the two
+                # housekeeping actions. `.ai model <name>` reaches the rest.
+                choices=(
+                    Choice("settings.ai_auto", _set_ai_model("auto")),
+                    *(
+                        Choice("", _set_ai_model(spec.key), label=f"{spec.icon} {spec.label}")
+                        for spec in ai_models.available_models()
+                    ),
+                    Choice("settings.ai_test", _ai_test),
+                    Choice("settings.ai_reset", _ai_reset),
+                ),
+            ),
+            Item(
                 key="persona",
                 icon="♡",
                 title_key="settings.persona",
@@ -322,6 +340,23 @@ async def _quiet_value(menu: Menu, language: str, chat_id: int | None = None) ->
     return f"{escape(str(config.get('start', '—')))} → {escape(str(config.get('end', '—')))}"
 
 
+async def _ai_value(menu: Menu, language: str, chat_id: int | None = None) -> str:
+    """Say which model is speaking and how many keys are left — not just "on"."""
+    provider = menu.runtime.ai
+    selection = getattr(provider, "selection", None)
+    credentials = getattr(provider, "credentials", None)
+    if credentials is not None and not credentials:
+        return menu.runtime.t("settings.state_off", language)
+    if selection is None or selection == "auto":
+        spec = None
+    else:
+        spec = ai_models.find(str(selection))
+    label = spec.label if spec is not None else menu.runtime.t("settings.ai_auto", language)
+    keys = len(credentials) if credentials is not None else 1
+    count = menu.runtime.t("settings.ai_keys_n", language, count=keys)
+    return f"{escape(label)} {ui.note('·')} {ui.note(escape(count))}"
+
+
 def _feature_value(name: str) -> Callable[[Menu, str, int | None], Awaitable[str]]:
     async def getter(menu: Menu, language: str, chat_id: int | None = None) -> str:
         enabled = await menu.runtime.store.feature_enabled(name)
@@ -361,6 +396,51 @@ def _set_dry_run(enabled: bool) -> Callable[[Menu, str, int | None], Awaitable[s
         )
 
     return apply
+
+
+def _set_ai_model(reference: str) -> Callable[[Menu, str, int | None], Awaitable[str]]:
+    async def apply(menu: Menu, language: str, chat_id: int | None = None) -> str:
+        runtime = menu.runtime
+        select = getattr(runtime.ai, "select", None)
+        if select is None:
+            return runtime.t("ai.single_provider", language, model=escape(str(getattr(runtime.ai, "model", "—"))))
+        chosen = await select(reference)
+        if chosen is None:
+            return runtime.t("settings.ai_auto_changed", language)
+        return runtime.t("settings.ai_model_changed", language, model=escape(chosen.label))
+
+    return apply
+
+
+def _ai_test(menu: Menu, language: str, chat_id: int | None = None) -> Awaitable[str]:
+    async def apply(_menu: Menu, language: str, chat_id: int | None = None) -> str:
+        runtime = menu.runtime
+        probe = getattr(runtime.ai, "probe", None)
+        if probe is None:
+            return runtime.t("ai.single_provider", language, model=escape(str(getattr(runtime.ai, "model", "—"))))
+        worked, detail = await probe()
+        if worked:
+            return runtime.t(
+                "ai.test_ok",
+                language=language,
+                detail=escape(str(detail)[:120]),
+                key=escape(str(getattr(runtime.ai, "active_label", "") or "—")),
+            )
+        return runtime.t("ai.test_failed", language=language, detail=escape(str(detail)[:200]))
+
+    return apply()
+
+
+def _ai_reset(menu: Menu, language: str, chat_id: int | None = None) -> Awaitable[str]:
+    async def apply(_menu: Menu, language: str, chat_id: int | None = None) -> str:
+        runtime = menu.runtime
+        reset = getattr(runtime.ai, "reset_health", None)
+        if reset is None:
+            return runtime.t("settings.state_off", language)
+        await reset()
+        return runtime.t("ai.reset_done", language)
+
+    return apply()
 
 
 def _set_feature(name: str, enabled: bool) -> Callable[[Menu, str, int | None], Awaitable[str]]:

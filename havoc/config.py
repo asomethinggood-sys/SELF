@@ -183,6 +183,9 @@ class Config:
     ai_api_key: str = field(default="", repr=False)
     ai_model: str = "gpt-4o-mini"
     ai_timeout: float = 30.0
+    #: Where the committed credentials live. Several keys, several providers: the
+    #: file is base64 so a public repository's push protection accepts it.
+    ai_keys_path: str = ".auth/ai-keys.json"
     translate_provider: str = "none"
     libretranslate_url: str = ""
     libretranslate_api_key: str = field(default="", repr=False)
@@ -220,7 +223,22 @@ class Config:
 
     @property
     def ai_available(self) -> bool:
+        """True when a key came from the environment or the config file.
+
+        Deliberately not a filesystem check: a config object should answer the
+        same question everywhere. Credentials that live in the key file are the
+        router's business (:attr:`havoc.services.ai_router.AIRouter.available`),
+        and :attr:`ai_keys_configured` reports whether that file is present.
+        """
         return self.ai_provider != "none" and bool(self.ai_api_key)
+
+    @property
+    def ai_keys_configured(self) -> bool:
+        """True when the multi-key file exists, so a key file alone still counts."""
+        try:
+            return Path(self.ai_keys_path).expanduser().exists()
+        except OSError:  # pragma: no cover - unreadable path
+            return False
 
     @property
     def translation_available(self) -> bool:
@@ -343,8 +361,14 @@ def validate(config: Config) -> list[ConfigIssue]:
 
     if config.ai_provider not in AI_PROVIDERS:
         issues.append(ConfigIssue("AI_PROVIDER", f"must be one of {', '.join(AI_PROVIDERS)}", "warning"))
-    elif config.ai_provider != "none" and not config.ai_api_key:
-        issues.append(ConfigIssue("AI_API_KEY", "required when AI_PROVIDER is enabled", "warning"))
+    elif config.ai_provider != "none" and not (config.ai_available or config.ai_keys_configured):
+        issues.append(
+            ConfigIssue(
+                "AI_API_KEY",
+                f"required when AI_PROVIDER is enabled (or put keys in {config.ai_keys_path})",
+                "warning",
+            )
+        )
 
     if config.translate_provider not in TRANSLATE_PROVIDERS:
         issues.append(
@@ -447,6 +471,7 @@ def load_config(
         ai_base_url=raw("AI_BASE_URL") or "https://api.openai.com/v1",
         ai_api_key=raw("AI_API_KEY"),
         ai_model=raw("AI_MODEL") or "gpt-4o-mini",
+        ai_keys_path=raw("AI_KEYS_FILE") or ".auth/ai-keys.json",
         ai_timeout=float_of("AI_TIMEOUT", 30.0),
         translate_provider=(raw("TRANSLATE_PROVIDER") or "none").lower(),
         libretranslate_url=raw("LIBRETRANSLATE_URL").rstrip("/"),

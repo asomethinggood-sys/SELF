@@ -10,6 +10,19 @@ from __future__ import annotations
 from tests.conftest import FakeEvent, FakeMessage, invoke
 
 
+def _index(runtime, key: str) -> str:
+    """The row number of ``key`` in the root card.
+
+    Hard-coded digits broke the day an item was inserted, which is a test that
+    was measuring the menu's layout rather than its behaviour. Asking the menu
+    where its rows are keeps these tests about switching things on.
+    """
+    for position, item in enumerate(runtime.settings_menu.items, 1):
+        if item.key == key:
+            return str(position)
+    raise AssertionError(f"no menu row called {key}")
+
+
 async def _reply(runtime, text: str, *, chat_id: int = 100) -> list[str]:
     """Send ``text`` as the owner, the way the router sees it."""
     client = runtime.client
@@ -35,7 +48,7 @@ async def test_settings_renders_a_numbered_card(runtime) -> None:
 
 async def test_number_opens_the_item_and_shows_its_value(runtime) -> None:
     await invoke(runtime, ".settings")
-    replies = await _reply(runtime, "4")
+    replies = await _reply(runtime, _index(runtime, "dry_run"))
     assert len(replies) == 1
     body = replies[0]
     assert "Dry run" in body
@@ -45,19 +58,19 @@ async def test_number_opens_the_item_and_shows_its_value(runtime) -> None:
 
 async def test_dry_run_can_be_turned_on_and_off_from_the_menu(runtime) -> None:
     await invoke(runtime, ".settings")
-    await _reply(runtime, "4")
+    await _reply(runtime, _index(runtime, "dry_run"))
     replies = await _reply(runtime, "1")
     assert await runtime.permissions.dry_run_active() is True
     assert any("Dry run is on" in text for text in replies)
 
-    await _reply(runtime, "4")
+    await _reply(runtime, _index(runtime, "dry_run"))
     await _reply(runtime, "2")
     assert await runtime.permissions.dry_run_active() is False
 
 
 async def test_prefix_is_typed_and_applied(runtime) -> None:
     await invoke(runtime, ".settings")
-    await _reply(runtime, "3")
+    await _reply(runtime, _index(runtime, "prefix"))
     replies = await _reply(runtime, "!")
     assert runtime.prefix == "!"
     assert any("Saved" in text for text in replies)
@@ -67,7 +80,7 @@ async def test_prefix_is_typed_and_applied(runtime) -> None:
 
 async def test_prefix_rejects_a_bad_value_without_closing(runtime) -> None:
     await invoke(runtime, ".settings")
-    await _reply(runtime, "3")
+    await _reply(runtime, _index(runtime, "prefix"))
     replies = await _reply(runtime, "toolongprefix")
     assert runtime.prefix == "."
     assert any("prefix" in text.lower() for text in replies)
@@ -75,7 +88,7 @@ async def test_prefix_rejects_a_bad_value_without_closing(runtime) -> None:
 
 async def test_quiet_hours_accepts_a_range(runtime) -> None:
     await invoke(runtime, ".settings")
-    await _reply(runtime, "5")
+    await _reply(runtime, _index(runtime, "quiet_hours"))
     replies = await _reply(runtime, "23:00-07:00")
     config = await runtime.permissions.quiet_hours_config(None)
     assert config["start"] == "23:00" and config["end"] == "07:00"
@@ -84,16 +97,17 @@ async def test_quiet_hours_accepts_a_range(runtime) -> None:
 
 async def test_quiet_hours_can_be_switched_off(runtime) -> None:
     await invoke(runtime, ".settings")
-    await _reply(runtime, "5")
+    quiet = _index(runtime, "quiet_hours")
+    await _reply(runtime, quiet)
     await _reply(runtime, "22:00-06:00")
-    await _reply(runtime, "5")
+    await _reply(runtime, quiet)
     await _reply(runtime, "off")
     assert await runtime.permissions.quiet_hours_config(None) is None
 
 
 async def test_quiet_hours_rejects_garbage(runtime) -> None:
     await invoke(runtime, ".settings")
-    await _reply(runtime, "5")
+    await _reply(runtime, _index(runtime, "quiet_hours"))
     replies = await _reply(runtime, "whenever")
     assert any("23:00-07:00" in text for text in replies)
     assert await runtime.permissions.quiet_hours_config(None) is None
@@ -102,14 +116,14 @@ async def test_quiet_hours_rejects_garbage(runtime) -> None:
 async def test_features_toggle_from_the_menu(runtime) -> None:
     await runtime.feature_manager.set_enabled("poetry", False)
     await invoke(runtime, ".settings")
-    await _reply(runtime, "7")
+    await _reply(runtime, _index(runtime, "poetry"))
     await _reply(runtime, "1")
     assert await runtime.store.feature_enabled("poetry") is True
 
 
 async def test_back_and_close(runtime) -> None:
     await invoke(runtime, ".settings")
-    await _reply(runtime, "4")
+    await _reply(runtime, _index(runtime, "dry_run"))
     back = await _reply(runtime, "0")
     assert "Settings" in back[0]
     closed = await _reply(runtime, "x")
@@ -119,7 +133,7 @@ async def test_back_and_close(runtime) -> None:
 
 async def test_bad_number_keeps_the_menu_open(runtime) -> None:
     await invoke(runtime, ".settings")
-    replies = await _reply(runtime, "4")
+    replies = await _reply(runtime, _index(runtime, "dry_run"))
     assert "Dry run" in replies[0]
     replies = await _reply(runtime, "9")
     assert "not one of the numbers" in replies[0]

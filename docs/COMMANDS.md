@@ -9,8 +9,14 @@ account other than the logged-in user.
 `.` in the usage column stands for the active prefix (default `.`).
 
 
-Total: **71 commands**.
+Total: **72 commands**.
 
+
+## Ai
+
+| Command | Description | Usage | Aliases |
+| --- | --- | --- | --- |
+| `.ai` | Every AI model and key, with today's budgets _(owner only)._ | `.ai [model <n|name|auto>|key [add <key>|rm <label>]|test|reset]` | `.models`, `.model`, `.keys` |
 
 ## Core
 

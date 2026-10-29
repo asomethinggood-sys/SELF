@@ -678,6 +678,11 @@ class Dispatcher:
             return False
         # Other flows (the settings menu) own their own state machine; the
         # router only knows to hand them the reply while one is open.
+        if session["flow"] == "ai":
+            menu = getattr(runtime, "ai_menu", None)
+            if menu is None:
+                return False
+            return await menu.handle(event, message, text, language, session)
         if session["flow"] == "settings":
             menu = getattr(runtime, "settings_menu", None)
             if menu is None:

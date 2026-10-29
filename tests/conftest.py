@@ -248,6 +248,9 @@ def make_config(tmp_path: Path, **overrides: Any) -> Config:
         command_prefix=".",
         outbound_rate_limit=1000,
         owner_ids=(42,),
+        # Never read the repository's real credentials from a test: a stale key
+        # in .auth would make the suite depend on the network.
+        ai_keys_path=str(tmp_path / "no-keys-here.json"),
     )
     defaults.update(overrides)
     return Config(**defaults)

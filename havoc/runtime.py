@@ -29,6 +29,7 @@ from .permissions import Permissions
 from .plugin_loader import PluginLoader
 from .scheduler import Scheduler
 from .services.ai_provider import AIProvider
+from .services.ai_router import AIRouter
 from .services.fight_loop import FightLoop
 from .services.memory import MemoryStore
 from .services.rate_limiter import RateLimiter
@@ -94,13 +95,17 @@ class Runtime:
         limiter = RateLimiter(outbound_limit=config.outbound_rate_limit)
         permissions = Permissions(config, store)
 
-        ai = AIProvider.from_config(config)
-        # A key pasted into the chat once (``.yura key …``) beats re-deploying:
-        # it lives in the database, never in the repository. Explicit
-        # configuration still wins when both exist.
+        # Several keys across several providers, rotated with persisted budgets
+        # and health. The router duck-types AIProvider, so every feature that
+        # asked `runtime.ai` for a sentence keeps working without knowing about
+        # the second key.
+        ai: Any = await AIRouter.load(config, store, logger)
         if not ai.available:
+            # A plain single-provider setup still works, and so does a lone key
+            # pasted into the chat (`.yura key …`), which lives in the database.
+            ai = AIProvider.from_config(config)
             stored_key = await store.get_setting("ai.api_key", None)
-            if stored_key and str(config.ai_provider) in {"openai_compatible", "none"}:
+            if not ai.available and stored_key and str(config.ai_provider) in {"openai_compatible", "none"}:
                 ai = AIProvider(
                     base_url=config.ai_base_url,
                     api_key=str(stored_key),

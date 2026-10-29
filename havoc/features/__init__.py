@@ -13,6 +13,7 @@ from types import ModuleType
 MODULE_ORDER: tuple[str, ...] = (
     "core",
     "settings_menu",
+    "ai_menu",
     "language",
     "utilities",
     "poetry",
