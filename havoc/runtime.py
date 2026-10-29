@@ -95,6 +95,19 @@ class Runtime:
         permissions = Permissions(config, store)
 
         ai = AIProvider.from_config(config)
+        # A key pasted into the chat once (``.yura key …``) beats re-deploying:
+        # it lives in the database, never in the repository. Explicit
+        # configuration still wins when both exist.
+        if not ai.available:
+            stored_key = await store.get_setting("ai.api_key", None)
+            if stored_key and str(config.ai_provider) in {"openai_compatible", "none"}:
+                ai = AIProvider(
+                    base_url=config.ai_base_url,
+                    api_key=str(stored_key),
+                    model=config.ai_model,
+                    timeout=config.ai_timeout,
+                    enabled=True,
+                )
         translator = build_translation_provider(config)
         feature_manager = FeatureManager(
             store,

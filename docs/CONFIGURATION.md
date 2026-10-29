@@ -63,6 +63,17 @@ Gemma 4, …), and falls back through the top three. If every configured slug ha
 been retired, one discovery call happens automatically and the turn is retried
 once.
 
+The key can arrive three ways, in order of preference:
+
+1. `.yura key <key>` in Telegram — stored in the database, message deleted, never
+   echoed. Survives restarts and deploys (the database is snapshotted).
+2. the `OPENROUTER_API_KEY` repository secret, which the deploy workflow exports
+   as `AI_API_KEY`;
+3. `AI_API_KEY` in the environment, or `ai.api_key` in `.auth/config.json` for a
+   fork without Actions secrets.
+
+A committed key is refused by GitHub push protection, which is why (1) exists.
+
 Verify with a real round-trip instead of trusting the config:
 
 ```bash

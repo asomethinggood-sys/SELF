@@ -435,3 +435,32 @@ async def test_features_command_lists_the_persona_group(runtime) -> None:
 @pytest.mark.parametrize("language", ["en", "fa"])
 def test_the_call_hint_is_present_in_both_languages(language: str) -> None:
     assert persona.call_prompt(language).strip()
+
+
+# ---------------------------------------------------------------------------
+# The key, stored without publishing it
+# ---------------------------------------------------------------------------
+async def test_the_key_command_stores_the_key_and_deletes_the_message(runtime) -> None:
+    runtime.client.sent.clear()
+    await invoke(runtime, ".yura key sk-or-v1-testtesttest")
+    stored = await runtime.store.get_setting("ai.api_key", None)
+    assert stored == "sk-or-v1-testtesttest"
+    assert runtime.ai.available is True
+    # The message that carried it is gone, and the confirmation does not repeat it.
+    assert runtime.client.deleted, "the key message was left in the chat"
+    assert "sk-or-v1-testtesttest" not in last_text(runtime)
+
+
+async def test_the_key_survives_a_restart(runtime, config) -> None:
+    await invoke(runtime, ".yura key sk-or-v1-persisted")
+    from havoc.runtime import Runtime
+
+    restarted = await Runtime.create(config, runtime.logger)
+    assert restarted.ai.available is True
+    assert restarted.ai._api_key == "sk-or-v1-persisted"
+    await restarted.db.close()
+
+
+async def test_the_key_command_reports_state_without_a_value(runtime) -> None:
+    await invoke(runtime, ".yura key")
+    assert "off" in last_text(runtime).lower() or "no" in last_text(runtime).lower()

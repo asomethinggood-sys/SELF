@@ -841,6 +841,8 @@
   "yura.card_hint": "کافی است بگویی {prefix}yura تا جواب بدهد. با {prefix}yura on به هر چیزی که اینجا بنویسی جواب می‌دهد.",
   "yura.card_title": "{name}",
   "yura.enabled_hint": "حالا به هر چیزی که اینجا بنویسی و دستور نباشد جواب می‌دهد. {prefix}yura off ساکتش می‌کند و {prefix}yura memory نشان می‌دهد چه چیزی یادش مانده.",
+  "yura.key_saved": "کلید ذخیره شد و پیام پاک شد. مدل: {model} — یک سلام بده و ببین.",
+  "yura.key_state": "کلید مدل: {state}. یک بار با {prefix}yura key <key> تنظیمش کن — پیام بلافاصله پاک می‌شود.",
   "yura.log_cleared": "{count} پیام از تاریخچهٔ گفت‌وگو پاک شد.",
   "yura.log_empty": "هنوز گفت‌وگویی نیست. یک چیزی بگو.",
   "yura.memory_cleared": "{count} خاطره فراموش شد.",

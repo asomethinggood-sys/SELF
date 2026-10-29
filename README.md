@@ -53,6 +53,19 @@ they survive a restart — and a deploy.
 sanitised name, text-only extension whitelist (`.md`, `.txt`, `.csv`, `.json`,
 `.py`, `.html`, `.svg`, `.tex`), size-capped. Nothing executable is written.
 
+**Connecting the model.** Put the key where it cannot leak: either a repository
+secret (`OPENROUTER_API_KEY`, read by the deploy workflow), or — with no GitHub
+visit at all — one message in Telegram:
+
+```
+.yura key sk-or-v1-…
+```
+
+The key is stored in the database, the message that carried it is deleted
+immediately, and the confirmation never repeats it. `.yura key` with no value
+reports whether one is set. `python -m havoc ai "hi"` makes one real call and
+prints which model answered.
+
 **Honesty.** Ask whether she is a bot and she says yes, in character, in one
 clause, then moves on.
 

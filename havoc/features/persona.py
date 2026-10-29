@@ -175,6 +175,38 @@ async def _memory_command(ctx: CommandContext, words: list[str]) -> None:
     )
 
 
+async def _key_command(ctx: CommandContext, words: list[str]) -> str:
+    """``.yura key <key>`` — store the provider key without publishing it.
+
+    The message that carried the key is deleted immediately when the account is
+    allowed to delete its own messages; the confirmation never echoes it. This
+    is the whole reason the key lives in the database: a repository secret needs
+    someone to open GitHub, and a committed key is refused by push protection.
+    """
+    runtime = ctx.runtime
+    value = " ".join(word for word in words if word).strip()
+    if not value:
+        stored = bool(await ctx.store.get_setting("ai.api_key", None))
+        state = ctx.t("common.yes") if stored else ctx.t("common.no")
+        return ctx.t("yura.key_state", state=state, prefix=runtime.prefix)
+
+    await ctx.store.set_setting("ai.api_key", value)
+    from ..services.ai_provider import AIProvider
+
+    runtime.ai = AIProvider(
+        base_url=runtime.config.ai_base_url,
+        api_key=value,
+        model=runtime.config.ai_model,
+        timeout=runtime.config.ai_timeout,
+        enabled=True,
+    )
+    try:
+        await runtime.sender.delete(ctx.chat_id, ctx.message.id)
+    except Exception as exc:  # noqa: BLE001 - a failed delete must not lose the key
+        runtime.logger.warning("yura: could not delete the key message: %s", exc)
+    return ctx.t("yura.key_saved", model=runtime.config.ai_model)
+
+
 async def _chat(ctx: CommandContext, text: str, *, greeting: bool = False) -> None:
     probe = _invocation_text(ctx) or " ".join(filter(None, [ctx.sub or "", *ctx.args]))
     language = _language_for(ctx, text, probe)
@@ -215,6 +247,9 @@ async def cmd_yura(ctx: CommandContext) -> None:
         return
     if action == "forget":
         await _memory_command(ctx, ["forget", *words])
+        return
+    if action in {"key", "apikey", "token"}:
+        await ctx.reply(await _key_command(ctx, words))
         return
     if action in {"log", "history"}:
         transcript = await ctx.runtime.memory.transcript(
@@ -333,6 +368,7 @@ def register(runtime: Any) -> None:
             subcommands=(
                 "on", "off", "enable", "disable", "status", "card", "who", "state",
                 "memory", "memories", "remember", "learn", "forget", "log", "history", "clear",
+                "key", "apikey", "token",
             ),
         )
     )
