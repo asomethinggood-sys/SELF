@@ -1,18 +1,20 @@
-"""Ask the configured AI provider three ways and report exactly what came back.
+"""Ask the configured AI provider several ways and report exactly what came back.
 
-A single "it failed" line is not enough to fix anything: the gateway can answer
-``/models`` with 200 and still refuse ``/chat/completions``, and the refusal page
-is an HTML error from the CDN in front of it, not JSON from the provider. This
-script separates those cases so the answer is a fact instead of a guess:
+A single "it failed" line is not enough to fix anything. The gateway can answer
+``/models`` with 200 and still refuse ``/chat/completions``; the refusal can be an
+HTML page from the CDN in front of it rather than JSON from the provider; and a
+free model can answer 200 with no content at all. This script separates those
+cases so the answer is a fact instead of a guess:
 
-1. ``GET /models`` **with** the key, the way the provider should ask;
-2. ``POST /chat/completions`` with a minimal payload, through the same HTTP
-   helper the bot uses;
-3. the same POST with the persona system prompt attached, because content
-   filters inspect the body.
+1. ``GET /models`` with the key;
+2. ``POST /chat/completions`` with a minimal payload;
+3. the same with the persona system prompt attached;
+4. the same with OpenRouter's optional attribution headers;
+5. the provider's own ``converse()``, which is what the bot actually calls;
+6. a small matrix of the discovered models at two token budgets, because some
+   free endpoints spend the whole budget on hidden reasoning and return nothing.
 
-Each result is ``status`` plus the first bytes of the body. Nothing here prints
-the key.
+Nothing here prints the key.
 """
 
 from __future__ import annotations
@@ -42,6 +44,43 @@ async def _attempt(name: str, coroutine) -> dict[str, object]:
     return {"check": name, "status": 200, "ok": True, "detail": _head(json.dumps(result)[:200])}
 
 
+async def _first_free_model(provider: AIProvider, auth: dict[str, str]) -> str:
+    """One free slug the gateway currently lists, for the raw checks."""
+    try:
+        entries = await http_module.get_json(f"{provider.base_url}/models", headers=auth)
+    except Exception:  # noqa: BLE001 - the listing check already reports failures
+        return provider.models[0] if provider.models else provider.model
+    free = [str(entry["id"]) for entry in entries.get("data", []) if str(entry.get("id", "")).endswith(":free")]
+    return sorted(free)[0] if free else (provider.models[0] if provider.models else provider.model)
+
+
+async def _matrix(provider: AIProvider, auth: dict[str, str]) -> list[dict[str, object]]:
+    """Which discovered models answer a plain question, and at what budget."""
+    rows: list[dict[str, object]] = []
+    for candidate in (provider.models or [])[:6]:
+        for budget in (16, 300):
+            entry: dict[str, object] = {"model": candidate, "budget": budget}
+            try:
+                data = await http_module.post_json(
+                    f"{provider.base_url}/chat/completions",
+                    {
+                        "model": candidate,
+                        "messages": [{"role": "user", "content": "2+2"}],
+                        "max_tokens": budget,
+                    },
+                    timeout=min(provider.timeout, 40),
+                    headers=auth,
+                )
+                choices = (data or {}).get("choices") or [{}]
+                message = choices[0].get("message") or {}
+                entry["content"] = _head(str(message.get("content") or ""), 40)
+                entry["has_reasoning"] = bool(message.get("reasoning") or message.get("reasoning_content"))
+            except Exception as exc:  # noqa: BLE001 - a probe reports, never raises
+                entry["error"] = _head(str(exc), 80)
+            rows.append(entry)
+    return rows
+
+
 async def main() -> int:
     config, _issues = load_config()
     provider = AIProvider.from_config(config)
@@ -49,36 +88,23 @@ async def main() -> int:
         "base_url": provider.base_url,
         "model": provider.model,
         "available": provider.available,
+        "user_agent": http_module.USER_AGENT,
         "checks": [],
     }
     checks: list[dict[str, object]] = report["checks"]  # type: ignore[assignment]
     if not provider.available:
         report["error"] = "provider is not configured (AI_PROVIDER / AI_API_KEY)"
-        report["discovered_models"] = provider.models[:5]
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 1
 
     auth = {"Authorization": f"Bearer {provider._api_key}"}
-    listing = await _attempt(
-        "models with key", http_module.get_json(f"{provider.base_url}/models", headers=auth)
+    checks.append(
+        await _attempt("models with key", http_module.get_json(f"{provider.base_url}/models", headers=auth))
     )
-    checks.append(listing)
 
-    model = ""
-    if listing["ok"]:
-        try:
-            entries = await http_module.get_json(f"{provider.base_url}/models", headers=auth)
-            free = [entry["id"] for entry in entries.get("data", []) if str(entry.get("id", "")).endswith(":free")]
-            model = sorted(free)[0] if free else ""
-        except Exception:  # noqa: BLE001 - the listing already succeeded once
-            model = ""
-    model = model or provider.models[0]
-
-    short = {
-        "model": model,
-        "messages": [{"role": "user", "content": "2+2"}],
-        "max_tokens": 16,
-    }
+    model = await _first_free_model(provider, auth)
+    report["probe_model"] = model
+    short = {"model": model, "messages": [{"role": "user", "content": "2+2"}], "max_tokens": 16}
     checks.append(
         await _attempt(
             "chat, minimal payload",
@@ -87,19 +113,21 @@ async def main() -> int:
             ),
         )
     )
-    long_payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": system_prompt("en")},
-            {"role": "user", "content": "what is 2+2"},
-        ],
-        "max_tokens": 40,
-    }
     checks.append(
         await _attempt(
             "chat, with the persona prompt",
             http_module.post_json(
-                f"{provider.base_url}/chat/completions", long_payload, timeout=min(provider.timeout, 40), headers=auth
+                f"{provider.base_url}/chat/completions",
+                {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt("en")},
+                        {"role": "user", "content": "what is 2+2"},
+                    ],
+                    "max_tokens": 300,
+                },
+                timeout=min(provider.timeout, 40),
+                headers=auth,
             ),
         )
     )
@@ -110,78 +138,18 @@ async def main() -> int:
                 f"{provider.base_url}/chat/completions",
                 short,
                 timeout=min(provider.timeout, 40),
-                headers={**auth, "HTTP-Referer": "https://github.com/asomethinggood-sys/SELF", "X-Title": "HAVOC Yura"},
+                headers={
+                    **auth,
+                    "HTTP-Referer": "https://github.com/asomethinggood-sys/SELF",
+                    "X-Title": "Yura",
+                },
             ),
         )
     )
 
-    report["discovered_models"] = provider.models[:5]
+    report["discovered_models"] = provider.models[:6]
     try:
-        reply = await provider.converse([AIMessage("user", "2+2")], max_tokens=16)
-        checks.append({"check": "provider.converse", "status": 200, "ok": True, "detail": _head(reply)})
-        report["active_model"] = provider.active_model
-    # Which models answer a plain question, and at what budget? The free
-    # catalogue contains endpoints that reply 200 with no content at all.
-    matrix: list[dict[str, object]] = []
-    for candidate in (provider.models or [])[:6]:
-        for budget in (16, 300):
-            try:
-                data = await http_module.post_json(
-                    f"{provider.base_url}/chat/completions",
-                    {"model": candidate, "messages": [{"role": "user", "content": "2+2"}], "max_tokens": budget},
-                    timeout=min(provider.timeout, 40),
-                    headers=auth,
-                )
-                message = ((data or {}).get("choices") or [{}])[0].get("message") or {}
-                matrix.append(
-                    {
-                        "model": candidate,
-                        "budget": budget,
-                        "content": _head(str(message.get("content") or ""), 40),
-                        "has_reasoning": bool(message.get("reasoning") or message.get("reasoning_content")),
-                    }
-                )
-            except Exception as exc:  # noqa: BLE001 - a probe reports, never raises
-                matrix.append({"model": candidate, "budget": budget, "error": _head(str(exc), 80)})
-    report["model_matrix"] = matrix
-    except Exception as exc:  # noqa: BLE001 - a probe reports, never raises
-        checks.append(
-            {
-                "check": "provider.converse",
-                "status": None,
-                "ok": False,
-                "detail": _head(f"{type(exc).__name__}: {exc}"),
-            }
-        )
-        report["active_model"] = provider.active_model
-    # Which models answer a plain question, and at what budget? The free
-    # catalogue contains endpoints that reply 200 with no content at all.
-    matrix: list[dict[str, object]] = []
-    for candidate in (provider.models or [])[:6]:
-        for budget in (16, 300):
-            try:
-                data = await http_module.post_json(
-                    f"{provider.base_url}/chat/completions",
-                    {"model": candidate, "messages": [{"role": "user", "content": "2+2"}], "max_tokens": budget},
-                    timeout=min(provider.timeout, 40),
-                    headers=auth,
-                )
-                message = ((data or {}).get("choices") or [{}])[0].get("message") or {}
-                matrix.append(
-                    {
-                        "model": candidate,
-                        "budget": budget,
-                        "content": _head(str(message.get("content") or ""), 40),
-                        "has_reasoning": bool(message.get("reasoning") or message.get("reasoning_content")),
-                    }
-                )
-            except Exception as exc:  # noqa: BLE001 - a probe reports, never raises
-                matrix.append({"model": candidate, "budget": budget, "error": _head(str(exc), 80)})
-    report["model_matrix"] = matrix
-
-    report["discovered_models"] = provider.models[:5]
-    try:
-        reply = await provider.converse([AIMessage("user", "2+2")], max_tokens=16)
+        reply = await provider.converse([AIMessage("user", "2+2")], max_tokens=300)
         checks.append({"check": "provider.converse", "status": 200, "ok": True, "detail": _head(reply)})
     except Exception as exc:  # noqa: BLE001 - a probe reports, never raises
         checks.append(
@@ -193,31 +161,7 @@ async def main() -> int:
             }
         )
     report["active_model"] = provider.active_model
-    # Which models answer a plain question, and at what budget? The free
-    # catalogue contains endpoints that reply 200 with no content at all.
-    matrix: list[dict[str, object]] = []
-    for candidate in (provider.models or [])[:6]:
-        for budget in (16, 300):
-            try:
-                data = await http_module.post_json(
-                    f"{provider.base_url}/chat/completions",
-                    {"model": candidate, "messages": [{"role": "user", "content": "2+2"}], "max_tokens": budget},
-                    timeout=min(provider.timeout, 40),
-                    headers=auth,
-                )
-                message = ((data or {}).get("choices") or [{}])[0].get("message") or {}
-                matrix.append(
-                    {
-                        "model": candidate,
-                        "budget": budget,
-                        "content": _head(str(message.get("content") or ""), 40),
-                        "has_reasoning": bool(message.get("reasoning") or message.get("reasoning_content")),
-                    }
-                )
-            except Exception as exc:  # noqa: BLE001 - a probe reports, never raises
-                matrix.append({"model": candidate, "budget": budget, "error": _head(str(exc), 80)})
-    report["model_matrix"] = matrix
-    report["user_agent"] = http_module.USER_AGENT
+    report["model_matrix"] = await _matrix(provider, auth)
 
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0 if all(check["ok"] for check in checks) else 2
