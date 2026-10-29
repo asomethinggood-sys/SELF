@@ -42,6 +42,12 @@ sentences (`>_<`, `(¬‿¬)`, `ᵕ̈`), and answers in whichever language you u
 - Without a key, or when the network is down, she answers from her offline line
   bank instead of going quiet. A companion that sulks because the API dropped is
   not a companion.
+- **Variety is structural, not a promise.** The bank is *composed* — an opener, a
+  body, a tail and a face drawn from separate pools — so the same greeting does
+  not get the same answer twice: **983,500 lines per language (1,967,000 total)**,
+  and the last 60 sentences in a chat are excluded before the next one is
+  picked. `.yura status` prints the current bank size. Her own messages are
+  recognised by shape, so a composed line that echoes back is never answered.
 
 **Memory.** `.yura remember my name is Sam`, or let her write it herself through
 the `[[remember: …]]` directive the prompt teaches her. `.yura memory` lists what
@@ -62,9 +68,12 @@ visit at all — one message in Telegram:
 ```
 
 The key is stored in the database, the message that carried it is deleted
-immediately, and the confirmation never repeats it. `.yura key` with no value
-reports whether one is set. `python -m havoc ai "hi"` makes one real call and
-prints which model answered.
+immediately, and the confirmation never repeats it. Then it is **tried once,
+on the spot**: the reply says either what the model answered, or the exact
+failure (`network: …`, `unauthorized: …`) — never a cheerful "saved" over a
+dead key. `.yura key` with no value repeats that last failure, and `.yura status`
+shows the provider, the offline-fallback count and the bank size.
+`python -m havoc ai "hi"` makes one real call and prints which model answered.
 
 **Honesty.** Ask whether she is a bot and she says yes, in character, in one
 clause, then moves on.

@@ -69,22 +69,49 @@ async def test_the_name_reaches_user_facing_text(runtime) -> None:
 # ---------------------------------------------------------------------------
 # The offline bank
 # ---------------------------------------------------------------------------
-def test_every_line_is_safe_bilingual_and_real() -> None:
-    assert set(persona.LINES) == {"en", "fa"}
-    for language, lines in persona.LINES.items():
-        assert len(lines) >= 25, f"only {len(lines)} lines in {language}"
-        assert len(set(lines)) == len(lines), f"duplicate line in {language}"
-        for line in lines:
+def test_the_bank_clears_three_thousand_lines_per_language() -> None:
+    """The complaint that grew the bank: she kept saying the same thing."""
+    from havoc import yura_lines
+
+    assert yura_lines.capacity("en") >= 3000
+    assert yura_lines.capacity("fa") >= 3000
+    assert persona.capacity() == yura_lines.capacity("en") + yura_lines.capacity("fa")
+
+
+def test_every_generated_line_is_safe_bilingual_and_real() -> None:
+    from havoc import yura_lines
+
+    for language in ("en", "fa"):
+        # Draw the way the chat does: each line joins the avoid set before the
+        # next one is picked, so repeats are not luck, they are a bug.
+        seen: set[str] = set()
+        for _ in range(120):
+            line = persona.build_line(language, avoid=seen)
+            assert line not in seen, f"repeat inside the avoid window: {line}"
+            seen.add(line)
             assert persona.is_safe(line), f"unsafe line: {line}"
             assert line == line.strip()
-            assert len(line) > 10
+            assert len(line) > 20
+            assert persona.is_own_line(line), f"unrecognised own line: {line}"
+    # The pool pieces themselves must be clean, not just the combinations.
+    for language in yura_lines.BODIES:
+        for body in yura_lines.BODIES[language]:
+            assert persona.is_safe(body), body
+            assert persona.is_own_line(yura_lines.pick(language, choice=0))
+        for tail in yura_lines.TAILS[language]:
+            assert persona.is_safe(tail), tail
 
 
 def test_the_voice_is_an_e_kitten() -> None:
     """The requested persona, asserted instead of assumed."""
-    joined = persona.normalize(" ".join(persona.LINES["en"]))
-    assert "daddaaa" in joined
-    assert any(face in " ".join(persona.LINES["en"]) for face in ("(¬‿¬)", ">_<", "ᵕ̈", "ᴗ"))
+    from havoc import yura_lines
+
+    assert "daddaaa" in yura_lines.PETS["en"]
+    assert "دددااااا" in yura_lines.PETS["fa"]
+    faces = " ".join(yura_lines.FACES)
+    assert any(face in faces for face in ("(¬‿¬)", ">_<", "ᵕ̈", "ᴗ"))
+    lines = [persona.build_line("en") for _ in range(60)]
+    assert any("daddaaa" in line for line in lines)
 
 
 def test_no_line_claims_to_be_a_person() -> None:
@@ -103,12 +130,12 @@ def test_no_scenario_machinery_survives() -> None:
 def test_a_line_can_be_chosen_deterministically() -> None:
     first = persona.build_line("en", choice=0)
     assert first == persona.build_line("en", choice=0)
-    assert first in persona.LINES["en"]
-    assert persona.build_line("en", choice=999) in persona.LINES["en"]
+    assert persona.is_own_line(first)
+    assert persona.is_own_line(persona.build_line("en", choice=999))
 
 
 def test_an_unknown_language_falls_back_to_english() -> None:
-    assert persona.build_line("de", choice=0) in persona.LINES["en"]
+    assert persona.is_own_line(persona.build_line("de", choice=0))
 
 
 def test_own_lines_are_recognized() -> None:
@@ -138,7 +165,7 @@ def test_the_prompt_carries_voice_memory_and_the_honesty_rule() -> None:
 # ---------------------------------------------------------------------------
 async def test_a_bare_call_answers_with_a_random_line(runtime) -> None:
     await invoke(runtime, ".yura")
-    assert _plain(runtime) in persona.LINES["en"]
+    assert persona.is_own_line(_plain(runtime))
 
 
 async def test_the_farsi_name_alone_answers_too(runtime) -> None:
@@ -146,12 +173,32 @@ async def test_the_farsi_name_alone_answers_too(runtime) -> None:
     message = FakeMessage(id=501, chat_id=100, sender_id=42, text="یورا", out=True)
     await runtime.handlers._handle_outgoing(FakeEvent(message, chat_id=100, out=True))
     assert runtime.client.sent, "a bare Persian call produced nothing"
-    assert html.unescape(runtime.client.sent[-1].text) in persona.LINES["fa"]
+    assert persona.is_own_line(html.unescape(runtime.client.sent[-1].text))
 
 
 async def test_she_answers_in_the_chat_language(runtime) -> None:
     await invoke(runtime, ".yura", language="fa")
-    assert _plain(runtime) in persona.LINES["fa"]
+    assert persona.is_own_line(_plain(runtime))
+
+
+def _letters(text: str) -> tuple[int, int]:
+    """(latin, persian) letters, so a kaomoji's stray ``و`` cannot fail a test."""
+    latin = sum("a" <= char.lower() <= "z" for char in text)
+    persian = sum("\u0600" <= char <= "\u06ff" for char in text)
+    return latin, persian
+
+
+async def test_the_words_typed_win_over_the_chat_default(runtime) -> None:
+    """A Persian chat must not answer an English sentence in Farsi, or back."""
+    await invoke(runtime, ".yura hello there", language="fa")
+    english = _plain(runtime)
+    latin, persian = _letters(english)
+    assert latin > persian, english
+
+    await invoke(runtime, ".yura حالت چطوره", language="en")
+    farsi = _plain(runtime)
+    latin, persian = _letters(farsi)
+    assert persian > latin, farsi
 
 
 async def test_the_card_reports_state_and_memory(runtime) -> None:
@@ -172,7 +219,7 @@ async def test_yura_switches_on_and_off(runtime) -> None:
 async def test_freeform_text_goes_to_her(runtime) -> None:
     """``.yura <anything>`` is a message to her, not an argument error."""
     await invoke(runtime, ".yura are you awake")
-    assert _plain(runtime) in persona.LINES["en"]
+    assert persona.is_own_line(_plain(runtime))
 
 
 async def test_a_reply_from_the_model_is_sent(runtime) -> None:
@@ -190,7 +237,7 @@ async def test_a_model_failure_falls_back_to_an_offline_line(runtime) -> None:
 
     runtime.ai = Exploding()
     await invoke(runtime, ".yura hey")
-    assert _plain(runtime) in persona.LINES["en"]
+    assert persona.is_own_line(_plain(runtime))
 
 
 async def test_the_model_reply_is_html_escaped(runtime) -> None:
@@ -282,7 +329,7 @@ async def test_it_replies_to_the_owners_own_message(runtime) -> None:
     await runtime.persona_replies.on_self_message(_event(runtime, "i had a long day"))
     sent = [html.unescape(message.text) for message in runtime.client.sent]
     assert len(sent) == 1
-    assert sent[0] in persona.LINES["en"]
+    assert persona.is_own_line(sent[0])
 
 
 async def test_it_sends_the_model_reply_when_one_is_configured(runtime) -> None:
@@ -389,7 +436,7 @@ async def test_it_uses_the_message_language(runtime) -> None:
     runtime.client.sent.clear()
     await runtime.persona_replies.on_self_message(_event(runtime, "شب بخیر"))
     sent = [html.unescape(message.text) for message in runtime.client.sent]
-    assert sent and sent[0] in persona.LINES["fa"]
+    assert sent and persona.is_own_line(sent[0])
 
 
 async def test_the_self_id_is_read_after_login(runtime) -> None:
@@ -440,7 +487,21 @@ def test_the_call_hint_is_present_in_both_languages(language: str) -> None:
 # ---------------------------------------------------------------------------
 # The key, stored without publishing it
 # ---------------------------------------------------------------------------
-async def test_the_key_command_stores_the_key_and_deletes_the_message(runtime) -> None:
+@pytest.fixture
+def no_network_probe(monkeypatch):
+    """Never touch the network from a test. The outcome is scripted instead."""
+    from havoc.services.ai_provider import AIProvider
+
+    async def _ok(self, *, max_tokens: int = 8):
+        return True, "ok"
+
+    monkeypatch.setattr(AIProvider, "probe", _ok)
+    return _ok
+
+
+async def test_the_key_command_stores_the_key_and_deletes_the_message(
+    runtime, no_network_probe
+) -> None:
     runtime.client.sent.clear()
     await invoke(runtime, ".yura key sk-or-v1-testtesttest")
     stored = await runtime.store.get_setting("ai.api_key", None)
@@ -451,7 +512,7 @@ async def test_the_key_command_stores_the_key_and_deletes_the_message(runtime) -
     assert "sk-or-v1-testtesttest" not in last_text(runtime)
 
 
-async def test_the_key_survives_a_restart(runtime, config) -> None:
+async def test_the_key_survives_a_restart(runtime, config, no_network_probe) -> None:
     await invoke(runtime, ".yura key sk-or-v1-persisted")
     from havoc.runtime import Runtime
 
@@ -464,3 +525,36 @@ async def test_the_key_survives_a_restart(runtime, config) -> None:
 async def test_the_key_command_reports_state_without_a_value(runtime) -> None:
     await invoke(runtime, ".yura key")
     assert "off" in last_text(runtime).lower() or "no" in last_text(runtime).lower()
+
+
+async def test_a_saved_key_is_actually_tried_and_the_answer_is_shown(
+    runtime, monkeypatch
+) -> None:
+    from havoc.services.ai_provider import AIProvider
+
+    async def _ok(self, *, max_tokens: int = 8):
+        return True, "ok"
+
+    monkeypatch.setattr(AIProvider, "probe", _ok)
+    await invoke(runtime, ".yura key sk-or-v1-probed")
+    text = html.unescape(last_text(runtime))
+    assert "ok" in text
+    assert runtime.yura_chat.last_error == ""
+
+
+async def test_a_saved_key_that_fails_is_reported_as_failing(runtime, monkeypatch) -> None:
+    """The whole complaint: the card said "live" while nothing answered."""
+    from havoc.services.ai_provider import AIProvider
+
+    async def _dead(self, *, max_tokens: int = 8):
+        return False, "network: [SSL: CERTIFICATE_VERIFY_FAILED]"
+
+    monkeypatch.setattr(AIProvider, "probe", _dead)
+    await invoke(runtime, ".yura key sk-or-v1-deadkey")
+    text = html.unescape(last_text(runtime))
+    assert "network" in text
+    assert runtime.yura_chat.last_error.startswith("network:")
+
+    # And the state view repeats it instead of pretending everything is fine.
+    await invoke(runtime, ".yura key")
+    assert "network" in html.unescape(last_text(runtime))

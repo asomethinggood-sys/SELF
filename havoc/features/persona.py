@@ -54,18 +54,35 @@ def _invocation_text(ctx: CommandContext) -> str:
 
 
 def _language_for(ctx: CommandContext, text: str, probe: str = "") -> str:
-    """The language to answer in.
+    """The language to answer in, read from what the owner typed.
 
-    The detector gives up on a single word like ``یورا`` and falls back to the
-    default, which would answer a Persian call in English. The text itself is a
-    better witness than a length heuristic.
+    The detector gives up on a single word like ``یورا`` or ``hi`` and falls back
+    to the chat default, which used to answer an English ``hi`` in Persian. The
+    typed words are the better witness: the command name itself is stripped
+    first, because ``.yura`` is Latin in both languages.
     """
-    probe = probe or text or _invocation_text(ctx)
-    if any("\u0600" <= char <= "\u06ff" for char in probe):
+    tail = (text or "").strip()
+    if not tail:
+        tail = _invocation_tail(ctx)
+    if any("\u0600" <= char <= "\u06ff" for char in tail):
         return "fa"
-    if text and any("a" <= char.lower() <= "z" for char in text):
+    if any("a" <= char.lower() <= "z" for char in tail):
         return "en"
+    # No letters at all (``.yura`` alone): fall back to the original invocation,
+    # so a bare ``یورا`` still answers in Farsi.
+    original = _invocation_text(ctx)
+    if any("\u0600" <= char <= "\u06ff" for char in original):
+        return "fa"
     return ctx.language
+
+
+def _invocation_tail(ctx: CommandContext) -> str:
+    """The message minus the prefix and the command word."""
+    raw = _invocation_text(ctx).strip()
+    if ctx.runtime.prefix and raw.startswith(ctx.runtime.prefix):
+        raw = raw[len(ctx.runtime.prefix):]
+    parts = raw.split()
+    return " ".join(parts[1:]) if len(parts) > 1 else ""
 
 
 def _name(language: str) -> str:
@@ -77,19 +94,26 @@ async def _card(ctx: CommandContext) -> str:
     enabled = await runtime.feature_manager.is_enabled("persona")
     facts = await runtime.memory.count(ctx.chat_id)
     provider = runtime.ai
+    chat = getattr(runtime, "yura_chat", None)
     rows = [
         f"{ui.bold(ctx.t('yura.state'))} {ui.state(enabled, on=ctx.t('common.on'), off=ctx.t('common.off'))}",
         f"{ui.bold(ctx.t('yura.mode'))} "
         + ui.note(
             escape(
-                ctx.t("yura.mode_model", model=provider.model)
+                ctx.t("yura.mode_model", model=getattr(provider, "active_model", "") or provider.model)
                 if getattr(provider, "available", False)
                 else ctx.t("yura.mode_offline")
             )
         ),
         f"{ui.bold(ctx.t('yura.memory_count'))} {ui.code(str(facts))}",
-        f"{ui.bold(ctx.t('yura.turns'))} {ui.code(str(getattr(runtime.yura_chat, 'turns', 0)))}",
+        f"{ui.bold(ctx.t('yura.turns'))} {ui.code(str(getattr(chat, 'turns', 0)))}",
+        f"{ui.bold(ctx.t('yura.bank'))} {ui.code(str(persona.capacity()))}",
     ]
+    if chat is not None and chat.fallbacks:
+        rows.append(
+            f"{ui.bold(ctx.t('yura.fallbacks'))} {ui.code(str(chat.fallbacks))}"
+            + (f" {ui.note(escape(truncate(chat.last_error, 120)))}" if chat.last_error else "")
+        )
     return "\n\n".join(
         [
             ui.title("♡", ctx.t("yura.card_title", name=escape(_name(ctx.language)))),
@@ -185,10 +209,16 @@ async def _key_command(ctx: CommandContext, words: list[str]) -> str:
     """
     runtime = ctx.runtime
     value = " ".join(word for word in words if word).strip()
+    chat = getattr(runtime, "yura_chat", None)
     if not value:
         stored = bool(await ctx.store.get_setting("ai.api_key", None))
         state = ctx.t("common.yes") if stored else ctx.t("common.no")
-        return ctx.t("yura.key_state", state=state, prefix=runtime.prefix)
+        answer = ctx.t("yura.key_state", state=state, prefix=runtime.prefix)
+        if stored and chat is not None and chat.last_error:
+            # The card says "live model" from configuration alone; this line says
+            # what actually happened the last time she tried to speak.
+            answer += "\n" + ui.note(escape(truncate(chat.last_error, 160)))
+        return answer
 
     await ctx.store.set_setting("ai.api_key", value)
     from ..services.ai_provider import AIProvider
@@ -204,7 +234,17 @@ async def _key_command(ctx: CommandContext, words: list[str]) -> str:
         await runtime.sender.delete(ctx.chat_id, ctx.message.id)
     except Exception as exc:  # noqa: BLE001 - a failed delete must not lose the key
         runtime.logger.warning("yura: could not delete the key message: %s", exc)
-    return ctx.t("yura.key_saved", model=runtime.config.ai_model)
+    # Try it once, now, and say what happened. "Saved" is not "working".
+    worked, detail = await runtime.ai.probe()
+    if chat is not None:
+        chat.last_error = "" if worked else detail
+    if worked:
+        return ctx.t("yura.key_saved", model=runtime.config.ai_model) + "\n" + ui.note(
+            escape(ctx.t("yura.key_verified", reply=detail))
+        )
+    return ctx.t("yura.key_saved", model=runtime.config.ai_model) + "\n" + ui.note(
+        escape(ctx.t("yura.key_unverified", error=truncate(detail, 160)))
+    )
 
 
 async def _chat(ctx: CommandContext, text: str, *, greeting: bool = False) -> None:
@@ -316,7 +356,11 @@ class PersonaReplies:
         if self_id is None or event.chat_id != self_id:
             self.skipped += 1
             return
-        if persona.is_own_line(event.text) or self._is_command(event.text):
+        if (
+            persona.is_own_line(event.text)
+            or self.runtime.yura_chat.was_sent(event.chat_id, event.text)
+            or self._is_command(event.text)
+        ):
             self.skipped += 1
             return
         decision = await self.runtime.permissions.can_act(event.chat_id, "persona", is_private=True)

@@ -22,6 +22,7 @@ executable is ever written: a model that hallucinates a ``.sh`` gets a ``.txt``.
 from __future__ import annotations
 
 import re
+from collections import deque
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -74,6 +75,12 @@ class YuraChat:
         self.logger = runtime.logger
         self.turns = 0
         self.fallbacks = 0
+        self.last_error = ""
+        # What she has said in each chat, in this process. Two jobs: stop the
+        # offline bank repeating itself, and make the loop guard airtight now
+        # that lines are composed rather than listed.
+        self._sent: dict[int, deque[str]] = {}
+        self._recent: dict[int, deque[str]] = {}
 
     @property
     def provider(self) -> AIProvider:
@@ -134,8 +141,13 @@ class YuraChat:
         """Reply to ``text``. Never raises for provider problems."""
         prompt = text.strip() or persona.call_prompt(language)
         if not prompt:
-            return Answer(persona.build_line(language))
+            return Answer(self._offline(chat_id, language))
 
+        history = await self.memory.history(chat_id)
+        # Lines already used in this chat: the model is asked for variety, the
+        # offline bank is *made* to give it.
+        avoid = {content for role, content in history if role == "assistant"}
+        avoid |= set(self._recent.get(chat_id, ()))
         # Context first, then the current turn: appending before reading would
         # put the same message in the prompt twice.
         _, messages = await self._context(chat_id, language, greeting=greeting)
@@ -148,16 +160,21 @@ class YuraChat:
             try:
                 reply = await self.provider.converse(messages, max_tokens=700)
             except AIError as exc:
+                self.last_error = f"{exc.kind}: {exc}"
                 self.logger.warning("yura: provider failed (%s)", exc.kind)
                 reply = None
+        elif not self.enabled:
+            self.last_error = "AI provider is not configured"
         if reply is None:
             source = "offline"
             self.fallbacks += 1
-            reply = persona.build_line(language)
+            reply = self._offline(chat_id, language, avoid=avoid)
 
         answer = await self._apply(reply, chat_id=chat_id, language=language)
         if not answer.text and not answer.files:
-            answer.text = persona.build_line(language)
+            answer.text = self._offline(chat_id, language, avoid=avoid)
+        if answer.text:
+            self._remember_said(chat_id, answer.text)
         await self.memory.append(chat_id, "assistant", answer.text or "(file sent)")
         self.turns += 1
         return Answer(
@@ -218,6 +235,32 @@ class YuraChat:
             self.logger.warning("yura: cannot write file: %s", exc)
             return None
         return target
+
+    # ------------------------------------------------------------------
+    # Variety and the loop guard
+    # ------------------------------------------------------------------
+    def _offline(self, chat_id: int, language: str, *, avoid: set[str] | None = None) -> str:
+        """An unused line from the offline bank for this chat."""
+        used = set(avoid or ())
+        used |= set(self._recent.get(chat_id, ()))
+        line = persona.build_line(language, avoid=used)
+        self._remember_said(chat_id, line)
+        return line
+
+    def _remember_said(self, chat_id: int, text: str) -> None:
+        ring = self._recent.get(chat_id)
+        if ring is None:
+            ring = self._recent[chat_id] = deque(maxlen=60)
+        ring.append(text)
+        sent = self._sent.get(chat_id)
+        if sent is None:
+            sent = self._sent[chat_id] = deque(maxlen=300)
+        sent.append(" ".join(text.split()))
+
+    def was_sent(self, chat_id: int, text: str) -> bool:
+        """True when this process already sent exactly this text in this chat."""
+        sent = self._sent.get(chat_id)
+        return bool(sent and " ".join(text.split()) in sent)
 
     # ------------------------------------------------------------------
     # Learning

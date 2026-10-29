@@ -126,6 +126,28 @@ class AIProvider:
             thread, max_tokens=max_tokens, temperature=temperature
         )
 
+    async def probe(self, *, max_tokens: int = 8) -> tuple[bool, str]:
+        """One tiny request, to find out whether the key works *now*.
+
+        Used when a key is stored: claiming "saved, model live" without trying is
+        exactly the kind of silent lie this project refuses. Returns
+        ``(worked, detail)`` where ``detail`` is the answer or the failure kind.
+        """
+        try:
+            reply = await self.complete(
+                "Reply with the single word: ok",
+                max_tokens=max_tokens,
+                temperature=0.0,
+            )
+        except AIError as exc:
+            return False, f"{exc.kind}: {exc}"
+        except Exception as exc:  # noqa: BLE001 - a probe must never raise
+            return False, f"{type(exc).__name__}: {exc}"
+        reply = " ".join(str(reply).split())
+        if not reply:
+            return False, "empty reply"
+        return True, reply[:80]
+
     async def discover_models(self, *, limit: int = 3, free_only: bool = True) -> list[str]:
         """Ask the gateway which models exist, best candidates first.
 

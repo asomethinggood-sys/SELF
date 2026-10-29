@@ -66,7 +66,10 @@ once.
 The key can arrive three ways, in order of preference:
 
 1. `.yura key <key>` in Telegram — stored in the database, message deleted, never
-   echoed. Survives restarts and deploys (the database is snapshotted).
+   echoed. Survives restarts and deploys (the database is snapshotted). It is
+   then **probed once**: either the model's answer or the failure kind is
+   reported back, and the same failure is repeated by `.yura key` and shown on
+   `.yura status` (with the offline-fallback count) until a request succeeds.
 2. the `OPENROUTER_API_KEY` repository secret, which the deploy workflow exports
    as `AI_API_KEY`;
 3. `AI_API_KEY` in the environment, or `ai.api_key` in `.auth/config.json` for a

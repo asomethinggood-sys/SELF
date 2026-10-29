@@ -6,11 +6,13 @@ and sends only the image (feature areas 27, 63, 100).
 
 Two constraints shaped this module:
 
-* **Pillow's wheels are not built with libraqm.** Without it, ``draw.text``
-  cannot join Arabic letters or reverse the run, so Persian comes out as
-  disconnected, left-to-right glyphs. Instead the text is shaped with
-  ``arabic_reshaper`` and reordered with ``python-bidi`` before it is drawn:
-  pure Python, no system libraries, identical output on every machine.
+* **Shaping depends on the machine, so it is detected at runtime.** When Pillow
+  was built with libraqm (most Linux wheels are) ``draw.text`` joins Arabic
+  letters and applies the bidi algorithm itself — and doing it twice mirrors the
+  text, which is exactly how the card shipped reversed to Telegram. So the
+  drawing path is chosen once, from ``PIL.features.check("raqm")``: with raqm the
+  raw logical string is drawn with ``direction="rtl"``; without it the text is
+  shaped with ``arabic_reshaper`` and reordered with ``python-bidi`` first.
 * **The card must look the same on every render.** All randomness (paper grain,
   ornament placement) is seeded from the reading id, so a given fal is stable.
 
@@ -75,12 +77,40 @@ def available() -> tuple[bool, str]:
     return True, ""
 
 
+@lru_cache(maxsize=1)
+def has_raqm() -> bool:
+    """True when the installed Pillow can shape and reorder Arabic script itself.
+
+    Pillow's wheels are compiled with Raqm support but load ``libraqm`` at
+    runtime, so this differs between machines: a bare container says False, a
+    GitHub runner with the system library says True. Drawing does not depend on
+    the answer any more — see :func:`_draw_line` — but ``.fal --info`` reports it,
+    because it is exactly the difference that once shipped every card mirrored.
+    """
+    try:
+        from PIL import features
+
+        return bool(features.check("raqm"))
+    except Exception:  # pragma: no cover - very old Pillow
+        return False
+
+
 def _shape(text: str) -> str:
-    """Join and reorder Persian/Arabic so a plain LTR draw call looks right."""
+    """Join Persian/Arabic letters into their contextual forms.
+
+    ``arabic_reshaper`` returns *logical* order (it only picks the joined glyph
+    for each letter), so the string is then reordered for display with
+    ``python-bidi``. Nothing after this point applies bidi again.
+    """
     import arabic_reshaper
     from bidi.algorithm import get_display
 
     return get_display(arabic_reshaper.reshape(text))
+
+
+def _prepare(text: str) -> str:
+    """The visual-order string that will be drawn glyph by glyph."""
+    return _shape(text)
 
 
 @lru_cache(maxsize=32)
@@ -90,9 +120,14 @@ def _font(path: str, size: int) -> Any:
     return ImageFont.truetype(path, size)
 
 
-def _width(draw: Any, text: str, font: Any) -> int:
-    box = draw.textbbox((0, 0), text, font=font)
-    return box[2] - box[0]
+def _width(draw: Any, text: str, font: Any) -> float:
+    """Width of the shaped line, measured one glyph at a time.
+
+    Per-glyph measurement is what makes the card identical on every machine: it
+    asks the font for each advance and never lets a layout engine reorder the
+    run. ``draw`` is accepted for call-site symmetry and is not used.
+    """
+    return sum(font.getlength(char) for char in _prepare(text))
 
 
 def _wrap(draw: Any, text: str, font: Any, limit: int) -> list[str]:
@@ -107,7 +142,7 @@ def _wrap(draw: Any, text: str, font: Any, limit: int) -> list[str]:
     current = ""
     for word in words:
         candidate = f"{current} {word}".strip()
-        if current and _width(draw, _shape(candidate), font) > limit:
+        if current and _width(draw, candidate, font) > limit:
             lines.append(current)
             current = word
         else:
@@ -154,7 +189,7 @@ def render_fal(reading: dict[str, Any], *, width: int = WIDTH) -> bytes:
         if all(
             _width(
                 ImageDraw.Draw(Image.new("RGB", (10, 10))),
-                _shape(verse),
+                verse,
                 _font(str(BOLD), candidate),
             )
             <= width - 2 * PADDING
@@ -250,40 +285,61 @@ def render_fal(reading: dict[str, Any], *, width: int = WIDTH) -> bytes:
     y = PADDING + int(10 * s)
     _ornament(draw, (width // 2, y + int(10 * s)), int(16 * s), GOLD)
     y += gap_ornament
-    _centered(draw, _shape("فال حافظ"), title, y, width, INK)
+    _centered(draw, "فال حافظ", title, y, width, INK)
     y += gap_title
-    _centered(draw, _shape("تفأل به دیوان حافظ"), subtitle, y, width, MUTED)
+    _centered(draw, "تفأل به دیوان حافظ", subtitle, y, width, MUTED)
     y += gap_subtitle
     _rule(draw, y, width=width)
     y += gap_rule
 
     for line in verse_lines:
-        _centered(draw, _shape(line), bold, y, width, INK)
+        _centered(draw, line, bold, y, width, INK)
         y += verse_step
     if truncated:
-        _centered(draw, _shape("…"), label, y + int(4 * s), width, MUTED)
+        _centered(draw, "…", label, y + int(4 * s), width, MUTED)
         y += int(verse_step * 0.8)
 
     y += int(gap_rule * 0.45)
     _rule(draw, y, width=width)
     y += gap_label
-    _centered(draw, _shape("معنی"), label, y, width, GOLD)
+    _centered(draw, "معنی", label, y, width, GOLD)
     y += int(NOTE_SIZE * 1.5)
     for line in note_lines:
-        _centered(draw, _shape(line), regular, y, width, INK)
+        _centered(draw, line, regular, y, width, INK)
         y += note_step
 
     y = height - PADDING - int(26 * s)
-    _centered(draw, _shape("یورا · فال حافظ"), footer, y, width, MUTED)
+    _centered(draw, "یورا · فال حافظ", footer, y, width, MUTED)
 
     buffer = io.BytesIO()
     canvas.save(buffer, format="PNG", optimize=True)
     return buffer.getvalue()
 
 
+def _draw_line(
+    draw: Any,
+    text: str,
+    font: Any,
+    x: float,
+    y: float,
+    fill: tuple[int, int, int],
+) -> None:
+    """Draw one shaped line glyph by glyph, left to right.
+
+    A whole-string ``draw.text`` hands the run to libraqm *when it exists*, and
+    raqm applies the bidi algorithm to what it is given. Since the string is
+    already in visual order, that reorders it a second time and the card arrives
+    mirrored — which is precisely what happened in production while a container
+    without libraqm looked perfect. Placing each glyph ourselves removes the
+    question entirely.
+    """
+    for char in _prepare(text):
+        draw.text((x, y), char, font=font, fill=fill)
+        x += font.getlength(char)
+
+
 def _centered(draw: Any, text: str, font: Any, y: int, width: int, colour: tuple[int, int, int]) -> None:
-    box = draw.textbbox((0, 0), text, font=font)
-    draw.text(((width - (box[2] - box[0])) / 2 - box[0], y), text, font=font, fill=colour)
+    _draw_line(draw, text, font, (width - _width(draw, text, font)) / 2, y, colour)
 
 
 def save_png(payload: bytes, path: Path) -> Path:

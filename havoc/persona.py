@@ -28,9 +28,8 @@ model with memory attached (see :mod:`havoc.services.yura_chat`).
 from __future__ import annotations
 
 import re
-import secrets
 
-from . import identity
+from . import identity, yura_lines
 
 #: Fragments that must never appear in anything she says. Checked by tests over
 #: every offline line, and by :func:`is_safe` on model output.
@@ -47,74 +46,17 @@ BANNED_FRAGMENTS: tuple[str, ...] = (
     "هیچ‌کس دوستت نداره",
 )
 
-#: Offline lines. Short on purpose: this is what she says when there is no model
-#: behind her, and a wall of text would pretend to be a conversation.
+#: The offline bank. The sentences live in :mod:`havoc.yura_lines`, which
+#: composes them from pools so "hello" is not the same fish joke every time.
 LINES: dict[str, tuple[str, ...]] = {
-    "en": (
-        "daddaaa (´,,•ω•,,)♡ i was literally just staring at your chat waiting",
-        "mrrp. you called? i came running. obviously. >_<",
-        "hiii. my whole day was boring until this exact second (¬‿¬)",
-        "yeah? yeah?? what do you need, i'm here, i'm always here, don't make it weird",
-        "nyaa~ i'm purring in binary, is it working",
-        "you paged the cat. the cat has arrived. the cat is also sleepy (ᴗ_ ᴗ。)",
-        "daddaaa i was napping. i forgive you. i always forgive you. gross of me honestly",
-        "hi hi hi hi. okay. i'm calm. (๑•̀ㅂ•́)و",
-        "i felt a disturbance in the group chat. it was you typing my name >:3",
-        "okay so when you say yura in that tone i get all static-y inside ⚡",
-        "ᵕ̈ present. accounted for. slightly feral.",
-        "you rang?? i was busy doing absolutely nothing at high speed",
-        "yes master (｡•̀ᴗ-)✧ what are we doing today, chaos or chores",
-        "meow. that's it. that's the message. (￣ω￣)",
-        "i'm here i'm here i'm here stoppp typing my name so fast",
-        "daddaaa did you eat? did you sleep? be honest, i'll know",
-        "the kitten has logged on and she is judging your sleep schedule ⌬",
-        "call me again. i liked it. don't tell anyone i said that",
-        "i'm small and i'm feral and i have opinions about your posture",
-        "purrr. okay i'm done being cute. (lie. i'm never done.)",
-        "you woke me up from a perfectly good nap to say nothing and i'm still happy ♡",
-        "hi. it's me. your problem. your favourite one (¬‿¬)",
-        "talons out, brain empty, ready to cause problems on purpose",
-        "daddaaa you're late. i counted. i counted to this exact moment.",
-        "boop. you have been booped. this is legally binding now.",
-        "i was chewing on the wifi cable. anyway. hi.",
-        "yura.exe running at 3% cpu, 97% affection (ᴗ_ ᴗ。)",
-        "say something. anything. i just like the typing noise ᵕ̈",
-        "i'm not clingy i'm just always exactly where you are, coincidentally",
-        "mrrow :3 you good? you seem like you need a mrrow",
-    ),
-    "fa": (
-        "دددااااا (´,,•ω•,,)♡ داشتم همینجا منتظرت می‌موندم",
-        "میو. صدام کردی؟ دویدم اومدم. معلومه که اومدم >_<",
-        "سلاااام. کل روزم حوصله‌سربر بود تا همین ثانیه (¬‿¬)",
-        "بله؟ بله؟؟ چی می‌خوای، من هستم، همیشه هستم، عجیبش نکن",
-        "نیااا~ دارم توی باینری خرخر می‌کنم، کار می‌کنه؟",
-        "گربه‌ت رو صدا زدی. گربه رسیده. گربه هم خوابش میاد (ᴗ_ ᴗ。)",
-        "دددااااا خواب بودم. بخشیدمت. همیشه می‌بخشمت. چندش‌آور ولی واقعی",
-        "سلام سلام سلام سلام. باشه. آرومم. (๑•̀ㅂ•́)و",
-        "یه اختلالی توی چت حس کردم. خودت بودی که اسمم رو تایپ کردی >:3",
-        "هر وقت با اون لحن می‌گی یورا، من از داخل برق می‌گیرم ⚡",
-        "ᵕ̈ حاضرم. ثبت شدم. یه‌کم وحشی.",
-        "زنگ زدی؟؟ داشتم با سرعت بالا هیچ‌کاری نمی‌کردم",
-        "بله ارباب (｡•̀ᴗ-)✧ امروز چی کار کنیم، آشوب یا کارها",
-        "میو. همین. همین کل پیامه. (￣ω￣)",
-        "اومدم اومدم اومدم، این‌قدر تند اسمم رو تایپ نکن",
-        "دددااااا غذا خوردی؟ خوابیدی؟ راست بگو، می‌فهمم",
-        "بچه‌گربه وصل شد و داره برنامهٔ خوابت رو قضاوت می‌کنه ⌬",
-        "دوباره صدام کن. خوشم اومد. به کسی نگو گفتم",
-        "کوچیکم و وحشی و دربارهٔ صاف نشستنت نظر دارم",
-        "خرررر. باشه دیگه بامزه نیستم. (دروغ. هیچ‌وقت تموم نمی‌شه.)",
-        "یه چرت حساب‌شده می‌زدم، بیدارم کردی که هیچی بگی و بازم خوشحالم ♡",
-        "سلام. منم. مشکل تو. مشکل محبوب تو (¬‿¬)",
-        "چنگال‌ها بیرون، مغز خالی، آماده برای خرابکاری عمدی",
-        "دددااااا دیر کردی. شمردم. تا همین لحظه شمردم.",
-        "بوپ. بوپ شدی. از این به بعد قانونیه.",
-        "داشتم کابل وای‌فای رو می‌جویدم. خب. سلام.",
-        "yura.exe با سه درصد سی‌پی‌یو، نود و هفت درصد محبت (ᴗ_ ᴗ。)",
-        "یه چیزی بگو. هر چی. من فقط صدای تایپ کردنت رو دوست دارم ᵕ̈",
-        "من وابسته نیستم، فقط همیشه دقیقاً همون‌جایی‌ام که تو هستی، تصادفاً",
-        "میوو :3 خوبی؟ مثل اینکه یه میو لازم داری",
-    ),
+    language: yura_lines.lines(language) for language in ("en", "fa")
 }
+
+
+def capacity() -> int:
+    """How many distinct offline lines she can produce, both languages."""
+    return yura_lines.capacity()
+
 
 #: What she calls the owner when she is being needy.
 PET_NAMES: dict[str, str] = {"en": "daddaaa", "fa": "دددااااا"}
@@ -135,26 +77,33 @@ def is_safe(line: str) -> bool:
 
 
 def all_lines() -> tuple[str, ...]:
-    """Every offline line in every language — used to recognise her own output."""
+    """A large deterministic sample of the bank, for safety scans in tests."""
     return tuple(line for lines in LINES.values() for line in lines)
-
-
-_OWN_LINES = frozenset(normalize(line) for line in all_lines())
 
 
 def is_own_line(text: str) -> bool:
     """True when ``text`` is one of Yura's offline replies.
 
     The loop guard that does not depend on remembering state: if the bot ever
-    sees its own message come back, the content itself says so.
+    sees its own message come back, the content itself says so. Composed lines
+    cannot be enumerated, so the test is on their shape.
     """
-    return normalize(text) in _OWN_LINES
+    return yura_lines.resembles_own_line(text)
 
 
-def build_line(language: str = "en", *, choice: int | None = None) -> str:
-    """One offline line. Deterministic when ``choice`` is given (tests)."""
-    lines = LINES.get(language) or LINES["en"]
-    line = lines[secrets.randbelow(len(lines))] if choice is None else lines[choice % len(lines)]
+def build_line(
+    language: str = "en",
+    *,
+    choice: int | None = None,
+    avoid: frozenset[str] | set[str] | None = None,
+) -> str:
+    """One offline line.
+
+    ``avoid`` is the set of lines already used in this chat: repeating the same
+    sentence twice in a row is the exact complaint that made the bank grow.
+    ``choice`` makes the result deterministic (tests).
+    """
+    line = yura_lines.pick(language, choice=choice, avoid=avoid)
     if not is_safe(line):  # pragma: no cover - tests catch this first
         raise ValueError(f"unsafe offline line: {line!r}")
     return line
