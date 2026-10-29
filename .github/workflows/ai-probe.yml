@@ -92,7 +92,11 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "$status" -ne 0 ]; then
-            echo "::error::The model did not answer (exit $status). See the reply above."
+            # The log archive is not always reachable, so the reason also goes
+            # into an annotation: one line, escaped, no key in it.
+            reason=$(printf '%s\n' "$reply" | grep -m1 -E "AI: (FAILED|not configured)|Fatal error" | cut -c1-300)
+            reason="${reason//$'\n'/ }"
+            echo "::error::The model did not answer (exit $status): ${reason:-no reason printed}"
             exit "$status"
           fi
           # A model that answers must have said 4 somewhere; "FAILED" must not pass.
