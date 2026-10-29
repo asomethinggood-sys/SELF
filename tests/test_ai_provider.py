@@ -198,3 +198,34 @@ async def test_every_model_empty_is_reported_as_a_bad_response(calls) -> None:
     with pytest.raises(AIError) as caught:
         await provider.converse([AIMessage("user", "hi")])
     assert caught.value.kind == "bad_response"
+
+
+async def test_a_budget_too_small_for_a_reasoning_model_is_retried(calls) -> None:
+    """The same slug answers once it is given room to think."""
+    made, fake_post = calls
+
+    async def fake_post_budget(url, body, *, timeout=30.0, headers=None):
+        made.append(body)
+        if body["max_tokens"] < 400:
+            return {"choices": [{"message": {"content": "", "reasoning": "thinking…"}}]}
+        return {"choices": [{"message": {"content": "4"}}]}
+
+    ai_module.post_json = fake_post_budget  # type: ignore[assignment]
+    provider = _provider(model="one:free")
+    assert await provider.converse([AIMessage("user", "2+2")], max_tokens=16) == "4"
+
+
+async def test_discovery_skips_endpoints_that_cannot_chat(monkeypatch) -> None:
+    async def fake_get(url, *, params=None, timeout=15.0, headers=None):
+        return {
+            "data": [
+                {"id": "some/embed-model:free"},
+                {"id": "some/vision-vl:free"},
+                {"id": "meta-llama/llama-3.3-70b-instruct:free"},
+            ]
+        }
+
+    monkeypatch.setattr(ai_module, "get_json", fake_get)
+    provider = _provider(model="auto")
+    await provider.discover_models()
+    assert provider.models == ["meta-llama/llama-3.3-70b-instruct:free"]

@@ -39,6 +39,21 @@ class AIMessage:
 #: Substrings that make a model a good default for Yura, best first. Used only
 #: when ``AI_MODEL=auto``: free slugs rotate every few weeks, so pinning one in
 #: a config file is how a bot ends up mute after a quiet upstream change.
+#: Slugs that are listed with the chat models but cannot answer a chat message:
+#: embeddings, rerankers, speech, image endpoints and moderation models.
+NON_CHAT_MARKERS: tuple[str, ...] = (
+    "embed",
+    "-vl",
+    "vision",
+    "rerank",
+    "whisper",
+    "tts",
+    "image",
+    "moderation",
+    "audio",
+    "guard",
+)
+
 MODEL_PREFERENCES: tuple[str, ...] = (
     "llama-3.3-70b",
     "qwen3-next-80b",
@@ -172,6 +187,7 @@ class AIProvider:
             free = [model for model in ids if model.endswith(":free")]
             if free:
                 ids = free
+        ids = [model for model in ids if not any(marker in model.lower() for marker in NON_CHAT_MARKERS)]
         ranked: list[str] = []
         for needle in MODEL_PREFERENCES:
             for model in ids:
@@ -212,35 +228,43 @@ class AIProvider:
             await self.discover_models()
         last_error: AIError | None = None
         content = ""
-        for candidate in self.models or [self.model]:
-            payload = {
-                "model": candidate,
-                "messages": thread,
-                "max_tokens": max_tokens,
-                "temperature": temperature,
-            }
-            try:
-                data = await post_json(
-                    f"{self.base_url}/chat/completions",
-                    payload,
-                    timeout=self.timeout,
-                    headers=headers,
-                )
-            except HttpError as exc:
-                last_error = AIError(str(exc), kind=exc.kind)
-                if exc.kind == "unauthorized":
-                    break  # a wrong key will not work with the next model either
-                continue
-            # A free catalogue contains models that answer 200 with no content:
-            # vision-only endpoints, and models that spend the whole budget on
-            # hidden reasoning. That is a bad candidate, not a dead provider, so
-            # the next one gets a turn instead of the user getting nothing.
-            content = _content_of(data)
-            if not content:
-                last_error = AIError("AI returned an empty response", kind="bad_response")
-                continue
-            self.active_model = candidate
-            break
+        # Two passes: the budget the caller asked for, then a generous one. A
+        # reasoning model that spends every token thinking returns content "",
+        # and the same model answers once it is given room.
+        budgets = [max_tokens] if max_tokens >= 400 else [max_tokens, max(max_tokens * 20, 400)]
+        for budget in budgets:
+            for candidate in self.models or [self.model]:
+                payload = {
+                    "model": candidate,
+                    "messages": thread,
+                    "max_tokens": budget,
+                    "temperature": temperature,
+                }
+                try:
+                    data = await post_json(
+                        f"{self.base_url}/chat/completions",
+                        payload,
+                        timeout=self.timeout,
+                        headers=headers,
+                    )
+                except HttpError as exc:
+                    last_error = AIError(str(exc), kind=exc.kind)
+                    if exc.kind == "unauthorized":
+                        break  # a wrong key will not work with the next model either
+                    continue
+                # A free catalogue contains models that answer 200 with no
+                # content. That is a bad candidate, not a dead provider, so the
+                # next one gets a turn instead of the owner getting nothing.
+                content = _content_of(data)
+                if not content:
+                    last_error = AIError("AI returned an empty response", kind="bad_response")
+                    continue
+                self.active_model = candidate
+                break
+            if content:
+                break
+            if last_error is not None and last_error.kind == "unauthorized":
+                break
         if not content and not self._discovered:
             # Every configured slug is probably retired. Ask the gateway what
             # actually exists right now and retry once with its free models.
