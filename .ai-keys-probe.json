@@ -14,10 +14,27 @@
         {
           "check": "POST /chat/completions (model auto)",
           "status": 200,
-          "body": "{\"id\":\"gen-1793308387-PsJzcJYBAYZwf9xAP3eK\",\"object\":\"chat.completion\",\"created\":1793308389,\"model\":\"deepseek/deepseek-v4.1-flash-1017\",\"provider\":\"Cohere\",\"system_fingerprint\":\"vllm-0.32.1rc1.dev197+g8e2beaa3b-tp2-3eea1"
+          "body": "{\"id\":\"gen-1793308486-9J9YLkDwyzLDUstqES19\",\"object\":\"chat.completion\",\"created\":1793308487,\"model\":\"deepseek/deepseek-v4.1-flash-1017\",\"provider\":\"Cohere\",\"system_fingerprint\":\"vllm-0.32.1rc1.dev197+g8e2beaa3b-tp2-3eea1"
         }
       ],
-      "free_models": []
+      "free_models": [
+        "recursive/flint-v1.0:free",
+        "xingchen-agi/xing4.0-29b-a4b:free",
+        "nvidia/nemotron-3.5-super-vl:free",
+        "dots-studio/dots-3-note-preview:free",
+        "liquid/lfm-2.5-2.6b:free",
+        "nvidia/nemotron-3.5-lightning:free",
+        "thinkingmachines/inkling-small:free",
+        "poolside/laguna-s-2.1:free",
+        "thinkingmachines/inkling:free",
+        "poolside/laguna-xs-2.1:free",
+        "cohere/north-mini-code:free",
+        "nvidia/nemotron-3.5-content-safety:free",
+        "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "google/gemma-4-26b-a4b-it:free",
+        "google/gemma-4-31b-it:free"
+      ]
     },
     {
       "provider": "openrouter",
@@ -33,10 +50,27 @@
         {
           "check": "POST /chat/completions (model auto)",
           "status": 200,
-          "body": "{\"id\":\"gen-1793308390-4c9XfRuhLIg5X5LjzCFe\",\"object\":\"chat.completion\",\"created\":1793308390,\"model\":\"deepseek/deepseek-v4.1-flash-1017\",\"provider\":\"InferenceNet\",\"system_fingerprint\":\"inference.net\",\"service_tier\":null,\""
+          "body": "{\"id\":\"gen-1793308488-o6OPkyva0ZO5akgBz6vU\",\"object\":\"chat.completion\",\"created\":1793308488,\"model\":\"deepseek/deepseek-v4.1-flash-1017\",\"provider\":\"InferenceNet\",\"system_fingerprint\":\"inference.net\",\"service_tier\":null,\""
         }
       ],
-      "free_models": []
+      "free_models": [
+        "recursive/flint-v1.0:free",
+        "xingchen-agi/xing4.0-29b-a4b:free",
+        "nvidia/nemotron-3.5-super-vl:free",
+        "dots-studio/dots-3-note-preview:free",
+        "liquid/lfm-2.5-2.6b:free",
+        "nvidia/nemotron-3.5-lightning:free",
+        "thinkingmachines/inkling-small:free",
+        "poolside/laguna-s-2.1:free",
+        "thinkingmachines/inkling:free",
+        "poolside/laguna-xs-2.1:free",
+        "cohere/north-mini-code:free",
+        "nvidia/nemotron-3.5-content-safety:free",
+        "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "google/gemma-4-26b-a4b-it:free",
+        "google/gemma-4-31b-it:free"
+      ]
     },
     {
       "provider": "google",
@@ -48,20 +82,81 @@
           "check": "GET /v1beta/models",
           "status": 200,
           "body": "{ \"models\": [ { \"name\": \"models/gemini-2.5-flash\", \"version\": \"001\", \"displayName\": \"Gemini 2.5 Flash\", \"description\": \"Stable version of Gemini 2.5 Flash, our mid-size multimodal model that supports up to 1 million toke",
-          "count": 0
+          "count": 60
         },
         {
           "check": "POST :generateContent (gemini-3.5-flash-lite)",
           "status": 200,
-          "body": "{ \"candidates\": [ { \"content\": { \"parts\": [ { \"text\": \"4\", \"thoughtSignature\": \"EmAKXgFpFH0TZcqdnAsGKubJAjmMK/f2QqHxwYu/PRv/gMRS57zXVR/WnJo8aj+YBAPcv4ulP/NMWsMN+z800xU2Ao2QULOX9OZUYAn/YsJ/Ob/WmgRZBZEwNGe0odDHXhE=\" } ], \""
+          "body": "{ \"candidates\": [ { \"content\": { \"parts\": [ { \"text\": \"4\", \"thoughtSignature\": \"EmAKXgFpFH0Tj7CV389+IHIauMZUHJQZoen3+fra+q0n7Khcc3IQm7gaESuKjIAktYNRN6a6N9UNzZOsFW7FJWqi1+fZRYzLfvH/8Usdd2OMlywL4fzIpk0h7dwI6qe1OkI=\" } ], \""
         },
         {
           "check": "POST /v1beta/openai/chat/completions (gemini-3.5-flash-lite)",
           "status": 200,
-          "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"4\",\"extra_content\":{\"google\":{\"thought_signature\":\"EmAKXgFpFH0TdUdeTrAg4sfEX0CT9gr203u5lmXASoBqeT5Q1IeEJoCjzAf5eo2qc11DXml7lf4ERtXe5D8gxYHmcyws+OG+R51VO"
+          "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"4\",\"extra_content\":{\"google\":{\"thought_signature\":\"EmAKXgFpFH0T1d7nG8LTNdFUHEDb8P6V6lRcn4tI+EqJyBZ+a5ZbJc8ds/iwkjlVs4FuvK9yxgF1wJvatnLJwIiSMpGFHtyHiL2N1"
         }
       ],
-      "models": []
+      "models": [
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-2.5-flash-preview-tts",
+        "gemini-2.5-pro-preview-tts",
+        "gemma-4-26b-a4b-it",
+        "gemma-4-31b-it",
+        "gemini-flash-latest",
+        "gemini-flash-lite-latest",
+        "gemini-pro-latest",
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash-image",
+        "gemini-3-flash-preview",
+        "gemini-3.1-pro-preview",
+        "gemini-3.1-pro-preview-customtools",
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite",
+        "gemini-3-pro-image-preview",
+        "gemini-3-pro-image",
+        "nano-banana-pro-preview",
+        "gemini-3.1-flash-image-preview",
+        "gemini-3.1-flash-image",
+        "gemini-3.1-flash-lite-image",
+        "gemini-nano-banana-2.1",
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-omni-flash-preview",
+        "gemini-omni-1.1-flash",
+        "gemini-3.5-transcribe",
+        "gemini-3.6-flash",
+        "gemini-3.7-flash",
+        "gemini-3.8-flash",
+        "gemini-4-argon",
+        "lyria-3-clip-preview",
+        "lyria-3-pro-preview",
+        "lyria-3.5",
+        "gemini-3.1-flash-tts-preview",
+        "gemini-3.8-flash-tts",
+        "gemini-3.8-flash-lite-tts",
+        "gemini-robotics-er-2-preview",
+        "gemini-2.5-computer-use-preview-10-2025",
+        "antigravity-preview-05-2026",
+        "antigravity-preview-09-2026",
+        "antigravity-preview-latest",
+        "deep-research-max-preview-04-2026",
+        "deep-research-preview-04-2026",
+        "deep-research-pro-preview-12-2025",
+        "gemini-embedding-001",
+        "gemini-embedding-2-preview",
+        "gemini-embedding-2",
+        "aqa",
+        "gemini-3.5-transcribe-live",
+        "gemini-2.5-flash-native-audio-latest",
+        "gemini-2.5-flash-native-audio-preview-09-2025",
+        "gemini-2.5-flash-native-audio-preview-12-2025",
+        "gemini-3.1-flash-live-preview",
+        "gemini-3.8-live",
+        "gemini-3.8-live-extended-thinking",
+        "gemini-robotics-er-2-streaming-preview",
+        "gemini-3.5-live-translate-preview",
+        "lyria-realtime-exp"
+      ]
     },
     {
       "provider": "google",
@@ -73,20 +168,81 @@
           "check": "GET /v1beta/models",
           "status": 200,
           "body": "{ \"models\": [ { \"name\": \"models/gemini-2.5-flash\", \"version\": \"001\", \"displayName\": \"Gemini 2.5 Flash\", \"description\": \"Stable version of Gemini 2.5 Flash, our mid-size multimodal model that supports up to 1 million toke",
-          "count": 0
+          "count": 60
         },
         {
           "check": "POST :generateContent (gemini-3.5-flash-lite)",
           "status": 200,
-          "body": "{ \"candidates\": [ { \"content\": { \"parts\": [ { \"text\": \"4\", \"thoughtSignature\": \"EmAKXgFpFH0T8COmQTu8sx1hs8Y2X+d992HyAfTLx+jhui1tarpX1oTEGc6oO1eLKpTyMKgU1b5xEKZYy3QEK1Tf3uBLIjUhPbuSkyfBIotE3pCRdIlfnb1djn9E6IkN+CE=\" } ], \""
+          "body": "{ \"candidates\": [ { \"content\": { \"parts\": [ { \"text\": \"4\", \"thoughtSignature\": \"EmAKXgFpFH0T7lGsXIrftAjQNLZCxvJMQIHUavjPEf/N1O/XFlp9xaUy1gfgEgQ7wK292WavISKQB2JU4r9uxFfp5mgCx61MXpbpFnViRmO2gXfyyov+9a8/zdtsxxgj60M=\" } ], \""
         },
         {
           "check": "POST /v1beta/openai/chat/completions (gemini-3.5-flash-lite)",
           "status": 200,
-          "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"4\",\"extra_content\":{\"google\":{\"thought_signature\":\"EmAKXgFpFH0TZ9W1KfBt1FqL/xk6kwscr5VPJJil3CipNpaOE7pEe14f5NpvbmCYd6EJDN6WQ9hYFs95aqv8O+Zmt3DrQ20YqqE98"
+          "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"4\",\"extra_content\":{\"google\":{\"thought_signature\":\"EmAKXgFpFH0TtQpXfIQgoZGn42YMay9tbuM6KyI699MamWpQ6scjkjCoAnztuOm/xKKGycxki/ZhyKfcEbI9nKBg431XUAMBABxH5"
         }
       ],
-      "models": []
+      "models": [
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-2.5-flash-preview-tts",
+        "gemini-2.5-pro-preview-tts",
+        "gemma-4-26b-a4b-it",
+        "gemma-4-31b-it",
+        "gemini-flash-latest",
+        "gemini-flash-lite-latest",
+        "gemini-pro-latest",
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash-image",
+        "gemini-3-flash-preview",
+        "gemini-3.1-pro-preview",
+        "gemini-3.1-pro-preview-customtools",
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite",
+        "gemini-3-pro-image-preview",
+        "gemini-3-pro-image",
+        "nano-banana-pro-preview",
+        "gemini-3.1-flash-image-preview",
+        "gemini-3.1-flash-image",
+        "gemini-3.1-flash-lite-image",
+        "gemini-nano-banana-2.1",
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-omni-flash-preview",
+        "gemini-omni-1.1-flash",
+        "gemini-3.5-transcribe",
+        "gemini-3.6-flash",
+        "gemini-3.7-flash",
+        "gemini-3.8-flash",
+        "gemini-4-argon",
+        "lyria-3-clip-preview",
+        "lyria-3-pro-preview",
+        "lyria-3.5",
+        "gemini-3.1-flash-tts-preview",
+        "gemini-3.8-flash-tts",
+        "gemini-3.8-flash-lite-tts",
+        "gemini-robotics-er-2-preview",
+        "gemini-2.5-computer-use-preview-10-2025",
+        "antigravity-preview-05-2026",
+        "antigravity-preview-09-2026",
+        "antigravity-preview-latest",
+        "deep-research-max-preview-04-2026",
+        "deep-research-preview-04-2026",
+        "deep-research-pro-preview-12-2025",
+        "gemini-embedding-001",
+        "gemini-embedding-2-preview",
+        "gemini-embedding-2",
+        "aqa",
+        "gemini-3.5-transcribe-live",
+        "gemini-2.5-flash-native-audio-latest",
+        "gemini-2.5-flash-native-audio-preview-09-2025",
+        "gemini-2.5-flash-native-audio-preview-12-2025",
+        "gemini-3.1-flash-live-preview",
+        "gemini-3.8-live",
+        "gemini-3.8-live-extended-thinking",
+        "gemini-robotics-er-2-streaming-preview",
+        "gemini-3.5-live-translate-preview",
+        "lyria-realtime-exp"
+      ]
     }
   ]
 }
