@@ -74,22 +74,6 @@ jobs:
           echo "ai_api_key=${ai_api_key}" >> "$GITHUB_OUTPUT"
           echo "::notice::Provider ${ai_provider:-none} · ${ai_base_url:-unset} · model ${ai_model:-auto}"
 
-      - name: What the gateway says to this runner
-        # GET /models and POST /chat/completions, with the key, through the same
-        # HTTP helper the bot uses — so a refusal is reported as what it is
-        # instead of as "the AI failed".
-        if: always()
-        shell: bash
-        env:
-          AI_PROVIDER: ${{ steps.ai.outputs.ai_provider }}
-          AI_BASE_URL: ${{ steps.ai.outputs.ai_base_url }}
-          AI_MODEL: ${{ steps.ai.outputs.ai_model }}
-          AI_API_KEY: ${{ steps.ai.outputs.ai_api_key }}
-        run: |
-          set -uo pipefail
-          python scripts/probe_ai.py > .ai-diag.txt 2>&1 || true
-          cat .ai-diag.txt
-
       - name: Ask it something it cannot fake
         id: ask
         shell: bash
@@ -128,6 +112,21 @@ jobs:
           elif ! printf '%s' "$reply" | grep -q "4"; then
             echo "::warning::The reply did not contain 4 — it answered, but read it yourself."
           fi
+
+      - name: What the gateway says to this runner
+        # Only when the plain request failed: every generation call spends the
+        # free tier's daily allowance (50), and a healthy probe must cost one.
+        if: always() && steps.ask.outputs.status != '0'
+        shell: bash
+        env:
+          AI_PROVIDER: ${{ steps.ai.outputs.ai_provider }}
+          AI_BASE_URL: ${{ steps.ai.outputs.ai_base_url }}
+          AI_MODEL: ${{ steps.ai.outputs.ai_model }}
+          AI_API_KEY: ${{ steps.ai.outputs.ai_api_key }}
+        run: |
+          set -uo pipefail
+          python scripts/probe_ai.py > .ai-diag.txt 2>&1 || true
+          cat .ai-diag.txt
 
       - name: Publish the answer where it can be read
         if: always()
@@ -174,7 +173,15 @@ jobs:
         run: |
           set -uo pipefail
           ok=$(python -c 'import json;print("yes" if json.load(open(".ai-probe.json")).get("ok") else "no")' 2>/dev/null || echo no)
-          if [ "$ok" != "yes" ]; then
-            echo "::error::The AI probe did not get an answer; see .ai-probe.json."
-            exit 1
+          if [ "$ok" = "yes" ]; then
+            exit 0
           fi
+          # The free plan allows 50 model requests a day. Hitting that is a
+          # quota fact, not a broken key, and must not paint the branch red —
+          # but it is recorded, and it says so out loud.
+          if grep -qi "rate_limited\|free-models-per-day" .ai-probe.json; then
+            echo "::warning::Free-tier daily limit reached; the key is fine. The record says when."
+            exit 0
+          fi
+          echo "::error::The AI probe did not get an answer; see .ai-probe.json."
+          exit 1

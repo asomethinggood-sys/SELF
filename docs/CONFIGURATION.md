@@ -85,7 +85,23 @@ python -m havoc ai "say hi in your own voice"
 
 It prints which model answered, or the failure kind (`unauthorized`, `network`,
 `rate_limited`). The deploy workflow runs the same command and puts the reply in
-the run summary.
+the run summary; `.github/workflows/ai-probe.yml` runs it without Telegram and
+commits the result to `.ai-probe.json`, which is the honest answer to "is the AI
+working".
+
+Two things that are easy to misread as a bad key:
+
+- **`403` with an HTML body** is the CDN in front of the gateway refusing the
+  `User-Agent`, not the provider refusing the key. Any `User-Agent` containing
+  `HAVOC` is refused; the client calls itself `Yura/2.0`.
+- **An empty reply at 200** is a model that spent the whole token budget on
+  hidden reasoning, or an endpoint that is not a chat model (vision, embeddings,
+  safety). The provider retries the same slug with a larger budget, then walks to
+  the next candidate, and discovery skips slugs that cannot chat.
+
+A free OpenRouter key allows **50 model requests a day**; past that every call
+returns `429` with `free-models-per-day` until the UTC reset. The probe records
+that as a quota fact and does not fail the build for it.
 | `TRANSLATE_PROVIDER` | `none`, `mymemory`, `libretranslate` | `.translate` and auto-translation |
 | `TRANSLATE_URL` | — | Self-hosted LibreTranslate endpoint |
 | `TRANSLATE_API_KEY` | — | Optional key for the endpoint above |

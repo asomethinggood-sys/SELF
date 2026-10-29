@@ -46,7 +46,8 @@ sentences (`>_<`, `(¬‿¬)`, `ᵕ̈`), and answers in whichever language you u
   body, a tail and a face drawn from separate pools — so the same greeting does
   not get the same answer twice: **983,500 lines per language (1,967,000 total)**,
   and the last 60 sentences in a chat are excluded before the next one is
-  picked. `.yura status` prints the current bank size. Her own messages are
+  picked, by sentence rather than by decoration — a new kaomoji on the same line
+  still counts as the same line. `.yura status` prints the current bank size. Her own messages are
   recognised by shape, so a composed line that echoes back is never answered.
 
 **Memory.** `.yura remember my name is Sam`, or let her write it herself through
@@ -74,6 +75,15 @@ failure (`network: …`, `unauthorized: …`) — never a cheerful "saved" over 
 dead key. `.yura key` with no value repeats that last failure, and `.yura status`
 shows the provider, the offline-fallback count and the bank size.
 `python -m havoc ai "hi"` makes one real call and prints which model answered.
+
+The `.github/workflows/ai-probe.yml` job does exactly that on every push that
+touches the bot, without Telegram: it asks *what is 2+2*, and the answer (or the
+failure) is committed to `.ai-probe.json` and kept as a run artifact. A green
+tick there means the key, the gateway and the model slug all work — measured,
+not assumed. Two facts that job produced and the code now respects: the CDN in
+front of the gateway answers **403** to any `User-Agent` containing the word
+`HAVOC`, and free models return an empty reply when the token budget is too
+small to finish thinking. Both used to look like a dead key.
 
 **Honesty.** Ask whether she is a bot and she says yes, in character, in one
 clause, then moves on.
