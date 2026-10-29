@@ -110,6 +110,8 @@ jobs:
               -d "$payload" || echo "curl failed"
             echo "  body: $(head -c 220 .d3 | tr '\n' ' ')"
           } > .ai-diag.txt 2>&1
+          echo "--- provider probe ---" >> .ai-diag.txt
+          python scripts/probe_ai.py >> .ai-diag.txt 2>&1 || true
           cat .ai-diag.txt
           rm -f .d1 .d2 .d3
 
