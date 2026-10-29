@@ -53,7 +53,8 @@ def _request(method: str, url: str, *, body: dict | None = None, headers: dict[s
         request.add_header(name, value)
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT) as response:  # noqa: S310
-            return response.status, response.read(4000).decode("utf-8", "replace")
+            # The models listing is ~100 KB of JSON: read it whole, summarise later.
+            return response.status, response.read(2_000_000).decode("utf-8", "replace")
     except urllib.error.HTTPError as exc:
         return exc.code, exc.read(2000).decode("utf-8", "replace")
     except Exception as exc:  # noqa: BLE001 - a probe records, never raises
