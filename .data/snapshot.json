@@ -1,6 +1,6 @@
 {
   "app": "havoc",
-  "created_at": "2026-10-29T21:38:40+00:00",
+  "created_at": "2026-10-29T21:59:30+00:00",
   "last_restore": {
     "counts": {
       "bookmarks": 1,
@@ -9,9 +9,9 @@
       "language_prefs": 1,
       "settings": 1
     },
-    "restored_at": "2026-10-29T21:33:40+00:00",
-    "run_id": "40957744950",
-    "source_created_at": "2026-10-29T21:31:53+00:00"
+    "restored_at": "2026-10-29T21:54:29+00:00",
+    "run_id": "40960939626",
+    "source_created_at": "2026-10-29T21:38:40+00:00"
   },
   "tables": {
     "aliases": [],
@@ -128,10 +128,10 @@
     ],
     "language_prefs": [
       {
-        "language": "fa",
+        "language": "en",
         "scope": "global",
         "scope_id": "",
-        "updated_at": "2026-10-29T21:14:52+00:00"
+        "updated_at": "2026-10-29T21:59:08+00:00"
       }
     ],
     "notes": [],
@@ -146,6 +146,16 @@
         "key": "clock.enabled",
         "updated_at": "2026-10-29T19:51:16+00:00",
         "value": "false"
+      },
+      {
+        "key": "ai.usage",
+        "updated_at": "2026-10-29T21:59:02+00:00",
+        "value": "{\"2b9beacf67a2|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-29\",\"count\":1}}"
+      },
+      {
+        "key": "ai.health",
+        "updated_at": "2026-10-29T21:59:02+00:00",
+        "value": "{\"2b9beacf67a2\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":1,\"failures\":0}}"
       }
     ],
     "templates": [],
