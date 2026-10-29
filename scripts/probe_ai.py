@@ -145,6 +145,7 @@ async def main() -> int:
             }
         )
     report["active_model"] = provider.active_model
+    report["user_agent"] = http_module.USER_AGENT
 
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0 if all(check["ok"] for check in checks) else 2
