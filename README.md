@@ -280,7 +280,7 @@ live account from this environment.
 | Area | What works |
 | --- | --- |
 | Core | `.help`, `.commands`, `.status`, `.ping`, `.diagnostics`, `.features`, `.feature`, `.stop`, `.lang`, `.id`, `.about`, `.config`, `.selfcheck`, `.prefix`, `.dryrun` |
-| Profile | `.clock` (5-minute periodic profile-name clock), `.bio` (set / rotation pool / preview / reset / limit), `.preset` create / apply / preview / delete **and schedule** (one-off or recurring), `.profile` show / preview / restore / history, `.counter` |
+| Profile | `.clock` (per-minute periodic profile-name clock), `.bio` (set / rotation pool / preview / reset / limit), `.preset` create / apply / preview / delete **and schedule** (one-off or recurring), `.profile` show / preview / restore / history, `.counter` |
 | Messaging | `.autoreply` (exact / contains / regex, cooldowns, loop protection), `.away`, `.schedule` / `.scheduled`, `.template` (validated placeholders), `.fight` (6 styles, intensity, offline-first, refuses threats, never repeats an insult), `.suggest` |
 | Detection | `.watch`, `.trigger` (notify / react / template / translate), `.react`, `.rules`, `.detect` (status + language), mention and reply notifications, edit and delete notifications, burst detection |
 | Information | `.search`, `.chats`, `.chatinfo`, `.bookmark`, `.note`, `.media` (info + download), `.export`, `.saved`, `.labels`, `.textstats`, `.calc`, `.time`, `.convert-time`, `.agenda` |
