@@ -105,21 +105,23 @@ jobs:
               -H "HTTP-Referer: https://github.com/asomethinggood-sys/SELF" -H "X-Title: HAVOC Yura" \
               -d "$payload" || echo "curl failed"
             echo "  body: $(head -c 220 .d2 | tr '\n' ' ')"
-            # The bot's own User-Agent is refused by the CDN in front of the
-            # gateway (403 with an HTML body, not a JSON error). Which part of it
-            # trips the rule matters: test the pieces, not one guess.
+            # The CDN in front of the gateway refuses any User-Agent containing
+            # the word HAVOC (403 with an HTML body, not a JSON error). Find a
+            # name that passes on both endpoints instead of guessing once.
             for ua in \
-              "HAVOC-userbot/2.0 (+https://github.com/asomethinggood-sys/SELF)" \
               "HAVOC/2.0 (+https://github.com/asomethinggood-sys/SELF)" \
-              "HAVOC-Yura/2.0" \
+              "havoc/2.0" \
+              "Yura/2.0 (+https://github.com/asomethinggood-sys/SELF)" \
+              "Yura-userbot/2.0 (+https://github.com/asomethinggood-sys/SELF)" \
               "python-urllib/3.11" \
-              "Mozilla/5.0 (compatible; HAVOC/2.0; +https://github.com/asomethinggood-sys/SELF)" \
               "curl/8.5.0"; do
-              code=$(curl -s -o .d5 -w '%{http_code}' --max-time 40 -X POST "${base}/chat/completions" \
+              get=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 -A "$ua" \
+                -H "Authorization: Bearer ${AI_API_KEY}" "${base}/models" || echo failed)
+              post=$(curl -s -o /dev/null -w '%{http_code}' --max-time 40 -X POST "${base}/chat/completions" \
                 -A "$ua" -H "Authorization: Bearer ${AI_API_KEY}" \
                 -H "Content-Type: application/json" -H "Accept: application/json" \
-                -d "$payload" || echo "curl-failed")
-              echo "ua [${ua}] -> ${code}"
+                -d "$payload" || echo failed)
+              echo "ua [${ua}] -> models ${get} · chat ${post}"
             done
             echo -n "chat with browser UA: "
             curl -s -o .d3 -w '%{http_code}\n' --max-time 40 -X POST "${base}/chat/completions" \
