@@ -1,0 +1,57 @@
+# --- Secrets & sessions (Havoc) ---
+.env
+.env.*
+!.env.example
+*.session
+*.session-journal
+sessions/
+session.txt
+
+# --- Local data / runtime state ---
+# runtime state lives in ./data; the packaged corpora do not
+data/
+!havoc/data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+backups/
+logs/
+*.log
+cache/
+# build-script downloads (see scripts/build_corpus.py)
+.cache/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
+
+# --- Editors / OS ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+
+# --- Local notes (not part of the project) ---
+.runtime/

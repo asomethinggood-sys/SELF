@@ -1,0 +1,490 @@
+"""Time parsing, timezone handling and human-friendly formatting.
+
+All persisted timestamps are timezone-aware UTC ISO-8601 strings with second
+resolution, e.g. ``2026-10-28T09:15:00+00:00``. Conversion to the user's
+timezone happens only at the edges (display and scheduling input) so DST is
+handled by :mod:`zoneinfo` rather than arithmetic on naive datetimes.
+
+Feature areas: 51-53, 58, 60 (schedule validation), 78.
+"""
+
+from __future__ import annotations
+
+import re
+from datetime import UTC, date, datetime, time, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from ..localization import digits_for
+
+UTC = UTC
+
+_DURATION_RE = re.compile(
+    r"(?P<value>\d+(?:[.,]\d+)?)\s*"
+    r"(?P<unit>seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|ماه|ماهه|روز|هفته|ساعت|دقیقه|ثانیه|ث)",
+    re.IGNORECASE,
+)
+_UNIT_SECONDS = {
+    "s": 1, "sec": 1, "secs": 1, "second": 1, "seconds": 1, "ثانیه": 1, "ث": 1,
+    "m": 60, "min": 60, "mins": 60, "minute": 60, "minutes": 60, "دقیقه": 60,
+    "h": 3600, "hr": 3600, "hrs": 3600, "hour": 3600, "hours": 3600, "ساعت": 3600,
+    "d": 86400, "day": 86400, "days": 86400, "روز": 86400,
+    "w": 604800, "week": 604800, "weeks": 604800, "هفته": 604800,
+}
+_WEEKDAYS = {
+    "mon": 0, "monday": 0, "دوشنبه": 0,
+    "tue": 1, "tues": 1, "tuesday": 1, "سه‌شنبه": 1, "سه شنبه": 1,
+    "wed": 2, "wednesday": 2, "چهارشنبه": 2,
+    "thu": 3, "thurs": 3, "thursday": 3, "پنجشنبه": 3, "پنج‌شنبه": 3,
+    "fri": 4, "friday": 4, "جمعه": 4,
+    "sat": 5, "saturday": 5, "شنبه": 5,
+    "sun": 6, "sunday": 6, "یکشنبه": 6, "یک‌شنبه": 6,
+}
+
+PERSIAN_MONTHS = (
+    "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
+    "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند",
+)
+
+MAX_DURATION_SECONDS = 10 * 365 * 86400
+
+
+class TimeParseError(ValueError):
+    """Raised when a duration/date cannot be understood."""
+
+
+# ---------------------------------------------------------------------------
+# Now / conversion
+# ---------------------------------------------------------------------------
+def utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+def to_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
+
+
+def get_zone(name: str | None, default: str = "UTC") -> ZoneInfo:
+    """Resolve an IANA timezone, raising a clear error for bad input."""
+    candidate = (name or default or "UTC").strip()
+    try:
+        return ZoneInfo(candidate)
+    except (ZoneInfoNotFoundError, ValueError, KeyError) as exc:
+        raise TimeParseError(f"unknown timezone {candidate!r}") from exc
+
+
+def safe_zone(name: str | None, default: str = "UTC") -> ZoneInfo:
+    try:
+        return get_zone(name, default)
+    except TimeParseError:
+        return get_zone(default)
+
+
+def local_now(tz_name: str | None = "UTC") -> datetime:
+    return utc_now().astimezone(safe_zone(tz_name))
+
+
+def to_local(dt: datetime, tz_name: str | None) -> datetime:
+    return to_utc(dt).astimezone(safe_zone(tz_name))
+
+
+def iso(dt: datetime) -> str:
+    return to_utc(dt).replace(microsecond=0).isoformat()
+
+
+def parse_iso(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    text = value.strip().replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return to_utc(dt)
+
+
+# ---------------------------------------------------------------------------
+# Durations
+# ---------------------------------------------------------------------------
+def parse_duration(text: str) -> timedelta:
+    """Parse ``30m``, ``2 hours``, ``1h30m``, ``۴۵ دقیقه`` into a timedelta."""
+    if not text or not text.strip():
+        raise TimeParseError("empty duration")
+    normalized = _normalize_digits(text.strip().lower())
+    if normalized.startswith(("-", "+")) or normalized.startswith("−"):
+        raise TimeParseError("duration must be positive")
+    # bare number means minutes (shortcut for ".remind 30 water")
+    if re.fullmatch(r"\d+(?:[.,]\d+)?", normalized):
+        minutes = float(normalized.replace(",", "."))
+        return timedelta(minutes=minutes)
+
+    total = 0.0
+    matched = 0
+    for match in _DURATION_RE.finditer(normalized):
+        raw_value = match.group("value").replace(",", ".")
+        unit = match.group("unit").lower().rstrip("s") if len(match.group("unit")) > 1 else match.group("unit").lower()
+        seconds = _UNIT_SECONDS.get(unit) or _UNIT_SECONDS.get(match.group("unit").lower())
+        if seconds is None:
+            continue
+        total += float(raw_value) * seconds
+        matched += 1
+    if not matched:
+        raise TimeParseError("no recognizable duration (e.g. 30m, 2h, 1d)")
+    # Reject "5m bananas" style input: every alphanumeric must be accounted for.
+    consumed = _DURATION_RE.sub("", normalized)
+    if re.search(r"[0-9a-z\u0600-\u06FF]", consumed):
+        raise TimeParseError("unexpected characters in duration")
+    if total <= 0:
+        raise TimeParseError("duration must be positive")
+    if total > MAX_DURATION_SECONDS:
+        raise TimeParseError("duration is unreasonably long")
+    return timedelta(seconds=total)
+
+
+def _normalize_digits(text: str) -> str:
+    from .text import to_latin_digits
+
+    return to_latin_digits(text)
+
+
+_TIME_RE = re.compile(r"^(\d{1,2}):(\d{2})(?::(\d{2}))?$")
+
+
+def parse_clock(text: str) -> time:
+    match = _TIME_RE.match(_normalize_digits(text.strip()))
+    if not match:
+        raise TimeParseError("time must look like HH:MM")
+    hour, minute = int(match.group(1)), int(match.group(2))
+    second = int(match.group(3) or 0)
+    if not (0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= second <= 59):
+        raise TimeParseError("time is out of range")
+    return time(hour, minute, second)
+
+
+# ---------------------------------------------------------------------------
+# Dates
+# ---------------------------------------------------------------------------
+_DATE_PATTERNS = (
+    ("%Y-%m-%d", r"^\d{4}-\d{1,2}-\d{1,2}$"),
+    ("%Y/%m/%d", r"^\d{4}/\d{1,2}/\d{1,2}$"),
+    ("%d.%m.%Y", r"^\d{1,2}\.\d{1,2}\.\d{4}$"),
+    ("%d/%m/%Y", r"^\d{1,2}/\d{1,2}/\d{4}$"),
+)
+
+
+def parse_date(text: str) -> date:
+    normalized = _normalize_digits(text.strip())
+    for fmt, pattern in _DATE_PATTERNS:
+        if re.fullmatch(pattern, normalized):
+            try:
+                return datetime.strptime(normalized, fmt).date()
+            except ValueError as exc:
+                raise TimeParseError(f"invalid date: {exc}") from exc
+    raise TimeParseError("date must look like YYYY-MM-DD or DD.MM.YYYY")
+
+
+def parse_timezone_offset(text: str) -> float | None:
+    """Parse ``+03:30`` / ``-5`` / ``UTC+2`` into an hour offset."""
+    normalized = _normalize_digits(text.strip()).upper().replace("UTC", "").replace("GMT", "")
+    match = re.fullmatch(r"([+-])(\d{1,2})(?::(\d{2}))?", normalized)
+    if not match:
+        return None
+    sign = -1 if match.group(1) == "-" else 1
+    hours = int(match.group(2))
+    minutes = int(match.group(3) or 0)
+    if hours > 14 or minutes > 59:
+        return None
+    return sign * (hours + minutes / 60)
+
+
+def parse_local_datetime(
+    text: str,
+    tz_name: str | None = "UTC",
+    *,
+    now: datetime | None = None,
+) -> datetime:
+    """Parse a human date/time in ``tz_name`` and return an aware UTC datetime.
+
+    Accepted forms: ``2026-01-02 14:30``, ``02.01.2026 14:30``, ``14:30``
+    (today), ``tomorrow 09:00``, ``فردا ۹:۰۰``.
+    """
+    zone = safe_zone(tz_name)
+    current = (now or utc_now()).astimezone(zone)
+    normalized = _normalize_digits(" ".join(text.strip().split()))
+    lowered = normalized.lower()
+
+    day_offset = 0
+    if lowered.startswith("tomorrow") or lowered.startswith("فردا"):
+        day_offset = 1
+        normalized = re.sub(r"(?i)^(tomorrow|فردا)\s*", "", normalized)
+    elif lowered.startswith("today") or lowered.startswith("امروز"):
+        normalized = re.sub(r"(?i)^(today|امروز)\s*", "", normalized)
+    elif lowered.startswith("yesterday") or lowered.startswith("دیروز"):
+        day_offset = -1
+        normalized = re.sub(r"(?i)^(yesterday|دیروز)\s*", "", normalized)
+
+    parts = normalized.split()
+    target_date: date | None = None
+    target_time: time | None = None
+    matched = False
+    for part in parts:
+        if target_time is None:
+            try:
+                target_time = parse_clock(part)
+                matched = True
+                continue
+            except TimeParseError:
+                pass
+        if target_date is None:
+            try:
+                target_date = parse_date(part)
+                matched = True
+                continue
+            except TimeParseError:
+                pass
+    if not matched and not day_offset:
+        # "abcdef" is neither a duration nor a date; guessing 09:00 would be a
+        # silent lie, so refuse instead.
+        raise TimeParseError("unrecognised time; use 30m, 14:30 or 2026-01-02 14:30")
+    if target_date is None:
+        target_date = current.date() + timedelta(days=day_offset)
+    if target_time is None:
+        target_time = time(9, 0) if parts else current.time().replace(second=0, microsecond=0)
+
+    naive = datetime.combine(target_date, target_time)
+    aware = naive.replace(tzinfo=zone)
+    return to_utc(aware)
+
+
+def parse_when(text: str, tz_name: str | None = "UTC", *, now: datetime | None = None) -> datetime:
+    """Parse either a relative duration (``30m``) or an absolute local time."""
+    current = now or utc_now()
+    try:
+        return current + parse_duration(text)
+    except TimeParseError:
+        return parse_local_datetime(text, tz_name, now=current)
+
+
+# ---------------------------------------------------------------------------
+# Recurrence
+# ---------------------------------------------------------------------------
+_RECURRENCE_PATTERNS = {
+    "daily": r"^(?:daily|every day|هر\s*روز|روزانه)$",
+    "weekly": r"^(?:weekly|every week|هر\s*هفته|هفتگی)$",
+    "monthly": r"^(?:monthly|every month|هر\s*ماه|ماهانه)$",
+}
+
+
+def parse_recurrence(text: str | None) -> str | None:
+    """Normalize a recurrence expression to a canonical spec.
+
+    Supported: ``none``, ``daily``, ``weekly``, ``monthly``, ``every 30m``,
+    ``weekdays``, ``sat``/``saturday``... and Persian equivalents.
+    Returns ``None`` for one-off jobs.
+    """
+    if not text:
+        return None
+    normalized = _normalize_digits(" ".join(text.strip().split())).lower()
+    if normalized in {"none", "once", "off", "هیچ", "یکبار", "یک‌بار"}:
+        return None
+    for canonical, pattern in _RECURRENCE_PATTERNS.items():
+        if re.fullmatch(pattern, normalized):
+            return canonical
+    if normalized in {"weekdays", "weekday", "روزهای هفته"}:
+        return "weekdays"
+    if normalized in {"weekends", "weekend", "آخر هفته"}:
+        return "weekends"
+    if normalized in _WEEKDAYS:
+        return f"weekly:{_WEEKDAYS[normalized]}"
+    if normalized.startswith("every ") or normalized.startswith("هر "):
+        rest = re.sub(r"^(every|هر)\s+", "", normalized)
+        if rest.lower() in _WEEKDAYS:
+            return f"weekly:{_WEEKDAYS[rest.lower()]}"
+        try:
+            delta = parse_duration(rest)
+        except TimeParseError:
+            return None
+        if delta.total_seconds() < 60:
+            return None
+        return f"interval:{int(delta.total_seconds())}"
+    return None
+
+
+def next_occurrence(current: datetime, recurrence: str | None, tz_name: str | None = "UTC") -> datetime | None:
+    """Compute the next fire time for a recurrence spec.
+
+    Recurrences are computed in local time and converted back to UTC, so a
+    daily reminder keeps its wall-clock time across DST changes.
+    """
+    if not recurrence:
+        return None
+    zone = safe_zone(tz_name)
+    local = to_local(current, tz_name)
+    if recurrence == "daily":
+        candidate = local + timedelta(days=1)
+    elif recurrence == "weekdays":
+        candidate = local + timedelta(days=1)
+        while candidate.weekday() >= 5:
+            candidate += timedelta(days=1)
+    elif recurrence == "weekends":
+        candidate = local + timedelta(days=1)
+        while candidate.weekday() < 5:
+            candidate += timedelta(days=1)
+    elif recurrence == "weekly":
+        candidate = local + timedelta(weeks=1)
+    elif recurrence.startswith("weekly:"):
+        try:
+            target = int(recurrence.split(":", 1)[1])
+        except ValueError:
+            return None
+        candidate = local + timedelta(days=1)
+        while candidate.weekday() != target:
+            candidate += timedelta(days=1)
+    elif recurrence == "monthly":
+        candidate = _add_month(local)
+    elif recurrence.startswith("interval:"):
+        try:
+            seconds = int(recurrence.split(":", 1)[1])
+        except ValueError:
+            return None
+        if seconds < 60:
+            return None
+        candidate = local + timedelta(seconds=seconds)
+    else:
+        return None
+    return to_utc(candidate.replace(tzinfo=zone))
+
+
+def _add_month(dt: datetime) -> datetime:
+    month = dt.month + 1
+    year = dt.year + (month - 1) // 12
+    month = (month - 1) % 12 + 1
+    day = min(dt.day, _days_in_month(year, month))
+    return dt.replace(year=year, month=month, day=day)
+
+
+def _days_in_month(year: int, month: int) -> int:
+    if month == 12:
+        return 31
+    return (date(year, month + 1, 1) - timedelta(days=1)).day
+
+
+# ---------------------------------------------------------------------------
+# Formatting
+# ---------------------------------------------------------------------------
+def humanize_delta(delta: timedelta, language: str = "en") -> str:
+    """Compact relative time, e.g. ``in 2h 15m`` / ``۲ ساعت و ۱۵ دقیقه دیگر``."""
+    seconds = int(abs(delta.total_seconds()))
+    negative = delta.total_seconds() < 0
+    units = (
+        (86400, ("d", "روز")),
+        (3600, ("h", "ساعت")),
+        (60, ("m", "دقیقه")),
+        (1, ("s", "ثانیه")),
+    )
+    if seconds < 5:
+        return "just now" if language == "en" else "همین حالا"
+    parts: list[str] = []
+    remaining = seconds
+    for size, (en_suffix, fa_name) in units:
+        amount, remaining = divmod(remaining, size)
+        if amount:
+            if language == "fa":
+                parts.append(f"{digits_for('fa', amount)} {fa_name}")
+            else:
+                parts.append(f"{amount}{en_suffix}")
+        if len(parts) == 2:
+            break
+    joiner = " و " if language == "fa" else " "
+    body = joiner.join(parts)
+    if language == "fa":
+        return f"{body} پیش" if negative else f"{body} دیگر"
+    return f"{body} ago" if negative else f"in {body}"
+
+
+def format_datetime(dt: datetime, tz_name: str | None = "UTC", language: str = "en") -> str:
+    """Human readable absolute time in the user's zone and language.
+
+    Farsi output uses the Jalali (Solar Hijri) calendar and Persian digits,
+    which is what Iranian users expect from a Persian interface.
+    """
+    local = to_local(dt, tz_name)
+    if language == "fa":
+        jy, jm, jd = gregorian_to_jalali(local.year, local.month, local.day)
+        stamp = f"{jy:04d}/{jm:02d}/{jd:02d} {local:%H:%M}"
+        weekday = _fa_weekday(local.weekday())
+        return f"{digits_for('fa', stamp)} ({weekday})"
+    return local.strftime("%Y-%m-%d %H:%M %Z").strip()
+
+
+def gregorian_to_jalali(gy: int, gm: int, gd: int) -> tuple[int, int, int]:
+    """Convert a Gregorian date to the Jalali (Solar Hijri) calendar."""
+    g_days_in_month = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+    gy2 = gy + 1 if gm > 2 else gy
+    days = (
+        355666
+        + 365 * gy
+        + (gy2 + 3) // 4
+        - (gy2 + 99) // 100
+        + (gy2 + 399) // 400
+        + gd
+        + sum(g_days_in_month[: gm - 1])
+    )
+    jy = -1595 + 33 * (days // 12053)
+    days %= 12053
+    jy += 4 * (days // 1461)
+    days %= 1461
+    if days > 365:
+        jy += (days - 1) // 365
+        days = (days - 1) % 365
+    if days < 186:
+        jm = 1 + days // 31
+        jd = 1 + days % 31
+    else:
+        jm = 7 + (days - 186) // 30
+        jd = 1 + (days - 186) % 30
+    return jy, jm, jd
+
+
+def _fa_weekday(index: int) -> str:
+    names = ("دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه", "شنبه", "یکشنبه")
+    return names[index % 7]
+
+
+def day_bounds(day: date, tz_name: str | None = "UTC") -> tuple[datetime, datetime]:
+    zone = safe_zone(tz_name)
+    start = datetime.combine(day, time(0, 0), tzinfo=zone)
+    end = start + timedelta(days=1)
+    return to_utc(start), to_utc(end)
+
+
+def week_bounds(day: date, tz_name: str | None = "UTC") -> tuple[datetime, datetime]:
+    """Monday-to-Sunday week bounds (seven days, exclusive end).
+
+    The Iranian week starts on Saturday, so callers that display a calendar
+    label the first column themselves; the arithmetic stays unambiguous.
+    """
+    start_day = day - timedelta(days=day.weekday())
+    start, _ = day_bounds(start_day, tz_name)
+    _, end = day_bounds(start_day + timedelta(days=6), tz_name)
+    return start, end
+
+
+def in_quiet_hours(moment: datetime, quiet_start: str, quiet_end: str, tz_name: str | None = "UTC") -> bool:
+    """Whether ``moment`` falls inside a quiet window that may cross midnight."""
+    local = to_local(moment, tz_name).time()
+    try:
+        start = parse_clock(quiet_start)
+        end = parse_clock(quiet_end)
+    except TimeParseError:
+        return False
+    if start == end:
+        return False
+    if start < end:
+        return start <= local < end
+    return local >= start or local < end
+
+
+def to_unix(dt: datetime) -> int:
+    return int(to_utc(dt).timestamp())

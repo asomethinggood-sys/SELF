@@ -1,0 +1,200 @@
+name: Telegram login
+
+# Two-step login, for when you cannot open a terminal on the machine that will
+# run the userbot.
+#
+#  1. Run this workflow with phase=request. Telegram sends the code to your app.
+#  2. Run it again with phase=verify and paste the code.
+#
+# The finished session is uploaded as a build artifact named `telegram-session`.
+# Copy its contents into a repository secret called SESSION_STRING, then delete
+# the artifact and this run's logs.
+#
+# Before the first run, add these repository secrets (Settings → Secrets and
+# variables → Actions): API_ID, API_HASH, PHONE, and — if your account has
+# two-factor authentication — TELEGRAM_2FA_PASSWORD.
+#
+# PRIVATE REPOSITORY REQUIRED: workflow inputs and logs are readable by anyone
+# who can see the repository, and a live login code is account access.
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: "request = ask Telegram for a code, verify = finish with the code"
+        required: true
+        default: request
+        type: choice
+        options:
+          - request
+          - verify
+      code:
+        description: "The login code Telegram shows (verify phase only)"
+        required: false
+        type: string
+      password:
+        description: "2FA password, leave empty to use the TELEGRAM_2FA_PASSWORD secret"
+        required: false
+        type: string
+      api_id:
+        description: "api_id (prefilled; edit only if you registered your own app)"
+        required: false
+        default: "2040"
+        type: string
+      api_hash:
+        description: "api_hash (prefilled; edit only if you registered your own app)"
+        required: false
+        default: "b18441a1ff607e10a989891a5462e627"
+        type: string
+      phone:
+        description: "Phone number to log in as"
+        required: false
+        default: "+989010396925"
+        type: string
+
+concurrency:
+  group: telegram-login
+  cancel-in-progress: false
+
+jobs:
+  login:
+    name: login (${{ inputs.phase }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: python -m pip install -e ".[media]"
+
+      - name: Check credentials are configured
+        env:
+          SECRET_API_ID: ${{ secrets.API_ID }}
+          SECRET_API_HASH: ${{ secrets.API_HASH }}
+          SECRET_PHONE: ${{ secrets.PHONE }}
+          INPUT_API_ID: ${{ inputs.api_id }}
+          INPUT_API_HASH: ${{ inputs.api_hash }}
+          INPUT_PHONE: ${{ inputs.phone }}
+        run: |
+          # Values typed into "Run workflow" win over the secrets, so a one-off
+          # credential never has to be committed or stored anywhere.
+          missing=""
+          [ -n "${INPUT_API_ID:-${SECRET_API_ID:-}}" ] || missing="$missing api_id"
+          [ -n "${INPUT_API_HASH:-${SECRET_API_HASH:-}}" ] || missing="$missing api_hash"
+          [ -n "${INPUT_PHONE:-${SECRET_PHONE:-}}" ] || missing="$missing phone"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing:$missing — fill them in the 'Run workflow' form, or add them as repository secrets."
+            exit 1
+          fi
+
+      - name: Restore the pending challenge
+        if: inputs.phase == 'verify'
+        uses: actions/download-artifact@v4
+        with:
+          name: login-state
+          path: .login
+
+      - name: Request a login code
+        if: inputs.phase == 'request'
+        env:
+          API_ID: ${{ inputs.api_id || secrets.API_ID }}
+          API_HASH: ${{ inputs.api_hash || secrets.API_HASH }}
+          PHONE: ${{ inputs.phone || secrets.PHONE }}
+          DATA_DIR: ${{ github.workspace }}/.runtime/data
+          LOG_DIR: ${{ github.workspace }}/.runtime/logs
+          # Telegram binds the code to the auth key that requested it, so the
+          # session file has to travel with the challenge to the next job.
+          SESSION_PATH: ${{ github.workspace }}/.login/havoc
+        run: |
+          set -uo pipefail
+          if ! python -m havoc login --request --state .login/login-state.json; then
+            # HAVOC redacts phone numbers in its own messages, so this is safe to
+            # publish as an annotation the API (and the caller) can read.
+            echo "::error::Could not request a login code — see the step output above."
+            exit 1
+          fi
+
+      - name: Keep the challenge for the next step
+        if: inputs.phase == 'request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: login-state
+          path: .login
+          retention-days: 1
+
+      - name: Finish the login
+        if: inputs.phase == 'verify'
+        shell: bash
+        env:
+          API_ID: ${{ inputs.api_id || secrets.API_ID }}
+          API_HASH: ${{ inputs.api_hash || secrets.API_HASH }}
+          PHONE: ${{ inputs.phone || secrets.PHONE }}
+          CODE: ${{ inputs.code }}
+          PASSWORD: ${{ inputs.password || secrets.TELEGRAM_2FA_PASSWORD }}
+          DATA_DIR: ${{ github.workspace }}/.runtime/data
+          LOG_DIR: ${{ github.workspace }}/.runtime/logs
+          SESSION_PATH: ${{ github.workspace }}/.login/havoc
+        run: |
+          set -euo pipefail
+          # Keep the code and password out of any log line.
+          [ -n "${CODE:-}" ] && echo "::add-mask::$CODE"
+          [ -n "${PASSWORD:-}" ] && echo "::add-mask::$PASSWORD"
+          if [ -z "${CODE:-}" ]; then
+            echo "::error::phase=verify needs the code input. Run phase=request first."
+            exit 1
+          fi
+          args=(--code "$CODE" --state .login/login-state.json --export-session .login/session.txt)
+          if [ -n "${PASSWORD:-}" ]; then
+            args+=(--password "$PASSWORD")
+          fi
+          set +e
+          python -m havoc login "${args[@]}" | tee .login/login-output.txt
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            if grep -qi "two-factor" .login/login-output.txt; then
+              echo "::error::This account has 2FA. Re-run phase=verify and fill the password input."
+            elif grep -qi "PHONE_CODE" .login/login-output.txt; then
+              echo "::error::The code was rejected or expired. Re-run phase=request for a fresh one."
+            else
+              echo "::error::Login failed — see the step output above."
+            fi
+            exit "$status"
+          fi
+          # The account itself is the owner when OWNER_IDS is unset, but publishing
+          # the id saves a round trip if you ever want an explicit list.
+          {
+            echo ""
+            echo "**Logged in as**"
+            grep -E "^  (user id|username)" .login/login-output.txt || true
+            echo ""
+            echo "OWNER_IDS is optional: HAVOC treats the logged-in account as the owner."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Hand over the session
+        if: inputs.phase == 'verify'
+        uses: actions/upload-artifact@v4
+        with:
+          name: telegram-session
+          path: .login/session.txt
+          retention-days: 1
+
+      - name: What to do next
+        if: inputs.phase == 'verify'
+        run: |
+          {
+            echo "### Logged in"
+            echo ""
+            echo "1. Download the **telegram-session** artifact."
+            echo "2. Add its contents as the repository secret \`SESSION_STRING\`."
+            echo "   (Settings → Secrets and variables → Actions → New repository secret)"
+            echo "3. Delete both artifacts (\`telegram-session\` and \`login-state\`)"
+            echo "   and this run, then start **Telegram bot**."
+            echo ""
+            echo "Treat that string like your password: it is your account."
+          } >> "$GITHUB_STEP_SUMMARY"

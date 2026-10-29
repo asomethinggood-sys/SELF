@@ -1,0 +1,6 @@
+{
+  "phone": "+989010396925",
+  "api_id": "2040",
+  "api_hash": "b18441a1ff607e10a989891a5462e627",
+  "note": "api_id 2040 is Telegram Desktop's published pair: the credential probe showed it is accepted by Telegram but not proven to survive a real login. Replace both values here once you have your own app from my.telegram.org; nothing else has to change."
+}

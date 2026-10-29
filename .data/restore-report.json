@@ -1,0 +1,12 @@
+{
+  "app": "havoc",
+  "counts": {
+    "bookmarks": 1,
+    "features": 13,
+    "language_prefs": 1
+  },
+  "kind": "restore-report",
+  "restored_at": "2026-10-29T12:56:41+00:00",
+  "run_id": "40876750692",
+  "source_created_at": "2026-10-29T12:50:17+00:00"
+}

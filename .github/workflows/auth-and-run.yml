@@ -1,0 +1,487 @@
+name: Auth and run
+
+# One run that does the whole job: request a login code, wait for the code to be
+# delivered into the repository, sign in, and then start the userbot.
+#
+# Why one run instead of two: Telegram binds a login code to the auth key that
+# requested it, so the process that asks for the code must also consume it. Doing
+# both here keeps that state in memory and in the actions cache, and it means the
+# session string never has to be copied anywhere by hand.
+#
+# How the code arrives: whoever has it commits it to `.auth/code.txt` on this
+# branch. The waiting step polls the remote and picks it up within seconds. The
+# code is single-use and expires in a couple of minutes, so the loop is short.
+#
+# Triggers
+#   * push touching `.auth/config.json` or this workflow — a commit is enough to
+#     start the login, no dispatch permission needed
+#   * a schedule, which restarts the bot when a run hits GitHub's six-hour limit
+#   * manual dispatch with optional overrides
+#
+# Pushing `.auth/code.txt` deliberately does *not* trigger a run: the job that is
+# already waiting polls for the file, which keeps the request and the code in the
+# same process (Telegram binds them together).
+#
+# Everything the caller needs to know is published three ways, because the log
+# archive is not always reachable: annotations, the job summary, and files under
+# `.auth/` (the session string is never written there unless asked for).
+
+on:
+  # Restart the bot when a run's six-hour ceiling is reached. Each run restores
+  # the cached session and skips the login.
+  schedule:
+    - cron: "0 */5 * * *"
+  push:
+    paths:
+      # A push is the deploy. Only things that change the bot's behaviour are
+      # listed: docs and tests must not restart a running userbot.
+      - "havoc/**"
+      - "pyproject.toml"
+      - ".auth/config.json"
+      - ".github/workflows/auth-and-run.yml"
+  workflow_dispatch:
+    inputs:
+      phone:
+        description: "Phone number to log in as (default: .auth/config.json)"
+        required: false
+        type: string
+      api_id:
+        description: "api_id override"
+        required: false
+        type: string
+      api_hash:
+        description: "api_hash override"
+        required: false
+        type: string
+      wait_minutes:
+        description: "How long to wait for .auth/code.txt (default 25)"
+        required: false
+        default: "25"
+      bot_minutes:
+        description: "How many minutes to run the bot afterwards (default 300)"
+        required: false
+        default: "300"
+
+permissions:
+  contents: write
+  # Read-only: the running bot asks which runs are queued before it steps
+  # aside, so it can never hand over to a deploy that will not happen.
+  actions: read
+
+concurrency:
+  group: havoc-auth
+  # A push replaces the running bot instead of queueing behind it. Without this
+  # a deploy would sit behind up to five hours of the previous run, which is
+  # exactly the wrong behaviour when iterating on features.
+  cancel-in-progress: true
+
+jobs:
+  login:
+    name: login and run
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: python -m pip install -e ".[media]"
+
+      - name: Announce the deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="${GITHUB_SHA:0:7}"
+          subject=$(git log -1 --pretty=%s "${GITHUB_SHA}" | head -c 120)
+          echo "::notice::Deploying ${sha}: ${subject}"
+          {
+            echo "### Deploying \`${sha}\`"
+            echo ""
+            echo "${subject}"
+            echo ""
+            echo "The session is restored from the cache, so no login is needed."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Read the credentials
+        id: creds
+        shell: bash
+        run: |
+          set -euo pipefail
+          phone="${IN_PHONE:-$(python -c 'import json;print(json.load(open(".auth/config.json"))["phone"])')}"
+          api_id="${IN_API_ID:-$(python -c 'import json;print(json.load(open(".auth/config.json"))["api_id"])')}"
+          api_hash="${IN_API_HASH:-$(python -c 'import json;print(json.load(open(".auth/config.json"))["api_hash"])')}"
+          echo "::add-mask::$phone"
+          echo "phone=$phone" >> "$GITHUB_OUTPUT"
+          echo "api_id=$api_id" >> "$GITHUB_OUTPUT"
+          echo "api_hash=$api_hash" >> "$GITHUB_OUTPUT"
+          # Only the shape of the number is published, never the number.
+          masked="${phone:0:3}…${phone: -3}"
+          echo "::notice::Credentials loaded for $masked (api_id $api_id)"
+        env:
+          IN_PHONE: ${{ inputs.phone }}
+          IN_API_ID: ${{ inputs.api_id }}
+          IN_API_HASH: ${{ inputs.api_hash }}
+
+      - name: Restore a previous session
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: .auth/session.txt
+          key: havoc-session-${{ github.run_id }}
+          restore-keys: |
+            havoc-session-
+
+      - name: Restore the database
+        id: data
+        uses: actions/cache@v4
+        with:
+          # Reminders, bookmarks, notes, settings and feature switches live here.
+          # Without this every deploy would start from an empty database.
+          path: .runtime/data
+          key: havoc-data-${{ github.run_id }}
+          restore-keys: |
+            havoc-data-
+
+      - name: What the database contains
+        shell: bash
+        env:
+          DATA_DIR: ${{ github.workspace }}/.runtime/data
+          DATABASE_PATH: ${{ github.workspace }}/.runtime/data/havoc.db
+          LOG_DIR: ${{ github.workspace }}/.runtime/logs
+          BACKUP_DIR: ${{ github.workspace }}/.runtime/data/backups
+          TIMEZONE: ${{ vars.HAVOC_TIMEZONE || 'Asia/Tehran' }}
+          HAVOC_CACHE_HIT: ${{ steps.data.outputs.cache-hit }}
+          HAVOC_CACHE_KEY: ${{ steps.data.outputs.cache-matched-key }}
+        run: |
+          set -uo pipefail
+          # Read the data before the bot starts, so the summary shows what a
+          # restart actually preserved. The boot counter is the proof: it only
+          # grows if the database survives from one run to the next.
+          python -m havoc data --boot-probe || {
+            echo "::warning::Could not read the database; the bot will start on what it has."
+            exit 0
+          }
+          python -m havoc data | sed 's/^/  /'
+          # A committed record: the boot counter is the one value that can only
+          # grow if the cached database really came back.
+          python -m havoc data --json-out data-status.json || true
+
+      - name: Record the data status
+        # Published to the repository so the database contents can be inspected
+        # without access to run logs. Pushing this file does not trigger a run.
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          if [ ! -f data-status.json ]; then
+            echo "::warning::No data-status.json was written; nothing to publish."
+            exit 0
+          fi
+          git config user.name "HAVOC data"
+          git config user.email "data@users.noreply.github.com"
+          git add data-status.json
+          if git diff --cached --quiet; then
+            echo "no change in the data status"
+            exit 0
+          fi
+          git commit -qm "data status $(date -u +%Y-%m-%dT%H:%MZ) [skip ci]"
+          # The bot also commits (snapshots) through the API while this job
+          # runs, so the branch may have moved since checkout.
+          for _ in 1 2 3; do
+            git fetch -q origin "${GITHUB_REF_NAME}" || true
+            git rebase -q --autostash FETCH_HEAD 2>/dev/null || {
+              git rebase --abort 2>/dev/null || true
+              sleep 2
+              continue
+            }
+            if git push -q origin "HEAD:refs/heads/${GITHUB_REF_NAME}"; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::warning::Could not publish data-status.json."
+
+      - name: Use the cached session
+        id: existing
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -s .auth/session.txt ]; then
+            echo "have_session=yes" >> "$GITHUB_OUTPUT"
+            echo "::notice::A saved session was restored; skipping the login."
+          else
+            echo "have_session=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Request a login code
+        id: request
+        if: steps.existing.outputs.have_session != 'yes'
+        shell: bash
+        env:
+          API_ID: ${{ steps.creds.outputs.api_id }}
+          API_HASH: ${{ steps.creds.outputs.api_hash }}
+          PHONE: ${{ steps.creds.outputs.phone }}
+          DATA_DIR: ${{ github.workspace }}/.runtime/data
+          LOG_DIR: ${{ github.workspace }}/.runtime/logs
+          SESSION_PATH: ${{ github.workspace }}/.auth/havoc
+        run: |
+          set -uo pipefail
+          if python -m havoc login --request --state .auth/login-state.json; then
+            echo "requested=yes" >> "$GITHUB_OUTPUT"
+            echo "::notice::Login code requested. Telegram is delivering it to the account now — commit it to .auth/code.txt and this job will pick it up within seconds."
+            {
+              echo "### Login code requested"
+              echo ""
+              echo "Commit the code from Telegram to \`.auth/code.txt\` on this branch."
+              echo "This job is waiting and will finish the login on its own."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::Could not request a login code — see the step output."
+            exit 1
+          fi
+
+      - name: Wait for the code, then log in
+        id: verify
+        if: steps.existing.outputs.have_session != 'yes'
+        shell: bash
+        env:
+          API_ID: ${{ steps.creds.outputs.api_id }}
+          API_HASH: ${{ steps.creds.outputs.api_hash }}
+          PHONE: ${{ steps.creds.outputs.phone }}
+          DATA_DIR: ${{ github.workspace }}/.runtime/data
+          LOG_DIR: ${{ github.workspace }}/.runtime/logs
+          SESSION_PATH: ${{ github.workspace }}/.auth/havoc
+          WAIT_MINUTES: ${{ inputs.wait_minutes || '25' }}
+          PASSWORD: ${{ secrets.TELEGRAM_2FA_PASSWORD }}
+        run: |
+          set -uo pipefail
+          deadline=$(( $(date +%s) + WAIT_MINUTES * 60 ))
+          code=""
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            git fetch -q origin "${GITHUB_REF_NAME}" || true
+            if candidate=$(git show "FETCH_HEAD:.auth/code.txt" 2>/dev/null | tr -cd '0-9'); then
+              if [ -n "$candidate" ]; then
+                code="$candidate"
+                break
+              fi
+            fi
+            sleep 5
+          done
+
+          if [ -z "$code" ]; then
+            echo "::warning::No code arrived within ${WAIT_MINUTES} minutes; nothing was changed."
+            echo "logged_in=no" >> "$GITHUB_OUTPUT"
+            {
+              echo "### No code arrived"
+              echo ""
+              echo "The job waited ${WAIT_MINUTES} minutes. Push the code to \`.auth/code.txt\`"
+              echo "to start a fresh attempt (codes expire quickly, so a new one is needed)."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "::add-mask::$code"
+          echo "::notice::Code received; finishing the login."
+
+          args=(--code "$code" --state .auth/login-state.json --export-session .auth/session.txt)
+          if [ -n "${PASSWORD:-}" ]; then
+            args+=(--password "$PASSWORD")
+          fi
+          set +e
+          python -m havoc login "${args[@]}" 2>&1 | tee .auth/login.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ] || [ ! -s .auth/session.txt ]; then
+            echo "::error::Login failed; see .auth/login.log in the artifacts."
+            echo "logged_in=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          chmod 600 .auth/session.txt
+          echo "logged_in=yes" >> "$GITHUB_OUTPUT"
+          echo "::notice::Logged in. The session is now cached for later runs."
+          {
+            echo "### Logged in"
+            echo ""
+            grep -E "^  (user id|username)" .auth/login.log || true
+            echo ""
+            echo "The session string was cached, not committed. Start the bot from"
+            echo "**Telegram bot** (or let this run continue)."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Clear the used code
+        if: always() && steps.verify.outputs.logged_in == 'yes'
+        # Housekeeping must never cost us the bot: a failed cleanup used to skip
+        # every later step, because GitHub implicitly ANDs a step's if with
+        # success(). See the detached-HEAD note on the push below.
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          git config user.name "HAVOC auth"
+          git config user.email "auth@users.noreply.github.com"
+          if git fetch -q origin "${GITHUB_REF_NAME}" 2>/dev/null && \
+             git show "FETCH_HEAD:.auth/code.txt" >/dev/null 2>&1; then
+            git rm -q --ignore-unmatch .auth/code.txt
+            git commit -qm "auth: consume the login code [skip ci]" || true
+            # actions/checkout leaves a detached HEAD, so a bare `git push` has
+            # no branch to push; name the target explicitly.
+            git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}" || \
+              echo "::warning::Could not remove .auth/code.txt; harmless."
+          else
+            echo "no code file to remove"
+          fi
+
+      - name: Save the session for later runs
+        if: always() && steps.verify.outputs.logged_in == 'yes'
+        uses: actions/cache/save@v4
+        with:
+          path: .auth/session.txt
+          # Immutable, unique key; later runs restore it with the prefix below.
+          key: havoc-session-${{ github.run_id }}
+
+      - name: Run the userbot
+        # always(): a failure in any earlier step must not keep the bot down.
+        if: always() && (steps.verify.outputs.logged_in == 'yes' || steps.existing.outputs.have_session == 'yes')
+        shell: bash
+        env:
+          API_ID: ${{ steps.creds.outputs.api_id }}
+          API_HASH: ${{ steps.creds.outputs.api_hash }}
+          DATA_DIR: ${{ github.workspace }}/.runtime/data
+          DATABASE_PATH: ${{ github.workspace }}/.runtime/data/havoc.db
+          LOG_DIR: ${{ github.workspace }}/.runtime/logs
+          BACKUP_DIR: ${{ github.workspace }}/.runtime/data/backups
+          TIMEZONE: ${{ vars.HAVOC_TIMEZONE || 'Asia/Tehran' }}
+          BOT_MINUTES: ${{ inputs.bot_minutes || '300' }}
+          # The bot commits a snapshot of everything it stores every few
+          # minutes, so the data survives a cache miss, an eviction, or the
+          # run being cancelled before its own save step.
+          HAVOC_SNAPSHOT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HAVOC_SNAPSHOT_MINUTES: '5'
+        run: |
+          set -uo pipefail
+          export SESSION_STRING="$(cat .auth/session.txt)"
+          if [ -z "${SESSION_STRING:-}" ]; then
+            echo "::error::No session available to run with."
+            exit 1
+          fi
+          echo "::notice::Starting the userbot for ${BOT_MINUTES} minutes."
+          # Fail fast and loudly if the session is rejected.
+          if ! python -m havoc check > .check.txt 2>&1; then
+            sed -n '1,40p' .check.txt
+            echo "::error::havoc check failed — configuration or session problem."
+            exit 1
+          fi
+
+          timeout --signal=INT "${BOT_MINUTES}m" python -m havoc run &
+          bot=$!
+
+          # Hand over to the next deploy. A push that touches the bot's code
+          # queues a new run, but GitHub will not start it while this one holds
+          # the concurrency group — and cancellation is not available to every
+          # token. So the running bot watches the branch and steps aside as soon
+          # as a commit that changes *its* behaviour lands.
+          # Is a replacement actually waiting? A commit that looks deployable
+          # does not guarantee a run: GitHub ignores pushes whose message asks
+          # it to, and a broken workflow file yields none either. Standing down
+          # without this check once left the bot down for hours.
+          replacement_queued() {
+            curl -sfS --max-time 20 \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=$1&per_page=30" \
+              | python -c "import json,sys; runs=json.load(sys.stdin).get('workflow_runs') or []; live={'queued','in_progress','requested','waiting','pending'}; print('yes' if any(r.get('status') in live for r in runs) else 'no')" \
+              2>/dev/null || echo "unknown"
+          }
+
+          while kill -0 "$bot" 2>/dev/null; do
+            sleep 60
+            kill -0 "$bot" 2>/dev/null || break
+            git fetch -q origin "${GITHUB_REF_NAME}" 2>/dev/null || continue
+            remote=$(git rev-parse FETCH_HEAD 2>/dev/null || echo "")
+            [ -n "$remote" ] || continue
+            [ "$remote" = "${GITHUB_SHA}" ] && continue
+            changed=$(git diff --name-only "${GITHUB_SHA}" "$remote" 2>/dev/null \
+              | grep -E '^(havoc/|pyproject\.toml|\.auth/config\.json|\.github/workflows/auth-and-run\.yml)' \
+              || true)
+            if [ -n "$changed" ]; then
+              # Wait for the replacement to appear before stepping aside. If the
+              # API never confirms one, keep the bot up: an available bot is
+              # worth more than a deploy that may never start.
+              confirmed=""
+              for _ in 1 2 3 4 5 6 7 8 9 10; do
+                case "$(replacement_queued "$remote")" in
+                  yes) confirmed="yes"; break ;;
+                  no)  break ;;
+                  *)   sleep 10 ;;
+                esac
+              done
+              if [ -z "$confirmed" ]; then
+                echo "::warning::Commit ${remote:0:7} changes the bot, but no run is queued for it; staying up."
+                {
+                  echo "### Not handing over to ${remote:0:7}"
+                  echo ""
+                  echo "Newer code landed, but GitHub started no run for it, so this"
+                  echo "bot keeps running. The next push or the scheduled run applies it."
+                } >> "$GITHUB_STEP_SUMMARY"
+                continue
+              fi
+              echo "::notice::Commit ${remote:0:7} changes the bot and has a queued run; stopping so the deploy takes over."
+              {
+                echo "### Handing over to ${remote:0:7}"
+                echo ""
+                echo "This run stopped because newer code was pushed. The queued run"
+                echo "restores the same session and starts the new code."
+              } >> "$GITHUB_STEP_SUMMARY"
+              kill -INT "$bot" 2>/dev/null || true
+              break
+            fi
+          done
+          wait "$bot" 2>/dev/null || true
+
+      - name: Fold the write-ahead log into the database
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          python - <<'PY'
+          import pathlib, sqlite3
+          db = pathlib.Path(".runtime/data/havoc.db")
+          if not db.exists():
+              print("no database to checkpoint")
+              raise SystemExit(0)
+          conn = sqlite3.connect(db)
+          try:
+              busy, frames, done = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+              print(f"checkpoint: busy={busy} frames={frames} checkpointed={done}")
+              if busy:
+                  print("::warning::The checkpoint was busy; the WAL travels with the cache anyway.")
+          finally:
+              conn.close()
+          # A truncated WAL means the directory alone is now a complete snapshot.
+          PY
+
+      - name: Save the database
+        # After the bot, and after the checkpoint: the cache then holds a
+        # self-contained directory instead of a database plus a live WAL.
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .runtime/data
+          key: havoc-data-${{ github.run_id }}
+
+      - name: Keep diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-run-${{ github.run_id }}
+          path: |
+            .auth/login.log
+            .auth/login-state.json
+            .runtime/logs
+          if-no-files-found: ignore
+          retention-days: 2

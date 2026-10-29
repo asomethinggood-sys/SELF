@@ -1,0 +1,26 @@
+[
+  {
+    "label": "telegram-desktop",
+    "api_id": "2040",
+    "verdict": "accepted",
+    "detail": "PhoneNumberInvalidError: The phone number is invalid (caused by SendCodeRequest)"
+  },
+  {
+    "label": "telegram-android",
+    "api_id": "6",
+    "verdict": "accepted",
+    "detail": "PhoneNumberInvalidError: The phone number is invalid (caused by SendCodeRequest)"
+  },
+  {
+    "label": "telegram-ios",
+    "api_id": "8",
+    "verdict": "accepted",
+    "detail": "PhoneNumberInvalidError: The phone number is invalid (caused by SendCodeRequest)"
+  },
+  {
+    "label": "telegram-macos",
+    "api_id": "9",
+    "verdict": "accepted",
+    "detail": "PhoneNumberInvalidError: The phone number is invalid (caused by SendCodeRequest)"
+  }
+]

@@ -1,0 +1,93 @@
+name: Telegram bot
+
+# Runs the userbot on a GitHub runner.
+#
+# Prerequisite: one repository secret, SESSION_STRING, from the "Telegram login"
+# workflow. Nothing else is required — HAVOC treats the logged-in account as the
+# owner when OWNER_IDS is unset.
+#
+# Honest limits of hosting a userbot this way:
+#   * GitHub kills a job after six hours, so the schedule restarts it rather
+#     than keeping one process alive;
+#   * the runner is disposable, so the SQLite database is restored and saved
+#     through the actions cache — a reminder due in the final minutes of a run
+#     can be lost if the job is killed mid-flight;
+#   * Telegram sometimes challenges logins from datacenter IPs.
+# A tiny VPS or a Raspberry Pi has none of these problems: docs/INSTALL.md.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */5 * * *"
+
+concurrency:
+  group: havoc-bot
+  cancel-in-progress: false
+
+jobs:
+  run:
+    name: run userbot
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: python -m pip install -e ".[media]"
+
+      - name: Check the session secret exists
+        env:
+          SESSION_STRING: ${{ secrets.SESSION_STRING }}
+        run: |
+          if [ -z "${SESSION_STRING:-}" ]; then
+            echo "::error::Missing the SESSION_STRING secret. Run the 'Telegram login' workflow first and paste the artifact into Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+      - name: Restore the data directory
+        uses: actions/cache@v4
+        with:
+          path: .runtime/data
+          key: havoc-data-${{ github.run_id }}
+          restore-keys: |
+            havoc-data-
+
+      - name: Run HAVOC
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+          SESSION_STRING: ${{ secrets.SESSION_STRING }}
+          # Optional: only needed if you want someone other than the logged-in
+          # account to be able to issue commands.
+          OWNER_IDS: ${{ secrets.OWNER_IDS }}
+          DATA_DIR: ${{ github.workspace }}/.runtime/data
+          DATABASE_PATH: ${{ github.workspace }}/.runtime/data/havoc.db
+          LOG_DIR: ${{ github.workspace }}/.runtime/logs
+          BACKUP_DIR: ${{ github.workspace }}/.runtime/data/backups
+          TIMEZONE: ${{ vars.HAVOC_TIMEZONE || 'UTC' }}
+          DEFAULT_LANGUAGE: ${{ vars.HAVOC_LANGUAGE || 'en' }}
+        run: |
+          set -uo pipefail
+          # Fail fast and loudly when the session is rejected instead of looping.
+          if ! python -m havoc check > .check.txt 2>&1; then
+            sed -n '1,40p' .check.txt
+            echo "::error::havoc check failed — configuration or session problem (see the output above)."
+            exit 1
+          fi
+          sed -n '1,20p' .check.txt
+          # The job lives as long as GitHub allows; the next scheduled run takes over.
+          timeout --signal=INT 5h20m python -m havoc run || true
+
+      - name: Keep the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: havoc-logs-${{ github.run_id }}
+          path: .runtime/logs
+          if-no-files-found: ignore
+          retention-days: 3

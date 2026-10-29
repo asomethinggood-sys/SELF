@@ -1,0 +1,3 @@
+# Login codes are consumed by the waiting job and removed afterwards.
+# A file here is a leftover, not a credential.
+*.txt

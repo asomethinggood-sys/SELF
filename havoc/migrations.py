@@ -1,0 +1,377 @@
+"""Schema migration system.
+
+Format
+------
+Each migration is a numbered, idempotent-by-construction step applied inside a
+transaction. ``schema_migrations`` records what ran, so a restart never
+re-applies a migration. New columns/tables must be added as a *new* migration;
+existing migrations are never edited after release (that is how data loss
+happens).
+
+Feature area: 85 (database migration system).
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from dataclasses import dataclass
+
+from .database import Database, DatabaseError
+
+
+@dataclass(frozen=True)
+class Migration:
+    version: int
+    name: str
+    statements: tuple[str, ...]
+
+
+MIGRATION_1_FOUNDATION = Migration(
+    version=1,
+    name="foundation",
+    statements=(
+        """
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            version    INTEGER PRIMARY KEY,
+            name       TEXT NOT NULL,
+            applied_at TEXT NOT NULL
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS settings (
+            key        TEXT PRIMARY KEY,
+            value      TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS chat_settings (
+            chat_id    INTEGER NOT NULL,
+            key        TEXT NOT NULL,
+            value      TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (chat_id, key)
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS language_prefs (
+            scope      TEXT NOT NULL,             -- global | chat | feature
+            scope_id   TEXT NOT NULL DEFAULT '',
+            language   TEXT NOT NULL,             -- en | fa | auto | mixed
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (scope, scope_id)
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS features (
+            name       TEXT PRIMARY KEY,
+            enabled    INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS profile_snapshots (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            field      TEXT NOT NULL UNIQUE,
+            value      TEXT,
+            captured_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS profile_presets (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            name       TEXT NOT NULL UNIQUE,
+            first_name TEXT,
+            last_name  TEXT,
+            bio        TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS profile_history (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            field      TEXT NOT NULL,
+            old_value  TEXT,
+            new_value  TEXT,
+            reason     TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS counters (
+            name       TEXT PRIMARY KEY,
+            value      INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS templates (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            name       TEXT NOT NULL UNIQUE,
+            body       TEXT NOT NULL,
+            language   TEXT NOT NULL DEFAULT 'auto',
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS autoreplies (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            pattern    TEXT NOT NULL,
+            match_type TEXT NOT NULL DEFAULT 'contains',
+            response   TEXT NOT NULL,
+            language   TEXT NOT NULL DEFAULT 'auto',
+            scope_chat_id INTEGER,
+            cooldown   INTEGER NOT NULL DEFAULT 300,
+            enabled    INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS schedules (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind        TEXT NOT NULL DEFAULT 'message',
+            chat_id     INTEGER NOT NULL,
+            text        TEXT NOT NULL,
+            run_at      TEXT NOT NULL,
+            recurrence  TEXT,
+            timezone    TEXT NOT NULL DEFAULT 'UTC',
+            enabled     INTEGER NOT NULL DEFAULT 1,
+            created_by  INTEGER,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+            last_run_at TEXT,
+            last_error  TEXT,
+            meta        TEXT
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS reminders (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            chat_id     INTEGER NOT NULL,
+            text        TEXT NOT NULL,
+            remind_at   TEXT NOT NULL,
+            recurrence  TEXT,
+            timezone    TEXT NOT NULL DEFAULT 'UTC',
+            status      TEXT NOT NULL DEFAULT 'pending',
+            created_by  INTEGER,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+            last_fired_at TEXT,
+            meta        TEXT
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS watches (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            keyword         TEXT NOT NULL,
+            scope_chat_id   INTEGER,
+            notify_chat_id  INTEGER,
+            language        TEXT NOT NULL DEFAULT 'auto',
+            enabled         INTEGER NOT NULL DEFAULT 1,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS triggers (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            name         TEXT NOT NULL UNIQUE,
+            event_type   TEXT NOT NULL DEFAULT 'message',
+            pattern      TEXT NOT NULL,
+            match_type   TEXT NOT NULL DEFAULT 'contains',
+            action_type  TEXT NOT NULL DEFAULT 'notify',
+            payload      TEXT,
+            scope_chat_id INTEGER,
+            language     TEXT NOT NULL DEFAULT 'auto',
+            enabled      INTEGER NOT NULL DEFAULT 1,
+            created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS reaction_rules (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            pattern     TEXT NOT NULL,
+            match_type  TEXT NOT NULL DEFAULT 'contains',
+            emoji       TEXT NOT NULL,
+            scope_chat_id INTEGER,
+            cooldown    INTEGER NOT NULL DEFAULT 60,
+            enabled     INTEGER NOT NULL DEFAULT 1,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS bookmarks (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            chat_id    INTEGER NOT NULL,
+            message_id INTEGER,
+            kind       TEXT NOT NULL DEFAULT 'message',
+            title      TEXT,
+            content    TEXT,
+            sender_id  INTEGER,
+            labels     TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS notes (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            chat_id    INTEGER NOT NULL,
+            title      TEXT,
+            body       TEXT NOT NULL,
+            labels     TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS aliases (
+            alias      TEXT PRIMARY KEY,
+            target     TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS jobs (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind        TEXT NOT NULL,
+            payload     TEXT,
+            run_at      TEXT NOT NULL,
+            status      TEXT NOT NULL DEFAULT 'pending',
+            attempts    INTEGER NOT NULL DEFAULT 0,
+            max_attempts INTEGER NOT NULL DEFAULT 3,
+            last_error  TEXT,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS usage_stats (
+            feature    TEXT NOT NULL,
+            counter    TEXT NOT NULL,
+            value      INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (feature, counter)
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS diagnostics (
+            key        TEXT PRIMARY KEY,
+            value      TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS plugins (
+            name       TEXT PRIMARY KEY,
+            version    TEXT,
+            enabled    INTEGER NOT NULL DEFAULT 1,
+            error      TEXT,
+            loaded_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS chat_labels (
+            chat_id    INTEGER NOT NULL,
+            label      TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (chat_id, label)
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS dedupe (
+            key     TEXT PRIMARY KEY,
+            seen_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS interactive_sessions (
+            user_id    INTEGER PRIMARY KEY,
+            flow       TEXT NOT NULL,
+            step       TEXT NOT NULL,
+            data       TEXT,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_schedules_run_at ON schedules(run_at)",
+        "CREATE INDEX IF NOT EXISTS idx_reminders_remind_at ON reminders(remind_at)",
+        "CREATE INDEX IF NOT EXISTS idx_jobs_status_run_at ON jobs(status, run_at)",
+        "CREATE INDEX IF NOT EXISTS idx_bookmarks_chat ON bookmarks(chat_id)",
+        "CREATE INDEX IF NOT EXISTS idx_notes_chat ON notes(chat_id)",
+        "CREATE INDEX IF NOT EXISTS idx_dedupe_seen ON dedupe(seen_at)",
+        "CREATE INDEX IF NOT EXISTS idx_profile_history_created ON profile_history(created_at)",
+    ),
+)
+
+MIGRATION_2_TIMESTAMPS = Migration(
+    version=2,
+    name="scheduler_durability",
+    statements=(
+        # A schedule can only fire once per planned slot; the column records the
+        # slot so reconnects/restarts cannot double-send (feature area 51/90).
+        "ALTER TABLE schedules ADD COLUMN last_slot TEXT",
+        "ALTER TABLE reminders ADD COLUMN last_slot TEXT",
+        "CREATE INDEX IF NOT EXISTS idx_schedules_enabled ON schedules(enabled, run_at)",
+        "CREATE INDEX IF NOT EXISTS idx_reminders_status ON reminders(status, remind_at)",
+    ),
+)
+
+MIGRATIONS: tuple[Migration, ...] = (MIGRATION_1_FOUNDATION, MIGRATION_2_TIMESTAMPS)
+
+LATEST_VERSION = max(m.version for m in MIGRATIONS)
+
+
+class MigrationError(DatabaseError):
+    pass
+
+
+async def current_version(db: Database) -> int:
+    try:
+        return int(await db.scalar("SELECT MAX(version) FROM schema_migrations", default=0) or 0)
+    except DatabaseError:
+        return 0
+
+
+async def apply_migrations(db: Database, migrations: Sequence[Migration] = MIGRATIONS) -> list[str]:
+    """Apply all pending migrations in ascending order.
+
+    Returns the names of migrations that were applied. Raises
+    :class:`MigrationError` (and leaves the database untouched for the failing
+    step) if a migration fails, so partial upgrades are visible instead of
+    silently ignored.
+    """
+    applied: list[str] = []
+    ordered = sorted(migrations, key=lambda m: m.version)
+
+    if not db.is_open:
+        await db.connect()
+
+    try:
+        # Bootstrap the bookkeeping table so `current_version` works.
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                version INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                applied_at TEXT NOT NULL
+            )
+            """
+        )
+    except DatabaseError as exc:
+        raise MigrationError(f"cannot prepare migration table: {exc}") from exc
+
+    for migration in ordered:
+        version = await current_version(db)
+        if migration.version <= version:
+            continue
+        try:
+            await db.execute_script(
+                [
+                    *migration.statements,
+                    "INSERT INTO schema_migrations(version, name, applied_at) "
+                    f"VALUES({migration.version}, '{migration.name}', datetime('now'))",
+                ]
+            )
+            applied.append(migration.name)
+        except Exception as exc:
+            raise MigrationError(
+                f"migration {migration.version} ({migration.name}) failed: {exc}"
+            ) from exc
+    return applied
