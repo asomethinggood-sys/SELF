@@ -161,3 +161,50 @@ async def test_the_same_sentence_does_not_come_back_within_the_recent_window(run
         text = " ".join((answer.text or "").split())
         assert text not in seen, text
         seen.add(text)
+
+
+async def test_a_spent_daily_allowance_keeps_her_offline_instead_of_retrying(runtime) -> None:
+    """50 free requests a day: once the gateway says so, stop asking.
+
+    Otherwise every message in the rest of the day pays a request and a timeout
+    to learn the same answer, and the owner waits for it.
+    """
+    from havoc.services.ai_provider import AIError
+
+    calls: list[str] = []
+
+    class RateLimited:
+        model = "limited"
+        available = True
+        active_model = "limited"
+
+        async def converse(self, messages, **kwargs):
+            calls.append("request")
+            raise AIError("Rate limit exceeded: free-models-per-day", kind="rate_limited")
+
+    chat = runtime.yura_chat
+    runtime.ai = RateLimited()
+    first = await chat.answer("hi", chat_id=3, language="en")
+    assert persona.is_own_line(first.text or "")
+    assert chat.fallbacks == 1
+    assert chat.quota_until is not None
+    assert "rate_limited" in chat.last_error
+
+    for _ in range(5):
+        answer = await chat.answer("again", chat_id=3, language="en")
+        assert persona.is_own_line(answer.text or "")
+    assert calls == ["request"], "kept calling a spent allowance"
+    assert chat.fallbacks == 6  # every one of those turns was served offline
+
+
+async def test_the_allowance_comes_back_after_the_reset(runtime, monkeypatch) -> None:
+    from datetime import timedelta
+
+    from havoc.services import yura_chat as module
+
+    chat = runtime.yura_chat
+    later = module.utc_now() + timedelta(days=1)
+    monkeypatch.setattr(module, "utc_now", lambda: later)
+    chat.quota_until = later - timedelta(minutes=1)
+    assert chat._quota_spent() is False
+    assert chat.quota_until is None

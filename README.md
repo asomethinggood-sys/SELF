@@ -76,6 +76,11 @@ dead key. `.yura key` with no value repeats that last failure, and `.yura status
 shows the provider, the offline-fallback count and the bank size.
 `python -m havoc ai "hi"` makes one real call and prints which model answered.
 
+The free plan allows **50 model requests a day**. When the gateway says the day's
+requests are gone, she stops asking: every later message that day is answered
+from the offline bank, and the reset is remembered, so a spent allowance costs
+one request rather than one per message.
+
 The `.github/workflows/ai-probe.yml` job does exactly that on every push that
 touches the bot, without Telegram: it asks *what is 2+2*, and the answer (or the
 failure) is committed to `.ai-probe.json` and kept as a run artifact. A green

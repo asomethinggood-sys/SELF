@@ -25,6 +25,7 @@ import re
 from collections import deque
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -81,6 +82,11 @@ class YuraChat:
         # that lines are composed rather than listed.
         self._sent: dict[int, deque[str]] = {}
         self._recent: dict[int, deque[str]] = {}
+        # A spent daily allowance is not a bug to retry into: once the gateway
+        # says the day's requests are gone, every later message this day goes
+        # straight to the offline bank instead of burning a request and a
+        # timeout to learn the same thing again.
+        self.quota_until: datetime | None = None
 
     @property
     def provider(self) -> AIProvider:
@@ -156,12 +162,16 @@ class YuraChat:
 
         reply: str | None = None
         source = "model"
-        if self.enabled:
+        if self.enabled and self._quota_spent():
+            self.logger.debug("yura: daily model allowance spent, answering offline")
+        elif self.enabled:
             try:
                 reply = await self.provider.converse(messages, max_tokens=700)
             except AIError as exc:
                 self.last_error = f"{exc.kind}: {exc}"
                 self.logger.warning("yura: provider failed (%s)", exc.kind)
+                if exc.kind == "rate_limited":
+                    self._spend_quota()
                 reply = None
         elif not self.enabled:
             self.last_error = "AI provider is not configured"
@@ -235,6 +245,34 @@ class YuraChat:
             self.logger.warning("yura: cannot write file: %s", exc)
             return None
         return target
+
+    # ------------------------------------------------------------------
+    # The daily allowance
+    # ------------------------------------------------------------------
+    def _quota_spent(self) -> bool:
+        """True when today's requests are gone and the reset has not happened."""
+        if self.quota_until is None:
+            return False
+        if utc_now() >= self.quota_until:
+            self.quota_until = None
+            return False
+        return True
+
+    def _spend_quota(self) -> None:
+        """Remember a spent allowance until the next UTC midnight.
+
+        OpenRouter's free plan allows 50 model requests per day and resets at
+        00:00 UTC; the provider reports that as ``rate_limited``. Retrying every
+        message until then would cost a request and a timeout each time.
+        """
+        now = utc_now()
+        self.quota_until = (now + timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        self.logger.warning(
+            "yura: daily model allowance spent; offline lines until %s",
+            self.quota_until.strftime("%Y-%m-%d %H:%M UTC"),
+        )
 
     # ------------------------------------------------------------------
     # Variety and the loop guard
