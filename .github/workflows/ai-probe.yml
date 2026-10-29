@@ -85,18 +85,33 @@ jobs:
         run: |
           set -uo pipefail
           base="${AI_BASE_URL:-https://openrouter.ai/api/v1}"
+          model=$(curl -s --max-time 25 "${base}/models" | python -c 'import json,sys;d=json.load(sys.stdin).get("data") or [];ids=[m["id"] for m in d if str(m.get("id","")).endswith(":free")];print(sorted(ids)[0] if ids else "meta-llama/llama-3.3-70b-instruct:free")' 2>/dev/null || echo "meta-llama/llama-3.3-70b-instruct:free")
+          payload=$(printf '{"model":"%s","messages":[{"role":"user","content":"2+2"}],"max_tokens":16}' "$model")
           {
             echo "base ${base}"
+            echo "model ${model}"
             echo -n "models anonymous: "
             curl -s -o /dev/null -w '%{http_code}\n' --max-time 20 "${base}/models" || echo "curl failed"
-            echo -n "models with key: "
-            curl -s -o .diag.body -w '%{http_code}\n' --max-time 20 -H "Authorization: Bearer ${AI_API_KEY}" "${base}/models" || echo "curl failed"
-            echo -n "models with browser UA: "
-            curl -s -o /dev/null -w '%{http_code}\n' --max-time 20 -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36" "${base}/models" || echo "curl failed"
-            echo "body head: $(head -c 200 .diag.body | tr '\n' ' ')"
+            echo -n "chat plain: "
+            curl -s -o .d1 -w '%{http_code}\n' --max-time 40 -X POST "${base}/chat/completions" \
+              -H "Authorization: Bearer ${AI_API_KEY}" -H "Content-Type: application/json" \
+              -d "$payload" || echo "curl failed"
+            echo "  body: $(head -c 220 .d1 | tr '\n' ' ')"
+            echo -n "chat with referer+title: "
+            curl -s -o .d2 -w '%{http_code}\n' --max-time 40 -X POST "${base}/chat/completions" \
+              -H "Authorization: Bearer ${AI_API_KEY}" -H "Content-Type: application/json" \
+              -H "HTTP-Referer: https://github.com/asomethinggood-sys/SELF" -H "X-Title: HAVOC Yura" \
+              -d "$payload" || echo "curl failed"
+            echo "  body: $(head -c 220 .d2 | tr '\n' ' ')"
+            echo -n "chat with browser UA: "
+            curl -s -o .d3 -w '%{http_code}\n' --max-time 40 -X POST "${base}/chat/completions" \
+              -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36" \
+              -H "Authorization: Bearer ${AI_API_KEY}" -H "Content-Type: application/json" \
+              -d "$payload" || echo "curl failed"
+            echo "  body: $(head -c 220 .d3 | tr '\n' ' ')"
           } > .ai-diag.txt 2>&1
           cat .ai-diag.txt
-          rm -f .diag.body
+          rm -f .d1 .d2 .d3
 
       - name: Ask it something it cannot fake
         id: ask
