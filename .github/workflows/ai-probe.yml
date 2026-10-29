@@ -87,10 +87,12 @@ jobs:
           LOG_DIR: ${{ github.workspace }}/.runtime/logs
         run: |
           set -uo pipefail
-          reply=$(python -m havoc ai "what is 2+2? answer with the number and nothing else" 2>&1)
+          # Straight to the file: nothing between the command and the record.
+          python -m havoc ai "what is 2+2? answer with the number and nothing else" > .ai-probe.txt 2>&1
           status=$?
+          reply=$(cat .ai-probe.txt)
           printf '%s\n' "$reply"
-          printf '%s\n' "$reply" > .ai-probe.txt
+          echo "::notice::exit $status · ${#reply} bytes of output"
           echo "status=${status}" >> "$GITHUB_OUTPUT"
           {
             echo "### AI probe"
@@ -118,7 +120,7 @@ jobs:
           STATUS: ${{ steps.ask.outputs.status }}
         run: |
           set -uo pipefail
-          python -c 'import json,os,pathlib,datetime;t=pathlib.Path(".ai-probe.txt");r=t.read_text(encoding="utf-8",errors="replace").strip() if t.exists() else "";f=[l.strip() for l in r.splitlines() if "AI: FAILED" in l or "Fatal error" in l];c=int(os.environ.get("STATUS") or 0);rec={"checked_at":datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),"exit_code":c,"ok":c==0 and not f,"failure":f[0] if f else "","answer":r};pathlib.Path(".ai-probe.json").write_text(json.dumps(rec,ensure_ascii=False,indent=2)+"\n",encoding="utf-8");print(rec["ok"])'
+          python -c 'import json,os,pathlib,datetime;t=pathlib.Path(".ai-probe.txt");r=t.read_text(encoding="utf-8",errors="replace").strip() if t.exists() else "";f=[l.strip() for l in r.splitlines() if "AI: FAILED" in l or "Fatal error" in l];c=int(os.environ.get("STATUS") or 1);rec={"checked_at":datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),"exit_code":c,"ok":c==0 and not f and "Model:" in r,"failure":f[0] if f else "","answer":r};pathlib.Path(".ai-probe.json").write_text(json.dumps(rec,ensure_ascii=False,indent=2)+"\n",encoding="utf-8");print(rec["ok"])'
           rm -f .ai-probe.txt
           git config user.name "HAVOC ai probe"
           git config user.email "probe@users.noreply.github.com"
@@ -131,7 +133,12 @@ jobs:
           git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}" || echo "::warning::Could not publish the probe result."
 
       - name: Fail the job when the model did not answer
-        if: always() && steps.ask.outputs.status != '0'
+        if: always()
+        shell: bash
         run: |
-          echo "::error::AI probe failed with exit code ${{ steps.ask.outputs.status }}; see .ai-probe.json."
-          exit 1
+          set -uo pipefail
+          ok=$(python -c 'import json;print("yes" if json.load(open(".ai-probe.json")).get("ok") else "no")' 2>/dev/null || echo no)
+          if [ "$ok" != "yes" ]; then
+            echo "::error::The AI probe did not get an answer; see .ai-probe.json."
+            exit 1
+          fi
