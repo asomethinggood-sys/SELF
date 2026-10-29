@@ -28,8 +28,11 @@ class StubProvider:
         self.replies = list(replies or ["mrrp. hi. (¬‿¬)"])
         self.calls: list[list[object]] = []
 
+    last_max_tokens = 0
+
     async def converse(self, messages, *, max_tokens: int = 400, temperature: float = 0.85) -> str:
         self.calls.append(list(messages))
+        self.last_max_tokens = max_tokens
         return self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
 
 
@@ -561,3 +564,76 @@ async def test_a_saved_key_that_fails_is_reported_as_failing(runtime, monkeypatc
     # And the state view repeats it instead of pretending everything is fine.
     await invoke(runtime, ".yura key")
     assert "network" in html.unescape(last_text(runtime))
+
+
+# ---------------------------------------------------------------------------
+# Files the owner actually asked for
+# ---------------------------------------------------------------------------
+def _pygame_program(lines: int = 300) -> str:
+    """A realistic long program: three hundred lines, ending in a main guard."""
+    body = [
+        "import sys",
+        "import pygame",
+        "",
+        "WIDTH, HEIGHT = 640, 480",
+        "STEP = 20",
+        "",
+        "def main() -> None:",
+        "    pygame.init()",
+        "    screen = pygame.display.set_mode((WIDTH, HEIGHT))",
+        "    clock = pygame.time.Clock()",
+        "    snake = [(320, 240)]",
+        "    direction = (STEP, 0)",
+    ]
+    index = 0
+    while len(body) < lines - 5:
+        body.append(f"    # step {index}: move the snake and keep it inside the screen")
+        body.append(f"    step_{index} = (snake[0][0] + direction[0], snake[0][1] + direction[1])")
+        index += 1
+    while len(body) < lines - 4:
+        body.append(f"    tail_{len(body)} = snake[-1]")
+    body += ["    pygame.quit()", "", 'if __name__ == "__main__":', "    main()"]
+    return "\n".join(body) + "\n"
+
+
+async def test_a_three_hundred_line_program_arrives_whole(runtime) -> None:
+    program = _pygame_program()
+    assert len(program.splitlines()) == 300
+    runtime.ai = StubProvider([f"sit. a snake. ╰(*´︶`*)╯\n[[file: snake.py]]{program}[[/file]]"])
+    await invoke(runtime, ".yura write me a 300 line pygame snake as a .py file")
+
+    files = [message for message in runtime.client.sent if "file" in message.kwargs]
+    assert files, "the program was never sent"
+    path = files[-1].kwargs["file"]
+    assert path.endswith("snake.py")
+    with open(path, encoding="utf-8") as handle:
+        delivered = handle.read()
+    assert delivered.splitlines() == program.splitlines(), "the program was truncated"
+    assert delivered.rstrip().endswith("main()")
+    # The chat bubble stays a chat bubble: the code is in the file, not pasted.
+    body = _plain(runtime)
+    assert "[[file" not in body and "import pygame" not in body
+
+
+async def test_asking_for_code_buys_the_model_more_tokens(runtime) -> None:
+    provider = StubProvider(["here\n[[file: x.py]]print(1)[[/file]]"])
+    runtime.ai = provider
+    await invoke(runtime, ".yura write a python script that prints 1")
+    budget = provider.calls[-1][0].__class__
+    del budget
+    assert provider.last_max_tokens == 4000
+
+    plain = StubProvider(["mrrp."])
+    runtime.ai = plain
+    await invoke(runtime, ".yura how was your day")
+    assert plain.last_max_tokens == 700, "ordinary chat must not ask for a program's budget"
+
+
+async def test_a_truncated_file_block_is_salvaged_not_dropped(runtime) -> None:
+    runtime.ai = StubProvider(["one sec\n[[file: half.py]]import pygame\npygame.init()\n# cut off here"])
+    await invoke(runtime, ".yura give me the pygame file")
+    files = [message for message in runtime.client.sent if "file" in message.kwargs]
+    assert files, "a truncated program was thrown away instead of sent"
+    with open(files[-1].kwargs["file"], encoding="utf-8") as handle:
+        assert "pygame.init()" in handle.read()
+    assert "[[file" not in _plain(runtime)

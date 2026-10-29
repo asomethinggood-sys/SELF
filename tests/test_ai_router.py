@@ -433,3 +433,20 @@ async def test_an_openrouter_daily_limit_spends_the_whole_account(patched_client
     gateway_specs = [spec for spec in ai_models.catalogue() if spec.provider == "openrouter"]
     assert all(router.used(gateway, spec) == spec.rpd for spec in gateway_specs)
     assert gateway not in {credential for credential, _ in router.plan()}
+
+
+async def test_the_token_budget_reaches_the_provider_unchanged(monkeypatch) -> None:
+    """A program needs a program's worth of tokens; the router must not shrink it."""
+    seen: list[int] = []
+
+    class Recorder(FakeClient):
+        async def converse(self, messages, *, max_tokens: int = 400, temperature: float = 0.85) -> str:
+            seen.append(max_tokens)
+            return "ok"
+
+    monkeypatch.setattr(
+        AIRouter, "_client", lambda self, credential, spec: Recorder(credential, spec, lambda k, m: "ok")
+    )
+    router = await _router(Path("."), _creds(("google", "AQ.one")))
+    await router.converse([AIMessage("user", "write a pygame snake")], max_tokens=4000)
+    assert seen == [4000]

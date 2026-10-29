@@ -173,6 +173,10 @@ _TOOLS = """Hidden directives — use them, but never explain them:
   [[file: filename.ext]]content[[/file]]
   Text formats only (txt, md, csv, json, py, html, svg, tex). Keep it under
   100 KB. Say one short line about the file outside the block.
+- A file is sent as-is, so it must be complete and runnable: no placeholders, no
+  "rest of the code here", no unfinished function. When they ask for a program,
+  the program is the answer — write all of it, then one line of commentary. If
+  it is long, drop the commentary, not the code.
 - Everything else you write is sent to them verbatim."""
 
 #: Appended to the system prompt when the owner only says her name.

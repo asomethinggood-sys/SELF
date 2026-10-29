@@ -42,6 +42,20 @@ FILE_EXTENSIONS = frozenset(
 MAX_FILE_BYTES = 100_000
 #: The reply itself, before any file block.
 MAX_REPLY_CHARS = 3500
+#: A reply that is asked for a program needs room for the program. 700 tokens is
+#: about 500 words: enough for a paragraph, not for three hundred lines of
+#: pygame. The file block is computed by the model, so the ceiling has to move
+#: with the request.
+FILE_TOKENS = 4000
+#: Words that mean "give me an actual file", in both languages the owner uses.
+_FILE_WORDS = (
+    "file", "code", "script", "program", "snippet", "write me", "make me a game",
+    "pygame", "python", "function", "class ", "html", "css", "json", "csv", "sql",
+    "فایل", "کد", "برنامه", "اسکریپت", "بنویس", "بساز",
+)
+_FILE_NAME_HINT = re.compile(r"\b[\w-]+\.(?:py|txt|md|csv|json|html|svg|tex|ya?ml|srt)\b", re.IGNORECASE)
+#: An opening block that never closed — what a truncated reply looks like.
+_OPEN_FILE_RE = re.compile(r"\[\[\s*file\s*[::]\s*([^\]\n]{1,64}?)\s*\]\](.*)\Z", re.IGNORECASE | re.DOTALL)
 
 _REMEMBER_RE = re.compile(r"\[\[\s*remember\s*[::]\s*(.+?)\s*\]\]", re.IGNORECASE | re.DOTALL)
 _FORGET_RE = re.compile(r"\[\[\s*forget\s*[::]\s*(.+?)\s*\]\]", re.IGNORECASE | re.DOTALL)
@@ -166,11 +180,17 @@ class YuraChat:
             self.logger.debug("yura: daily model allowance spent, answering offline")
         elif self.enabled:
             try:
-                reply = await self.provider.converse(messages, max_tokens=700)
+                reply = await self.provider.converse(
+                    messages, max_tokens=FILE_TOKENS if _wants_file(prompt) else 700
+                )
             except AIError as exc:
                 self.last_error = f"{exc.kind}: {exc}"
                 self.logger.warning("yura: provider failed (%s)", exc.kind)
-                if exc.kind == "rate_limited":
+                if exc.kind == "rate_limited" and not hasattr(self.provider, "plan"):
+                    # A single-provider setup has one allowance; when it is gone,
+                    # stop asking until midnight. The rotating router spends its
+                    # own per-key counters instead and knows which keys are left,
+                    # so muting the day would be wrong there.
                     self._spend_quota()
                 reply = None
         elif not self.enabled:
@@ -212,7 +232,21 @@ class YuraChat:
             if path is not None:
                 files.append(path)
 
-        visible = _FILE_RE.sub("", _REMEMBER_RE.sub("", _FORGET_RE.sub("", reply)))
+        cleaned = _FILE_RE.sub("", _REMEMBER_RE.sub("", _FORGET_RE.sub("", reply)))
+        # A reply that hit the token ceiling stops mid-program, without the
+        # closing marker. Salvage what arrived instead of dropping the file
+        # entirely: a program missing its last line is still a program the owner
+        # can run, and saying "here you go" over nothing is worse.
+        if not files:
+            opened = _OPEN_FILE_RE.search(cleaned)
+            if opened is not None:
+                salvaged = self._write_file(opened.group(1), opened.group(2))
+                if salvaged is not None:
+                    files.append(salvaged)
+                    cleaned = cleaned[: opened.start()]
+                    self.logger.warning("yura: salvaged a truncated file block (%s)", salvaged.name)
+
+        visible = cleaned
         visible = re.sub(r"\n{3,}", "\n\n", visible).strip()
         if len(visible) > MAX_REPLY_CHARS:
             visible = visible[:MAX_REPLY_CHARS].rstrip() + " …"
@@ -306,6 +340,14 @@ class YuraChat:
     async def learn(self, chat_id: int, fact: str, *, kind: str = "fact") -> bool:
         """Explicit ``.yura remember …``. Returns False for a duplicate."""
         return bool(await self.memory.remember(chat_id, fact, kind=kind))
+
+
+def _wants_file(prompt: str) -> bool:
+    """True when the owner asked for something to be written, not said."""
+    lowered = prompt.lower()
+    if _FILE_NAME_HINT.search(prompt):
+        return True
+    return any(word in lowered for word in _FILE_WORDS)
 
 
 def _kind_of(fact: str) -> str:
