@@ -120,6 +120,30 @@ async def main() -> int:
         reply = await provider.converse([AIMessage("user", "2+2")], max_tokens=16)
         checks.append({"check": "provider.converse", "status": 200, "ok": True, "detail": _head(reply)})
         report["active_model"] = provider.active_model
+    # Which models answer a plain question, and at what budget? The free
+    # catalogue contains endpoints that reply 200 with no content at all.
+    matrix: list[dict[str, object]] = []
+    for candidate in (provider.models or [])[:6]:
+        for budget in (16, 300):
+            try:
+                data = await http_module.post_json(
+                    f"{provider.base_url}/chat/completions",
+                    {"model": candidate, "messages": [{"role": "user", "content": "2+2"}], "max_tokens": budget},
+                    timeout=min(provider.timeout, 40),
+                    headers=auth,
+                )
+                message = ((data or {}).get("choices") or [{}])[0].get("message") or {}
+                matrix.append(
+                    {
+                        "model": candidate,
+                        "budget": budget,
+                        "content": _head(str(message.get("content") or ""), 40),
+                        "has_reasoning": bool(message.get("reasoning") or message.get("reasoning_content")),
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001 - a probe reports, never raises
+                matrix.append({"model": candidate, "budget": budget, "error": _head(str(exc), 80)})
+    report["model_matrix"] = matrix
     except Exception as exc:  # noqa: BLE001 - a probe reports, never raises
         checks.append(
             {
@@ -130,6 +154,30 @@ async def main() -> int:
             }
         )
         report["active_model"] = provider.active_model
+    # Which models answer a plain question, and at what budget? The free
+    # catalogue contains endpoints that reply 200 with no content at all.
+    matrix: list[dict[str, object]] = []
+    for candidate in (provider.models or [])[:6]:
+        for budget in (16, 300):
+            try:
+                data = await http_module.post_json(
+                    f"{provider.base_url}/chat/completions",
+                    {"model": candidate, "messages": [{"role": "user", "content": "2+2"}], "max_tokens": budget},
+                    timeout=min(provider.timeout, 40),
+                    headers=auth,
+                )
+                message = ((data or {}).get("choices") or [{}])[0].get("message") or {}
+                matrix.append(
+                    {
+                        "model": candidate,
+                        "budget": budget,
+                        "content": _head(str(message.get("content") or ""), 40),
+                        "has_reasoning": bool(message.get("reasoning") or message.get("reasoning_content")),
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001 - a probe reports, never raises
+                matrix.append({"model": candidate, "budget": budget, "error": _head(str(exc), 80)})
+    report["model_matrix"] = matrix
 
     report["discovered_models"] = provider.models[:5]
     try:
@@ -145,6 +193,30 @@ async def main() -> int:
             }
         )
     report["active_model"] = provider.active_model
+    # Which models answer a plain question, and at what budget? The free
+    # catalogue contains endpoints that reply 200 with no content at all.
+    matrix: list[dict[str, object]] = []
+    for candidate in (provider.models or [])[:6]:
+        for budget in (16, 300):
+            try:
+                data = await http_module.post_json(
+                    f"{provider.base_url}/chat/completions",
+                    {"model": candidate, "messages": [{"role": "user", "content": "2+2"}], "max_tokens": budget},
+                    timeout=min(provider.timeout, 40),
+                    headers=auth,
+                )
+                message = ((data or {}).get("choices") or [{}])[0].get("message") or {}
+                matrix.append(
+                    {
+                        "model": candidate,
+                        "budget": budget,
+                        "content": _head(str(message.get("content") or ""), 40),
+                        "has_reasoning": bool(message.get("reasoning") or message.get("reasoning_content")),
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001 - a probe reports, never raises
+                matrix.append({"model": candidate, "budget": budget, "error": _head(str(exc), 80)})
+    report["model_matrix"] = matrix
     report["user_agent"] = http_module.USER_AGENT
 
     print(json.dumps(report, ensure_ascii=False, indent=2))
