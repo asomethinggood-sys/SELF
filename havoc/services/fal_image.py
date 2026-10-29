@@ -30,16 +30,21 @@ ASSET_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
 REGULAR = ASSET_DIR / "Vazirmatn-Regular.ttf"
 BOLD = ASSET_DIR / "Vazirmatn-Bold.ttf"
 
-#: Card geometry, in pixels. 1080 wide survives Telegram's compression without
-#: the text turning to mush on a phone.
-WIDTH = 1080
-PADDING = 68
-VERSE_SIZE = 46
-NOTE_SIZE = 33
-LABEL_SIZE = 29
-TITLE_SIZE = 62
-SUBTITLE_SIZE = 28
-FOOTER_SIZE = 24
+#: Card geometry, in pixels.
+#:
+#: 1440 wide, not 1080: Telegram re-encodes a photo to at most 1280 px and the
+#: downscale is what made thin Persian strokes look ragged. Drawing larger and
+#: letting Telegram shrink it means the glyphs arrive crisp. Everything below is
+#: scaled from this one number.
+WIDTH = 1440
+_SCALE = WIDTH / 1080
+PADDING = int(68 * _SCALE)
+VERSE_SIZE = int(46 * _SCALE)
+NOTE_SIZE = int(36 * _SCALE)
+LABEL_SIZE = int(30 * _SCALE)
+TITLE_SIZE = int(66 * _SCALE)
+SUBTITLE_SIZE = int(30 * _SCALE)
+FOOTER_SIZE = int(26 * _SCALE)
 
 #: A whole ghazal is 4000 pixels tall, which nobody can read on a phone. A fal
 #: shows an opening — the way the tradition reads it — and the card stays one
@@ -125,9 +130,11 @@ def _rule(draw: Any, y: int, *, width: int = WIDTH, inset: int = PADDING + 26) -
     """A gold hairline with a lozenge in the middle."""
     left, right = inset, width - inset
     middle = width // 2
-    draw.line([(left, y), (middle - 34, y)], fill=GOLD_SOFT, width=2)
-    draw.line([(middle + 34, y), (right, y)], fill=GOLD_SOFT, width=2)
-    _ornament(draw, (middle, y), 13, GOLD)
+    scale = width / 1080
+    gap = int(34 * scale)
+    draw.line([(left, y), (middle - gap, y)], fill=GOLD_SOFT, width=2)
+    draw.line([(middle + gap, y), (right, y)], fill=GOLD_SOFT, width=2)
+    _ornament(draw, (middle, y), int(14 * scale), GOLD)
 
 
 def render_fal(reading: dict[str, Any], *, width: int = WIDTH) -> bytes:
@@ -142,7 +149,7 @@ def render_fal(reading: dict[str, Any], *, width: int = WIDTH) -> bytes:
     # One bayt should read as one line. Pick the largest type size at which
     # every selected verse fits, instead of letting a long verse break in two.
     verse_size = VERSE_SIZE
-    for candidate in (VERSE_SIZE, 42, 38, 34, 30):
+    for candidate in (VERSE_SIZE, int(50 * _SCALE), int(46 * _SCALE), int(42 * _SCALE), int(38 * _SCALE)):
         verse_size = candidate
         if all(
             _width(
@@ -173,22 +180,34 @@ def render_fal(reading: dict[str, Any], *, width: int = WIDTH) -> bytes:
     truncated = len(all_verses) > MAX_VERSES
     note_lines = _wrap(probe, interpretation, regular, inner)
 
-    verse_step = int(verse_size * 1.86)
-    note_step = int(NOTE_SIZE * 1.86)
-    height = (
+    # Every vertical step is derived from the type sizes, so the layout scales
+    # with WIDTH instead of drifting apart (which is what made the subtitle
+    # collide with the title at 1440 px).
+    s = width / 1080
+    verse_step = int(verse_size * 1.9)
+    note_step = int(NOTE_SIZE * 1.9)
+    gap_ornament = int(64 * s)
+    gap_title = int(96 * s)
+    gap_subtitle = int(62 * s)
+    gap_rule = int(66 * s)
+    gap_label = int(52 * s)
+    gap_footer = int(80 * s)
+    height = int(
         PADDING
-        + 62  # top ornament
-        + 84  # title
-        + 54  # subtitle
-        + 64  # first rule
-        + (len(verse_lines) + (1 if truncated else 0)) * verse_step
-        + 58  # second rule
-        + 46  # label
+        + gap_ornament
+        + gap_title
+        + gap_subtitle
+        + gap_rule
+        + (len(verse_lines) * verse_step)
+        + gap_rule
+        + gap_label
         + len(note_lines) * note_step
-        + 72  # footer block
+        + gap_footer
         + PADDING
     )
-    height = max(height, 720)
+    if truncated:
+        height += int(verse_step * 0.8)
+    height = max(height, int(760 * s))
 
     canvas = Image.new("RGB", (width, height), PAPER)
     draw = ImageDraw.Draw(canvas)
@@ -212,10 +231,11 @@ def render_fal(reading: dict[str, Any], *, width: int = WIDTH) -> bytes:
         draw.point((x, y), fill=shade)
 
     # Border: two rules and corner lozenges.
-    margin = 26
-    draw.rectangle([margin, margin, width - margin, height - margin], outline=GOLD, width=3)
+    margin = int(26 * (width / 1080))
+    draw.rectangle([margin, margin, width - margin, height - margin], outline=GOLD, width=max(2, int(3 * (width / 1080))))
     draw.rectangle(
-        [margin + 10, margin + 10, width - margin - 10, height - margin - 10],
+        [margin + int(10 * (width / 1080)), margin + int(10 * (width / 1080)),
+         width - margin - int(10 * (width / 1080)), height - margin - int(10 * (width / 1080))],
         outline=GOLD_SOFT,
         width=1,
     )
@@ -225,35 +245,35 @@ def render_fal(reading: dict[str, Any], *, width: int = WIDTH) -> bytes:
         (margin, height - margin),
         (width - margin, height - margin),
     ):
-        _ornament(draw, corner, 11, GOLD)
+        _ornament(draw, corner, int(12 * (width / 1080)), GOLD)
 
-    y = PADDING + 10
-    _ornament(draw, (width // 2, y + 8), 15, GOLD)
-    y += 62
+    y = PADDING + int(10 * s)
+    _ornament(draw, (width // 2, y + int(10 * s)), int(16 * s), GOLD)
+    y += gap_ornament
     _centered(draw, _shape("فال حافظ"), title, y, width, INK)
-    y += 84
+    y += gap_title
     _centered(draw, _shape("تفأل به دیوان حافظ"), subtitle, y, width, MUTED)
-    y += 54
+    y += gap_subtitle
     _rule(draw, y, width=width)
-    y += 58
+    y += gap_rule
 
     for line in verse_lines:
         _centered(draw, _shape(line), bold, y, width, INK)
         y += verse_step
     if truncated:
-        _centered(draw, _shape("…"), label, y + 6, width, MUTED)
-        y += verse_step
+        _centered(draw, _shape("…"), label, y + int(4 * s), width, MUTED)
+        y += int(verse_step * 0.8)
 
-    y += 30
+    y += int(gap_rule * 0.45)
     _rule(draw, y, width=width)
-    y += 40
+    y += gap_label
     _centered(draw, _shape("معنی"), label, y, width, GOLD)
-    y += 46
+    y += int(NOTE_SIZE * 1.5)
     for line in note_lines:
         _centered(draw, _shape(line), regular, y, width, INK)
         y += note_step
 
-    y = height - PADDING - 26
+    y = height - PADDING - int(26 * s)
     _centered(draw, _shape("یورا · فال حافظ"), footer, y, width, MUTED)
 
     buffer = io.BytesIO()

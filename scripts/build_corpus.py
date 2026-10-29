@@ -39,6 +39,7 @@ import tarfile
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -50,36 +51,48 @@ API = "https://api.github.com"
 #: long out of copyright: the classical canon, no modern or living poets.
 #: The cap is a ceiling, not a promise: sampling spreads across each book.
 PERSIAN_POETS: dict[str, int] = {
-    "حافظ": 420,
-    "مولوی": 420,
-    "سعدی": 340,
-    "صائب تبریزی": 260,
-    "عطار": 300,
-    "خیام": 200,
-    "فردوسی": 130,
-    "نظامی": 130,
-    "سنایی": 200,
-    "انوری": 160,
-    "خاقانی": 160,
-    "بیدل دهلوی": 200,
-    "شاه نعمت‌الله ولی": 140,
-    "ابوسعید ابوالخیر": 130,
-    "باباطاهر": 110,
-    "امیرخسرو دهلوی": 110,
-    "اوحدی": 100,
-    "فیض کاشانی": 100,
-    "محتشم کاشانی": 100,
-    "خواجوی کرمانی": 100,
-    "سلمان ساوجی": 90,
-    "وحشی": 90,
-    "عراقی": 90,
-    "ناصرخسرو": 90,
-    "رودکی": 80,
-    "قاآنی": 80,
-    "فروغی بسطامی": 60,
-    "عبید زاکانی": 60,
-    "هلالی جغتایی": 60,
-    "عرفی": 60,
+    "صائب تبریزی": 900,
+    "مولوی": 900,
+    "حافظ": 700,
+    "سعدی": 700,
+    "عطار": 700,
+    "بیدل دهلوی": 500,
+    "شاه نعمت‌الله ولی": 400,
+    "سنایی": 400,
+    "انوری": 340,
+    "خاقانی": 340,
+    "اوحدی": 300,
+    "ملک‌الشعرای بهار": 300,
+    "خیام": 300,
+    "فیض کاشانی": 280,
+    "محتشم کاشانی": 280,
+    "خواجوی کرمانی": 260,
+    "سلمان ساوجی": 250,
+    "امیرخسرو دهلوی": 250,
+    "ابوسعید ابوالخیر": 250,
+    "فردوسی": 250,
+    "نظامی": 250,
+    "اقبال لاهوری": 240,
+    "عراقی": 200,
+    "وحشی": 200,
+    "قاآنی": 200,
+    "باباطاهر": 200,
+    "جامی": 200,
+    "عرفی": 190,
+    "هلالی جغتایی": 120,
+    "پروین اعتصامی": 150,
+    "رودکی": 150,
+    "ناصرخسرو": 150,
+    "فروغی بسطامی": 120,
+    "رضی‌الدین آرتیمانی": 100,
+    "هاتف اصفهانی": 90,
+    "مهستی گنجوی": 90,
+    "عبید زاکانی": 80,
+    "شیخ بهایی": 80,
+    "باباافضل کاشانی": 80,
+    "منوچهری": 80,
+    "کسایی": 60,
+    "شاطرعباس صبوحی": 60,
 }
 
 #: Long masnavi passages do not fit a chat message, and short ruba'is are the
@@ -87,6 +100,15 @@ PERSIAN_POETS: dict[str, int] = {
 #: so ``.poem`` always yields something that reads in one bubble.
 MAX_POEM_CHARS = 900
 MIN_POEM_CHARS = 80
+
+#: Poets taken from ``ganjoor/ganjoor-data`` (the static JSON export) rather than
+#: the 2017 SQL dump, which predates them. Each entry is ``slug: (name, cap)``.
+GANJOOR_DATA_POETS: dict[str, tuple[str, int]] = {
+    "iraj": ("ایرج میرزا", 240),
+    "aref": ("عارف قزوینی", 120),
+    "ashofte": ("آشفته", 80),
+    "iranshan": ("ایرانشهر", 60),
+}
 
 #: Gutenberg books whose poems are delimited by a heading line.
 #: ``mode``: "roman" = Roman numeral heading, "titled" = ALL-CAPS title heading.
@@ -179,6 +201,13 @@ def _get(url: str, *, retries: int = 4) -> bytes:
                 continue
             raise
     raise RuntimeError("unreachable")
+
+
+def _blob(owner_repo: str, sha: str, name: str) -> dict:
+    """Fetch one git blob and decode its base64 payload as JSON."""
+    raw = _cached(f"{API}/repos/{owner_repo}/git/blobs/{sha}", name)
+    payload = json.loads(raw)
+    return json.loads(base64.b64decode(payload["content"]).decode("utf-8"))
 
 
 def _cached(url: str, name: str) -> bytes:
@@ -481,6 +510,58 @@ def parse_titled_sections(text: str, *, work: str) -> list[tuple[str, str]]:
     return out
 
 
+def _ganjoor_data_poems(slug: str, poet: str, cap: int) -> list[dict]:
+    """Fetch one poet from the static JSON export (``ganjoor/ganjoor-data``).
+
+    Used for poets the old SQL dump does not know about. The tree is fetched
+    once and cached; each poem is a single blob request.
+    """
+    tree_path = CACHE / "ganjoor-tree.json"
+    CACHE.mkdir(parents=True, exist_ok=True)
+    if not tree_path.exists():
+        raw = _get(f"{API}/repos/ganjoor/ganjoor-data/git/trees/HEAD?recursive=1")
+        tree_path.write_bytes(raw)
+    tree = json.loads(tree_path.read_bytes())
+    blobs = {
+        entry["path"]: entry["sha"]
+        for entry in tree["tree"]
+        if entry["type"] == "blob" and entry["path"].startswith(f"poets/{slug}/")
+    }
+    poem_paths = sorted(path for path in blobs if path.endswith(".json") and not path.endswith("_cat.json"))
+    step = max(1, len(poem_paths) // max(1, cap))
+    chosen = poem_paths[::step][:cap]
+
+    def fetch(path: str) -> dict | None:
+        try:
+            data = _blob("ganjoor/ganjoor-data", blobs[path], "gdata-" + path.replace("/", "_"))
+        except Exception:  # noqa: BLE001 - one bad poem must not stop the build
+            return None
+        verses = data.get("Verses") or []
+        pieces: list[str] = []
+        for verse in verses:
+            first = (verse.get("Text") or "").strip()
+            second = (verse.get("Text2") or "").strip()
+            if not first:
+                continue
+            pieces.append(f"{first}    {second}".rstrip() if second else first)
+        text = _clean_persian("\n".join(pieces))
+        if not MIN_POEM_CHARS <= len(text) <= MAX_POEM_CHARS:
+            return None
+        return {
+            "title": (data.get("Title") or "").strip() or f"{poet} — شعر",
+            "poet": poet,
+            "language": "fa",
+            "text": text,
+        }
+
+    found: list[dict] = []
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for poem in pool.map(fetch, chosen):
+            if poem is not None:
+                found.append(poem)
+    return found
+
+
 def build_english(limit: int) -> list[dict]:
     poems: list[dict] = []
     for book in GUTENBERG_BOOKS:
@@ -553,7 +634,7 @@ def check() -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--persian", type=int, default=3200, help="max Persian poems")
+    parser.add_argument("--persian", type=int, default=14000, help="max Persian poems")
     parser.add_argument("--english", type=int, default=500, help="max English poems")
     parser.add_argument("--persian-only", action="store_true")
     parser.add_argument("--english-only", action="store_true")
@@ -566,6 +647,12 @@ def main(argv: list[str] | None = None) -> int:
     if not args.english_only:
         print("Persian — Ganjoor", file=sys.stderr)
         poems.extend(build_persian(args.persian))
+        if args.persian >= 10000:
+            print("Persian — Ganjoor static export (poets missing from the dump)", file=sys.stderr)
+            for slug, (name, cap) in GANJOOR_DATA_POETS.items():
+                extra = _ganjoor_data_poems(slug, name, cap)
+                poems.extend(extra)
+                print(f"  {name}: +{len(extra)}", file=sys.stderr)
     if not args.persian_only:
         print("English — Project Gutenberg", file=sys.stderr)
         poems.extend(build_english(args.english))

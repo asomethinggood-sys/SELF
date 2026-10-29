@@ -67,7 +67,9 @@ def test_migrate_is_idempotent(env, capsys) -> None:
     assert cli_main.cli(["migrate"]) == cli_main.EXIT_OK
     out = capsys.readouterr().out
     assert "nothing to do" in out.lower()
-    assert "→ 2" in out
+    from havoc.migrations import LATEST_VERSION
+
+    assert f"→ {LATEST_VERSION}" in out
 
 
 def test_unknown_command_exits_with_error(env) -> None:

@@ -49,10 +49,29 @@ with an explanatory message instead of an error.
 
 | Variable | Values | Purpose |
 | --- | --- | --- |
-| `AI_PROVIDER` | `none`, `openai_compatible` | AI-enhanced summaries and comebacks |
-| `AI_BASE_URL` | e.g. `https://api.openai.com/v1` | Any OpenAI-compatible endpoint, local models included |
-| `AI_MODEL` | e.g. `gpt-4o-mini` | Model name |
+| `AI_PROVIDER` | `none`, `openai_compatible` | Yura's conversation, summaries and comebacks |
+| `AI_BASE_URL` | e.g. `https://openrouter.ai/api/v1` | Any OpenAI-compatible endpoint, local models included |
+| `AI_MODEL` | `auto`, a slug, or a comma-separated chain | See below |
 | `AI_API_KEY` | — | Provider key (never logged, never shown by `.config`) |
+| `AI_TIMEOUT` | `30` | Seconds before a request is abandoned |
+
+`AI_MODEL` accepts a **fallback chain** — `a:free,b:free` — and tries each in
+order, because free tiers add and retire slugs without notice. `auto` is better
+still: the bot asks the gateway's `/models` endpoint which free models exist
+right now, ranks them by a small preference list (Llama 3.3 70B, Qwen3-Next 80B,
+Gemma 4, …), and falls back through the top three. If every configured slug has
+been retired, one discovery call happens automatically and the turn is retried
+once.
+
+Verify with a real round-trip instead of trusting the config:
+
+```bash
+python -m havoc ai "say hi in your own voice"
+```
+
+It prints which model answered, or the failure kind (`unauthorized`, `network`,
+`rate_limited`). The deploy workflow runs the same command and puts the reply in
+the run summary.
 | `TRANSLATE_PROVIDER` | `none`, `mymemory`, `libretranslate` | `.translate` and auto-translation |
 | `TRANSLATE_URL` | — | Self-hosted LibreTranslate endpoint |
 | `TRANSLATE_API_KEY` | — | Optional key for the endpoint above |

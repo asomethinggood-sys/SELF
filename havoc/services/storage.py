@@ -41,7 +41,10 @@ DEFAULT_FEATURES: dict[str, bool] = {
     "reminder_intent": False,
     "summaries": False,
     "auto_translate": False,
-    "persona": False,
+    # On by default: it only ever answers the owner's own messages in the
+    # owner's own chat, which is the whole point of the companion. Every other
+    # automation stays off until asked for. `.yura off` silences it.
+    "persona": True,
     "media": False,
     "poetry": False,
     "roasts": False,

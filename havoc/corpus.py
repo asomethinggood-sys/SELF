@@ -76,6 +76,86 @@ def languages() -> dict[str, int]:
     return counts
 
 
+#: Transliterations and nicknames people actually type, mapped to the name the
+#: corpus uses. Anything not here still resolves by substring, in either script.
+POET_ALIASES: dict[str, str] = {
+    "hafez": "حافظ",
+    "hafiz": "حافظ",
+    "rumi": "مولوی",
+    "mowlana": "مولوی",
+    "molana": "مولوی",
+    "mevlana": "مولوی",
+    "saadi": "سعدی",
+    "sadi": "سعدی",
+    "khayyam": "خیام",
+    "khayam": "خیام",
+    "omar": "خیام",
+    "attar": "عطار",
+    "ferdowsi": "فردوسی",
+    "ferdosi": "فردوسی",
+    "nezami": "نظامی",
+    "saeb": "صائب تبریزی",
+    "bidel": "بیدل دهلوی",
+    "bedil": "بیدل دهلوی",
+    "iraj": "ایرج میرزا",
+    "irej": "ایرج میرزا",
+    "parvin": "پروین اعتصامی",
+    "bahar": "ملک‌الشعرای بهار",
+    "malekolshoara": "ملک‌الشعرای بهار",
+    "jami": "جامی",
+    "roodaki": "رودکی",
+    "rudaki": "رودکی",
+    "mahsati": "مهستی گنجوی",
+    "shakespeare": "William Shakespeare",
+    "housman": "A. E. Housman",
+    "tennyson": "Alfred, Lord Tennyson",
+    "blake": "William Blake",
+    "fitzgerald": "Omar Khayyam (tr. Edward FitzGerald)",
+}
+
+#: Topics, because "شعر شراب" should give a poem about wine and not a complaint
+#: that no poet is called "شراب". Each topic is a set of words; a poem matches if
+#: it contains any of them.
+TOPICS: dict[str, tuple[str, ...]] = {
+    "شراب": ("شراب", "می ", "می‌", "ساغر", "جام", "باده", "رطل", "خم ", "مستی", "ساقی"),
+    "عشق": ("عشق", "دلبر", "یار", "معشوق", "وصال", "فراق"),
+    "غم": ("غم", "اندوه", "حزن", "دلتنگی", "غصه"),
+    "مرگ": ("مرگ", "اجل", "خاک", "قبر", "فنا"),
+    "خدا": ("خدا", "الله", "حق ", "معبود", "پروردگار"),
+    "طبیعت": ("گل", "بهار", "باد", "ابر", "چمن", "بلبل", "سرو"),
+    "وطن": ("وطن", "ایران", "ملت", "میهن"),
+    "زنان": ("زن", "دختر", "مادر", "همسر"),
+    "حکمت": ("حکمت", "دانش", "عقل", "خرد", "علم"),
+    "نصیحت": ("نصیحت", "پند", "موعظه", "اندرز"),
+    "دوستی": ("دوست", "رفیق", "یاران", "همدم"),
+    "شب": ("شب", "ماه", "ستاره", "سحر"),
+    "wine": ("wine", "cup", "tavern", "drunk"),
+    "love": ("love", "beloved", "heart", "kiss"),
+    "death": ("death", "grave", "die", "dust"),
+    "night": ("night", "moon", "star", "dawn"),
+    "god": ("god", "lord", "heaven", "prayer"),
+    "spring": ("spring", "flower", "rose", "garden"),
+    "time": ("time", "hour", "year", "age"),
+}
+
+#: Every character that separates two words in Persian text but carries no
+#: meaning for a lookup: ZWNJ, the zero-width joiner, and a plain space.
+_NAME_NOISE = str.maketrans({"\u200c": "", "\u200d": "", " ": "", "\u0640": ""})
+
+
+def _name_key(text: str) -> str:
+    return fold(text.strip().lower().translate(_NAME_NOISE))
+
+
+def topic_terms(query: str) -> tuple[str, ...]:
+    """The words a topic stands for, or an empty tuple when it is not a topic."""
+    key = query.strip().lower().replace("‌", "")
+    for name, terms in TOPICS.items():
+        if key == name.lower() or (len(key) >= 3 and key in name.lower()):
+            return terms
+    return ()
+
+
 def resolve_poet(query: str) -> str | None:
     """Match a user-typed poet name, in either script.
 
@@ -86,31 +166,16 @@ def resolve_poet(query: str) -> str | None:
     if not needle:
         return None
     table = poets()
+    # "ایرج‌میرزا", "ایرج میرزا" and "iraj" are the same request.
+    key = _name_key(query)
     for name in table:
-        if name.lower() == needle:
+        if _name_key(name) == key:
             return name
     for name in table:
-        if needle in name.lower():
+        if key and key in _name_key(name):
             return name
-    # A Latin query against a Persian name: try a small, honest alias table.
-    aliases = {
-        "hafez": "حافظ",
-        "rumi": "مولوی",
-        "mowlana": "مولوی",
-        "saadi": "سعدی",
-        "khayyam": "خیام",
-        "attar": "عطار",
-        "ferdowsi": "فردوسی",
-        "nevisi": "نظامی",
-        "nezami": "نظامی",
-        "shakespeare": "William Shakespeare",
-        "dickinson": "Emily Dickinson",
-        "housman": "A. E. Housman",
-        "tennyson": "Alfred, Lord Tennyson",
-        "blake": "William Blake",
-        "tagore": "Rabindranath Tagore",
-    }
-    target = aliases.get(needle)
+    # A Latin query against a Persian name: try the alias table.
+    target = POET_ALIASES.get(needle) or POET_ALIASES.get(needle.replace(" ", ""))
     if target and target in table:
         return target
     return None
@@ -125,21 +190,30 @@ def fold(text: str) -> str:
     return text.translate(_FOLD)
 
 
-def search_poems(query: str, *, language: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
+def search_poems(
+    query: str,
+    *,
+    language: str | None = None,
+    limit: int = 4000,
+    terms: tuple[str, ...] | None = None,
+) -> list[dict[str, Any]]:
     """Poems whose text or title contains ``query``, folded for Persian spelling.
 
-    The corpus is small enough (a few MB) that a linear scan beats any index, and
-    an index would have to be rebuilt every time the data file changes.
+    When ``terms`` is given, a poem matches if it contains any of them — that is
+    how a topic like "شراب" becomes "wine, cup, tavern, ساغر, باده …".
+
+    A linear scan over a few thousand poems is faster than maintaining an index
+    that would have to be rebuilt whenever the data file changes.
     """
-    needle = fold(query.strip().lower())
-    if not needle:
+    needles = [fold(term.lower()) for term in (terms or (query,)) if term.strip()]
+    if not needles:
         return []
     matches: list[dict[str, Any]] = []
     for poem in _poems():
         if language is not None and poem["language"] != language:
             continue
         haystack = fold((poem["text"] + " " + poem["title"]).lower())
-        if needle in haystack:
+        if any(needle in haystack for needle in needles):
             matches.append(poem)
             if len(matches) >= limit:
                 break

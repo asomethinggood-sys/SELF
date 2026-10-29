@@ -120,6 +120,28 @@ jobs:
           echo "phone=$phone" >> "$GITHUB_OUTPUT"
           echo "api_id=$api_id" >> "$GITHUB_OUTPUT"
           echo "api_hash=$api_hash" >> "$GITHUB_OUTPUT"
+          # The AI block (provider, base URL, key, model) lives in the same file.
+          # Read it with the same tolerance: a missing block just means offline
+          # Yura, which still answers, so it must never abort the job.
+          ai_provider=$(python -c 'import json;print((json.load(open(".auth/config.json")).get("ai") or {}).get("provider",""))' 2>/dev/null || true)
+          ai_base_url=$(python -c 'import json;print((json.load(open(".auth/config.json")).get("ai") or {}).get("base_url",""))' 2>/dev/null || true)
+          ai_model=$(python -c 'import json;print((json.load(open(".auth/config.json")).get("ai") or {}).get("model",""))' 2>/dev/null || true)
+          # The key itself is a repository secret (push protection refuses a
+          # committed one). An explicit value in the file still wins for
+          # self-hosted forks that have no Actions secret configured.
+          ai_api_key="${OPENROUTER_API_KEY:-$(python -c 'import json;print((json.load(open(".auth/config.json")).get("ai") or {}).get("api_key",""))' 2>/dev/null || true)}"
+          if [ -n "$ai_api_key" ]; then
+            echo "::add-mask::$ai_api_key"
+          fi
+          echo "ai_provider=$ai_provider" >> "$GITHUB_OUTPUT"
+          echo "ai_base_url=$ai_base_url" >> "$GITHUB_OUTPUT"
+          echo "ai_model=$ai_model" >> "$GITHUB_OUTPUT"
+          echo "ai_api_key=$ai_api_key" >> "$GITHUB_OUTPUT"
+          if [ -n "$ai_api_key" ]; then
+            echo "::notice::AI configured: ${ai_provider:-none} · ${ai_base_url:-unset} · model ${ai_model:-auto}"
+          else
+            echo "::warning::No AI key in .auth/config.json — Yura will only use her offline lines."
+          fi
           # Only the shape of the number is published, never the number.
           masked="${phone:0:3}…${phone: -3}"
           echo "::notice::Credentials loaded for $masked (api_id $api_id)"
@@ -127,6 +149,7 @@ jobs:
           IN_PHONE: ${{ inputs.phone }}
           IN_API_ID: ${{ inputs.api_id }}
           IN_API_HASH: ${{ inputs.api_hash }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
       - name: Restore a previous session
         id: cache
@@ -344,6 +367,32 @@ jobs:
           # Immutable, unique key; later runs restore it with the prefix below.
           key: havoc-session-${{ github.run_id }}
 
+      - name: Verify the AI provider
+        # One real round-trip, because a key and a model slug can both look fine
+        # in a config file and still be wrong. Yura falls back to her offline
+        # lines, so a failure here is reported, not fatal.
+        if: steps.creds.outputs.ai_api_key != ''
+        continue-on-error: true
+        shell: bash
+        env:
+          AI_PROVIDER: ${{ steps.creds.outputs.ai_provider }}
+          AI_BASE_URL: ${{ steps.creds.outputs.ai_base_url }}
+          AI_MODEL: ${{ steps.creds.outputs.ai_model }}
+          AI_API_KEY: ${{ steps.creds.outputs.ai_api_key }}
+          DATA_DIR: ${{ github.workspace }}/.runtime/data
+          LOG_DIR: ${{ github.workspace }}/.runtime/logs
+        run: |
+          set -uo pipefail
+          reply=$(python -m havoc ai "say hi in your own voice, one short line" 2>&1) || true
+          printf '%s\n' "$reply"
+          {
+            echo "### AI probe"
+            echo ""
+            echo '```'
+            printf '%s\n' "$reply"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Run the userbot
         # always(): a failure in any earlier step must not keep the bot down.
         if: always() && (steps.verify.outputs.logged_in == 'yes' || steps.existing.outputs.have_session == 'yes')
@@ -356,6 +405,12 @@ jobs:
           LOG_DIR: ${{ github.workspace }}/.runtime/logs
           BACKUP_DIR: ${{ github.workspace }}/.runtime/data/backups
           TIMEZONE: ${{ vars.HAVOC_TIMEZONE || 'Asia/Tehran' }}
+          # Yura's brain. Without these four she still answers — from her
+          # offline line bank — so the bot never dies because a model did.
+          AI_PROVIDER: ${{ steps.creds.outputs.ai_provider }}
+          AI_BASE_URL: ${{ steps.creds.outputs.ai_base_url }}
+          AI_MODEL: ${{ steps.creds.outputs.ai_model }}
+          AI_API_KEY: ${{ steps.creds.outputs.ai_api_key }}
           BOT_MINUTES: ${{ inputs.bot_minutes || '300' }}
           # The bot commits a snapshot of everything it stores every few
           # minutes, so the data survives a cache miss, an eviction, or the

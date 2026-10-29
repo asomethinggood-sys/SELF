@@ -113,6 +113,10 @@ BARE_COMMANDS: dict[str, tuple[str, str]] = {
     "جمله": ("quote", ""),
     "roast": ("roast", ""),
     "خاک‌برسر": ("roast", ""),
+    # "enough" — the word the owner uses to stop a repeating fight loop. It only
+    # stops that loop; the emergency brake is still ``.stop``.
+    "بسه": ("fight", "stop"),
+    "بس": ("fight", "stop"),
 }
 
 

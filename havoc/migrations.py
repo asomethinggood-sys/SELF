@@ -313,7 +313,44 @@ MIGRATION_2_TIMESTAMPS = Migration(
     ),
 )
 
-MIGRATIONS: tuple[Migration, ...] = (MIGRATION_1_FOUNDATION, MIGRATION_2_TIMESTAMPS)
+MIGRATION_3_YURA_MEMORY = Migration(
+    version=3,
+    name="yura_memory",
+    statements=(
+        # What Yura remembers about the owner. ``kind`` separates durable facts
+        # ("works night shifts") from preferences and one-off notes, so recall
+        # can weigh them differently.
+        """
+        CREATE TABLE IF NOT EXISTS yura_memory (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            chat_id    INTEGER NOT NULL,
+            kind       TEXT NOT NULL DEFAULT 'fact',
+            content    TEXT NOT NULL,
+            weight     INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL
+        )
+        """,
+        # Rolling conversation window: the last N turns of a real chat, so a
+        # reply has context instead of amnesia.
+        """
+        CREATE TABLE IF NOT EXISTS yura_history (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            chat_id    INTEGER NOT NULL,
+            role       TEXT NOT NULL,
+            content    TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_yura_memory_chat ON yura_memory(chat_id, id DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_yura_history_chat ON yura_history(chat_id, id DESC)",
+    ),
+)
+
+MIGRATIONS: tuple[Migration, ...] = (
+    MIGRATION_1_FOUNDATION,
+    MIGRATION_2_TIMESTAMPS,
+    MIGRATION_3_YURA_MEMORY,
+)
 
 LATEST_VERSION = max(m.version for m in MIGRATIONS)
 

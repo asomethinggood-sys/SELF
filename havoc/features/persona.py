@@ -1,11 +1,19 @@
-"""Yura's own voice as commands and one carefully gated automation.
+"""Yura: the e-kitten who answers in your own chat.
 
-``.yura`` never sends on its own: it shows a card, lists scenarios, or drafts a
-reply the owner can send with ``.yura send``. Automatic replies live behind the
-``persona`` feature switch and only ever happen in the owner's own chat with
-the owner's own messages, so the bot can never start talking to someone else.
+There is no scenario engine here any more. A bare ``yura`` / ``یورا`` gives a
+random line from :data:`havoc.persona.LINES`; anything else you type in your own
+chat goes to the model with her memory attached
+(:mod:`havoc.services.yura_chat`), and she answers like herself.
 
-Feature areas: 12 (personality), 21 (messaging), 96 (feature switches).
+Two paths, both owner-only
+--------------------------
+* the **command** ``.yura`` — works even with the ``persona`` switch off, because
+  it is a direct request;
+* the **ambient reply** — every non-command message the owner sends in their own
+  Saved Messages, when the ``persona`` switch is on. Nobody else is ever
+  answered, and nothing is ever sent into another chat.
+
+Feature areas: 12 (personality), 21 (messaging), 70 (AI), 96 (feature switches).
 """
 
 from __future__ import annotations
@@ -13,56 +21,81 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from .. import persona, ui
+from .. import identity, persona, ui
 from ..command_registry import Command, CommandContext, CommandError
 from ..event_engine import EventType, NormalizedEvent
-from ..identity import tagline
-from ..utils.formatting import bold, code, escape
+from ..utils.formatting import escape
 from ..utils.security import redact_text
 from ..utils.text import truncate
 
-#: Never answer more often than this, whatever the owner types.
-MIN_INTERVAL_SECONDS = 45
-#: ...and never more than this many times in a rolling window.
-MAX_PER_HOUR = 12
+#: A chat companion cannot wait 45 seconds between sentences. Short cooldown
+#: only, to swallow double-sends and update loops.
+MIN_INTERVAL_SECONDS = 2.0
+#: Safety valve, not a conversation budget: a stuck loop cannot flood forever.
+MAX_PER_HOUR = 300
 
-DRAFT_KEY = "persona.draft"
+#: Commands that belong to the dispatcher — never answered by the persona path.
+_INTERNAL_WORDS = frozenset({"yura", "یورا", "stop", "بسه", "off"})
+
+
+def _invocation_text(ctx: CommandContext) -> str:
+    """What the owner actually typed, before the parser threw it away.
+
+    A bare command is rebuilt as ``.yura`` before dispatch, so the Persian word
+    that triggered it only survives on the event itself.
+    """
+    event = getattr(ctx, "event", None)
+    message = getattr(event, "message", None) or getattr(ctx, "message", None)
+    for attribute in ("raw_text", "message", "text"):
+        value = getattr(message, attribute, None)
+        if isinstance(value, str) and value.strip():
+            return value
+    return ""
+
+
+def _language_for(ctx: CommandContext, text: str, probe: str = "") -> str:
+    """The language to answer in.
+
+    The detector gives up on a single word like ``یورا`` and falls back to the
+    default, which would answer a Persian call in English. The text itself is a
+    better witness than a length heuristic.
+    """
+    probe = probe or text or _invocation_text(ctx)
+    if any("\u0600" <= char <= "\u06ff" for char in probe):
+        return "fa"
+    if text and any("a" <= char.lower() <= "z" for char in text):
+        return "en"
+    return ctx.language
+
+
+def _name(language: str) -> str:
+    return identity.display(language)
 
 
 async def _card(ctx: CommandContext) -> str:
-    enabled = await ctx.runtime.feature_manager.is_enabled("persona")
-    state = ui.state(
-        enabled, on=ctx.t("common.on"), off=ctx.t("common.off")
-    )
-    facts = [
-        f"{ui.bold(ctx.t('yura.state'))} {state}",
-        f"{ui.bold(ctx.t('yura.scenarios'))} {code(str(len(persona.SCENARIOS)))}",
-        f"{ui.bold(ctx.t('yura.mode'))} {ui.note(escape(ctx.t('yura.mode_offline')))}",
+    runtime = ctx.runtime
+    enabled = await runtime.feature_manager.is_enabled("persona")
+    facts = await runtime.memory.count(ctx.chat_id)
+    provider = runtime.ai
+    rows = [
+        f"{ui.bold(ctx.t('yura.state'))} {ui.state(enabled, on=ctx.t('common.on'), off=ctx.t('common.off'))}",
+        f"{ui.bold(ctx.t('yura.mode'))} "
+        + ui.note(
+            escape(
+                ctx.t("yura.mode_model", model=provider.model)
+                if getattr(provider, "available", False)
+                else ctx.t("yura.mode_offline")
+            )
+        ),
+        f"{ui.bold(ctx.t('yura.memory_count'))} {ui.code(str(facts))}",
+        f"{ui.bold(ctx.t('yura.turns'))} {ui.code(str(getattr(runtime.yura_chat, 'turns', 0)))}",
     ]
     return "\n\n".join(
         [
             ui.title("♡", ctx.t("yura.card_title", name=escape(_name(ctx.language)))),
-            ui.note(escape(tagline(ctx.language))),
-            ui.panel(facts),
-            ui.footer(ctx.t("yura.card_hint", prefix=ctx.runtime.prefix)),
-        ]
-    )
-
-
-def _name(language: str) -> str:
-    from ..identity import display
-
-    return display(language)
-
-
-def _scenario_list(ctx: CommandContext) -> str:
-    labels = persona.labels(ctx.language)
-    rows = [ui.item(scenario.key, labels[scenario.key]) for scenario in persona.SCENARIOS]
-    return "\n\n".join(
-        [
-            ui.title("♡", ctx.t("yura.list_header")),
+            ui.note(escape(identity.tagline(ctx.language))),
             ui.panel(rows),
-            ui.footer(ctx.t("yura.list_hint", prefix=ctx.runtime.prefix)),
+            ui.footer(ctx.t("yura.card_hint", prefix=runtime.prefix)),
         ]
     )
 
@@ -71,99 +104,153 @@ async def _set_enabled(ctx: CommandContext, enabled: bool) -> None:
     await ctx.store.set_feature("persona", enabled)
     await ctx.runtime.feature_manager.refresh()
     await ctx.reply_ok(
-        ctx.t("yura.switched", name=escape(_name(ctx.language)), state=ctx.t("common.on" if enabled else "common.off"))
+        ctx.t(
+            "yura.switched",
+            name=escape(_name(ctx.language)),
+            state=ctx.t("common.on" if enabled else "common.off"),
+        )
     )
     if enabled:
         await ctx.reply(ctx.t("yura.enabled_hint", prefix=ctx.runtime.prefix))
 
 
-async def cmd_yura(ctx: CommandContext) -> None:
-    action = (ctx.sub or "").lower()
-    runtime = ctx.runtime
-    # ``.yura tired`` has no subcommand: the parser demotes an unknown first
-    # token into the arguments, so that token is the scenario.
-    if not action and ctx.args:
-        action = " ".join(ctx.args).strip().lower()
+def _memory_card(ctx: CommandContext, rows: list[Any]) -> str:
+    if not rows:
+        return "\n\n".join(
+            [
+                ui.title("❥", ctx.t("yura.memory_header")),
+                ui.note(ctx.t("yura.memory_empty", prefix=ctx.runtime.prefix)),
+            ]
+        )
+    lines = [
+        f"{ui.code(str(memory.id))} {escape(truncate(memory.line(), 120))} {ui.note(memory.kind)}"
+        for memory in rows
+    ]
+    return "\n\n".join(
+        [
+            ui.title("❥", ctx.t("yura.memory_header")),
+            ui.panel(lines),
+            ui.footer(ctx.t("yura.memory_hint", prefix=ctx.runtime.prefix)),
+        ]
+    )
 
-    if action in {"", "status", "who", "card", "me"}:
-        await ctx.reply(await _card(ctx))
-        return
-    if action in {"on", "off", "enable", "disable"}:
-        await _set_enabled(ctx, action in {"on", "enable"})
-        return
-    if action in {"list", "scenarios", "ls"}:
-        await ctx.reply(_scenario_list(ctx))
-        return
 
-    if action == "send":
-        drafted = await ctx.store.get_chat_setting(ctx.chat_id, DRAFT_KEY, None)
-        if not drafted:
-            raise CommandError("yura.no_draft", prefix=runtime.prefix)
-        text = str(drafted)
-        await runtime.sender.send(ctx.chat_id, escape(text))
-        await ctx.store.delete_chat_setting(ctx.chat_id, DRAFT_KEY)
-        await ctx.reply_ok(ctx.t("yura.sent"))
-        return
+async def _memory_command(ctx: CommandContext, words: list[str]) -> None:
+    store = ctx.runtime.memory
+    action = words[0].lower() if words else "list"
+    rest = " ".join(words[1:]).strip()
 
-    if action == "reply":
-        # Draft from a replied-to message, exactly like the automatic path but
-        # without spending the rate budget.
-        reply = await ctx.reply_message()
-        if reply is None:
-            raise CommandError("errors.reply_required", prefix=runtime.prefix, name="yura")
-        source = getattr(reply, "raw_text", None) or getattr(reply, "message", None) or ""
-        scenario = persona.detect(str(source), ctx.language)
-        if scenario is None:
-            raise CommandError("yura.no_scenario", prefix=runtime.prefix)
-        line = persona.build_line(scenario, ctx.language)
-        await ctx.store.set_chat_setting(ctx.chat_id, DRAFT_KEY, line)
-        await ctx.reply(
-            "\n".join(
-                [
-                    bold(ctx.t("yura.draft_header", scenario=escape(scenario))),
-                    escape(line),
-                    ctx.t("yura.draft_hint", prefix=runtime.prefix),
-                ]
-            )
+    if action in {"list", "ls", "all", ""}:
+        await ctx.reply(_memory_card(ctx, await store.list(ctx.chat_id)))
+        return
+    if action in {"clear", "wipe", "reset"}:
+        removed = await store.clear(ctx.chat_id)
+        await ctx.reply_ok(ctx.t("yura.memory_cleared", count=removed))
+        return
+    if action in {"add", "remember", "learn", "save", "یادم", "یادمباشه"}:
+        fact = rest or " ".join(words[1:]).strip()
+        if not fact:
+            raise CommandError("yura.memory_needs_text", prefix=ctx.runtime.prefix)
+        stored = await ctx.runtime.yura_chat.learn(ctx.chat_id, fact)
+        await ctx.reply_ok(
+            ctx.t("yura.memory_saved" if stored else "yura.memory_known", fact=escape(truncate(fact, 120)))
         )
         return
-
-    # An explicit scenario name wins over anything else in the arguments.
-    scenario = persona.resolve_scenario(action) or persona.resolve_scenario(" ".join(ctx.args))
-    if scenario is None:
-        if action:
-            raise CommandError(
-                "errors.invalid_choice",
-                field="scenario",
-                choices=", ".join(s.key for s in persona.SCENARIOS),
-            )
-        await ctx.reply(await _card(ctx))
+    if action in {"forget", "delete", "del", "فراموش"}:
+        if not rest:
+            raise CommandError("yura.memory_needs_text", prefix=ctx.runtime.prefix)
+        if rest.lstrip("#").isdigit():
+            removed = await store.forget(ctx.chat_id, int(rest.lstrip("#")))
+            await ctx.reply_ok(ctx.t("yura.memory_forgot_one", count=int(bool(removed))))
+            return
+        removed = await store.forget_matching(ctx.chat_id, rest)
+        await ctx.reply_ok(ctx.t("yura.memory_forgot", count=removed))
         return
 
-    line = persona.build_line(scenario.key, ctx.language)
-    await ctx.reply(escape(line))
+    # Anything else after "memory" is a fact to keep: ``.yura memory I am 27``.
+    fact = " ".join(words).strip()
+    stored = await ctx.runtime.yura_chat.learn(ctx.chat_id, fact)
+    await ctx.reply_ok(
+        ctx.t("yura.memory_saved" if stored else "yura.memory_known", fact=escape(truncate(fact, 120)))
+    )
+
+
+async def _chat(ctx: CommandContext, text: str, *, greeting: bool = False) -> None:
+    probe = _invocation_text(ctx) or " ".join(filter(None, [ctx.sub or "", *ctx.args]))
+    language = _language_for(ctx, text, probe)
+    answer = await ctx.runtime.yura_chat.answer(
+        text, chat_id=ctx.chat_id, language=language, greeting=greeting
+    )
+    if answer.text:
+        await ctx.reply(escape(answer.text))
+    for path in answer.files:
+        await ctx.runtime.sender.send_media(
+            ctx.chat_id,
+            str(path),
+            caption=escape(truncate(path.name, 90)),
+        )
+
+
+async def cmd_yura(ctx: CommandContext) -> None:
+    action = (ctx.sub or "").lower()
+    words = [word for word in ctx.args if word.strip()]
+    if not action and words:
+        action = words[0].lower()
+
+    if action in {"", "me", "hi", "hey", "salam", "سلام"}:
+        # A bare call is a random line — never a menu, never a scenario list.
+        await _chat(ctx, "", greeting=True)
+        return
+    if action in {"on", "enable", "off", "disable"}:
+        await _set_enabled(ctx, action in {"on", "enable"})
+        return
+    if action in {"status", "card", "who", "state"}:
+        await ctx.reply(await _card(ctx))
+        return
+    if action in {"memory", "memories", "حافظه"}:
+        await _memory_command(ctx, words)
+        return
+    if action in {"remember", "learn"}:
+        await _memory_command(ctx, ["add", *words])
+        return
+    if action == "forget":
+        await _memory_command(ctx, ["forget", *words])
+        return
+    if action in {"log", "history"}:
+        transcript = await ctx.runtime.memory.transcript(
+            ctx.chat_id, await ctx.runtime.memory.history(ctx.chat_id)
+        )
+        await ctx.reply(escape(transcript) if transcript else ctx.t("yura.log_empty"))
+        return
+    if action == "clear":
+        removed = await ctx.runtime.memory.clear_history(ctx.chat_id)
+        await ctx.reply_ok(ctx.t("yura.log_cleared", count=removed))
+        return
+
+    # Everything else is something you said to her.
+    text = " ".join(words).strip()
+    await _chat(ctx, text)
 
 
 class PersonaReplies:
-    """The only automatic behaviour: a warm reply to the owner's own message.
+    """The ambient path: your own messages, your own chat, her voice.
 
-    Gates, in order — every one of them must pass:
+    Gates, in order — every one must pass:
 
-    1. the message is outgoing (the owner typed it),
-    2. it is in the owner's own Saved Messages chat,
-    3. the ``persona`` feature is enabled,
-    4. :meth:`Permissions.can_act` allows it (emergency stop, quiet hours,
-       private-chat policy all live there),
-    5. the rate budget is intact,
-    6. something in the text actually matches a scenario.
+    1. the message is outgoing (you typed it),
+    2. it is in your own Saved Messages chat,
+    3. it is not a command (the dispatcher already answered those),
+    4. the ``persona`` feature is enabled,
+    5. :meth:`Permissions.can_act` allows it (emergency stop, quiet hours,
+       private-chat policy),
+    6. the short cooldown and hourly valve are intact.
     """
 
     def __init__(self, runtime: Any) -> None:
         self.runtime = runtime
         self.logger = runtime.logger
-        # None, not 0.0: monotonic() has no defined origin, and on a freshly
-        # started machine or container it can be smaller than the cooldown,
-        # which would silence the first reply for no reason.
+        # None, not 0.0: monotonic() has no defined origin and can be smaller
+        # than the cooldown on a fresh container.
         self._last_at: float | None = None
         self._window: list[float] = []
         self.answered = 0
@@ -171,7 +258,6 @@ class PersonaReplies:
 
     @property
     def self_id(self) -> int | None:
-        """Read live: this is created before login, when the id is still None."""
         return self.runtime.permissions.self_id
 
     def _budget_ok(self, now: float) -> bool:
@@ -181,6 +267,13 @@ class PersonaReplies:
         self._window = [stamp for stamp in self._window if stamp >= cutoff]
         return len(self._window) < MAX_PER_HOUR
 
+    def _is_command(self, text: str) -> bool:
+        stripped = text.strip()
+        if self.runtime.prefix and stripped.startswith(self.runtime.prefix):
+            return True
+        first = stripped.split(maxsplit=1)[0].lower() if stripped else ""
+        return first in _INTERNAL_WORDS
+
     async def on_self_message(self, event: NormalizedEvent) -> None:
         if not event.is_outgoing or not event.text.strip():
             return
@@ -188,16 +281,11 @@ class PersonaReplies:
         if self_id is None or event.chat_id != self_id:
             self.skipped += 1
             return
-        if persona.is_own_line(event.text) or self.runtime.prefix and event.text.strip().startswith(self.runtime.prefix):
-            # Our own output, or a command the dispatcher already answered.
+        if persona.is_own_line(event.text) or self._is_command(event.text):
             self.skipped += 1
             return
         decision = await self.runtime.permissions.can_act(event.chat_id, "persona", is_private=True)
         if not decision.allowed:
-            self.skipped += 1
-            return
-        scenario = persona.detect(event.text, event.language if event.language in {"en", "fa"} else None)
-        if scenario is None:
             self.skipped += 1
             return
         now = time.monotonic()
@@ -205,14 +293,22 @@ class PersonaReplies:
             self.skipped += 1
             return
 
-        line = persona.build_line(scenario, await self._language(event))
+        language = await self._language(event)
+        answer = await self.runtime.yura_chat.answer(
+            event.text, chat_id=event.chat_id, language=language
+        )
         self._last_at = now
         self._window.append(now)
         self.answered += 1
         self.logger.info(
-            "persona: answering '%s' in Saved Messages", redact_text(truncate(event.text, 40))
+            "yura: answering '%s' in Saved Messages", redact_text(truncate(event.text, 40))
         )
-        await self.runtime.sender.send(event.chat_id, escape(line))
+        if answer.text:
+            await self.runtime.sender.send(event.chat_id, escape(answer.text))
+        for path in answer.files:
+            await self.runtime.sender.send_media(
+                event.chat_id, str(path), caption=escape(truncate(path.name, 90))
+            )
 
     async def _language(self, event: NormalizedEvent) -> str:
         if event.language in {"en", "fa"}:
@@ -232,12 +328,11 @@ def register(runtime: Any) -> None:
             cmd_yura,
             category="persona",
             aliases=("person", "self"),
-            usage="[on|off|list|reply|send|<scenario>]",
+            usage="[on|off|status|memory|log|clear|<anything>]",
             changes_state=True,
             subcommands=(
-                "on", "off", "enable", "disable", "status", "list", "ls", "scenarios",
-                "reply", "send", "who", "card",
-                *persona.SCENARIO_BY_KEY.keys(),
+                "on", "off", "enable", "disable", "status", "card", "who", "state",
+                "memory", "memories", "remember", "learn", "forget", "log", "history", "clear",
             ),
         )
     )
@@ -248,5 +343,5 @@ def register(runtime: Any) -> None:
         replies.on_self_message,
         {EventType.OUTGOING},
         priority=40,
-        description="warm replies to the owner's own messages",
+        description="Yura answers the owner's own messages",
     )

@@ -19,25 +19,69 @@ digits.
 .remind 30m water           # reminder
 .remind ۲ ساعت آب           # …and it understands Persian digits
 .fight sarcastic            # draft a comeback to the replied message
-.yura tired                 # hear Yura's take on being tired
+.fight instant brutal unhinged   # …or send them non-stop until you say بسه
+.yura                       # call her; she says something
 .pic ~/Pictures/sunset.jpg  # send a picture or file (with checks)
 .stop                       # freeze everything
 ```
 
 ## Yura's voice
 
-`.yura` is a small, offline personality: fifteen scenarios (good night, tired,
-stressed, proud, hungry, "are you a bot?" …) with warm replies in both
-languages. It needs no API key and no network.
+Yura is an **e-kitten**: clingy, a little feral, typing like a person rather
+than a brand. She says `daddaaa` when she wants attention, drops kaomoji into her
+sentences (`>_<`, `(¬‿¬)`, `ᵕ̈`), and answers in whichever language you used.
 
-- `.yura` shows the card, `.yura list` the scenarios, `.yura <scenario>` one line.
-- `.yura reply` drafts an answer to the message you reply to; `.yura send` sends it.
-- `.yura on` lets Yura answer **your own** messages in Saved Messages, at most
-  once a minute, twelve times an hour, never during quiet hours, never in
-  another chat, and never in reply to its own lines.
+- A bare `.yura` / `.یورا` — or just the word `یورا` — gets a random line. No
+  menus, no "scenarios", no keyword matching.
+- Anything else — `.yura are you awake`, or simply typing a sentence in your own
+  Saved Messages with the `persona` switch on — goes to the model with the
+  conversation so far and what she remembers about you.
+- `.yura on` opens that ambient path. It only ever answers **your own** messages
+  in **your own** chat; no other chat, ever. `.yura off`, quiet hours and `.stop`
+  all silence it.
+- Without a key, or when the network is down, she answers from her offline line
+  bank instead of going quiet. A companion that sulks because the API dropped is
+  not a companion.
 
-The persona is deliberately honest: when asked whether it is real, it says it
-is a bot. The affection is in the tone, not in a claim about what it is.
+**Memory.** `.yura remember my name is Sam`, or let her write it herself through
+the `[[remember: …]]` directive the prompt teaches her. `.yura memory` lists what
+she keeps, `.yura forget <text>` removes a fact, `.yura memory clear` wipes it.
+Facts and the last 20 turns live in the same SQLite file as everything else, so
+they survive a restart — and a deploy.
+
+**Files.** Ask for one (`make me a shopping list`) and she sends a real document:
+sanitised name, text-only extension whitelist (`.md`, `.txt`, `.csv`, `.json`,
+`.py`, `.html`, `.svg`, `.tex`), size-capped. Nothing executable is written.
+
+**Honesty.** Ask whether she is a bot and she says yes, in character, in one
+clause, then moves on.
+
+## Fight Mode, from civil to unhinged
+
+`.fight` still drafts one comeback to the message you reply to — `.fight send`
+sends it. The style and the intensity are separate:
+
+```
+.fight brutal                    # the meanest style
+.fight sarcastic unhinged        # …at the top of the ladder
+.fight instant repeated brutal   # post them continuously until you say بسه
+.fight stop                      # or that
+```
+
+The intensity ladder is `low → medium → high → intense → unhinged`. Lines are
+**composed** from three pools (opener × argument × closer) rather than stored:
+**37,800 distinct lines per language** — 75,600 across both — and the hook word
+varies on top of that. `fight.capacity()` computes the number and the test suite
+asserts it, so the figure cannot drift from the code.
+
+`instant` starts a loop: a new line every few seconds (`.fight instant every 8`),
+one loop per chat, with a hard ceiling of 600 lines / 45 minutes and every brake
+wired in — `.stop`, quiet hours, dry run, and the per-chat permission scope.
+`بسه` works as a bare word.
+
+Rules that do not move: no appearance, family, religion, ethnicity, ability or
+identity attacks, no threats, no slurs, and an insult aimed at the bot is
+defused rather than mirrored.
 
 ## A settings menu, not a list of flags
 
@@ -59,11 +103,19 @@ work offline; none of them needs an API key.
 
 **`.poem`** (`.شعر`) sends one poem — the body in a quote block, the poet in
 italics underneath, the title in a quiet line below. It draws on a corpus that
-ships inside the package: **3,640 poems from 26 poets**, the classical Persian
-canon (Hafez, Rumi, Saadi, Khayyam, Attar, Ferdowsi, Nezami, Saeb, Bidel …) plus
-public-domain English verse (Shakespeare's sonnets, Housman, Tennyson, FitzGerald's
-Khayyam, Blake). `.poem poets` lists the shelf; `.poem حافظ` or `.poem hafez`
-picks from one poet; `.poem fa` / `.poem en` forces a language.
+ships inside the package: **10,207 poems from 51 poets**, the classical Persian
+canon (Rumi 824, Saadi 700, Saeb 600, Hafez 578, Attar 541, Bidel 438 …) plus
+poets the old Ganjoor dump predates (Iraj Mirza, Aref Qazvini, Ashofte) and
+public-domain English verse (Shakespeare's sonnets, Housman, Tennyson,
+FitzGerald's Khayyam, Blake).
+
+- `.poem` / `.شعر` — one poem in the chat's language.
+- `.poem poets` — the shelf, with counts.
+- `.poem حافظ`, `.poem hafez`, `.poem ایرج میرزا`, `.poem ایرج‌میرزا` — one poet.
+  Names match with or without the ZWNJ, in either script.
+- `.poem شراب`, `.poem love` — a **theme**, not a poet: wine, عشق, غم, مرگ, شب,
+  nature, homeland, wisdom, friendship and more.
+- `.poem search <words>` — free text across the whole corpus.
 
 **`.fal`** (`.فال`) is a Hafez divination, and it arrives as a **picture**: a
 parchment card with a gold rule, the couplets set large, the meaning below it in
@@ -198,7 +250,7 @@ live account from this environment.
 | Scheduling | `.remind` (relative, absolute, Persian, recurring), `.reminders`, `.tasks`, `.quiet-hours`, `.agenda`, missed-job recovery, periodic jobs |
 | Language/text | `.digits`, `.normalize`, `.rtl`, `.cleanup`, `.transform`, `.translate` (when a provider is configured), `.summarize` (offline extractive, AI optional) |
 | Management | `.chatsettings`, `.alias`, `.quick`, `.backup` (export / import / auto), `.plugins` (load, unload, list) |
-| Fun | `.joke`, `.quote`, `.random`, `.coin` — bilingual, offline; `.poem` (3,640-poem corpus, per-poet filtering), `.fal` (Hafez card rendered as a PNG), `.roast` (reply-only, safety-filtered) |
+| Fun | `.joke`, `.quote`, `.random`, `.coin` — bilingual, offline; `.poem` (10,207-poem corpus, per-poet and per-theme filtering), `.fal` (Hafez card rendered as a PNG), `.roast` (reply-only, safety-filtered) |
 
 ### Working with limits you should know about
 

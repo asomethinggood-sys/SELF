@@ -182,7 +182,9 @@ def test_render_produces_a_png_of_the_right_shape() -> None:
 
     image = Image.open(io.BytesIO(payload))
     assert image.width == fal_image.WIDTH
-    assert 900 < image.height < 1900, "the card must stay one screen tall"
+    # A portrait card: tall enough for a full reading, never a scrolling ribbon.
+    ratio = image.height / image.width
+    assert 0.9 < ratio < 1.6, f"unexpected card proportions ({ratio:.2f})"
     # A mostly-blank canvas would be a silent failure; check there is ink.
     colours = image.convert("RGB").getcolors(maxcolors=200_000) or []
     assert len(colours) > 50
@@ -339,8 +341,8 @@ async def test_fight_draft_is_a_card_with_their_line_and_ours(runtime) -> None:
 async def test_fight_styles_are_a_panel_not_a_list_of_bullets(runtime) -> None:
     sent = await invoke(runtime, ".fight styles")
     body = sent[0].text
-    assert "<blockquote><code>sarcastic</code>" in body
-    assert "•" not in body
+    assert "<blockquote>" in body and "<code>sarcastic</code>" in body
+    assert "<li>" not in body and "•" not in body
 
 
 async def test_the_hook_prefers_a_subject_over_a_generic_adjective() -> None:
@@ -354,7 +356,7 @@ async def test_the_hook_prefers_a_subject_over_a_generic_adjective() -> None:
 
 async def test_yura_card_is_a_card(runtime) -> None:
     await runtime.feature_manager.set_enabled("persona", True)
-    sent = await invoke(runtime, ".yura")
+    sent = await invoke(runtime, ".yura status")
     body = sent[0].text
     assert body.startswith("<b>♡</b> · <b>")
     assert "<blockquote>" in body
@@ -389,7 +391,7 @@ async def test_poem_search_shows_a_matching_poem(runtime) -> None:
     sent = await invoke(runtime, ".poem search عشق")
     body = sent[0].text
     assert "<blockquote" in body
-    assert "mention it" in body
+    assert "poems about" in body
 
 
 async def test_poem_search_explains_an_empty_result(runtime) -> None:

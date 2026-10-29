@@ -280,6 +280,9 @@ async def runtime(config: Config, quiet_logger: logging.Logger) -> Runtime:
     # gate itself flip them back explicitly.
     for name in ("poetry", "roasts"):
         await rt.feature_manager.set_enabled(name, True)
+    # The persona is on by default (it only speaks in the owner's own chat);
+    # tests that exercise it turn it back on explicitly.
+    await rt.feature_manager.set_enabled("persona", False)
     await rt.feature_manager.refresh()
     yield rt
     await rt.db.close()

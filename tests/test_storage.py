@@ -48,10 +48,13 @@ async def test_chat_settings_and_language(store: Store) -> None:
     assert len(prefs) == 1
 
 
-async def test_feature_defaults_are_off(store: Store) -> None:
+async def test_feature_defaults_match_the_declaration(store: Store) -> None:
     features = await store.features()
     for name, enabled in DEFAULT_FEATURES.items():
-        assert features[name] is enabled is False
+        assert features[name] is enabled
+    # The one deliberate exception: the companion speaks in the owner's own chat.
+    assert DEFAULT_FEATURES["persona"] is True
+    assert sum(1 for value in DEFAULT_FEATURES.values() if value) == 1
     await store.set_feature("autoreply", True)
     assert await store.feature_enabled("autoreply") is True
 

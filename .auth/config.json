@@ -2,5 +2,11 @@
   "phone": "+989010396925",
   "api_id": "2040",
   "api_hash": "b18441a1ff607e10a989891a5462e627",
-  "note": "api_id 2040 is Telegram Desktop's published pair: the credential probe showed it is accepted by Telegram but not proven to survive a real login. Replace both values here once you have your own app from my.telegram.org; nothing else has to change."
+  "note": "api_id 2040 is Telegram Desktop's published pair: the credential probe showed it is accepted by Telegram but not proven to survive a real login. Replace both values here once you have your own app from my.telegram.org; nothing else has to change.",
+  "ai": {
+    "provider": "openai_compatible",
+    "base_url": "https://openrouter.ai/api/v1",
+    "model": "auto"
+  },
+  "note_ai": "Free-plan OpenRouter key lives in the repository secret OPENROUTER_API_KEY (repo settings → Secrets → Actions), never in this file: GitHub push protection rejects committed keys, and a secret is also readable by the workflow without being public. AI_MODEL=auto asks /models which free models exist and picks one, then falls back through the rest; free slugs rotate monthly, which is why the model is not pinned. `python -m havoc ai` makes one real call to verify."
 }

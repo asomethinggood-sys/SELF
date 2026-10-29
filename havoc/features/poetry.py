@@ -66,13 +66,31 @@ async def cmd_poem(ctx: CommandContext) -> None:
     query = " ".join(words).strip()
     language: str | None = None
     poet: str | None = None
+    topic_note = ""
 
     if query:
         if query.lower() in _LANGUAGE_WORDS:
             language = _LANGUAGE_WORDS[query.lower()]
         else:
+            # A name first, then a topic, then a plain word search: "شعر ایرج‌میرزا"
+            # and "شعر شراب" are the same shape of request.
             poet = corpus.resolve_poet(query)
             if poet is None:
+                terms = corpus.topic_terms(query)
+                matches = corpus.search_poems(query, terms=terms or None)
+                if matches:
+                    poem = random.SystemRandom().choice(matches)
+                    await ctx.reply(
+                        _poem_card(
+                            poem,
+                            note=ctx.t(
+                                "poem.found_in",
+                                count=len(matches),
+                                query=escape(terms[0] if terms else query),
+                            ),
+                        )
+                    )
+                    return
                 raise CommandError(
                     "poem.unknown_poet",
                     query=escape(query),
@@ -93,13 +111,20 @@ async def cmd_poem(ctx: CommandContext) -> None:
         except corpus.CorpusError as exc:
             raise CommandError("poem.empty") from exc
 
-    await ctx.reply(_poem_card(poem))
+    await ctx.reply(_poem_card(poem, note=topic_note))
 
 
 def _poem_card(poem: dict[str, Any], *, note: str = "") -> str:
     text = str(poem.get("text", "")).strip()
     lines = text.count("\n") + 1
-    card = ui.quote_card(text, str(poem.get("poet", "")), expandable=lines > _COLLAPSE_AFTER)
+    # Persian verse is set in italics: it separates the quoted couplets from
+    # Yura's own voice, which is never italic.
+    card = ui.quote_card(
+        text,
+        str(poem.get("poet", "")),
+        expandable=lines > _COLLAPSE_AFTER,
+        italics=poem.get("language") == "fa",
+    )
     title = str(poem.get("title", "")).strip()
     blocks = [card]
     if title and title not in text:

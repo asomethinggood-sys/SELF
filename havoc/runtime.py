@@ -29,10 +29,13 @@ from .permissions import Permissions
 from .plugin_loader import PluginLoader
 from .scheduler import Scheduler
 from .services.ai_provider import AIProvider
+from .services.fight_loop import FightLoop
+from .services.memory import MemoryStore
 from .services.rate_limiter import RateLimiter
 from .services.sender import Sender
 from .services.storage import Store
 from .services.translation_provider import build_translation_provider
+from .services.yura_chat import YuraChat
 from .utils.security import redact_text
 from .utils.time import utc_now
 
@@ -62,6 +65,9 @@ class Runtime:
     sender: Sender
     telegram: Any = None
     client: Any = None
+    memory: MemoryStore = None  # type: ignore[assignment] - set in create()
+    yura_chat: YuraChat = None  # type: ignore[assignment] - set in create()
+    fight_loop: FightLoop = None  # type: ignore[assignment] - set in create()
     plugin_loader: PluginLoader | None = None
     stats: dict[str, int] = field(default_factory=dict)
     started_at: Any = field(default_factory=utc_now)
@@ -146,6 +152,9 @@ class Runtime:
             stats={"commands_ok": 0, "commands_failed": 0, "events": 0},
         )
         runtime.dispatcher = Dispatcher(runtime)
+        runtime.memory = MemoryStore(db)
+        runtime.yura_chat = YuraChat(runtime)
+        runtime.fight_loop = FightLoop(runtime)
         from .handlers import Router
 
         # The router is stateless apart from counters; attaching it here keeps
@@ -295,6 +304,11 @@ class Runtime:
             await self.event_engine.emit(now_event(EventType.SHUTDOWN))
         except Exception:  # pragma: no cover
             pass
+        if self.fight_loop is not None:
+            try:
+                await self.fight_loop.stop_all()
+            except Exception as exc:  # noqa: BLE001
+                self.logger.debug("error stopping fight loops: %s", exc)
         await self.scheduler.stop()
         await self.event_engine.stop()
         if self.telegram is not None:

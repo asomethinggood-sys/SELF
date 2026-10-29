@@ -46,7 +46,7 @@ Total: **71 commands**.
 | --- | --- | --- | --- |
 | `.coin` | Flip a coin _(owner only)._ | `.coin` | `.flip`, `.شیریاپا` |
 | `.fal` | Draw a Hafez reading and send it as a card _(owner only; feature `poetry`)._ | `.fal [text] [number]` | `.hafez`, `.divination`, `.فال` |
-| `.fight` | Draft a witty comeback for the replied message _(owner only; changes state)._ | `.fight [style|intensity|send|styles]` | `.دعوا` |
+| `.fight` | Draft a comeback — or send them non-stop until you say stop _(owner only; changes state)._ | `.fight [style|intensity|instant|stop|send|styles]` | `.دعوا` |
 | `.joke` | Tell a random bilingual joke _(owner only)._ | `.joke` | `.جوک` |
 | `.poem` | A poem from the shipped corpus, with the poet underneath _(owner only; feature `poetry`)._ | `.poem [poet|fa|en]` | `.poetry`, `.verse`, `.شعر` |
 | `.quote` | Show a random short quote _(owner only)._ | `.quote` | `.جمله` |
@@ -111,7 +111,7 @@ Total: **71 commands**.
 
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
-| `.yura` | Yura's own voice: status, scenarios, drafts for the owner's messages _(owner only; changes state)._ | `.yura [on|off|list|reply|send|<scenario>]` | `.person`, `.self`, `.یورا` |
+| `.yura` | Yura herself: talk to her, or manage what she remembers _(owner only; changes state)._ | `.yura [on|off|status|memory|log|clear|<anything>]` | `.person`, `.self`, `.یورا` |
 
 ## Profile
 

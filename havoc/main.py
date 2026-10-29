@@ -426,6 +426,40 @@ async def command_login(args: argparse.Namespace) -> int:
         await telegram.disconnect()
 
 
+async def command_ai(args: argparse.Namespace) -> int:
+    """One live round-trip to the configured model — the only honest test.
+
+    Static checks cannot tell you whether a key works or whether a free model
+    is still listed. This makes a real request, prints the reply, and exits
+    non-zero when the provider fails, so a workflow step can gate on it.
+    """
+    from .persona import system_prompt
+    from .services.ai_provider import AIError, AIMessage, AIProvider
+
+    config, _issues = load_config(dotenv_path=project_env_file())
+    provider = AIProvider.from_config(config)
+    if not provider.available:
+        print("AI: not configured (set AI_PROVIDER=openai_compatible and AI_API_KEY)")
+        return EXIT_CONFIG
+    print(f"AI: {provider.base_url} · models: {', '.join(provider.models)}")
+    print(f"Prompt: {args.prompt}")
+    try:
+        reply = await provider.converse(
+            [
+                AIMessage("system", system_prompt("en")),
+                AIMessage("user", args.prompt),
+            ],
+            max_tokens=args.max_tokens,
+        )
+    except AIError as exc:
+        print(f"AI: FAILED ({exc.kind}) — {exc}")
+        return EXIT_RUNTIME
+    print(f"Model: {provider.active_model}")
+    print("-" * 48)
+    print(reply)
+    return EXIT_OK
+
+
 async def command_check(args: argparse.Namespace) -> int:
     config, issues = load_config(dotenv_path=project_env_file())
     print(f"{CODENAME} {__version__} — configuration check")
@@ -668,6 +702,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="write a SESSION_STRING to PATH after a successful login (chmod 600)",
     )
     login.set_defaults(func=command_login)
+
+    ai = subparsers.add_parser("ai", help="send one real prompt to the configured model")
+    ai.add_argument("prompt", nargs="?", default="hi, say something in character", help="what to ask")
+    ai.add_argument("--max-tokens", type=int, default=200)
+    ai.set_defaults(func=command_ai)
 
     check = subparsers.add_parser("check", help="validate configuration and run diagnostics")
     check.set_defaults(func=command_check)

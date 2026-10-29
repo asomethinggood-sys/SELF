@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from .http import HttpError, post_json
+from .http import HttpError, get_json, post_json
 
 
 class AIError(Exception):
@@ -34,6 +34,22 @@ class AIError(Exception):
 class AIMessage:
     role: str
     content: str
+
+
+#: Substrings that make a model a good default for Yura, best first. Used only
+#: when ``AI_MODEL=auto``: free slugs rotate every few weeks, so pinning one in
+#: a config file is how a bot ends up mute after a quiet upstream change.
+MODEL_PREFERENCES: tuple[str, ...] = (
+    "llama-3.3-70b",
+    "qwen3-next-80b",
+    "qwen3-235b",
+    "gemma-4-31b",
+    "deepseek",
+    "mistral-large",
+    "gpt-oss-120b",
+    "nemotron",
+    "gemini",
+)
 
 
 class AIProvider:
@@ -52,7 +68,13 @@ class AIProvider:
     ) -> None:
         self.base_url = (base_url or "").rstrip("/")
         self._api_key = api_key
+        # ``AI_MODEL`` may be a comma-separated fallback chain: free tiers add
+        # and retire models without notice, and a chat that dies because one
+        # slug disappeared is a bad trade for a config value.
         self.model = model
+        self.models = [part.strip() for part in (model or "").split(",") if part.strip()]
+        self.active_model = self.models[0] if self.models else ""
+        self._discovered = False
         self.timeout = timeout
         self.enabled = enabled and bool(self.base_url) and bool(api_key)
         self.requests = 0
@@ -96,25 +118,109 @@ class AIProvider:
         """
         if not self.enabled:
             raise AIError("AI provider is not configured", kind="disabled")
-        messages: list[dict[str, str]] = []
+        thread: list[AIMessage] = []
         if system:
-            messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-        }
+            thread.append(AIMessage("system", system))
+        thread.append(AIMessage("user", prompt))
+        return await self.converse(
+            thread, max_tokens=max_tokens, temperature=temperature
+        )
+
+    async def discover_models(self, *, limit: int = 3, free_only: bool = True) -> list[str]:
+        """Ask the gateway which models exist, best candidates first.
+
+        Used when the configured model is ``auto`` or when every configured
+        model 404s. Only reads ``/models``; a failure returns an empty list and
+        the caller reports the original error instead of a confusing one.
+        """
+        try:
+            data = await get_json(f"{self.base_url}/models", timeout=min(self.timeout, 20))
+        except HttpError:
+            return []
+        entries = data.get("data") if isinstance(data, dict) else None
+        if not isinstance(entries, list):
+            return []
+        self._discovered = True
+        ids = [
+            str(entry.get("id"))
+            for entry in entries
+            if isinstance(entry, dict) and entry.get("id")
+        ]
+        if free_only:
+            free = [model for model in ids if model.endswith(":free")]
+            if free:
+                ids = free
+        ranked: list[str] = []
+        for needle in MODEL_PREFERENCES:
+            for model in ids:
+                if needle in model and model not in ranked:
+                    ranked.append(model)
+        for model in ids:
+            if model not in ranked:
+                ranked.append(model)
+        self.models = ranked[:limit] or self.models
+        return self.models
+
+    async def converse(
+        self,
+        messages: Sequence[AIMessage],
+        *,
+        max_tokens: int = 400,
+        temperature: float = 0.85,
+    ) -> str:
+        """Send a full role-tagged conversation and return the reply text.
+
+        Unlike :meth:`chat`, this keeps the ``assistant`` turns, which is what a
+        real conversation needs: without them the model forgets what it just
+        said and repeats itself.
+        """
+        if not self.enabled:
+            raise AIError("AI provider is not configured", kind="disabled")
+        thread = [
+            {"role": message.role, "content": message.content}
+            for message in messages
+            if message.content.strip()
+        ]
+        if not any(message["role"] == "user" for message in thread):
+            raise AIError("no user message in the conversation", kind="bad_response")
         headers = {"Authorization": f"Bearer {self._api_key}"}
         self.requests += 1
-        try:
-            data = await post_json(
-                f"{self.base_url}/chat/completions", payload, timeout=self.timeout, headers=headers
-            )
-        except HttpError as exc:
+
+        if not self.models or self.models == ["auto"]:
+            await self.discover_models()
+        data: object = None
+        last_error: AIError | None = None
+        for candidate in self.models or [self.model]:
+            payload = {
+                "model": candidate,
+                "messages": thread,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            }
+            try:
+                data = await post_json(
+                    f"{self.base_url}/chat/completions",
+                    payload,
+                    timeout=self.timeout,
+                    headers=headers,
+                )
+            except HttpError as exc:
+                last_error = AIError(str(exc), kind=exc.kind)
+                if exc.kind == "unauthorized":
+                    break  # a wrong key will not work with the next model either
+                continue
+            self.active_model = candidate
+            break
+        if data is None and not self._discovered:
+            # Every configured slug is probably retired. Ask the gateway what
+            # actually exists right now and retry once with its free models.
+            if await self.discover_models():
+                return await self.converse(
+                    messages, max_tokens=max_tokens, temperature=temperature
+                )
+        if data is None:
             self.failures += 1
-            raise AIError(str(exc), kind=exc.kind) from exc
+            raise last_error or AIError("AI provider is not configured", kind="disabled")
 
         try:
             choices = data["choices"]

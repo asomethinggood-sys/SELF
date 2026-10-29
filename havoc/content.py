@@ -10,8 +10,11 @@ only light, contextual wordplay aimed at the replied-to message.
 
 from __future__ import annotations
 
+import re
 import secrets
 from dataclasses import dataclass
+
+from . import fight
 
 JOKES: dict[str, tuple[str, ...]] = {
     "en": (
@@ -193,7 +196,10 @@ STOPWORDS: dict[str, frozenset[str]] = {
 
 #: Words that make a "fight" a real conflict. HAVOC refuses these targets.
 HARASSMENT_MARKERS: tuple[str, ...] = (
-    "kill", "die", "death threat", "hurt you", "beat you", "slur",
+    # "die" alone is deliberately absent: "a hill to die on" is an idiom, and a
+    # false refusal is its own kind of bug. Real threats carry a verb and a
+    # target ("kill you", "hurt you"), which the other markers catch.
+    "kill", "death threat", "hurt you", "beat you", "slur",
     "بکش", "مرگت", "تهدید", "لتت", "می‌زنمت",
 )
 
@@ -229,9 +235,12 @@ def random_roast(language: str = "en", hook: str = "") -> str:
 
 
 def normalize_style(style: str | None, language: str = "en") -> str:
-    if not style:
-        return "clever" if language == "en" else "clever"
-    return STYLE_ALIASES.get(style.strip().lower(), "clever")
+    """Map a typed style name onto the composer's vocabulary.
+
+    Delegated so ``brutal`` (and anything added later) works from every entry
+    point without editing two tables.
+    """
+    return fight.normalize_style(style, language)
 
 
 #: Evaluative adjectives are what an argument is *about* only by accident: a hook
@@ -272,8 +281,7 @@ def extract_hook(text: str, language: str = "en") -> str:
 
 
 def is_insult(text: str) -> bool:
-    lowered = (text or "").lower()
-    return any(marker in lowered for marker in INSULT_MARKERS)
+    return _has_marker(text, INSULT_MARKERS)
 
 
 def build_offline_comeback(
@@ -293,21 +301,34 @@ def build_offline_comeback(
         if intensity == "low":
             text = text.split(". ")[0].rstrip(".") + "."
         return Comeback(text=text, style="defuse", language=language, intensity=intensity, source="offline")
-    templates = FIGHT_STYLES_FA if language == "fa" else FIGHT_STYLES
-    pool = templates.get(style) or templates["clever"]
-    template = secrets.choice(pool)
-    safe_hook = (hook or ("this" if language == "en" else "این")).strip()
-    if len(safe_hook) > 80:
-        safe_hook = safe_hook[:77].rstrip() + "…"
-    text = template.format(hook=safe_hook)
+    text = fight.compose(hook, style=style, intensity=intensity, language=language)
     if intensity == "low":
-        text = text.rstrip("!.") + ("." if language == "en" else ".")
+        text = text.rstrip("!.")
     return Comeback(text=text, style=style, language=language, intensity=intensity, source="offline")
 
 
-def contains_harassment(text: str) -> bool:
+_LATIN_LETTER = re.compile(r"[A-Za-z]")
+
+
+def _has_marker(text: str, markers: tuple[str, ...]) -> bool:
+    """Marker match that respects word edges for Latin words.
+
+    A substring test on "die" fires on "dies", "diet" and "ingredient", which
+    would make the bot refuse ordinary sentences — and, worse, refuse a comeback
+    that merely says an argument died.
+    """
     lowered = (text or "").lower()
-    return any(marker in lowered for marker in HARASSMENT_MARKERS)
+    for marker in markers:
+        if _LATIN_LETTER.match(marker):
+            if re.search(rf"(?<!\w){re.escape(marker)}(?!\w)", lowered):
+                return True
+        elif marker in lowered:
+            return True
+    return False
+
+
+def contains_harassment(text: str) -> bool:
+    return _has_marker(text, HARASSMENT_MARKERS)
 
 
 #: Gen-Z roasts that a person would actually send back.

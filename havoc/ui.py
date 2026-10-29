@@ -148,14 +148,17 @@ def split_sections(sections: Sequence[str]) -> str:
     return "\n\n".join(section for section in sections if str(section).strip())
 
 
-def quote_card(text: str, author: str = "", *, expandable: bool = False) -> str:
+def quote_card(
+    text: str, author: str = "", *, expandable: bool = False, italics: bool = False
+) -> str:
     """A poem or quote: the body in a blockquote, the author right under it.
 
     ``author`` is printed in italics on its own line, which is the shape people
     expect from a quotation — and it keeps Farsi and Latin names readable in the
     same message.
     """
-    block = f"<blockquote expandable>{escape(text)}</blockquote>" if expandable else quote(text)
+    body = italic(escape(text)) if italics else escape(text)
+    block = f"<blockquote expandable>{body}</blockquote>" if expandable else f"<blockquote>{body}</blockquote>"
     if not author:
         return block
     return f"{block}\n{italic('— ' + author)}"

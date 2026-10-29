@@ -12,16 +12,12 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .. import ui
+from .. import fight, ui
 from ..command_registry import Command, CommandContext, CommandError
 from ..content import (
-    FIGHT_STYLES,
-    FIGHT_STYLES_FA,
-    INTENSITY_LABELS,
     build_offline_comeback,
     contains_harassment,
     extract_hook,
-    normalize_style,
 )
 from ..language_detection import detect_language
 from ..services.ai_provider import AIError
@@ -370,36 +366,93 @@ async def cmd_scheduled(ctx: CommandContext) -> None:
 # ---------------------------------------------------------------------------
 # Fight Mode
 # ---------------------------------------------------------------------------
+#: Words that turn a normal ``.fight`` into the repeating loop.
+LOOP_WORDS = frozenset({"instant", "repeat", "repeated", "loop", "spam", "nonstop", "non-stop",
+                        "پیوسته", "تکراری", "مداوم", "بی‌وقفه"})
+STOP_WORDS = frozenset({"stop", "halt", "enough", "بسه", "بس", "کافیه", "تمام"})
+
+
+def _fight_keywords(words: list[str]) -> dict[str, Any]:
+    """Sort free-form arguments into style / intensity / mode.
+
+    ``fight instant repeated brutal`` has no subcommand at all — the parser
+    demotes the first unknown token into the arguments — so the words have to be
+    read as a bag rather than a position.
+    """
+    found: dict[str, Any] = {"loop": False, "interval": None, "stop": False, "leftovers": []}
+    index = 0
+    while index < len(words):
+        word = words[index].strip().lower()
+        index += 1
+        if not word:
+            continue
+        if word in LOOP_WORDS:
+            found["loop"] = True
+            continue
+        if word in STOP_WORDS:
+            found["stop"] = True
+            continue
+        if word in {"every", "هر"} and index < len(words):
+            found["interval"] = words[index]
+            index += 1
+            continue
+        if word in fight.STYLE_ALIASES:
+            found["style"] = word
+            continue
+        if word in fight.INTENSITY_ALIASES:
+            found["intensity"] = word
+            continue
+        if word.isdigit():
+            found["interval"] = word
+            continue
+        found["leftovers"].append(word)
+    return found
+
+
 async def cmd_fight(ctx: CommandContext) -> None:
     runtime = ctx.runtime
     action = (ctx.sub or "").lower()
-    reply = await ctx.reply_message()
+    words = [word for word in ctx.args if word.strip()]
 
     if action in {"styles", "help"}:
-        styles = FIGHT_STYLES_FA if ctx.language == "fa" else FIGHT_STYLES
-        rows = [ui.item(style, ctx.t(f"fight.style_{style}", default=style)) for style in styles]
+        rows = [ui.item(style, ctx.t(f"fight.style_{style}", default=style)) for style in fight.STYLES]
+        intensities = " · ".join(
+            escape(ctx.t(f"fight.intensity_{level}", default=level)) for level in fight.INTENSITIES
+        )
         await ctx.reply(
             "\n\n".join(
                 [
                     ui.title("⚔", ctx.t("fight.styles_header")),
                     ui.panel(rows),
+                    ui.note(ctx.t("fight.intensities_line", levels=intensities)),
+                    ui.note(ctx.t("fight.capacity_line", count=fight.capacity())),
                     ui.footer(ctx.t("fight.styles_hint", prefix=runtime.prefix)),
                 ]
             )
         )
         return
 
-    drafted = await ctx.store.get_chat_setting(ctx.chat_id, "fight.draft", None)
+    if action == "stop" or (words and words[0].lower() in STOP_WORDS):
+        stopped = await runtime.fight_loop.stop(ctx.chat_id)
+        await ctx.reply_ok(
+            ctx.t("fight.loop_stopped" if stopped else "fight.loop_none")
+        )
+        return
 
     if action == "send":
+        drafted = await ctx.store.get_chat_setting(ctx.chat_id, "fight.draft", None)
         if not drafted:
             raise CommandError("fight.no_draft")
         text = str(drafted)
-        await ctx.runtime.sender.send(ctx.chat_id, escape(text))
+        await runtime.sender.send(ctx.chat_id, escape(text))
         await ctx.store.delete_chat_setting(ctx.chat_id, "fight.draft")
         await ctx.reply_ok(ctx.t("fight.sent"))
         return
 
+    # Everything after the command name, in both the subcommand and args slots.
+    keywords = _fight_keywords([action, *words] if action else words)
+
+    reply = await ctx.reply_message()
     if reply is None:
         raise CommandError("errors.reply_required", prefix=runtime.prefix, name="fight")
 
@@ -410,12 +463,24 @@ async def cmd_fight(ctx: CommandContext) -> None:
         raise CommandError("fight.unsafe_target")
 
     language = ctx.flag("lang") if ctx.flag("lang") in {"en", "fa"} else detect_language(source).resolve(ctx.language)
-    style = normalize_style(ctx.sub, language)
-    intensity = (ctx.flag("intensity") or "medium").lower()
-    if intensity not in {"low", "medium", "high"}:
-        raise CommandError("errors.invalid_choice", field="intensity", choices="low, medium, high")
-
+    style = fight.normalize_style(keywords.get("style") or action, language)
+    intensity = fight.normalize_intensity(
+        ctx.flag("intensity") or keywords.get("intensity") or "medium"
+    )
     hook = extract_hook(source, language)
+
+    if keywords["loop"]:
+        await _start_loop(
+            ctx,
+            hook=hook,
+            source=source,
+            style=style,
+            intensity=intensity,
+            language=language,
+            interval_word=keywords.get("interval"),
+        )
+        return
+
     result = None
     if runtime.ai.available and (ctx.has_flag("ai") or await ctx.store.get_bool("fight.use_ai", False)):
         from ..content import FIGHT_SYSTEM_PROMPT
@@ -440,7 +505,7 @@ async def cmd_fight(ctx: CommandContext) -> None:
     await ctx.store.set_chat_setting(ctx.chat_id, "fight.draft", result.text)
     facts = [
         f"{ui.bold(ctx.t('fight.style'))} {escape(ctx.t(f'fight.style_{result.style}', default=result.style))}",
-        f"{ui.bold(ctx.t('fight.intensity'))} {escape(INTENSITY_LABELS.get(language, INTENSITY_LABELS['en']).get(intensity, intensity))}",
+        f"{ui.bold(ctx.t('fight.intensity'))} {escape(fight.INTENSITY_LABELS.get(language, fight.INTENSITY_LABELS['en']).get(intensity, intensity))}",
         f"{ui.bold(ctx.t('fight.source'))} {ui.note(escape(result.source))}",
     ]
     await ctx.reply(
@@ -453,6 +518,53 @@ async def cmd_fight(ctx: CommandContext) -> None:
                 ui.quote_card(result.text, ""),
                 ui.panel(facts),
                 ui.footer(ctx.t("fight.preview_hint", prefix=runtime.prefix)),
+            ]
+        )
+    )
+
+
+async def _start_loop(
+    ctx: CommandContext,
+    *,
+    hook: str,
+    source: str,
+    style: str,
+    intensity: str,
+    language: str,
+    interval_word: Any,
+) -> None:
+    """Start the repeating stream and answer with one card, once."""
+    from ..services.fight_loop import DEFAULT_INTERVAL, MIN_INTERVAL
+
+    interval = DEFAULT_INTERVAL
+    if interval_word:
+        try:
+            interval = max(MIN_INTERVAL, float(str(interval_word).rstrip("s")))
+        except (TypeError, ValueError):
+            interval = DEFAULT_INTERVAL
+
+    state = await ctx.runtime.fight_loop.start(
+        ctx.chat_id,
+        hook=hook,
+        style=style,
+        intensity=intensity,
+        language=language,
+        interval=interval,
+        source_text=source,
+    )
+    facts = [
+        f"{ui.bold(ctx.t('fight.style'))} {escape(ctx.t(f'fight.style_{state.style}', default=state.style))}",
+        f"{ui.bold(ctx.t('fight.intensity'))} {escape(fight.INTENSITY_LABELS.get(language, fight.INTENSITY_LABELS['en']).get(state.intensity, state.intensity))}",
+        f"{ui.bold(ctx.t('fight.loop_interval'))} {ui.code(f'{state.interval:.0f}s')}",
+    ]
+    await ctx.reply(
+        "\n\n".join(
+            [
+                ui.title("⚔", ctx.t("fight.loop_header")),
+                ui.note(ctx.t("fight.their_line")),
+                ui.quote_card(" ".join(source.split())[:280], ""),
+                ui.panel(facts),
+                ui.footer(ctx.t("fight.loop_hint", prefix=ctx.runtime.prefix)),
             ]
         )
     )
@@ -540,7 +652,7 @@ def register(runtime: Any) -> None:
             Command("template", cmd_template, category="messaging", usage="[list|add|show|send|delete]", changes_state=True, subcommands=('list', 'ls', 'add', 'show', 'preview', 'send', 'delete', 'rm')),
             Command("schedule", cmd_schedule, category="messaging", usage="<when> <text> [--to chat] [--repeat daily]", changes_state=True),
             Command("scheduled", cmd_scheduled, category="messaging", usage="[list|cancel|reschedule]", changes_state=True, subcommands=('list', 'ls', 'cancel', 'delete', 'rm', 'reschedule', 'move')),
-            Command("fight", cmd_fight, category="fun", usage="[style|send|styles]", requires_reply=False, changes_state=True, subcommands=('send', 'styles', 'help', 'sarcastic', 'dry', 'clever', 'playful', 'dramatic', 'blunt', 'ساختن', 'کنایه', 'طعنه', 'خشک', 'هوشمند', 'زیرکانه', 'بازیگوش', 'شوخ', 'دراماتیک', 'احساسی', 'رک', 'صریح')),
+            Command("fight", cmd_fight, category="fun", usage="[style|intensity|instant|stop|send|styles]", requires_reply=False, changes_state=True, subcommands=("send", "styles", "help", "stop", "instant", "repeat", "repeated", "loop", "nonstop", "every", "low", "medium", "high", "intense", "unhinged", "ملایم", "متوسط", "شدید", "سنگین", "دیوانه", "blunt", "brutal", "clever", "direct", "dramatic", "dry", "fun", "harsh", "playful", "sarcasm", "sarcastic", "savage", "smart", "احساسی", "بازیگوش", "بی‌رحم", "خشن", "خشک", "دراماتیک", "رک", "زیرکانه", "شوخ", "صریح", "طعنه", "هوشمند", "وحشی", "کنایه")),
             Command("suggest", cmd_suggest, category="messaging", aliases=("reply", "draft"), usage="[tone]", requires_reply=False, subcommands=('friendly', 'formal', 'funny', 'supportive', 'direct')),
         ]
     )
