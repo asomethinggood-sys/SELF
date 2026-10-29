@@ -27,6 +27,8 @@ on:
   schedule:
     # Once a day, after the free tier's UTC reset: if yesterday's runs spent the
     # 50-request allowance, this is the run that proves the key still answers.
+    # GitHub only fires schedules from the default branch, so this one starts
+    # working when this branch is the branch the repository runs from.
     - cron: "17 1 * * *"
 
 permissions:
