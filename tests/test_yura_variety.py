@@ -152,11 +152,16 @@ async def test_offline_lines_avoid_lethal_and_isolating_content() -> None:
 
 
 async def test_the_same_sentence_does_not_come_back_within_the_recent_window(runtime) -> None:
-    """``avoid`` is honoured even when the bank is asked for many lines."""
+    """``avoid`` is honoured even when the bank is asked for many lines.
+
+    200 turns is twice the ring buffer: a picker that only remembered the last
+    sixty lines would start repeating here, which is exactly how the owner
+    described the bug.
+    """
     chat = runtime.yura_chat
     runtime.ai = _Offline()
     seen: set[str] = set()
-    for _ in range(100):
+    for _ in range(200):
         answer = await chat.answer("hello", chat_id=13, language="en")
         text = " ".join((answer.text or "").split())
         assert text not in seen, text
@@ -208,3 +213,25 @@ async def test_the_allowance_comes_back_after_the_reset(runtime, monkeypatch) ->
     chat.quota_until = later - timedelta(minutes=1)
     assert chat._quota_spent() is False
     assert chat.quota_until is None
+
+
+async def test_the_bank_never_repeats_even_after_every_sentence_is_used() -> None:
+    """With 140 sentences, turn 321 is where a naive picker repeats."""
+    used: set[str] = set()
+    for turn in range(700):
+        line = yura_lines.pick("en", avoid=used)
+        assert line not in used, f"repeat at turn {turn}: {line}"
+        used.add(line)
+    assert len(used) == 700
+
+
+async def test_a_long_conversation_never_repeats_a_line(runtime) -> None:
+    """1,200 turns — twice the window a naive memory keeps — and not one repeat."""
+    chat = runtime.yura_chat
+    runtime.ai = _Offline()
+    seen: set[str] = set()
+    for turn in range(1200):
+        answer = await chat.answer("hello", chat_id=31, language="en")
+        text = " ".join((answer.text or "").split())
+        assert text not in seen, f"repeat at turn {turn}: {text}"
+        seen.add(text)

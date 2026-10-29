@@ -122,7 +122,7 @@
   "cleanup.header": "⋮ Cleaned text preview",
   "cleanup.note": "Nothing was changed. Copy what you need.",
   "clock.disabled": "Profile clock disabled. Use {prefix}profile restore to bring back your original name.",
-  "clock.enabled": "◷ Profile clock enabled — update every 5 minutes using template {template} in {tz}.",
+  "clock.enabled": "◷ Profile clock enabled — updating every minute using template {template} in {tz}.",
   "clock.header": "◷ Profile clock",
   "clock.invalid_template": "The template must contain {time} or {date}.",
   "clock.preview": "Preview",

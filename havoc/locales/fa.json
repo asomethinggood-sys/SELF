@@ -122,7 +122,7 @@
   "cleanup.header": "⋮ پیش‌نمایش متن پاک‌سازی‌شده",
   "cleanup.note": "هیچ چیز تغییر نکرد. هرچه لازم است کپی کنید.",
   "clock.disabled": "ساعت پروفایل خاموش شد. برای بازگرداندن نام اصلی {prefix}profile restore را بزنید.",
-  "clock.enabled": "◷ ساعت پروفایل روشن شد — هر ۵ دقیقه با قالب {template} در {tz} به‌روزرسانی می‌شود.",
+  "clock.enabled": "◷ ساعت پروفایل روشن شد — هر دقیقه با قالب {template} در {tz} به‌روزرسانی می‌شود.",
   "clock.header": "◷ ساعت پروفایل",
   "clock.invalid_template": "قالب باید شامل {time} یا {date} باشد.",
   "clock.preview": "پیش‌نمایش",

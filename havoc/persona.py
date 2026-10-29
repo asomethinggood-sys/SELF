@@ -91,6 +91,16 @@ def is_own_line(text: str) -> bool:
     return yura_lines.resembles_own_line(text)
 
 
+def bodies(language: str = "en") -> tuple[str, ...]:
+    """Every offline sentence in the bank for ``language``."""
+    return tuple(yura_lines.BODIES.get(language if language in yura_lines.BODIES else "en", ()))
+
+
+def sentence_of(line: str, language: str = "en") -> str:
+    """Which bank sentence ``line`` is, or ``""`` when it is not from the bank."""
+    return yura_lines.body_of(line, language if language in {"en", "fa"} else "en")
+
+
 def build_line(
     language: str = "en",
     *,

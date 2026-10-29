@@ -206,6 +206,22 @@ def _render_clock(template: str, timezone_name: str) -> str:
     )
 
 
+def _next_tick_delay() -> float:
+    """Seconds until the next minute boundary, never less than half a minute.
+
+    Scheduling the clock ``CLOCK_INTERVAL`` seconds after it last ran lets it
+    drift: a job that takes a moment plus a ten-second scheduler tick makes the
+    name change later and later within the minute, and after an hour it is two
+    minutes behind the clock on the wall. Aiming at the boundary instead keeps
+    the name changing as the minute does.
+    """
+    remainder = utc_now().timestamp() % CLOCK_INTERVAL
+    delay = CLOCK_INTERVAL - remainder
+    # `ensure_periodic` floors the interval at 30 s; asking for less would be
+    # silently rounded, so ask for what we will get.
+    return delay if delay >= CLOCK_INTERVAL / 2 else CLOCK_INTERVAL
+
+
 async def clock_job(runtime: Any, row: Any) -> None:
     """Periodic profile-name clock (re-enqueues itself)."""
     enabled = await runtime.store.get_bool("clock.enabled", False)
@@ -216,12 +232,14 @@ async def clock_job(runtime: Any, row: Any) -> None:
     try:
         rendered = _render_clock(template, zone_name)
     except (KeyError, ValueError) as exc:
+        # A broken template must not stop the clock: it is reported, and the job
+        # keeps its cadence so fixing the template is enough to recover.
         runtime.health.record_error("profile.clock", f"template error: {exc}")
-        return
-    rendered = rendered[:PROFILE_NAME_LIMIT]
+        rendered = None
+    rendered = rendered[:PROFILE_NAME_LIMIT] if rendered else None
     me = getattr(runtime.telegram, "me", None) if runtime.telegram else None
     current = getattr(me, "first_name", None) if me is not None else None
-    if rendered != current:
+    if rendered is not None and rendered != current:
         from telethon.tl.functions.account import UpdateProfileRequest
 
         try:
@@ -231,7 +249,7 @@ async def clock_job(runtime: Any, row: Any) -> None:
                 me.first_name = rendered
         except Exception as exc:  # noqa: BLE001
             runtime.health.record_error("profile.clock", exc)
-    await runtime.scheduler.ensure_periodic("profile.clock", CLOCK_INTERVAL)
+    await runtime.scheduler.ensure_periodic("profile.clock", _next_tick_delay())
 
 
 async def cmd_clock(ctx: CommandContext) -> None:

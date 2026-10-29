@@ -546,7 +546,36 @@ def pick(
             fallback = line
         if line not in skip and _body_of(line, lang) not in spoken:
             return line
+    # Forty random tries missed. A repeat is the one outcome the bank exists to
+    # prevent, so stop guessing: walk the unsaid sentences and take the first
+    # line that is not already in the chat. Only a chat that has spent every
+    # sentence in the language gets the fallback.
+    if not spoken:
+        return fallback or _compose(lang, picker, pet=pet)
+    ordered = random.Random(len(skip))
+    for body in BODIES[lang]:
+        if body in spoken:
+            continue
+        line = _compose(lang, ordered, pet=pet, body=body)
+        if line not in skip:
+            return line
+    # Every sentence has been said. A new pet on an old sentence is a worse
+    # repeat than a new line, and still not the same line.
+    for body in BODIES[lang]:
+        for candidate in PETS[lang]:
+            line = _compose(lang, ordered, pet=candidate, body=body)
+            if line not in skip:
+                return line
     return fallback or _compose(lang, picker, pet=pet)
+
+
+def body_of(line: str, lang: str) -> str:
+    """The sentence a composed line was built from, or ``""`` if it is not one.
+
+    Public because the chat needs it: remembering *sentences* rather than the
+    last thirty lines is what stops a joke coming back an hour later.
+    """
+    return _body_of(line, lang)
 
 
 def _body_of(line: str, lang: str) -> str:

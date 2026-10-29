@@ -40,6 +40,10 @@ FILE_EXTENSIONS = frozenset(
 )
 #: A generated file is a note or a script, not a dataset dump.
 MAX_FILE_BYTES = 100_000
+#: How many exact lines a chat remembers. The bank holds ~2,800 distinct lines per
+#: language, so this is the whole catalogue: inside the lifetime of a conversation
+#: no line comes back twice.
+SENT_MEMORY = 4000
 #: The reply itself, before any file block.
 MAX_REPLY_CHARS = 3500
 #: A reply that is asked for a program needs room for the program. 700 tokens is
@@ -94,8 +98,18 @@ class YuraChat:
         # What she has said in each chat, in this process. Two jobs: stop the
         # offline bank repeating itself, and make the loop guard airtight now
         # that lines are composed rather than listed.
-        self._sent: dict[int, deque[str]] = {}
+        # Ordered *unique* lines per chat: a dict is an insertion-ordered set, so
+        # the oldest line is the first key when the cap is reached. A deque would
+        # store the same line twice (the raw pick and the visible copy) and halve
+        # how far back the memory reaches.
+        self._sent: dict[int, dict[str, None]] = {}
         self._recent: dict[int, deque[str]] = {}
+        # The sentences used most recently, oldest first. This is a *window*, not
+        # a lifetime tally: the bank only has ~140 sentences per language, so a
+        # picker told to avoid all of them forever starts inventing new faces for
+        # an old joke. Keeping the last half in view means a sentence can return
+        # only after every other sentence has had a turn.
+        self._said_bodies: dict[int, deque[str]] = {}
         # A spent daily allowance is not a bug to retry into: once the gateway
         # says the day's requests are gone, every later message this day goes
         # straight to the offline bank instead of burning a request and a
@@ -168,6 +182,8 @@ class YuraChat:
         # offline bank is *made* to give it.
         avoid = {content for role, content in history if role == "assistant"}
         avoid |= set(self._recent.get(chat_id, ()))
+        avoid |= set(self._said_bodies.get(chat_id, ()))
+        avoid |= set(self._sent.get(chat_id, ()))
         # Context first, then the current turn: appending before reading would
         # put the same message in the prompt twice.
         _, messages = await self._context(chat_id, language, greeting=greeting)
@@ -312,22 +328,48 @@ class YuraChat:
     # Variety and the loop guard
     # ------------------------------------------------------------------
     def _offline(self, chat_id: int, language: str, *, avoid: set[str] | None = None) -> str:
-        """An unused line from the offline bank for this chat."""
+        """An unused line from the offline bank for this chat.
+
+        The bank is asked to avoid the recent window; the loop afterwards is the
+        belt to that braces — a picker that returns something already said in this
+        chat gets asked again, rather than the owner getting the same joke twice.
+        """
         used = set(avoid or ())
         used |= set(self._recent.get(chat_id, ()))
+        used |= set(self._said_bodies.get(chat_id, ()))
+        used |= set(self._sent.get(chat_id, ()))
         line = persona.build_line(language, avoid=used)
+        for _attempt in range(12):
+            if not self.was_sent(chat_id, line):
+                break
+            used.add(line)
+            line = persona.build_line(language, avoid=used)
         self._remember_said(chat_id, line)
         return line
 
     def _remember_said(self, chat_id: int, text: str) -> None:
+        language = "fa" if _looks_persian(text) else "en"
+        sentence = persona.sentence_of(text, language)
+        if sentence:
+            window = self._said_bodies.get(chat_id)
+            if window is None:
+                window = self._said_bodies[chat_id] = deque(maxlen=_body_window(language))
+            if sentence in window:
+                window.remove(sentence)
+            window.append(sentence)
         ring = self._recent.get(chat_id)
         if ring is None:
             ring = self._recent[chat_id] = deque(maxlen=60)
         ring.append(text)
         sent = self._sent.get(chat_id)
         if sent is None:
-            sent = self._sent[chat_id] = deque(maxlen=300)
-        sent.append(" ".join(text.split()))
+            # Long enough that a line cannot come back inside a conversation
+            # someone would actually notice: the bank holds ~2,800 distinct lines
+            # per language, and this is most of a day of talking.
+            sent = self._sent[chat_id] = {}
+        sent[" ".join(text.split())] = None
+        while len(sent) > SENT_MEMORY:
+            sent.pop(next(iter(sent)))
 
     def was_sent(self, chat_id: int, text: str) -> bool:
         """True when this process already sent exactly this text in this chat."""
@@ -340,6 +382,20 @@ class YuraChat:
     async def learn(self, chat_id: int, fact: str, *, kind: str = "fact") -> bool:
         """Explicit ``.yura remember …``. Returns False for a duplicate."""
         return bool(await self.memory.remember(chat_id, fact, kind=kind))
+
+
+def _body_window(language: str) -> int:
+    """How many recent sentences a chat keeps out of reach.
+
+    Half the bank: small enough that the picker never runs out of material, large
+    enough that a sentence cannot come back before seventy others have been said.
+    """
+    return max(1, len(persona.bodies(language)) // 2)
+
+
+def _looks_persian(text: str) -> bool:
+    """True when the line is written in the Persian alphabet."""
+    return any("\u0600" <= character <= "\u06ff" for character in text)
 
 
 def _wants_file(prompt: str) -> bool:
