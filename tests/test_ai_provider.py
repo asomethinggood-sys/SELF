@@ -35,6 +35,8 @@ def calls(monkeypatch):
         behaviour = fake_post.script.get(model, "ok")
         if behaviour == "missing":
             raise HttpError("HTTP 404: no such model", kind="http_error", status=404)
+        if behaviour == "empty":
+            return {"choices": [{"message": {"content": ""}}]}
         return {"choices": [{"message": {"content": f"reply from {model}"}}]}
 
     fake_post.script = {}
@@ -171,3 +173,28 @@ def test_the_client_does_not_call_itself_havoc() -> None:
     assert "havoc" not in USER_AGENT.lower()
     assert "Yura" in USER_AGENT
     assert USER_AGENT.strip() == USER_AGENT
+
+
+async def test_an_empty_answer_moves_on_to_the_next_model(calls) -> None:
+    """A 200 with no content is a bad candidate, not a dead provider.
+
+    The free catalogue has vision-only endpoints and models that spend the whole
+    token budget on hidden reasoning; both answer 200 with ``content: ""``. The
+    owner should get the next model's answer, not an offline fallback.
+    """
+    _made, fake_post = calls
+    fake_post.script = {"one:free": "empty"}
+    provider = _provider()
+    reply = await provider.converse([AIMessage("user", "hi")])
+    assert reply == "reply from two:free"
+    assert provider.active_model == "two:free"
+    assert provider.failures == 0
+
+
+async def test_every_model_empty_is_reported_as_a_bad_response(calls) -> None:
+    _made, fake_post = calls
+    fake_post.script = {"one:free": "empty", "two:free": "empty"}
+    provider = _provider()
+    with pytest.raises(AIError) as caught:
+        await provider.converse([AIMessage("user", "hi")])
+    assert caught.value.kind == "bad_response"

@@ -210,8 +210,8 @@ class AIProvider:
 
         if not self.models or self.models == ["auto"]:
             await self.discover_models()
-        data: object = None
         last_error: AIError | None = None
+        content = ""
         for candidate in self.models or [self.model]:
             payload = {
                 "model": candidate,
@@ -231,28 +231,26 @@ class AIProvider:
                 if exc.kind == "unauthorized":
                     break  # a wrong key will not work with the next model either
                 continue
+            # A free catalogue contains models that answer 200 with no content:
+            # vision-only endpoints, and models that spend the whole budget on
+            # hidden reasoning. That is a bad candidate, not a dead provider, so
+            # the next one gets a turn instead of the user getting nothing.
+            content = _content_of(data)
+            if not content:
+                last_error = AIError("AI returned an empty response", kind="bad_response")
+                continue
             self.active_model = candidate
             break
-        if data is None and not self._discovered:
+        if not content and not self._discovered:
             # Every configured slug is probably retired. Ask the gateway what
             # actually exists right now and retry once with its free models.
             if await self.discover_models():
                 return await self.converse(
                     messages, max_tokens=max_tokens, temperature=temperature
                 )
-        if data is None:
+        if not content:
             self.failures += 1
             raise last_error or AIError("AI provider is not configured", kind="disabled")
-
-        try:
-            choices = data["choices"]
-            content = choices[0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as exc:
-            self.failures += 1
-            raise AIError("unexpected AI response shape", kind="bad_response") from exc
-        if not isinstance(content, str) or not content.strip():
-            self.failures += 1
-            raise AIError("AI returned an empty response", kind="bad_response")
         return content.strip()
 
     async def chat(self, messages: Sequence[AIMessage], *, max_tokens: int = 400) -> str:
@@ -261,6 +259,17 @@ class AIProvider:
         prompt = "\n\n".join(message.content for message in messages if message.role == "user")
         system = "\n\n".join(message.content for message in messages if message.role == "system") or None
         return await self.complete(prompt, system=system, max_tokens=max_tokens)
+
+
+def _content_of(data: object) -> str:
+    """The reply text in a completion, or ``""`` when the shape is unusable."""
+    try:
+        content = data["choices"][0]["message"]["content"]  # type: ignore[index]
+    except (KeyError, IndexError, TypeError):
+        return ""
+    if not isinstance(content, str):
+        return ""
+    return content.strip()
 
 
 def neutral_ai_provider() -> AIProvider:
