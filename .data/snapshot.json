@@ -1,6 +1,6 @@
 {
   "app": "havoc",
-  "created_at": "2026-10-29T21:59:30+00:00",
+  "created_at": "2026-10-29T22:04:31+00:00",
   "last_restore": {
     "counts": {
       "bookmarks": 1,
@@ -91,9 +91,9 @@
         "updated_at": "2026-10-29T11:20:32+00:00"
       },
       {
-        "enabled": 0,
+        "enabled": 1,
         "name": "clock",
-        "updated_at": "2026-10-29T19:51:16+00:00"
+        "updated_at": "2026-10-29T22:03:57+00:00"
       },
       {
         "enabled": 0,
@@ -137,25 +137,54 @@
     "notes": [],
     "plugins": [],
     "profile_presets": [],
-    "profile_snapshots": [],
+    "profile_snapshots": [
+      {
+        "captured_at": "2026-10-29T22:03:57+00:00",
+        "field": "first_name",
+        "id": 1,
+        "value": "Him"
+      },
+      {
+        "captured_at": "2026-10-29T22:03:57+00:00",
+        "field": "last_name",
+        "id": 2,
+        "value": null
+      },
+      {
+        "captured_at": "2026-10-29T22:03:57+00:00",
+        "field": "bio",
+        "id": 3,
+        "value": "Another day goes by"
+      }
+    ],
     "reaction_rules": [],
     "reminders": [],
     "schedules": [],
     "settings": [
       {
         "key": "clock.enabled",
-        "updated_at": "2026-10-29T19:51:16+00:00",
-        "value": "false"
+        "updated_at": "2026-10-29T22:03:57+00:00",
+        "value": "true"
       },
       {
         "key": "ai.usage",
-        "updated_at": "2026-10-29T21:59:02+00:00",
-        "value": "{\"2b9beacf67a2|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-29\",\"count\":1}}"
+        "updated_at": "2026-10-29T22:03:21+00:00",
+        "value": "{\"2b9beacf67a2|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-29\",\"count\":3},\"e8bfd373256a|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-29\",\"count\":3}}"
       },
       {
         "key": "ai.health",
-        "updated_at": "2026-10-29T21:59:02+00:00",
-        "value": "{\"2b9beacf67a2\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":1,\"failures\":0}}"
+        "updated_at": "2026-10-29T22:03:21+00:00",
+        "value": "{\"2b9beacf67a2\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":3,\"failures\":0},\"e8bfd373256a\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":3,\"failures\":0}}"
+      },
+      {
+        "key": "clock.timezone",
+        "updated_at": "2026-10-29T22:03:57+00:00",
+        "value": "\"Asia/Tehran\""
+      },
+      {
+        "key": "clock.template",
+        "updated_at": "2026-10-29T22:03:57+00:00",
+        "value": "\"◷ {time}\""
       }
     ],
     "templates": [],
