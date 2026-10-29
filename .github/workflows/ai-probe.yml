@@ -169,7 +169,27 @@ jobs:
             exit 0
           fi
           git commit -qm "ci: ai probe result [skip ci]"
-          git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}" || echo "::warning::Could not publish the probe result."
+          # The running bot commits snapshots every few minutes, so the branch
+          # usually moves while this job runs. Rebase and retry; a lost publish
+          # is a lost record of a real failure, which is the thing we need.
+          for attempt in 1 2 3; do
+            if git pull -q --rebase origin "${GITHUB_REF_NAME}" && \
+               git push -q origin "HEAD:refs/heads/${GITHUB_REF_NAME}"; then
+              echo "published on attempt ${attempt}"
+              exit 0
+            fi
+            git rebase --abort 2>/dev/null || true
+            sleep 5
+          done
+          echo "::warning::Could not publish the probe result; the artifact still has it."
+
+      - name: Keep the record as an artifact too
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-probe
+          path: .ai-probe.json
+          if-no-files-found: warn
 
       - name: Fail the job when the model did not answer
         if: always()
