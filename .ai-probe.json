@@ -1,7 +1,8 @@
 {
-  "checked_at": "2026-10-29T19:51:30Z",
+  "checked_at": "2026-10-29T19:53:01Z",
   "exit_code": 1,
   "ok": false,
   "failure": "AI: FAILED (unauthorized) — HTTP 403: <!DOCTYPE html>",
-  "answer": "AI: https://openrouter.ai/api/v1 · models: auto\nPrompt: what is 2+2? answer with the number and nothing else\nAI: FAILED (unauthorized) — HTTP 403: <!DOCTYPE html>\n<!--[if lt IE 7]> <html class=\"no-js ie6 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 7]>    <html class=\"no-js ie7 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 8]>    <html class=\"no-js ie8 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if gt IE 8]><!--> <html class=\"no-js\" lang=\"en-US\"> <!--<![endif]-->\n<head>\n<title>Attention Required! | Cloudflare</title>\n<meta charset=\"UTF-8\" />\n<meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\" />\n<meta http-equiv=\"X-UA-Compatible\""
+  "answer": "AI: https://openrouter.ai/api/v1 · models: auto\nPrompt: what is 2+2? answer with the number and nothing else\nAI: FAILED (unauthorized) — HTTP 403: <!DOCTYPE html>\n<!--[if lt IE 7]> <html class=\"no-js ie6 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 7]>    <html class=\"no-js ie7 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 8]>    <html class=\"no-js ie8 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if gt IE 8]><!--> <html class=\"no-js\" lang=\"en-US\"> <!--<![endif]-->\n<head>\n<title>Attention Required! | Cloudflare</title>\n<meta charset=\"UTF-8\" />\n<meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\" />\n<meta http-equiv=\"X-UA-Compatible\"",
+  "diagnostics": "base https://openrouter.ai/api/v1\nmodels anonymous: 200\nmodels with key: 200\nmodels with browser UA: 200\nbody head: {\"data\":[{\"id\":\"particle-ai/particle-1\",\"canonical_slug\":\"particle-ai/particle-1-20261027\",\"hugging_face_id\":null,\"name\":\"Particle AI: Particle-1\",\"created\":1793207893,\"description\":\"Particle-1 is a t"
 }
