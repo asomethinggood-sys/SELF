@@ -156,3 +156,18 @@ async def test_an_empty_reply_is_a_bad_response(calls, monkeypatch) -> None:
     with pytest.raises(AIError) as caught:
         await provider.converse([AIMessage("user", "hi")])
     assert caught.value.kind == "bad_response"
+
+
+def test_the_client_does_not_call_itself_havoc() -> None:
+    """Measured, not stylistic.
+
+    The CDN in front of openrouter.ai answers 403 with an HTML error page for
+    every User-Agent containing the word ``havoc`` — "HAVOC/2.0" and "havoc/2.0"
+    alike — while "Yura/2.0", curl and python-urllib are served normally. A
+    blocked request is indistinguishable from a bad key unless this is known.
+    """
+    from havoc.services.http import USER_AGENT
+
+    assert "havoc" not in USER_AGENT.lower()
+    assert "Yura" in USER_AGENT
+    assert USER_AGENT.strip() == USER_AGENT

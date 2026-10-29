@@ -75,8 +75,9 @@ jobs:
           echo "::notice::Provider ${ai_provider:-none} · ${ai_base_url:-unset} · model ${ai_model:-auto}"
 
       - name: What the gateway says to this runner
-        # A 403 with an HTML body is Cloudflare, not the key: it helps to know
-        # whether the block is on the endpoint or on this machine's address.
+        # GET /models and POST /chat/completions, with the key, through the same
+        # HTTP helper the bot uses — so a refusal is reported as what it is
+        # instead of as "the AI failed".
         if: always()
         shell: bash
         env:
@@ -86,54 +87,8 @@ jobs:
           AI_API_KEY: ${{ steps.ai.outputs.ai_api_key }}
         run: |
           set -uo pipefail
-          base="${AI_BASE_URL:-https://openrouter.ai/api/v1}"
-          model=$(curl -s --max-time 25 "${base}/models" | python -c 'import json,sys;d=json.load(sys.stdin).get("data") or [];ids=[m["id"] for m in d if str(m.get("id","")).endswith(":free")];print(sorted(ids)[0] if ids else "meta-llama/llama-3.3-70b-instruct:free")' 2>/dev/null || echo "meta-llama/llama-3.3-70b-instruct:free")
-          payload=$(printf '{"model":"%s","messages":[{"role":"user","content":"2+2"}],"max_tokens":16}' "$model")
-          {
-            echo "base ${base}"
-            echo "model ${model}"
-            echo -n "models anonymous: "
-            curl -s -o /dev/null -w '%{http_code}\n' --max-time 20 "${base}/models" || echo "curl failed"
-            echo -n "chat plain: "
-            curl -s -o .d1 -w '%{http_code}\n' --max-time 40 -X POST "${base}/chat/completions" \
-              -H "Authorization: Bearer ${AI_API_KEY}" -H "Content-Type: application/json" \
-              -d "$payload" || echo "curl failed"
-            echo "  body: $(head -c 220 .d1 | tr '\n' ' ')"
-            echo -n "chat with referer+title: "
-            curl -s -o .d2 -w '%{http_code}\n' --max-time 40 -X POST "${base}/chat/completions" \
-              -H "Authorization: Bearer ${AI_API_KEY}" -H "Content-Type: application/json" \
-              -H "HTTP-Referer: https://github.com/asomethinggood-sys/SELF" -H "X-Title: HAVOC Yura" \
-              -d "$payload" || echo "curl failed"
-            echo "  body: $(head -c 220 .d2 | tr '\n' ' ')"
-            # The CDN in front of the gateway refuses any User-Agent containing
-            # the word HAVOC (403 with an HTML body, not a JSON error). Find a
-            # name that passes on both endpoints instead of guessing once.
-            for ua in \
-              "HAVOC/2.0 (+https://github.com/asomethinggood-sys/SELF)" \
-              "havoc/2.0" \
-              "Yura/2.0 (+https://github.com/asomethinggood-sys/SELF)" \
-              "Yura-userbot/2.0 (+https://github.com/asomethinggood-sys/SELF)" \
-              "python-urllib/3.11" \
-              "curl/8.5.0"; do
-              get=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 -A "$ua" \
-                -H "Authorization: Bearer ${AI_API_KEY}" "${base}/models" || echo failed)
-              post=$(curl -s -o /dev/null -w '%{http_code}' --max-time 40 -X POST "${base}/chat/completions" \
-                -A "$ua" -H "Authorization: Bearer ${AI_API_KEY}" \
-                -H "Content-Type: application/json" -H "Accept: application/json" \
-                -d "$payload" || echo failed)
-              echo "ua [${ua}] -> models ${get} · chat ${post}"
-            done
-            echo -n "chat with browser UA: "
-            curl -s -o .d3 -w '%{http_code}\n' --max-time 40 -X POST "${base}/chat/completions" \
-              -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36" \
-              -H "Authorization: Bearer ${AI_API_KEY}" -H "Content-Type: application/json" \
-              -d "$payload" || echo "curl failed"
-            echo "  body: $(head -c 220 .d3 | tr '\n' ' ')"
-          } > .ai-diag.txt 2>&1
-          echo "--- provider probe ---" >> .ai-diag.txt
-          python scripts/probe_ai.py >> .ai-diag.txt 2>&1 || true
+          python scripts/probe_ai.py > .ai-diag.txt 2>&1 || true
           cat .ai-diag.txt
-          rm -f .d1 .d2 .d3 .d5
 
       - name: Ask it something it cannot fake
         id: ask

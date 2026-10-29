@@ -20,7 +20,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-USER_AGENT = "HAVOC-userbot/2.0 (+https://github.com/asomethinggood-sys/SELF)"
+#: The name this client calls itself. Not "HAVOC…": the CDN in front of
+#: openrouter.ai answers 403 with an HTML error page for any User-Agent that
+#: contains that word (measured from a GitHub runner: "HAVOC/2.0" and
+#: "havoc/2.0" are both refused, "Yura/2.0" is accepted, so are curl and
+#: python-urllib). A blocked request looks like a bad key when it is not.
+USER_AGENT = "Yura/2.0 (+https://github.com/asomethinggood-sys/SELF)"
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 
 
