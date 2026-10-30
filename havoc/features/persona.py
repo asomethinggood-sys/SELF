@@ -24,7 +24,10 @@ from typing import Any
 from .. import identity, persona, ui
 from ..command_registry import Command, CommandContext, CommandError
 from ..event_engine import EventType, NormalizedEvent
+from ..services.vision import IMAGE_MEDIA_TYPES, Picture, looks_like_picture
+from ..services.vision import download as download_picture
 from ..utils.formatting import escape
+from ..utils.markup import rich
 from ..utils.security import redact_text
 from ..utils.text import truncate
 
@@ -257,6 +260,18 @@ async def _key_command(ctx: CommandContext, words: list[str]) -> str:
     )
 
 
+def _visible(answer: Any) -> str:
+    """Telegram HTML for an answer.
+
+    Only a model writes markdown. The offline bank is hand-made and ends lines
+    with kaomoji (``╰(*´︶`*)╯``), which must arrive exactly as authored — so model
+    text is rendered, everything else is only escaped.
+    """
+    if answer.source == "model":
+        return rich(answer.text)
+    return escape(answer.text)
+
+
 async def _chat(ctx: CommandContext, text: str, *, greeting: bool = False) -> None:
     probe = _invocation_text(ctx) or " ".join(filter(None, [ctx.sub or "", *ctx.args]))
     language = _language_for(ctx, text, probe)
@@ -264,7 +279,11 @@ async def _chat(ctx: CommandContext, text: str, *, greeting: bool = False) -> No
         text, chat_id=ctx.chat_id, language=language, greeting=greeting
     )
     if answer.text:
-        await ctx.reply(escape(answer.text))
+        # `rich` for model text, not `escape`: she writes **bold** and > quotes
+        # because that is how a model writes, and escaping them shipped the
+        # asterisks. `ctx.reply` already threads to the message that asked, so the
+        # answer can be replied to in turn.
+        await ctx.reply(_visible(answer))
     for path in answer.files:
         await ctx.runtime.sender.send_media(
             ctx.chat_id,
@@ -362,13 +381,20 @@ class PersonaReplies:
         first = stripped.split(maxsplit=1)[0].lower() if stripped else ""
         return first in _INTERNAL_WORDS
 
+    #: A reply to her is addressed to her even if it is one word, so the "is this
+    #: one of her own lines?" guard must not be the only thing deciding. It still
+    #: guards against answering her own messages when a quote is involved.
     async def on_self_message(self, event: NormalizedEvent) -> None:
-        if not event.is_outgoing or not event.text.strip():
+        if not event.is_outgoing:
+            return
+        picture = await self._picture(event)
+        if picture is None and not event.text.strip():
             return
         self_id = self.self_id
         if self_id is None or event.chat_id != self_id:
             self.skipped += 1
             return
+        quoted = await self._quoted_text(event)
         if (
             persona.is_own_line(event.text)
             or self.runtime.yura_chat.was_sent(event.chat_id, event.text)
@@ -387,20 +413,64 @@ class PersonaReplies:
 
         language = await self._language(event)
         answer = await self.runtime.yura_chat.answer(
-            event.text, chat_id=event.chat_id, language=language
+            event.text,
+            chat_id=event.chat_id,
+            language=language,
+            picture=picture,
+            quoted=quoted,
         )
         self._last_at = now
         self._window.append(now)
         self.answered += 1
         self.logger.info(
-            "yura: answering '%s' in Saved Messages", redact_text(truncate(event.text, 40))
+            "yura: answering '%s' in Saved Messages%s",
+            redact_text(truncate(event.text or event.media_type or "", 40)),
+            " (a picture)" if picture is not None else "",
         )
         if answer.text:
-            await self.runtime.sender.send(event.chat_id, escape(answer.text))
+            # Threaded: her answer is a Telegram reply to the message it answers,
+            # so the conversation reads as a conversation and the owner can reply
+            # straight back to it.
+            await self.runtime.sender.send(
+                event.chat_id, _visible(answer), reply_to=event.message_id
+            )
         for path in answer.files:
             await self.runtime.sender.send_media(
                 event.chat_id, str(path), caption=escape(truncate(path.name, 90))
             )
+
+    async def _picture(self, event: NormalizedEvent) -> Picture | None:
+        """The image the owner attached, if there is one worth looking at."""
+        if event.media_type not in IMAGE_MEDIA_TYPES:
+            return None
+        message = event.raw
+        if message is None or not looks_like_picture(getattr(message, "media", None)):
+            return None
+        return await download_picture(self.runtime.client, message)
+
+    async def _quoted_text(self, event: NormalizedEvent) -> str:
+        """The message the owner used Telegram's reply button on, if it was hers."""
+        if not event.is_reply:
+            return ""
+        message = event.raw
+        getter = getattr(message, "get_reply_message", None)
+        if getter is None:
+            return ""
+        try:
+            replied = await getter()
+        except Exception:  # noqa: BLE001 - a deleted target is not an error
+            return ""
+        if replied is None:
+            return ""
+        text = " ".join(str(getattr(replied, "raw_text", "") or "").split())
+        if not text:
+            return "a picture" if getattr(replied, "media", None) is not None else ""
+        # Only quote something she said, or the owner's own words they pointed
+        # at; quoting a third party would leak their message into the prompt.
+        sender = getattr(replied, "sender_id", None)
+        if sender is not None and self.self_id is not None and sender != self.self_id:
+            return ""
+        return text[:600]
 
     async def _language(self, event: NormalizedEvent) -> str:
         if event.language in {"en", "fa"}:

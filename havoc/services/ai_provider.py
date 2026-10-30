@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from .http import HttpError, get_json, post_json
 
@@ -32,8 +33,42 @@ class AIError(Exception):
 
 @dataclass(frozen=True)
 class AIMessage:
+    """One turn. ``content`` is text, or a list of OpenAI-shaped parts.
+
+    A list is how a picture travels: ``[{"type": "text", ...},
+    {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,…"}}]``.
+    Both providers this project speaks to accept that shape, so a photo costs no
+    extra client code — only the router has to know that not every model can see.
+    """
+
     role: str
-    content: str
+    content: Any
+
+    @property
+    def is_text(self) -> bool:
+        return isinstance(self.content, str)
+
+    @property
+    def text(self) -> str:
+        """The text part, whatever shape the turn has."""
+        if isinstance(self.content, str):
+            return self.content
+        if isinstance(self.content, list):
+            return "\n".join(
+                str(part.get("text", ""))
+                for part in self.content
+                if isinstance(part, dict) and part.get("type") == "text"
+            )
+        return str(self.content or "")
+
+    @property
+    def has_image(self) -> bool:
+        if not isinstance(self.content, list):
+            return False
+        return any(
+            isinstance(part, dict) and part.get("type") in {"image_url", "input_image"}
+            for part in self.content
+        )
 
 
 #: Substrings that make a model a good default for Yura, best first. Used only
@@ -219,7 +254,7 @@ class AIProvider:
         thread = [
             {"role": message.role, "content": message.content}
             for message in messages
-            if message.content.strip()
+            if message.text.strip() or message.has_image
         ]
         if not any(message["role"] == "user" for message in thread):
             raise AIError("no user message in the conversation", kind="bad_response")

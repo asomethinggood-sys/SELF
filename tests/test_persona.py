@@ -166,6 +166,22 @@ def test_the_prompt_carries_voice_memory_and_the_honesty_rule() -> None:
     assert "یورا" in farsi and "اسمش ساراست" in farsi
 
 
+def test_the_prompt_tells_her_that_the_formatting_is_real() -> None:
+    """She wrote markdown and it was escaped: the prompt has to name the marks."""
+    prompt = persona.system_prompt("en")
+    assert "**bold**" in prompt
+    assert "*italic*" in prompt
+    assert "> when quoting" in prompt
+    farsi = persona.system_prompt("fa")
+    assert "**بولد**" in farsi and "*ایتالیک*" in farsi
+
+
+def test_the_prompt_never_asks_for_colour_emoji() -> None:
+    """Standing design rule: symbols, not emoji."""
+    assert "No colour emoji" in persona.system_prompt("en")
+    assert "ایموجی رنگی" in persona.system_prompt("fa")
+
+
 # ---------------------------------------------------------------------------
 # The command
 # ---------------------------------------------------------------------------

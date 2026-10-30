@@ -1,0 +1,132 @@
+name: Format probe
+
+# Two claims that a unit test cannot make honestly:
+#
+#   1. the model's markdown arrives as real Telegram formatting, not asterisks;
+#   2. she can look at a picture.
+#
+# Both are checked against the real provider through the production router, with
+# the real persona system prompt and the real `rich()` renderer. The transcript —
+# what the model said *and* the HTML the owner would see — is committed to
+# `.format-probe.json`, so the proof is readable without run logs.
+#
+# No Telegram, no login, no session: this job touches only the AI keys.
+
+on:
+  push:
+    paths:
+      - "havoc/utils/markup.py"
+      - "havoc/services/vision.py"
+      - "havoc/services/yura_chat.py"
+      - "havoc/features/persona.py"
+      - "scripts/format_probe.py"
+      - ".github/workflows/format-probe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: havoc-format-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    name: ask the model for bold and for a colour
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Ask the real model
+        id: probe
+        shell: bash
+        continue-on-error: true
+        env:
+          DATA_DIR: ${{ github.workspace }}/.runtime/data
+          LOG_DIR: ${{ github.workspace }}/.runtime/logs
+        run: |
+          set -uo pipefail
+          python scripts/format_probe.py > .format-probe.txt 2>&1
+          status=$?
+          cat .format-probe.txt
+          printf '%s\n' "$status" > .format-probe.status
+          {
+            echo "### Format probe"
+            echo ""
+            echo '```'
+            cat .format-probe.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            echo "::warning::The probe did not pass; see .format-probe.json for what came back."
+          fi
+
+      - name: Publish the transcript
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          if [ ! -f .format-probe.json ]; then
+            echo "::warning::No record was written."
+            exit 0
+          fi
+          git config user.name "HAVOC format probe"
+          git config user.email "probe@users.noreply.github.com"
+          git add .format-probe.json
+          if git diff --cached --quiet; then
+            echo "nothing new to publish"
+            exit 0
+          fi
+          git commit -qm "ci: format probe result [skip ci]"
+          for attempt in 1 2 3; do
+            if git pull -q --rebase origin "${GITHUB_REF_NAME}" && \
+               git push -q origin "HEAD:refs/heads/${GITHUB_REF_NAME}"; then
+              echo "published on attempt ${attempt}"
+              exit 0
+            fi
+            git rebase --abort 2>/dev/null || true
+            sleep 5
+          done
+          echo "::warning::Could not publish the record; the artifact still has it."
+
+      - name: Keep the record as an artifact too
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: format-probe
+          path: .format-probe.json
+          if-no-files-found: warn
+
+      - name: Report, without failing the branch over a spent daily allowance
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          rm -f .format-probe.txt .format-probe.status
+          if [ ! -f .format-probe.json ]; then
+            echo "::error::The probe produced no record at all."
+            exit 1
+          fi
+          ok=$(python -c 'import json;print("yes" if json.load(open(".format-probe.json")).get("ok") else "no")')
+          if [ "$ok" = "yes" ]; then
+            echo "formatting and vision both answered for real"
+            exit 0
+          fi
+          if grep -qi "rate_limited\|free-models-per-day" .format-probe.json; then
+            echo "::warning::Free-tier limit reached; this is a budget fact, not a broken feature. The record says when."
+            exit 0
+          fi
+          echo "::error::The probe failed; .format-probe.json holds the raw reply and the failure kind."
+          exit 1

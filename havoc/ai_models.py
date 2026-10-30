@@ -58,6 +58,9 @@ class ModelSpec:
     rpd: int = 0  # requests per day, 0 = unlimited/unknown
     available: bool = True
     note: str = ""
+    #: Can the model see a picture? Google's Gemini family can; the gateway's
+    #: "auto" routes to whatever is free, so it is only a maybe.
+    vision: bool = True
 
     @property
     def key(self) -> str:
@@ -139,6 +142,11 @@ def available_models(provider: str | None = None) -> tuple[ModelSpec, ...]:
     return tuple(
         spec for spec in catalogue() if spec.available and (provider is None or spec.provider == provider)
     )
+
+
+def vision_models() -> tuple[ModelSpec, ...]:
+    """Models that can look at a picture, best first."""
+    return tuple(spec for spec in auto_plan() if spec.vision)
 
 
 def auto_plan() -> tuple[ModelSpec, ...]:

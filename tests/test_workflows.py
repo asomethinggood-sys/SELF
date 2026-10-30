@@ -158,6 +158,31 @@ def test_missing_credentials_message_names_the_form() -> None:
 
 
 # ---------------------------------------------------------------------------
+# format-probe: formatting and vision, proven against the real model
+# ---------------------------------------------------------------------------
+def test_the_format_probe_runs_the_production_renderer() -> None:
+    """A probe that tests a different path than production is a probe that lies."""
+    job = _load("format-probe.yml")["jobs"]["probe"]
+    scripts = "\n".join(step.get("run", "") for step in job["steps"])
+    assert "scripts/format_probe.py" in scripts
+
+
+def test_the_format_probe_needs_no_telegram_login() -> None:
+    data = _load("format-probe.yml")
+    text = str(data)
+    assert "telegram-login" not in text
+    assert "SESSION" not in text
+    assert "API_ID" not in text
+
+
+def test_the_format_probe_publishes_what_it_saw() -> None:
+    job = _load("format-probe.yml")["jobs"]["probe"]
+    scripts = "\n".join(step.get("run", "") for step in job["steps"])
+    assert ".format-probe.json" in scripts
+    assert "git push" in scripts
+
+
+# ---------------------------------------------------------------------------
 # auth-and-run: the one-run login that survives GitHub's job ceiling
 # ---------------------------------------------------------------------------
 def test_auth_and_run_is_triggerable_without_dispatch_permission() -> None:

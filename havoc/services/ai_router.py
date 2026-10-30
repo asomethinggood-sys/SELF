@@ -328,14 +328,21 @@ class AIRouter:
             return find(self.selection)
         return None
 
-    def plan(self) -> list[tuple[Credential, ModelSpec]]:
-        """The ordered (credential, model) pairs one message may try."""
+    def plan(self, *, vision: bool = False) -> list[tuple[Credential, ModelSpec]]:
+        """The ordered (credential, model) pairs one message may try.
+
+        ``vision`` narrows the list to models that can see a picture. Without the
+        filter a photo would be sent to a text-only model, which answers 400 and
+        burns a request from a 500-a-day allowance to learn nothing.
+        """
         now = utc_now()
         chosen = self.selected_spec()
         if chosen is not None:
-            specs = [chosen]
+            specs = [chosen] if (chosen.vision or not vision) else []
         else:
             specs = list(auto_plan())
+        if vision:
+            specs = [spec for spec in specs if spec.vision]
 
         pairs: list[tuple[Credential, ModelSpec]] = []
         for spec in specs:
@@ -378,7 +385,8 @@ class AIRouter:
         self.requests += 1
         attempts: list[Attempt] = []
         last: AIError | None = None
-        for credential, spec in self.plan():
+        wants_vision = any(getattr(message, "has_image", False) for message in messages)
+        for credential, spec in self.plan(vision=wants_vision):
             if len(attempts) >= MAX_ATTEMPTS:
                 break
             # The plan was drawn before this message touched anything; a key that

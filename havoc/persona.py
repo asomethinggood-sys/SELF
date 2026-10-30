@@ -189,6 +189,28 @@ _TOOLS = """Hidden directives — use them, but never explain them:
   it is long, drop the commentary, not the code.
 - Everything else you write is sent to them verbatim."""
 
+#: How she is allowed to use Telegram's formatting. This exists because the model
+#: wrote good markdown and none of it was rendered: a persona told only "be
+#: short" writes short plain lines. Told which marks are real, it uses them.
+_STYLE = {
+    "en": """Formatting is real — these marks arrive as formatting, so use them:
+- **bold** for the one thing that matters, or a headline line.
+- *italic* for an aside, a soft word, a verse.
+- start a line with > when quoting them or a poem.
+- - for a list, ``` for code or a file you are about to send.
+- one or two a message, not every line: decoration that repeats stops reading
+  as emphasis. No colour emoji; symbols like ♡ ✧ ╰(*´︶`*)╯ are yours.
+- if they send a picture, talk about what is actually in it, not a guess.""",
+    "fa": """این قالب‌ها واقعاً دیده می‌شوند، پس استفاده‌شان کن:
+- **بولد** برای تنها نکتهٔ مهم پیام، یا یک خط تیتر.
+- *ایتالیک* برای یک جملهٔ آرام، یک بیت، یا حرفی که زیر لب می‌گویی.
+- خطی را با > شروع کن وقتی از حرف او یا یک شعر نقل قول می‌کنی.
+- - برای فهرست، و ``` برای کد یا فایلی که می‌فرستی.
+- در هر پیام یکی دو تا، نه هر خط: تزئینی که تکرار شود دیگر تأکید نیست.
+  ایموجی رنگی نگذار؛ نمادها مثل ♡ ✧ ╰(*´︶`*)╯ مال خودت هستند.
+- اگر عکس فرستاد، دربارهٔ چیزی که واقعاً در عکس است حرف بزن، نه حدس.""",
+}
+
 #: Appended to the system prompt when the owner only says her name.
 CALL_HINT = """The owner just called your name with nothing attached. Answer as a
 greeting: pleased, a little dramatic, short. Do not ask a list of questions."""
@@ -204,7 +226,8 @@ def system_prompt(
 ) -> str:
     """The system message handed to the model, with memory folded in."""
     rules = _PERSONA_RULES.get(language) or _PERSONA_RULES["en"]
-    blocks = [rules, _TOOLS]
+    style = _STYLE.get(language) or _STYLE["en"]
+    blocks = [rules, style, _TOOLS]
     if greeting:
         blocks.append(CALL_HINT)
     facts = [line for line in memories if line.strip()]
@@ -227,6 +250,28 @@ def system_prompt(
 def call_prompt(language: str = "en") -> str:
     """The user-role text used when the owner only says her name."""
     return "yura" if language == "en" else "یورا"
+
+
+def picture_prompt(language: str = "en") -> str:
+    """A photo with no caption is still a question, so ask it for them."""
+    if language == "fa":
+        return "(این عکسو فرستادم. نگاهش کن و بگو چی می‌بینی.)"
+    return "(sent this picture — look at it and tell me what you see.)"
+
+
+def quoted_prompt(quoted: str, language: str = "en", question: str = "") -> str:
+    """Fold the message the owner replied to into the question.
+
+    Telegram's reply button carries the answer's target, but a model only sees
+    text: without this, "why?" pointed at nothing and she answered a question she
+    could not see.
+    """
+    quoted = " ".join(str(quoted).split())[:600]
+    if language == "fa":
+        head = f"(به این پیام جواب دادی: «{quoted}»)"
+    else:
+        head = f'(replying to: "{quoted}")'
+    return f"{head}\n{question}".strip() if question else head
 
 
 def labels(language: str) -> dict[str, str]:

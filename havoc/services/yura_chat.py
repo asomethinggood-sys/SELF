@@ -171,11 +171,24 @@ class YuraChat:
         chat_id: int,
         language: str = "en",
         greeting: bool = False,
+        picture: Any = None,
+        quoted: str = "",
     ) -> Answer:
-        """Reply to ``text``. Never raises for provider problems."""
-        prompt = text.strip() or persona.call_prompt(language)
-        if not prompt:
+        """Reply to ``text``. Never raises for provider problems.
+
+        ``picture`` is a :class:`havoc.services.vision.Picture` the owner sent —
+        she looks at it and answers about it. ``quoted`` is the message they used
+        Telegram's reply button on, so "this one?" has something to point at.
+        """
+        spoken = text.strip()
+        prompt = spoken or ("" if picture is not None else persona.call_prompt(language))
+        if not prompt and picture is None:
             return Answer(self._offline(chat_id, language))
+        if picture is not None and not prompt:
+            # A photo with no caption is still a question: "what is this?".
+            prompt = persona.picture_prompt(language)
+        if quoted.strip():
+            prompt = persona.quoted_prompt(quoted, language, prompt)
 
         history = await self.memory.history(chat_id)
         # Lines already used in this chat: the model is asked for variety, the
@@ -187,7 +200,21 @@ class YuraChat:
         # Context first, then the current turn: appending before reading would
         # put the same message in the prompt twice.
         _, messages = await self._context(chat_id, language, greeting=greeting)
-        messages.append(AIMessage("user", prompt))
+        if picture is not None:
+            # A multimodal turn: the words and the picture in one message, which
+            # is the only shape every provider accepts for a photo plus a
+            # question about it.
+            messages.append(
+                AIMessage(
+                    "user",
+                    [
+                        {"type": "text", "text": prompt},
+                        picture.part(),
+                    ],
+                )
+            )
+        else:
+            messages.append(AIMessage("user", prompt))
         await self.memory.append(chat_id, "user", prompt)
 
         reply: str | None = None
@@ -197,7 +224,8 @@ class YuraChat:
         elif self.enabled:
             try:
                 reply = await self.provider.converse(
-                    messages, max_tokens=FILE_TOKENS if _wants_file(prompt) else 700
+                    messages,
+                    max_tokens=FILE_TOKENS if _wants_file(prompt) else 700,
                 )
             except AIError as exc:
                 self.last_error = f"{exc.kind}: {exc}"
