@@ -41,6 +41,7 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from datetime import datetime
 
 #: GitHub statuses that mean "a run exists and is not finished".
 LIVE_STATUSES = frozenset({"queued", "in_progress", "requested", "waiting", "pending", "accepted"})
@@ -104,6 +105,69 @@ def live_runs(
     return wanted
 
 
+#: A run older than this is a corpse wearing a "in progress" badge: GitHub kills
+#: a job at six hours, and anything near that ceiling is holding the concurrency
+#: group for no benefit. 320 minutes leaves room to checkpoint and save.
+STALE_MINUTES = 320
+
+
+def stale_runs(
+    token: str,
+    repo: str,
+    *,
+    workflow: str = "auth-and-run.yml",
+    branch: str | None = None,
+    now: float | None = None,
+    api: str = API,
+    timeout: float = 20.0,
+) -> list[dict]:
+    """Runs that are still "in progress" long past the point of being useful."""
+    import time as _time
+
+    stamp = _time.time() if now is None else now
+    url = f"{api}/repos/{repo}/actions/runs?per_page=50"
+    if branch:
+        url += f"&branch={branch}"
+    status, body = _request("GET", url, token, timeout=timeout)
+    if status != 200:
+        raise RuntimeError(f"list runs failed: HTTP {status} {body[:200]}")
+    runs = json.loads(body).get("workflow_runs") or []
+    stale: list[dict] = []
+    for run in runs:
+        if str(run.get("status")) not in {"in_progress"}:
+            continue
+        if workflow and not str(run.get("path", "")).endswith(workflow):
+            continue
+        started = str(run.get("run_started_at") or run.get("created_at") or "")
+        try:
+            began = datetime.fromisoformat(started.replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            continue
+        if stamp - began > STALE_MINUTES * 60:
+            stale.append(run)
+    return stale
+
+
+def reap(
+    token: str,
+    repo: str,
+    *,
+    workflow: str = "auth-and-run.yml",
+    branch: str | None = None,
+    api: str = API,
+    dry_run: bool = False,
+) -> list[str]:
+    """Cancel the stale runs. Returns the ids it stopped (or would stop)."""
+    ids: list[str] = []
+    for run in stale_runs(token, repo, workflow=workflow, branch=branch, api=api):
+        run_id = str(run.get("id"))
+        ids.append(run_id)
+        if dry_run:
+            continue
+        _request("POST", f"{api}/repos/{repo}/actions/runs/{run_id}/force-cancel", token)
+    return ids
+
+
 def ensure_successor(
     token: str,
     repo: str,
@@ -156,6 +220,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--workflow", default=os.environ.get("HANDOVER_WORKFLOW", "auth-and-run.yml"))
     parser.add_argument("--dry-run", action="store_true", help="say what would happen")
     parser.add_argument("--json", action="store_true", help="print the report as JSON")
+    parser.add_argument(
+        "--reap",
+        action="store_true",
+        help=f"cancel runs stuck in progress for more than {STALE_MINUTES} minutes first",
+    )
     args = parser.parse_args(argv)
 
     token = os.environ.get("GITHUB_TOKEN", "").strip()
@@ -170,6 +239,23 @@ def main(argv: list[str] | None = None) -> int:
     if missing:
         print(f"handover: not in a GitHub Actions context ({', '.join(missing)} unset)", file=sys.stderr)
         return 1
+
+    if args.reap:
+        # A wedged run holds the concurrency group: no successor can start while
+        # it sits there, so it is stopped before the queue is considered.
+        try:
+            stopped = reap(
+                token, repo, workflow=args.workflow, branch=ref, dry_run=args.dry_run
+            )
+        except RuntimeError as exc:
+            print(f"handover: reap failed — {exc}", file=sys.stderr)
+            stopped = []
+        if stopped:
+            print(f"handover: stopped {len(stopped)} stale run(s): {', '.join(stopped)}")
+            if not args.dry_run:
+                import time as _time
+
+                _time.sleep(30)  # let GitHub clear the group before refilling it
 
     report = ensure_successor(
         token, repo, ref, args.workflow, self_run_id=self_run, dry_run=args.dry_run

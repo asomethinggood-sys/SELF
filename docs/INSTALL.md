@@ -216,17 +216,26 @@ chain hold:
    running bot notices the empty queue and queues another. A push *queues*
    behind the running bot (it does not cancel it any more), and the bot stands
    down only once it has confirmed a replacement exists.
-3. **The supervisor is the last resort.** If nothing is running *and* nothing is
+3. **A wedged run is reaped.** The concurrency group admits one running and one
+   pending run, and GitHub cancels the *older pending* one whenever a third
+   arrives — so a run stuck past the six-hour ceiling in front can keep a fresh
+   push from ever starting. `scripts/handover.py --reap` cancels anything still
+   "in progress" after 320 minutes before it refills the queue, and the
+   **Restart** workflow stops everything and starts clean in one click.
+4. **The supervisor is the last resort.** If nothing is running *and* nothing is
    queued — a cancellation during the first few seconds of a run, for example —
    `.github/workflows/supervisor.yml` dispatches one. GitHub only fires
    `schedule` for workflows on the **default branch**, so this one is only a
    working safety net once it lives on `main`; from any other branch it runs
    when you press *Run workflow*, not on a timer.
 
-Two honest limits: there is a boot gap of about a minute while the next runner
-installs the package, and a bot that is not running cannot hear you — nothing
-can start it from inside Telegram, which is exactly why the queue is kept full
-before anything goes wrong.
+Two honest limits. There is a boot gap of about a minute while the next runner
+installs the package — that gap is the runner, not the bot's design, and a VPS
+does not have it. And a bot that is not running cannot hear you: nothing can
+start it from inside Telegram, which is exactly why the queue is kept full
+*before* anything goes wrong. "Saying her name and she comes back" holds because
+the replacement is already queued when you say it, not because a message can
+wake a dead process.
 
 One trap worth knowing, because it cost a six-hour outage: **`GITHUB_TOKEN` is a
 secret, not one of the automatic `GITHUB_*` variables.** A step that talks to the

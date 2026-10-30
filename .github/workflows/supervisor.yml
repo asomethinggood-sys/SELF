@@ -59,7 +59,9 @@ jobs:
           # or in progress, and if not, dispatch one". `--json` prints the
           # decision so the log and the summary say what happened.
           log=handover.json
-          if python3 scripts/handover.py --json > "$log" 2>handover.err; then
+          # --reap first: a run stuck in progress past the six-hour ceiling holds
+          # the concurrency group, so no successor can start while it sits there.
+          if python3 scripts/handover.py --reap --json > "$log" 2>handover.err; then
             action=$(python3 -c 'import json;print(json.load(open("handover.json"))["action"])')
           else
             action="error"
@@ -73,6 +75,7 @@ jobs:
             case "$action" in
               already-covered) echo "A run was already queued or running; nothing to do." ;;
               dispatched)      echo "Nothing was alive. Queued \`auth-and-run.yml\`." ;;
+              already-covered) echo "A run was already queued or running; nothing to do." ;;
               *)               echo "Could not queue a replacement. See the log." ;;
             esac
             echo ""

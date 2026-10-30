@@ -171,6 +171,7 @@ def test_the_supervisor_targets_a_workflow_that_exists() -> None:
     target = data["jobs"]["supervise"]["steps"][1]["env"]["HANDOVER_WORKFLOW"]
     assert target in {path.name for path in WORKFLOWS.glob("*.yml")}, target
     assert "scripts/handover.py" in script
+    assert "--reap" in script, "a wedged run blocks the group the supervisor is refilling"
     assert data["permissions"]["actions"] == "write"
 
 
@@ -231,3 +232,48 @@ def test_restart_does_not_use_the_refusing_chain_helper() -> None:
     # The comment may mention it; the code must not call it.
     code = "\n".join(line for line in start.splitlines() if not line.strip().startswith("#"))
     assert "handover.py" not in code
+
+
+# ---------------------------------------------------------------------------
+# Reaping a wedged run
+# ---------------------------------------------------------------------------
+def _iso_ago(minutes: float) -> str:
+    import datetime
+
+    moment = datetime.datetime.now(datetime.UTC) - datetime.timedelta(minutes=minutes)
+    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def test_a_run_past_the_ceiling_is_stale(api) -> None:
+    api([_run(id=7, status="in_progress", run_started_at=_iso_ago(400))])
+    stale = handover.stale_runs("t0ken", "me/repo")
+    assert [run["id"] for run in stale] == [7]
+
+
+def test_a_healthy_run_is_not(api) -> None:
+    api([_run(id=8, status="in_progress", run_started_at=_iso_ago(30))])
+    assert handover.stale_runs("t0ken", "me/repo") == []
+
+
+def test_a_finished_run_is_never_reaped(api) -> None:
+    api([_run(id=9, status="completed", run_started_at=_iso_ago(400))])
+    assert handover.stale_runs("t0ken", "me/repo") == []
+
+
+def test_reap_cancels_only_the_stale_ones(api) -> None:
+    fake = api(
+        [
+            _run(id=1, status="in_progress", run_started_at=_iso_ago(400)),
+            _run(id=2, status="in_progress", run_started_at=_iso_ago(10)),
+        ]
+    )
+    stopped = handover.reap("t0ken", "me/repo")
+    assert stopped == ["1"]
+    assert any("runs/1/force-cancel" in url for _, url, _ in fake.calls)
+    assert not any("runs/2/force-cancel" in url for _, url, _ in fake.calls)
+
+
+def test_a_dry_run_reap_stops_nothing(api) -> None:
+    fake = api([_run(id=3, status="in_progress", run_started_at=_iso_ago(400))])
+    assert handover.reap("t0ken", "me/repo", dry_run=True) == ["3"]
+    assert not any("force-cancel" in url for _, url, _ in fake.calls)
