@@ -7,12 +7,12 @@
     "bookmarks": 1,
     "chat_settings": 1,
     "features": 17,
-    "jobs": 591,
+    "jobs": 601,
     "language_prefs": 1,
-    "profile_history": 590,
+    "profile_history": 600,
     "profile_snapshots": 3,
     "schema_migrations": 6,
-    "settings": 13,
+    "settings": 14,
     "sqlite_sequence": 6,
     "usage_stats": 17,
     "yura_history": 68,
@@ -29,18 +29,18 @@
     "diagnostics": 0,
     "features": 17,
     "interactive_sessions": 0,
-    "jobs": 591,
+    "jobs": 601,
     "language_prefs": 1,
     "notes": 0,
     "plugins": 0,
-    "profile_history": 590,
+    "profile_history": 600,
     "profile_presets": 0,
     "profile_snapshots": 3,
     "reaction_rules": 0,
     "reminders": 0,
     "schedules": 0,
     "schema_migrations": 6,
-    "settings": 13,
+    "settings": 14,
     "sqlite_sequence": 6,
     "templates": 0,
     "triggers": 0,
@@ -53,13 +53,13 @@
   },
   "restored_from": {
     "cache_hit": "false",
-    "run_id": "41044274210"
+    "run_id": "41045595679"
   },
-  "boot_log_lines": 24,
+  "boot_log_lines": 25,
   "boot_log_tail": [
-    "2026-10-30T10:36:14+00:00 run=41041816446 boots=22 db=450560B",
     "2026-10-30T10:45:59+00:00 run=41042986943 boots=23 db=450560B",
-    "2026-10-30T10:56:47+00:00 run=41044274210 boots=24 db=454656B"
+    "2026-10-30T10:56:47+00:00 run=41044274210 boots=24 db=454656B",
+    "2026-10-30T11:06:38+00:00 run=41045595679 boots=25 db=462848B"
   ],
-  "boots": 24
+  "boots": 25
 }
