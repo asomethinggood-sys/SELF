@@ -384,7 +384,14 @@ class YuraChat:
             reply, lessons, getattr(who, "user_id", None)
         )
         answer = await self._apply(
-            reply, chat_id=chat_id, language=language, incoming=spoken, worn=worn
+            reply,
+            chat_id=chat_id,
+            language=language,
+            incoming=spoken,
+            # Only her model answers get restyled. The offline bank is hand-written
+            # and line-perfect; swapping its ornaments would be editing a poem to
+            # fix its punctuation.
+            worn=worn if source == "model" else set(),
         )
         if not answer.text and not answer.files:
             answer.text = fallback

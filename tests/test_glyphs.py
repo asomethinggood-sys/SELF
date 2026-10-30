@@ -11,6 +11,7 @@ import unicodedata
 
 import pytest
 
+from havoc import persona
 from havoc.utils import glyphs
 
 
@@ -104,3 +105,25 @@ def test_the_brief_always_offers_real_glyphs(language: str) -> None:
     block = persona.ornament_prompt(language, used=set())
     offered = glyphs.collect(block)
     assert len(offered) >= 6, block
+
+
+class _OfflineProvider:
+    """A provider that is not available, so the offline bank answers."""
+
+    available = False
+
+
+async def test_an_offline_line_is_never_restyled(runtime) -> None:
+    """The bank is hand-written. A swapped ornament is an edit to a poem."""
+
+    await runtime.store.set_feature("persona", True)
+    await runtime.feature_manager.refresh()
+    runtime.ai = _OfflineProvider()  # type: ignore[assignment] - the offline path
+    chat = runtime.yura_chat
+    await runtime.memory.append(100, "assistant", "✦ ✧ ❦ ⊹ ⁂ everything is used")
+
+    answer = await chat.answer("yura, say something", chat_id=100, language="en")
+
+    assert answer.source == "offline"
+    # It is still one of her bank sentences, not a re-lettered version of one.
+    assert persona.sentence_of(answer.text, "en"), answer.text
