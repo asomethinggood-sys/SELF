@@ -326,3 +326,56 @@ async def test_asking_the_time_answers_with_the_time(runtime) -> None:
     answer = await runtime.yura_chat.answer("what time is it", chat_id=100, is_owner=True)
     assert "◷" in answer.text or "UTC" in answer.text
     assert '```' not in answer.text
+
+
+#: Forty-five things he might say that are not instructions. Every one of these
+#: used to be — and must stay — conversation: she answers them in her own voice.
+CONVERSATION_CORPUS = (
+    "i missed you today",
+    "you were quiet all morning",
+    "that is a nice name",
+    "i can't sleep",
+    "good night yura",
+    "do you remember the poem i sent",
+    "what do you think of me",
+    "i am tired",
+    "tell me something you never told anyone",
+    "why do you always answer like that",
+    "i bought a new phone",
+    "do you ever get bored",
+    "my day was long",
+    "someone was rude to me in the group",
+    "this song reminds me of you",
+    "i am reading a book about time travel",
+    "the time will come",
+    "i wish you were here",
+    "you are beautiful",
+    "say something in russian",
+    "what is your favourite colour",
+    "how old are you",
+    "do you dream",
+    "are you happy",
+    "i am working late",
+    "my brother is visiting",
+    "we should meet",
+    "the weather is awful",
+    "can you keep a secret",
+    "stop being dramatic",
+    "that hurts",
+    "i need a hug",
+    "شب بخیر",
+    "دلم برات تنگ شده",
+    "امروز خیلی خسته بودم",
+    "چی فکر میکنی",
+    "تو خیلی مهربونی",
+    "بگو یه چیزی",
+    "من عاشق شعرَم",
+    "ساعت‌ها دیر میگذره",
+    "بریم بخوابیم",
+    "منو دوست داری",
+)
+
+
+@pytest.mark.parametrize("sentence", CONVERSATION_CORPUS)
+def test_plain_conversation_is_never_turned_into_a_command(sentence: str) -> None:
+    assert detect(sentence) is None, f"{sentence!r} would have stolen her answer"
