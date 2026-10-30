@@ -68,6 +68,9 @@ _FILE_RE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 _UNSAFE_NAME = re.compile(r"[^0-9A-Za-z._\u0600-\u06ff-]+")
+#: Where the last picture she looked at is kept, per chat. A description is
+#: remembered because "make it funnier" a day later still points at *this* photo.
+PICTURE_SETTING = "yura.last_picture"
 
 
 @dataclass
@@ -138,12 +141,18 @@ class YuraChat:
             local_time = to_local(utc_now(), config.timezone).strftime("%Y-%m-%d %H:%M")
         except Exception:  # pragma: no cover - a bad zone must not break a reply
             local_time = None
+        hour = None
+        try:
+            hour = to_local(utc_now(), self.runtime.config.timezone).hour
+        except Exception:  # pragma: no cover - a bad zone must not break a reply
+            hour = None
         system = persona.system_prompt(
             language,
             memories=facts,
             owner_name=owner_name,
             local_time=local_time,
             greeting=greeting,
+            hour=hour,
         )
         messages = [AIMessage("system", system)]
         for role, content in await self.memory.history(chat_id):
@@ -249,6 +258,8 @@ class YuraChat:
             answer.text = self._offline(chat_id, language, avoid=avoid)
         if answer.text:
             self._remember_said(chat_id, answer.text)
+        if picture is not None and answer.text:
+            await self.remember_picture(chat_id, answer.text, source=source)
         await self.memory.append(chat_id, "assistant", answer.text or "(file sent)")
         self.turns += 1
         return Answer(
@@ -323,6 +334,57 @@ class YuraChat:
             self.logger.warning("yura: cannot write file: %s", exc)
             return None
         return target
+
+    # ------------------------------------------------------------------
+    # The last picture
+    # ------------------------------------------------------------------
+    async def remember_picture(self, chat_id: int, description: str, *, source: str = "model") -> None:
+        """Keep what she said about the last picture, so it can be revisited."""
+        record = {
+            "at": utc_now().isoformat(),
+            "text": " ".join(str(description).split())[:800],
+            "source": source,
+        }
+        try:
+            await self.runtime.store.set_setting(f"{PICTURE_SETTING}.{chat_id}", record)
+        except Exception as exc:  # pragma: no cover - a full disk must not mute her
+            self.logger.warning("yura: could not keep the picture note: %s", exc)
+
+    async def last_picture(self, chat_id: int) -> dict[str, str] | None:
+        """What she said about the last picture in this chat, if any."""
+        try:
+            record = await self.runtime.store.get_setting(f"{PICTURE_SETTING}.{chat_id}", None)
+        except Exception:  # pragma: no cover - defensive
+            return None
+        if not isinstance(record, dict) or not record.get("text"):
+            return None
+        return {str(key): str(value) for key, value in record.items()}
+
+    async def caption_last_picture(self, chat_id: int, language: str = "en") -> Answer:
+        """Say something new about the picture she already looked at."""
+        record = await self.last_picture(chat_id)
+        if record is None:
+            return Answer(self._offline(chat_id, language))
+        prompt = persona.caption_prompt(record["text"], language)
+        _, messages = await self._context(chat_id, language)
+        messages.append(AIMessage("user", prompt))
+        reply: str | None = None
+        if self._quota_spent():
+            self.last_error = "daily allowance spent"
+        elif self.enabled:
+            try:
+                reply = await self.provider.converse(messages, max_tokens=300)
+            except AIError as exc:
+                self.last_error = f"{exc.kind}: {exc}"
+        source = "model" if reply else "offline"
+        if reply is None:
+            self.fallbacks += 1
+            reply = self._offline(chat_id, language)
+        answer = await self._apply(reply, chat_id=chat_id, language=language)
+        if not answer.text:
+            answer.text = self._offline(chat_id, language)
+        await self.memory.append(chat_id, "assistant", answer.text)
+        return Answer(text=answer.text, source=source)
 
     # ------------------------------------------------------------------
     # The daily allowance

@@ -136,6 +136,7 @@ class SentMessage:
     chat_id: Any
     text: str
     kwargs: dict[str, Any] = field(default_factory=dict)
+    message_id: int = 0
 
 
 class FakeClient:
@@ -156,17 +157,32 @@ class FakeClient:
         if self.fail_with is not None:
             raise self.fail_with
         self._next_id += 1
-        self.sent.append(SentMessage(chat_id, text, kwargs))
+        self.sent.append(SentMessage(chat_id, text, kwargs, message_id=self._next_id))
         return FakeMessage(id=self._next_id, chat_id=int(chat_id) if str(chat_id).lstrip("-").isdigit() else 0, text=text, out=True, sender_id=42)
 
     async def send_file(self, chat_id: Any, file: Any, **kwargs: Any) -> FakeMessage:
         self._next_id += 1
-        self.sent.append(SentMessage(chat_id, kwargs.get("caption", ""), {**kwargs, "file": file}))
+        self.sent.append(
+            SentMessage(
+                chat_id, kwargs.get("caption", ""), {**kwargs, "file": file}, message_id=self._next_id
+            )
+        )
         return FakeMessage(id=self._next_id, text=kwargs.get("caption", ""), out=True)
 
     async def edit_message(self, entity: Any, message: Any, text: str, **kwargs: Any) -> Any:
+        """Edit in place — and update the record, because Telegram would.
+
+        Yura types "…" and then fills it in, so a fake that kept both would make
+        every "did she answer?" assertion read the placeholder.
+        """
         self.edits.append((entity, message, text))
-        return message
+        target = message if isinstance(message, int) else getattr(message, "id", None)
+        for sent in reversed(self.sent):
+            if sent.message_id == target:
+                sent.text = text
+                sent.kwargs = {**sent.kwargs, **kwargs}
+                break
+        return FakeMessage(id=int(target or 0), chat_id=int(entity) if str(entity).lstrip("-").isdigit() else 0, text=text, out=True)
 
     async def delete_messages(self, entity: Any, ids: Any) -> None:
         self.deleted.append((entity, ids))

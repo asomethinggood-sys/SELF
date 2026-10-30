@@ -76,6 +76,7 @@ class Sender:
         dry_run: bool | None = None,
         file: str | None = None,
         caption: str | None = None,
+        voice_note: bool = False,
     ) -> SendResult:
         simulate = self.dry_run if dry_run is None else dry_run
         # Whitespace-only bodies are a bug in the caller, not a message.
@@ -118,6 +119,7 @@ class Sender:
                             parse_mode=parse_mode,
                             reply_to=reply_to if index == 0 else None,
                             silent=silent,
+                            **({"voice_note": True} if voice_note else {}),
                         )
                     )
                 else:
@@ -185,8 +187,26 @@ class Sender:
         silent: bool = False,
         parse_mode: str | None = "html",
         dry_run: bool | None = None,
+        voice_note: bool = False,
     ) -> SendResult:
-        """Send one file or an album (a list), with the usual safety rails."""
+        """Send one file or an album (a list), with the usual safety rails.
+
+        ``voice_note`` lets a file arrive as a playable voice message rather than
+        a document. Telethon takes it as a send_file keyword; a fake client that
+        does not know it is fine, it is passed through in the recorded kwargs.
+        """
+        if voice_note:
+            return await self.send(
+                chat_id,
+                caption,
+                file=media,
+                caption=caption,
+                reply_to=reply_to,
+                silent=silent,
+                parse_mode=parse_mode,
+                dry_run=dry_run,
+                voice_note=True,
+            )
         return await self.send(
             chat_id,
             caption,
@@ -197,6 +217,29 @@ class Sender:
             parse_mode=parse_mode,
             dry_run=dry_run,
         )
+
+    async def react(self, chat_id: Any, message_id: int, emoji: str) -> bool:
+        """React to a message. ``False`` when the client cannot do it.
+
+        Telegram has an allowed set of reaction emoji and rejects anything else,
+        so a failure here is a "no" rather than an error the caller has to catch.
+        """
+        if self.dry_run:
+            self.logger.info("DRY-RUN react -> %s on %s: %s", chat_id, message_id, emoji)
+            return True
+        for name in ("send_reaction", "react"):
+            sender = getattr(self.client, name, None)
+            if sender is None:
+                continue
+            try:
+                result = sender(chat_id, message_id, emoji)
+                if asyncio.iscoroutine(result):
+                    await result
+                return True
+            except Exception as exc:  # noqa: BLE001 - a reaction is a flourish
+                self.logger.warning("react failed: %s", exc)
+                continue
+        return False
 
     async def notify_owner(self, text: str, owner_id: int | None = None, **kwargs: Any) -> SendResult:
         """Deliver to Saved Messages (``me``) unless an explicit target is set.

@@ -18,6 +18,7 @@ Feature areas: 12 (personality), 21 (messaging), 70 (AI), 96 (feature switches).
 
 from __future__ import annotations
 
+import random
 import time
 from typing import Any
 
@@ -28,8 +29,11 @@ from ..services.vision import IMAGE_MEDIA_TYPES, Picture, looks_like_picture
 from ..services.vision import download as download_picture
 from ..utils.formatting import escape
 from ..utils.markup import rich
+from ..utils.mood import mood_line
 from ..utils.security import redact_text
 from ..utils.text import truncate
+from ..utils.time import to_local, utc_now
+from . import yura_extras
 
 #: A chat companion cannot wait 45 seconds between sentences. Short cooldown
 #: only, to swallow double-sends and update loops.
@@ -260,6 +264,13 @@ async def _key_command(ctx: CommandContext, words: list[str]) -> str:
     )
 
 
+def _local_hour(runtime: Any) -> int:
+    try:
+        return to_local(utc_now(), runtime.config.timezone).hour
+    except Exception:  # pragma: no cover - a bad zone must not break a reply
+        return 12
+
+
 def _visible(answer: Any) -> str:
     """Telegram HTML for an answer.
 
@@ -341,6 +352,38 @@ async def cmd_yura(ctx: CommandContext) -> None:
         removed = await ctx.runtime.memory.clear_history(ctx.chat_id)
         await ctx.reply_ok(ctx.t("yura.log_cleared", count=removed))
         return
+    if action in {"recap", "today"}:
+        await yura_extras.recap(ctx)
+        return
+    if action in {"diary", "journal"}:
+        await yura_extras.diary(ctx)
+        return
+    if action in {"faces", "face", "kaomoji"}:
+        await yura_extras.faces(ctx, list(words))
+        return
+    if action in {"say", "speak", "voice-note"}:
+        spoken = (ctx.raw_args or " ".join(words)).strip()
+        engine = yura_extras.tts_for(ctx.runtime)
+        # With an engine configured, ".yura say" is a voice note. Without one it
+        # stays what it always was — something you said to her — because a word
+        # silently changing meaning is worse than a feature being absent.
+        if spoken and await engine.has_engine():
+            await yura_extras.say(ctx, spoken)
+        else:
+            await _chat(ctx, spoken)
+        return
+    if action in {"voice", "tts"}:
+        await yura_extras.voice(ctx, [word for word in words if word.strip()])
+        return
+    if action in {"poster", "card-art"}:
+        await yura_extras.poster(ctx, list(words))
+        return
+    if action in {"caption", "look-again"}:
+        await yura_extras.caption(ctx)
+        return
+    if action in {"react", "reaction"}:
+        await yura_extras.react(ctx, list(words))
+        return
 
     # Everything else is something you said to her. `raw_args` is everything
     # after the command word, which is not the same as `args`: the parser takes
@@ -351,18 +394,27 @@ async def cmd_yura(ctx: CommandContext) -> None:
 
 
 class PersonaReplies:
-    """The ambient path: your own messages, your own chat, her voice.
+    """Her two automatic paths, and the gates on each.
 
-    Gates, in order — every one must pass:
+    **Saved Messages** — you type, she answers. Gates: it is outgoing, it is your
+    own chat, it is not a command, the persona is enabled, :meth:`can_act`
+    agrees, and both the short cooldown and hourly valve are intact.
 
-    1. the message is outgoing (you typed it),
-    2. it is in your own Saved Messages chat,
-    3. it is not a command (the dispatcher already answered those),
-    4. the ``persona`` feature is enabled,
-    5. :meth:`Permissions.can_act` allows it (emergency stop, quiet hours,
-       private-chat policy),
-    6. the short cooldown and hourly valve are intact.
+    **A group** — she answers *only* when the message is addressed to her: a
+    Telegram reply to one of her messages, her name in the text, or a mention.
+    She never starts a conversation there, never answers a message that was not
+    aimed at her, and has its own slower budget. A picture is looked at only
+    under the same rule, so a group photo is not fed to a model because it
+    happened to appear.
     """
+
+    #: What she sends first, so a model answer feels typed rather than materialised.
+    TYPING = "…"
+    #: Groups get a slower valve than the owner's own chat.
+    MIN_GROUP_INTERVAL = 6.0
+    MAX_GROUP_PER_HOUR = 40
+    #: Every so many answers she puts her attention bar under the message.
+    MOOD_EVERY = 3
 
     def __init__(self, runtime: Any) -> None:
         self.runtime = runtime
@@ -371,19 +423,35 @@ class PersonaReplies:
         # than the cooldown on a fresh container.
         self._last_at: float | None = None
         self._window: list[float] = []
+        self._group_window: dict[int, list[float]] = {}
+        self._group_last: dict[int, float] = {}
         self.answered = 0
+        self.group_answered = 0
         self.skipped = 0
+        self.reacted = 0
+        self._since_mood = 0
+        self._since_reaction = 0
 
     @property
     def self_id(self) -> int | None:
         return self.runtime.permissions.self_id
 
+    # -- budgets ---------------------------------------------------------
     def _budget_ok(self, now: float) -> bool:
         if self._last_at is not None and now - self._last_at < MIN_INTERVAL_SECONDS:
             return False
         cutoff = now - 3600
         self._window = [stamp for stamp in self._window if stamp >= cutoff]
         return len(self._window) < MAX_PER_HOUR
+
+    def _group_budget_ok(self, chat_id: int, now: float) -> bool:
+        last = self._group_last.get(chat_id)
+        if last is not None and now - last < self.MIN_GROUP_INTERVAL:
+            return False
+        cutoff = now - 3600
+        window = [stamp for stamp in self._group_window.get(chat_id, []) if stamp >= cutoff]
+        self._group_window[chat_id] = window
+        return len(window) < self.MAX_GROUP_PER_HOUR
 
     def _is_command(self, text: str) -> bool:
         stripped = text.strip()
@@ -392,9 +460,15 @@ class PersonaReplies:
         first = stripped.split(maxsplit=1)[0].lower() if stripped else ""
         return first in _INTERNAL_WORDS
 
-    #: A reply to her is addressed to her even if it is one word, so the "is this
-    #: one of her own lines?" guard must not be the only thing deciding. It still
-    #: guards against answering her own messages when a quote is involved.
+    def _named(self, text: str) -> bool:
+        """True when the message says her name, in either spelling or alphabet."""
+        lowered = (text or "").lower()
+        for name in ("yura", "یورا", *identity.NAMES.values()):
+            if name and name.lower() in lowered:
+                return True
+        return False
+
+    # -- the owner's own chat --------------------------------------------
     async def on_self_message(self, event: NormalizedEvent) -> None:
         if not event.is_outgoing:
             return
@@ -405,7 +479,7 @@ class PersonaReplies:
         if self_id is None or event.chat_id != self_id:
             self.skipped += 1
             return
-        quoted = await self._quoted_text(event)
+        quoted, _hers = await self._quoted_chain(event)
         if (
             persona.is_own_line(event.text)
             or self.runtime.yura_chat.was_sent(event.chat_id, event.text)
@@ -421,34 +495,130 @@ class PersonaReplies:
         if not self._budget_ok(now):
             self.skipped += 1
             return
-
-        language = await self._language(event)
-        answer = await self.runtime.yura_chat.answer(
-            event.text,
-            chat_id=event.chat_id,
-            language=language,
-            picture=picture,
-            quoted=quoted,
+        await self._answer(
+            event, chat_id=event.chat_id, picture=picture, quoted=quoted, is_private=True
         )
         self._last_at = now
         self._window.append(now)
         self.answered += 1
+
+    # -- a group ----------------------------------------------------------
+    async def on_group_message(self, event: NormalizedEvent) -> None:
+        """Answer only what was addressed to her.
+
+        Three ways a message is addressed to her, and nothing else counts: a
+        Telegram reply to one of her own messages, her name in the text, or a
+        mention. The gate is checked before the picture is fetched, so a group
+        photo nobody asked about is never downloaded.
+        """
+        if event.is_outgoing or not event.is_group or event.message_id is None:
+            return
+        quoted, hers = await self._quoted_chain(event)
+        addressed = hers or self._named(event.text) or event.mentions_me
+        if not addressed:
+            return
+        picture = await self._picture(event)
+        if picture is None and not event.text.strip():
+            return
+        decision = await self.runtime.permissions.can_act(event.chat_id, "persona", is_private=False)
+        if not decision.allowed:
+            self.skipped += 1
+            return
+        now = time.monotonic()
+        if not self._group_budget_ok(event.chat_id, now):
+            self.skipped += 1
+            return
+        # Every ninth group answer is a reaction instead of a line: a companion
+        # that always has something to say is a broadcaster.
+        self._since_reaction += 1
+        if hers and self._since_reaction % 9 == 0:
+            target = event.reply_to_id or event.message_id
+            emoji = random.choice(yura_extras.REACTIONS)
+            if await self.runtime.sender.react(event.chat_id, target, emoji):
+                self.reacted += 1
+                self._since_reaction = 0
+                self._group_last[event.chat_id] = now
+                self._group_window.setdefault(event.chat_id, []).append(now)
+                return
+        await self._answer(
+            event, chat_id=event.chat_id, picture=picture, quoted=quoted, is_private=False
+        )
+        self._group_last[event.chat_id] = now
+        self._group_window.setdefault(event.chat_id, []).append(now)
+        self.group_answered += 1
+
+    # -- one turn ---------------------------------------------------------
+    async def _answer(
+        self,
+        event: NormalizedEvent,
+        *,
+        chat_id: int,
+        picture: Picture | None,
+        quoted: str,
+        is_private: bool,
+    ) -> None:
+        language = await self._language(event)
+        answer = await self.runtime.yura_chat.answer(
+            event.text,
+            chat_id=chat_id,
+            language=language,
+            picture=picture,
+            quoted=quoted,
+        )
         self.logger.info(
-            "yura: answering '%s' in Saved Messages%s",
+            "yura: answering '%s' in %s%s",
             redact_text(truncate(event.text or event.media_type or "", 40)),
+            "Saved Messages" if is_private else f"chat {chat_id}",
             " (a picture)" if picture is not None else "",
         )
         if answer.text:
-            # Threaded: her answer is a Telegram reply to the message it answers,
-            # so the conversation reads as a conversation and the owner can reply
-            # straight back to it.
-            await self.runtime.sender.send(
-                event.chat_id, _visible(answer), reply_to=event.message_id
+            await self._deliver(
+                chat_id, self._decorate(_visible(answer)), event.message_id, answer.source
             )
         for path in answer.files:
             await self.runtime.sender.send_media(
-                event.chat_id, str(path), caption=escape(truncate(path.name, 90))
+                chat_id, str(path), caption=escape(truncate(path.name, 90))
             )
+
+    async def _deliver(self, chat_id: int, html: str, reply_to: Any, source: str) -> None:
+        """Send, then edit into the real answer — the message types itself.
+
+        An offline line is instant and gets no placeholder: a "…" that is replaced
+        in the same frame looks like a glitch. A model answer took a second, and
+        that second is worth showing.
+        """
+        sender = self.runtime.sender
+        if source != "model":
+            await sender.send(chat_id, html, reply_to=reply_to)
+            return
+        try:
+            placeholder = await sender.send(chat_id, self.TYPING, reply_to=reply_to)
+        except Exception:  # noqa: BLE001 - fall back to one clean message
+            await sender.send(chat_id, html, reply_to=reply_to)
+            return
+        message = getattr(placeholder, "message", None)
+        message_id = getattr(message, "id", None)
+        if getattr(placeholder, "dry_run", False) or message_id is None:
+            return
+        try:
+            await sender.edit(chat_id, message_id, html)
+        except Exception as exc:  # noqa: BLE001 - the placeholder must not be the answer
+            self.logger.warning("yura: could not fill the placeholder (%s)", exc)
+            try:
+                await sender.delete(chat_id, message_id)
+            except Exception:  # noqa: BLE001
+                pass
+            await sender.send(chat_id, html, reply_to=reply_to)
+
+    def _decorate(self, html: str) -> str:
+        """Sometimes a bar under the message: the body clock, made visible."""
+        self._since_mood += 1
+        if self._since_mood % self.MOOD_EVERY:
+            return html
+        hour = _local_hour(self.runtime)
+        if html.endswith("</blockquote>"):
+            return html
+        return f"{html}\n\n<i>{mood_line(hour)}</i>"
 
     async def _picture(self, event: NormalizedEvent) -> Picture | None:
         """The image the owner attached, if there is one worth looking at."""
@@ -459,29 +629,55 @@ class PersonaReplies:
             return None
         return await download_picture(self.runtime.client, message)
 
-    async def _quoted_text(self, event: NormalizedEvent) -> str:
-        """The message the owner used Telegram's reply button on, if it was hers."""
+    async def _quoted_chain(self, event: NormalizedEvent, depth: int = 3) -> tuple[str, bool]:
+        """What is being replied to, up to ``depth`` levels, and whether it is hers.
+
+        One level answers "why?" about a single message. Three levels answer it
+        about a thread: the model sees the shape of the conversation instead of
+        the last line of it.
+        """
         if not event.is_reply:
-            return ""
+            return "", False
         message = event.raw
         getter = getattr(message, "get_reply_message", None)
         if getter is None:
-            return ""
+            return "", False
         try:
             replied = await getter()
         except Exception:  # noqa: BLE001 - a deleted target is not an error
-            return ""
-        if replied is None:
-            return ""
-        text = " ".join(str(getattr(replied, "raw_text", "") or "").split())
-        if not text:
-            return "a picture" if getattr(replied, "media", None) is not None else ""
-        # Only quote something she said, or the owner's own words they pointed
-        # at; quoting a third party would leak their message into the prompt.
-        sender = getattr(replied, "sender_id", None)
-        if sender is not None and self.self_id is not None and sender != self.self_id:
-            return ""
-        return text[:600]
+            return "", False
+        lines: list[str] = []
+        hers = False
+        current = replied
+        for _ in range(max(1, depth)):
+            if current is None:
+                break
+            text = " ".join(str(getattr(current, "raw_text", "") or "").split())
+            sender = getattr(current, "sender_id", None)
+            mine = bool(getattr(current, "out", False)) or (
+                sender is not None and self.self_id is not None and sender == self.self_id
+            )
+            # Only quote something she said or the owner said: a third party's
+            # message must not be folded into a prompt by being pointed at.
+            if sender is not None and self.self_id is not None and sender != self.self_id \
+                    and not getattr(current, "out", False):
+                break
+            hers = hers or mine
+            if text:
+                lines.append(text[:400])
+            elif getattr(current, "media", None) is not None:
+                lines.append("a picture")
+            nxt = getattr(current, "get_reply_message", None)
+            if nxt is None:
+                break
+            try:
+                current = await nxt()
+            except Exception:  # noqa: BLE001
+                break
+        if not lines:
+            return "", hers
+        # Oldest first reads like a thread; the model answers the newest.
+        return "\n".join(reversed(lines)), hers
 
     async def _language(self, event: NormalizedEvent) -> str:
         if event.language in {"en", "fa"}:
@@ -506,7 +702,9 @@ def register(runtime: Any) -> None:
             subcommands=(
                 "on", "off", "enable", "disable", "status", "card", "who", "state",
                 "memory", "memories", "remember", "learn", "forget", "log", "history", "clear",
-                "key", "apikey", "token",
+                "key", "apikey", "token", "recap", "today", "diary", "journal", "faces",
+                "face", "kaomoji", "say", "speak", "voice", "tts", "poster", "caption",
+                "react", "reaction",
             ),
         )
     )
@@ -518,4 +716,13 @@ def register(runtime: Any) -> None:
         {EventType.OUTGOING},
         priority=40,
         description="Yura answers the owner's own messages",
+    )
+    # Groups: only what is addressed to her. Kept as a separate subscriber so a
+    # group bug can never take the owner's own chat down with it.
+    runtime.event_engine.subscribe(
+        "persona.group_reply",
+        replies.on_group_message,
+        {EventType.MESSAGE},
+        priority=45,
+        description="Yura answers a reply to her, or her name, in a group",
     )

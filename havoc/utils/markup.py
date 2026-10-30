@@ -21,9 +21,12 @@ What it recognises
 ------------------
 ``**bold**`` · ``__bold__`` · ``*italic*`` · ``_italic_`` · ``~~strike~~`` ·
 ``||spoiler||`` · `` `code` `` · fenced blocks · ``> quote`` · ``# heading`` ·
-``- bullet`` / ``1. numbered``. Persian text is left alone where markdown would
-mangle it: underscores inside a word (``خیلی_خوب``) are not italic markers, and a
-lone ``*`` in the middle of a sentence stays a character.
+``- bullet`` / ``1. numbered``, plus three of the project's own marks:
+``>> whisper`` (a collapsible quote), ``++underline++`` and ``^^small caps^^`` /
+``%%spaced%%`` for the typographic variants Telegram has no entity for. Persian
+text is left alone where markdown would mangle it: underscores inside a word
+(``خیلی_خوب``) are not italic markers, and a lone ``*`` in the middle of a
+sentence stays a character.
 
 Feature area: 30 (formatting toolkit), 96 (presentation).
 """
@@ -33,6 +36,7 @@ from __future__ import annotations
 import re
 
 from .formatting import escape
+from .typeface import small_caps, spaced
 
 #: Telegram rejects a message whose tags do not nest; this module cannot produce
 #: one, but the tests check that anyway.
@@ -48,6 +52,12 @@ _STRIKE_RE = re.compile(r"~~(?=\S)([^\n]{1,400}?)~~")
 _SPOILER_RE = re.compile(r"\|\|(?=\S)([^\n]{1,400}?)\|\|")
 _HEADING_RE = re.compile(r"(?m)^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$")
 _QUOTE_RE = re.compile(r"(?m)^\s{0,3}&gt;\s?(.*)$")
+#: ``>> line`` is a quote the reader has to tap to open. Telegram supports it as
+#: an attribute of <blockquote>, so nothing new is sent — only the attribute.
+_WHISPER_RE = re.compile(r"(?m)^\s{0,3}&gt;&gt;\s?(.*)$")
+_UNDERLINE_RE = re.compile(r"\+\+(?=\S)([^+\n]{1,200}?)\+\+")
+_SMALL_RE = re.compile(r"\^\^(?=\S)([^^\n]{1,60}?)\^\^")
+_SPACED_RE = re.compile(r"%%(?=\S)([^%\n]{1,60}?)%%")
 _BULLET_RE = re.compile(r"(?m)^\s{0,3}[-*+]\s+(.+)$")
 _NUMBERED_RE = re.compile(r"(?m)^\s{0,3}(\d{1,3})[.)]\s+(.+)$")
 
@@ -80,7 +90,7 @@ def looks_formatted(text: str) -> bool:
         return False
     return any(
         marker in text
-        for marker in ("**", "__", "`", "~~", "||", "> ", "# ", "\n- ", "\n* ", "\n1. ")
+        for marker in ("**", "__", "`", "~~", "||", "++", "^^", "%%", "> ", "# ", "\n- ", "\n* ", "\n1. ")
     ) or bool(re.search(r"(?m)^(\s{0,3}[-*+#>]|\s{0,3}\d{1,3}[.)]\s)", text))
 
 
@@ -126,16 +136,26 @@ def rich(text: str) -> str:
     body = _ITALIC_UNDER_RE.sub(_emphasise("i"), body)
     body = _STRIKE_RE.sub(_emphasise("s"), body)
     body = _SPOILER_RE.sub(_emphasise("tg-spoiler"), body)
+    body = _UNDERLINE_RE.sub(_emphasise("u"), body)
+    # These two are not tags: the substitution *is* the styling.
+    body = _SMALL_RE.sub(lambda m: small_caps(m.group(1)), body)
+    body = _SPACED_RE.sub(lambda m: spaced(m.group(1)), body)
 
     # Block styles, line by line. A heading becomes a bold line, a quote becomes
     # a Telegram blockquote, a bullet gets a glyph.
     lines: list[str] = []
     quote_buffer: list[str] = []
+    whisper_buffer: list[str] = []
 
     def flush_quote() -> None:
         if quote_buffer:
             lines.append("<blockquote>" + "\n".join(quote_buffer) + "</blockquote>")
             quote_buffer.clear()
+        if whisper_buffer:
+            lines.append(
+                '<blockquote expandable>' + "\n".join(whisper_buffer) + "</blockquote>"
+            )
+            whisper_buffer.clear()
 
     for line in body.split("\n"):
         heading = _HEADING_RE.match(line)
@@ -143,8 +163,16 @@ def rich(text: str) -> str:
             flush_quote()
             lines.append(f"<b>{heading.group(1)}</b>")
             continue
+        whisper = _WHISPER_RE.match(line)
+        if whisper is not None:
+            if quote_buffer:
+                flush_quote()
+            whisper_buffer.append(whisper.group(1))
+            continue
         quote = _QUOTE_RE.match(line)
         if quote is not None:
+            if whisper_buffer:
+                flush_quote()
             quote_buffer.append(quote.group(1))
             continue
         flush_quote()

@@ -25,7 +25,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from ..utils.time import iso, utc_now
+from ..utils.time import iso, parse_iso, utc_now
 
 #: How many past messages are replayed to the model per chat.
 HISTORY_TURNS = 20
@@ -156,6 +156,33 @@ class MemoryStore:
             (chat_id, limit),
         )
         return [(str(row["role"]), str(row["content"])) for row in reversed(rows)]
+
+    async def recent_with_times(
+        self, chat_id: int, *, limit: int = 200, since: Any = None
+    ) -> list[tuple[str, str, Any]]:
+        """History with a timestamp per line, newest window, oldest first.
+
+        ``.yura recap`` and ``.yura diary`` are the reason this exists: a
+        transcript without times can be summarised but not *placed*, and the
+        owner asked for a day, not for a blob.
+        """
+        if since is not None:
+            rows = await self.db.fetch_all(
+                "SELECT role, content, created_at FROM yura_history"
+                " WHERE chat_id = ? AND created_at >= ? ORDER BY id ASC LIMIT ?",
+                (chat_id, iso(since), limit),
+            )
+        else:
+            rows = await self.db.fetch_all(
+                "SELECT role, content, created_at FROM yura_history"
+                " WHERE chat_id = ? ORDER BY id DESC LIMIT ?",
+                (chat_id, limit),
+            )
+            rows = list(reversed(rows))
+        return [
+            (str(row["role"]), str(row["content"]), parse_iso(str(row["created_at"])))
+            for row in rows
+        ]
 
     async def clear_history(self, chat_id: int) -> int:
         return await self.db.execute("DELETE FROM yura_history WHERE chat_id = ?", (chat_id,))
