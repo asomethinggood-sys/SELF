@@ -142,6 +142,29 @@ process's verdict*, *the words are part of the contract*.
 These are 1.8's core, and §5 and §6 specify them. Everything else in this
 document exists to make them safe to build.
 
+### 2.4 What has already landed (do not rebuild it)
+
+The first slice of 1.8 shipped with the toolbox commit, and it is tested, not
+planned. A future run must *extend* these, not replace them:
+
+| Landed | Where | What it does |
+| --- | --- | --- |
+| Target resolution | `havoc/services/reach.py` | id → saved → alias → entity → dialog search; ambiguity is named, never guessed |
+| Sending with options | `Reach.deliver` | repeat + gap, spoiler, silent, reply-to, `--at`, `--delete-after`, dry run |
+| The outbox | migration 9, `Store.add_outbox`/`outbox`/`mark_deleted` | every send recorded with status `sent`/`dry`/`failed`/`deleted` |
+| Scheduled send and unsend | `reach_send`, `reach_unsend` jobs | a repeat is one send now and the rest on the clock; a self-destruct is a job |
+| Reactions | `sender.react` | raw `SendReactionRequest`; `client.send_reaction` does not exist and never did |
+| Ignoring | `ignored` table, `store.is_ignored` | a hard gate in the DM path *and* before the group "addressed" check |
+| Timelines | `havoc/services/plans.py`, `plan_step` job | sentence → steps at real moments, cancelable, idempotent per step |
+| The sentences | `intent._reach` | "send X to Y", "say … in saved messages", "N times", "with a spoiler", "don't talk to", "react with", "then" chains |
+| Commands | `.send` `.say` `.broadcast` `.outbox` `.unsend` `.emoji` `.plan` `.ignore` | the console surface, owner-only |
+| Tools | `tools.send_message`, `tools.plan`, `tools.react` | the model can reach the same code the commands do |
+| Proof | `tests/test_toolbox.py` (23 tests), audit `boot` | the boot, the plan arithmetic and every sentence above |
+
+What is *not* yet there: the read side (inbox, unread, mentions, folders), the
+account side (sessions, privacy, 2FA, contacts, blocking), and the remaining
+timeline verbs. §6 and §12 keep them in order.
+
 ---
 
 ## 3. The contract: how a sentence becomes an action
@@ -960,7 +983,7 @@ Fifteen lines. If any one of them silently does nothing, 1.8 is not done.
 
 ## 14. Appendix A — command inventory
 
-The current dot surface (75 commands). 1.8 adds the ones marked ✚.
+The current dot surface. ✓ ships in this branch, ✚ is still to build.
 
 ```
 core      .help .commands .ping .status .diagnostics .selfcheck .version✚
@@ -971,13 +994,13 @@ text      .translate .transform .normalize .rtl .digits .textstats .summarize
 content   .fal .poem .quote .random .joke .roast .pic .coin .fight
 memory    .note .notes✚ .bookmark .saved .saved send✚ .remember✚ .forget✚
 chats     .chats .chatinfo .chatsettings .labels .media .group✚ .folder✚
-          .mute✚ .unread✚ .mentions✚ .who✚ .people✚
+          .mute✚ .unread✚ .mentions✚ .who✚ .people✚ .ignore✓ .mute-person✓
 profile   .profile .bio .clock .preset .away .counter
 time      .remind .reminders .tasks .schedule .scheduled .agenda .quiet-hours
-          .plan✚ .plans✚
+          .plan✓ .plans✓ .timeline✓
 social    .autoreply .trigger .rules .detect .react .watch .template .suggest
-sending   .send✚ .reply✚ .forward✚ .copy✚ .edit✚ .delete✚ .pin✚ .react✚
-          .broadcast✚ .outbox✚
+sending   .send✓ .say✓ .broadcast✓ .outbox✓ .unsend✓ .emoji✓ .reply✚ .forward✚
+          .copy✚ .edit✚ .delete✚ .pin✚ .react✚
 account   .sessions✚ .privacy✚ .2fa✚ .contact✚ .block✚
 yura      .yura .ai
 ```
@@ -1009,7 +1032,7 @@ yura      .yura .ai
 | `tests/test_tool_shapes.py` | every wire shape |
 | `tests/test_agent_acts.py` | his screenshots, replayed |
 | `tests/test_autoreply_scope.py` | DMs versus groups |
-| `tests/test_plan.py` ✚ | timelines |
+| `tests/test_toolbox.py` | the toolbox, the timeline arithmetic, the boot |
 
 ---
 
