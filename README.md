@@ -93,6 +93,33 @@ front of the gateway answers **403** to any `User-Agent` containing the word
 `HAVOC`, and free models return an empty reply when the token budget is too
 small to finish thinking. Both used to look like a dead key.
 
+The `.github/workflows/format-probe.yml` job proves the two things a unit test
+cannot: it asks the real model for bold and italic and records the raw reply
+next to the HTML it becomes, and it asks about the colour of a PNG built in
+memory, so "she can see a picture" is a transcript rather than a promise. Both
+land in `.format-probe.json`. The last green record:
+
+| what | asked | model said | owner sees |
+|---|---|---|---|
+| formatting | bold + italic in two lines | `**NOTED** *hush*` | **NOTED** *hush* |
+| vision | "what colour is this square?" (red PNG) | `Red` | — |
+
+**Formatting is real.** She writes markdown because that is how a model writes,
+and `havoc/utils/markup.py` turns exactly the marks Telegram understands into
+tags — escape first, then bold, italic, strike, spoiler, code, fenced blocks,
+headings, quotes and bullets. A kaomoji is never mangled, `خیلی_خوب` keeps its
+underscore, and an unbalanced `*` stays an asterisk.
+
+**A picture is a question.** Send a photo, sticker or image file in Saved
+Messages and she looks at it: the bytes are sniffed (4 MB cap, real type, not the
+file name), sent as an `image_url` part, and the router narrows its plan to
+models that can see — a text-only model would answer 400 and spend a request to
+say nothing. A photo with no caption is read as "what is this?".
+
+**The reply button continues the conversation.** Point at her message and ask
+"why?" — the quoted line is folded into the prompt, and her answer is itself a
+reply to yours, so the thread goes both ways.
+
 **Honesty.** Ask whether she is a bot and she says yes, in character, in one
 clause, then moves on.
 
