@@ -275,8 +275,19 @@ def _visible(answer: Any) -> str:
 async def _chat(ctx: CommandContext, text: str, *, greeting: bool = False) -> None:
     probe = _invocation_text(ctx) or " ".join(filter(None, [ctx.sub or "", *ctx.args]))
     language = _language_for(ctx, text, probe)
+    # `.yura` on a photo does what a caption-less call does: she looks. The
+    # ambient path handles the prefix-less case; the command should not be the
+    # one place where a picture is ignored.
+    message = getattr(ctx, "message", None)
+    picture = None
+    if message is not None and looks_like_picture(getattr(message, "media", None)):
+        picture = await download_picture(ctx.runtime.client, message)
     answer = await ctx.runtime.yura_chat.answer(
-        text, chat_id=ctx.chat_id, language=language, greeting=greeting
+        text,
+        chat_id=ctx.chat_id,
+        language=language,
+        greeting=greeting,
+        picture=picture,
     )
     if answer.text:
         # `rich` for model text, not `escape`: she writes **bold** and > quotes

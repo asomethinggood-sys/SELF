@@ -10,9 +10,10 @@ Both are tested on the ambient path, the one the owner uses.
 
 from __future__ import annotations
 
-from conftest import FakeDocument, FakeMedia, FakeMessage
+from conftest import FakeDocument, FakeEvent, FakeMedia, FakeMessage
 
 from havoc.event_engine import EventType, normalize_message
+from havoc.utils.parsing import parse_command
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 256
 
@@ -163,6 +164,21 @@ async def test_a_voice_note_is_not_downloaded(runtime) -> None:
     assert runtime.client.downloads == 0
 
 
+async def test_the_command_also_looks_at_a_photo(runtime) -> None:
+    """.yura on a picture must not be the one path that ignores it."""
+    await _enable(runtime)
+    runtime.ai = StubProvider()
+    runtime.client = PhotoClient()
+    runtime.sender.client = runtime.client
+
+    message = _photo_message(text=".yura what is this")
+    message.id = 520
+    message.chat_id = 100
+    parsed = parse_command(".yura what is this", runtime.prefix)
+    assert parsed is not None
+    await runtime.dispatcher.handle(FakeEvent(message, chat_id=100, out=True), message, parsed, "en")
+
+    assert _picture_part(runtime.ai.calls[-1]) is not None
 # ---------------------------------------------------------------------------
 # Telegram's reply button
 # ---------------------------------------------------------------------------
