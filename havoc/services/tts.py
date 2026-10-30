@@ -35,14 +35,44 @@ __all__ = [
 #: Free-tier, no card: https://console.groq.com/keys
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 GROQ_MODEL = "playai-tts"
-#: Edge voices that fit her: young, light, not a newsreader.
-EDGE_VOICES = {
-    "en": "en-US-AnaNeural",
-    "fa": "fa-IR-DilaraNeural",
+#: Edge voices that fit her, per language, best first. A *list* because a voice
+#: name can disappear from the service: the next one is tried instead of the whole
+#: command failing. All of them are young and light, none is a newsreader.
+EDGE_VOICES: dict[str, tuple[str, ...]] = {
+    "en": ("en-US-AnaNeural", "en-GB-MaisieNeural", "en-US-MichelleNeural"),
+    "fa": ("fa-IR-DilaraNeural", "fa-IR-FaridNeural"),
+    # ru-RU-DariyaNeural is a child voice — the closest thing the free engine has
+    # to the way she actually sounds; Svetlana is the grown-up fallback.
+    "ru": ("ru-RU-DariyaNeural", "ru-RU-SvetlanaNeural"),
+    # Nanami is the light, soft one; Keita only exists so a broken name still
+    # produces speech instead of an error message.
+    "ja": ("ja-JP-NanamiNeural", "ja-JP-KeitaNeural"),
 }
-#: Groq's voices for English; the free tier has no Persian voice, so ``fa``
-#: falls back to edge rather than reading Persian with an English mouth.
-GROQ_VOICES = {"en": "Celeste-PlayAI", "fa": "Celeste-PlayAI"}
+#: How each language is nudged to sound like *her* rather than like a reader.
+#: ``rate`` speeds the sentence up a touch, ``pitch`` lifts it into kitten range.
+EDGE_TUNING: dict[str, dict[str, str]] = {
+    "en": {"rate": "+6%", "pitch": "+22Hz"},
+    "fa": {"rate": "+4%", "pitch": "+18Hz"},
+    "ru": {"rate": "+6%", "pitch": "+24Hz"},
+    "ja": {"rate": "+8%", "pitch": "+26Hz"},
+}
+#: What a language sounds like when it is only written down.
+_SCRIPTS: tuple[tuple[str, tuple[int, int]], ...] = (
+    ("fa", (0x0600, 0x06FF)),
+    ("ru", (0x0400, 0x04FF)),
+    ("ja", (0x3040, 0x30FF)),
+)
+#: Groq's voices, per language it can actually speak. The free tier has no
+#: Persian, Russian or Japanese voice, so those fall back to edge rather than
+#: reading the text with an English mouth.
+GROQ_VOICES = {
+    "en": "Celeste-PlayAI",
+    "fa": "Celeste-PlayAI",
+    "ru": "Celeste-PlayAI",
+    "ja": "Celeste-PlayAI",
+}
+#: Languages the edge engine is tuned for here.
+SPEECH_LANGUAGES = tuple(EDGE_VOICES)
 
 #: Telegram's voice notes are Opus; these two mime types are accepted and
 #: re-encoded by the client, so mp3 is fine.
@@ -82,6 +112,24 @@ class TTSResult:
 
     def __repr__(self) -> str:  # pragma: no cover - debugging only
         return f"TTSResult({self.provider}, {self.mime}, {self.size} bytes)"
+
+
+def detect_speech_language(text: str) -> str:
+    """Which voice a *piece of text* should be read in.
+
+    The chat language is not enough: ``.yura say привет`` in an English chat has
+    to come out of a Russian mouth. Detection is by script, which is honest for
+    the four languages tuned here, and falls back to English.
+    """
+    body = str(text or "")
+    for code, (low, high) in _SCRIPTS:
+        if any(low <= ord(character) <= high for character in body):
+            return code
+    return "en"
+
+
+def _edge_voices(language: str) -> tuple[str, ...]:
+    return EDGE_VOICES.get(language) or EDGE_VOICES["en"]
 
 
 def _encode_key(raw: str) -> str:
@@ -124,7 +172,7 @@ class TextToSpeech:
             return str(stored)
         if await self.provider() == "openai":
             return GROQ_VOICES.get(language, GROQ_VOICES["en"])
-        return EDGE_VOICES.get(language, EDGE_VOICES["en"])
+        return _edge_voices(language)[0]
 
     async def base_url(self) -> str:
         stored = await self.runtime.store.get_setting(BASE_URL_SETTING, None)
@@ -172,8 +220,12 @@ class TextToSpeech:
         except Exception as exc:  # noqa: BLE001
             raise TTSError("edge-tts is not installed", kind="unavailable") from exc
         buffer = bytearray()
+        tuning = EDGE_TUNING.get(detect_speech_language(text), {})
         try:
-            communicate = edge_tts.Communicate(text, voice)
+            try:
+                communicate = edge_tts.Communicate(text, voice, **tuning)
+            except TypeError:  # pragma: no cover - an older edge-tts without tuning
+                communicate = edge_tts.Communicate(text, voice)
             async for chunk in communicate.stream():
                 if chunk.get("type") == "audio" and chunk.get("data"):
                     buffer.extend(chunk["data"])
@@ -214,12 +266,22 @@ class TextToSpeech:
 
     # -- the one public call ---------------------------------------------
     async def say(self, text: str, language: str = "en") -> TTSResult | None:
-        """Speak ``text``. ``None`` when no provider could do it — never raises."""
+        """Speak ``text``. ``None`` when no provider could do it — never raises.
+
+        The language is taken from the text itself when the script says more than
+        the chat setting does: Russian and Japanese were added for their voices,
+        and a Russian sentence in an English chat must not be read by Ana.
+        """
         spoken = " ".join(str(text or "").split())[:MAX_SPEECH_CHARS]
         if not spoken:
             return None
+        if detect_speech_language(spoken) != "en":
+            language = detect_speech_language(spoken)
         chosen = await self.provider()
-        voice = await self.voice(language)
+        # An explicitly chosen voice wins over the per-language default, so
+        # ``.yura voice set …`` still means what it says.
+        stored = await self.runtime.store.get_setting(VOICE_SETTING, None)
+        candidates = [str(stored)] if stored else list(_edge_voices(language))
         order = [chosen] if chosen in {"edge", "openai"} else ["edge", "openai"]
         if chosen == "openai" and not await self.key():
             order = ["edge"]
@@ -227,20 +289,21 @@ class TextToSpeech:
         # owner asked for a voice note, not for a lecture about the API key.
         if "openai" in order:
             order.append("edge")
-        edge_voice = EDGE_VOICES.get(language, EDGE_VOICES["en"]) if not await self.voice(language) else await self.voice(language)
         errors: list[str] = []
         for provider in order:
-            try:
-                if provider == "edge":
-                    result = await self._edge(spoken, edge_voice)
-                else:
-                    result = await self._openai(spoken, voice)
-            except TTSError as exc:
-                errors.append(f"{provider}: {exc.kind}")
-                continue
-            self.spoken += 1
-            self.last_error = ""
-            return result
+            voices = candidates if provider == "edge" else [GROQ_VOICES.get(language, GROQ_VOICES["en"])]
+            for voice in voices:
+                try:
+                    if provider == "edge":
+                        result = await self._edge(spoken, voice)
+                    else:
+                        result = await self._openai(spoken, voice)
+                except TTSError as exc:
+                    errors.append(f"{provider}/{voice}: {exc.kind}")
+                    continue
+                self.spoken += 1
+                self.last_error = ""
+                return result
         self.last_error = "; ".join(errors) or "no provider"
         self.logger.warning("tts: %s", self.last_error)
         return None

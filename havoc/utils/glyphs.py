@@ -188,6 +188,57 @@ ROLES: dict[str, tuple[str, ...]] = {
 }
 
 
+#: Kaomoji, kept apart from the ornaments because a face is *hers*, not syntax.
+#: Hand-picked so a message can wear a different one every time instead of the
+#: same three: ``ᵕ̈`` and ``Ⱉ`` and ``₍ᐢ. .ᐢ₎`` are three different moods.
+FACES: tuple[str, ...] = (
+    "ᵕ̈", "ᐧ ᴗ ᐧ", "꒰ᵕ ᵕ꒱", "₍ᐢ. .ᐢ₎", "₍ᐢ..ᐢ₎", "(¬‿¬)", ">_<", "Ⱉ", "ᐟ", "ᐠᐧᐟ",
+    "(˶ᵔ ᵕ ᵔ˶)", "ᵔ◡ᵔ", "( ˘ ³˘)♡", "ᶘ ᵒᴥᵒᶅ", "(๑˃ᴗ˂)ﻭ", "٩(ˊᗜˋ*)و", "⸜(｡˃ ᵕ ˂ )⸝",
+    "⋆˙⟡♡", "(≧▽≦)", "(；一_一)", "ᕕ( ᐛ )ᕗ", "ʕ•ᴥ•ʔ", "(๑•̀ㅂ•́)و", "⸜(๑’ᵕ’๑)⸝",
+    "(ᵕ—ᴗ—)", "૮₍ ˃ ⤙ ˂ ₎ა", "૮ ˶ᵔ ᵕ ᵔ˶ ა", "⟡ ݁₊ ⊹", "₊˚⊹ ᰔ", "ᯓᡣ𐭩", "ᡣ𐭩",
+    "૮꒰˶ᵔ ᵕ ᵔ˶꒱ა", "꒰ᵕ༚ᵕ꒱˖♡", "( ´ ▽ ` )", "(๑>◡<๑)", "(*´▽`*)", "(¬‿¬ )",
+    "✧(＾ω＾)", "^._.^", "-ᴗ-", "ᵕ̈♡", "(˶ᵔᗜᵔ˶)", "૮₍˶ •. • ⑅₎ა", "ᐟᐟ", "ʚɞ",
+    "ᐧᵕᐧ", "( ˶ˆ ᗜ ˆ˵ )", "ヽ(・∀・)ﾉ", "(｡•́︿•̀｡)", "⸜(ᵕᵕ)⸝", "₊ ⊹ ᵕ̈",
+    "ᰔᩚ", "ᡣ𐭩♡", "(๑'ᵕ'๑)", "ᵕ̈ ✧", "ᶻ 𝗓 𐰁", "ᐢ. .ᐢ", "꒰ ∗ ᵕ ᵕ ∗ ꒱",
+)
+
+#: Faces already used, so a message can wear a different one. Kept whole (a face
+#: is several characters) and matched as a substring.
+
+
+def collect_faces(text: str) -> set[str]:
+    """Every kaomoji from :data:`FACES` that appears in ``text``."""
+    body = str(text or "")
+    return {face for face in FACES if face in body}
+
+
+def fresh_faces(*, avoid: set[str] | None = None, count: int = 3) -> list[str]:
+    taken = set(avoid or ())
+    pool = [face for face in FACES if face not in taken] or list(FACES)
+    return random.sample(pool, k=min(count, len(pool)))
+
+
+def signature(*, avoid: set[str] | None = None) -> str:
+    """One fresh ornament for this message, and it is hers to open with."""
+    return fresh(avoid=avoid, role="open", count=1)[0]
+
+
+def restyle_faces(text: str, used: set[str] | None = None) -> str:
+    """Swap a kaomoji she already wore in a recent answer for a fresh one."""
+    body = str(text or "")
+    if not body or not used:
+        return body
+    taken = collect_faces(body) | set(used)
+    for face in used:
+        if face not in body:
+            continue
+        replacement = fresh_faces(avoid=taken, count=1)[0]
+        body = body.replace(face, replacement)
+        taken.add(replacement)
+        taken.discard(face)
+    return body
+
+
 def count() -> int:
     """How many glyphs the box holds."""
     return len(ALL)
@@ -214,14 +265,21 @@ def fresh(*, avoid: set[str] | None = None, role: str = "", count: int = 1) -> l
     return random.sample(pool, k=min(count, len(pool)))
 
 
-def suggest(avoid: set[str] | None = None) -> dict[str, list[str]]:
+def suggest(
+    avoid: set[str] | None = None,
+    *,
+    faces: set[str] | None = None,
+    per_role: int = 5,
+) -> dict[str, list[str]]:
     """A fresh handful for one message, grouped by the job each does."""
     taken = set(avoid or ())
     out: dict[str, list[str]] = {}
-    for role in ("open", "separate", "close", "point"):
-        picked = fresh(avoid=taken, role=role, count=3)
+    for role in ("open", "separate", "close", "point", "wrap"):
+        picked = fresh(avoid=taken, role=role, count=per_role)
         taken.update(picked)
         out[role] = picked
+    out["face"] = fresh_faces(avoid=faces, count=4)
+    out["signature"] = [signature(avoid=taken)]
     return out
 
 

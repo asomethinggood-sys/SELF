@@ -784,7 +784,7 @@ async def test_the_room_block_is_the_only_room_block(runtime) -> None:
     assert prompt.count("## ") == 1
     assert "not him" in prompt
     assert "his colleague" in prompt
-    assert "short, but alive" in prompt
+    assert "alive and complete" in prompt
 
 
 def test_the_bar_still_exists_in_his_own_chat(runtime) -> None:
@@ -854,3 +854,24 @@ async def test_the_switch_without_a_word_reports_the_state(runtime) -> None:
     await invoke(runtime, ".yura reply", language="en")
     text = _plain(runtime).lower()
     assert "thread" in text or "ریپلای" in text
+
+
+def test_length_is_a_story_not_a_telegram_sms() -> None:
+    """The complaint was "too short". The prompt has to say what long means."""
+    system = persona.system_prompt("en")
+    assert "three to six short paragraphs" in system
+    assert "failed answer" in system
+    assert "one thought per paragraph" in system.lower()
+
+
+def test_the_persian_prompt_says_the_same_thing() -> None:
+    system = persona.system_prompt("fa")
+    assert "سه" in system and "پاراگراف" in system
+
+
+def test_a_group_is_not_an_excuse_to_go_short() -> None:
+    block = persona.audience_prompt(
+        language="en", chat_title="Tea", speaker="Ali", is_owner=False, is_group=True
+    )
+    assert "answer all of it" in block
+    assert "two or three lines" not in block

@@ -954,6 +954,7 @@
   "yura.voice_hint": "{prefix}yura speak <متن> می‌گوید · {prefix}yura voice key <کلید> برای صدای سرویس · {prefix}yura voice off برمی‌گردد به صدای داخلی",
   "yura.voice_key_saved": "کلید صدا ذخیره شد و پیام پاک شد.",
   "yura.voice_key_usage": "استفاده: {prefix}yura voice key <کلید>",
+  "yura.voice_languages": "صداها: **{languages}** — هر کدام را بگویی، با همان دهن خوانده می‌شود.",
   "yura.voice_spoken": "ویس فرستاده‌شده: {count}",
   "yura.voice_title": "صدایش"
 }

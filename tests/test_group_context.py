@@ -562,7 +562,7 @@ async def test_the_prompt_hands_her_fresh_glyphs(runtime) -> None:
     await replies.on_group_message(_event("yura, say something"))
 
     prompt = _all_text(runtime.ai.calls[-1])
-    assert "typography for this message" in prompt
+    assert "how this message looks" in prompt
     assert "out of bounds" in prompt
     assert "✦" in prompt
 
@@ -580,3 +580,19 @@ async def test_an_ornament_she_repeats_is_swapped(runtime) -> None:
     assert "new answer" in sent
     assert "✦" not in sent, "she reused the ornament from her last answer"
     assert glyphs.collect(sent)
+
+
+async def test_the_same_face_is_not_worn_twice(runtime) -> None:
+    """Three answers in a row ending in ᵕ̈ is what made her look like a stamp."""
+    from havoc.utils import glyphs
+
+    replies, client = await _runtime_with(runtime)
+    worn = glyphs.FACES[0]
+    await runtime.memory.append(GROUP, "assistant", f"old answer {worn}")
+    runtime.ai = StubProvider(f"new answer with a face {worn}")
+
+    await replies.on_group_message(_event("yura, say something"))
+
+    sent = client.sent[-1][1]
+    assert worn not in sent, "she wore the same kaomoji twice in a row"
+    assert glyphs.collect_faces(sent)

@@ -66,14 +66,14 @@ async def test_edge_needs_no_key_and_still_speaks(runtime) -> None:
     assert result is not None
     assert result.provider == "edge"
     assert result.audio == b"fake-ogg"
-    assert edge.calls == [("hello there", EDGE_VOICES["en"])]
+    assert edge.calls == [("hello there", EDGE_VOICES["en"][0])]
 
 
 async def test_persian_gets_a_persian_voice(runtime) -> None:
     edge = _Edge()
     engine = await _engine(runtime, edge=edge)
     await engine.say("سلام", "fa")
-    assert edge.calls[-1][1] == EDGE_VOICES["fa"]
+    assert edge.calls[-1][1] == EDGE_VOICES["fa"][0]
 
 
 async def test_a_blank_line_is_not_spoken(runtime) -> None:
@@ -168,6 +168,63 @@ async def test_a_long_line_is_cut_before_it_costs_money_or_breaks(runtime) -> No
     assert len(edge.calls[0][0]) == 600
 
 
-@pytest.mark.parametrize("language", ["en", "fa"])
+@pytest.mark.parametrize("language", ["en", "fa", "ru", "ja"])
 def test_every_language_has_a_voice(language: str) -> None:
     assert EDGE_VOICES[language]
+    assert EDGE_VOICES[language][0]
+
+
+# ---------------------------------------------------------------------------
+# Russian and Japanese
+# ---------------------------------------------------------------------------
+async def test_russian_gets_a_russian_voice(runtime) -> None:
+    edge = _Edge()
+    engine = await _engine(runtime, edge=edge)
+    await engine.say("привет, как ты?", "en")  # an English chat, Russian words
+    assert edge.calls[-1][1] == EDGE_VOICES["ru"][0]
+
+
+async def test_japanese_gets_a_japanese_voice(runtime) -> None:
+    edge = _Edge()
+    engine = await _engine(runtime, edge=edge)
+    await engine.say("ねえ、元気にしてた？", "en")
+    assert edge.calls[-1][1] == EDGE_VOICES["ja"][0]
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("привет", "ru"),
+        ("ねえ、元気？", "ja"),
+        ("سلام", "fa"),
+        ("hello", "en"),
+    ],
+)
+def test_the_voice_follows_the_script(text: str, expected: str) -> None:
+    from havoc.services.tts import detect_speech_language
+
+    assert detect_speech_language(text) == expected
+
+
+async def test_a_missing_voice_name_falls_through_to_the_next_one(runtime) -> None:
+    """A voice can vanish from the service; the next one speaks instead of an error."""
+    calls: list[str] = []
+
+    async def flaky(text, voice):
+        calls.append(voice)
+        if len(calls) == 1:
+            raise TTSError("voice not found", kind="network")
+        return b"fake-ogg"
+
+    engine = TextToSpeech(runtime, edge_speak=flaky)
+    result = await engine.say("hello", "en")
+    assert result is not None
+    assert calls == [EDGE_VOICES["en"][0], EDGE_VOICES["en"][1]]
+
+
+def test_every_tuned_language_has_a_voice_and_a_cute_setting() -> None:
+    from havoc.services.tts import EDGE_TUNING
+
+    for language in ("en", "fa", "ru", "ja"):
+        assert EDGE_VOICES[language]
+        assert EDGE_TUNING[language]["pitch"].startswith("+")

@@ -253,30 +253,55 @@ async def run() -> dict[str, object]:
     record["echo"] = echo
 
     # -- 6. is she still her? ----------------------------------------------
-    # "so dry, gives short responses, no aesthetic glyphs" was the complaint
-    # after the prompt was tightened. Two ordinary messages, and the answer has
-    # to carry some of her: a glyph and more than a clipped fragment.
+    # "so dry, gives short responses, same glyphs every time" was the complaint
+    # after the prompt was tightened and then re-tightened. Two ordinary
+    # messages, at full length (no truncation before measuring): the answer has
+    # to fill a paragraph or three, carry an ornament, wear a face and be *laid
+    # out* — more than one paragraph, or at least a divider on its own line.
     voice: dict[str, object] = {}
     samples: list[str] = []
+    sizes: list[int] = []
+    structured = 0
+    faced = 0
     try:
         for ask in ("hey, how was your day?", "what are you doing right now?"):
-            brief = persona.ornament_prompt("en", used=set("✦✧⋆"))
+            # The second turn is told what the first answer already wore, exactly
+            # as the reply path does — that is where the repeats came from.
+            worn = set().union(*[glyphs.collect(text) for text in samples]) if samples else set("✦✧⋆")
+            worn_faces = set().union(*[glyphs.collect_faces(text) for text in samples]) if samples else set()
+            brief = persona.ornament_prompt("en", used=worn, faces=worn_faces)
             answer = await provider.converse(  # type: ignore[attr-defined]
                 [
                     AIMessage("system", f"{system_prompt('en')}\n\n{brief}"),
                     AIMessage("user", ask),
                 ],
-                max_tokens=300,
+                max_tokens=1200,
             )
-            samples.append(_head(answer, 300))
+            text = str(answer).strip()
+            samples.append(text)
+            sizes.append(len(text))
+            if "\n\n" in text or "\n" in text.strip():
+                structured += 1
+            if glyphs.collect_faces(text):
+                faced += 1
         with_glyph = [text for text in samples if glyphs.collect(text)]
         voice = {
-            "ok": bool(with_glyph) and min(len(text) for text in samples) >= 12,
-            "samples": samples,
+            # one point per complaint: long enough, ornamented, faced, laid out
+            "ok": (
+                min(sizes) >= 220
+                and len(with_glyph) == len(samples)
+                and faced >= 1
+                and structured >= 1
+            ),
+            "samples": [_head(text, 700) for text in samples],
+            "chars": sizes,
+            "shortest": min(sizes),
+            "longest": max(sizes),
             "with_a_glyph": len(with_glyph),
-            "shortest": min((len(text) for text in samples), default=0),
-            "longest": max((len(text) for text in samples), default=0),
+            "wears_a_face": faced,
+            "laid_out": structured,
             "box_size": glyphs.count(),
+            "faces": len(glyphs.FACES),
             "budget_tokens": 2500,
             "message_chars": 4096,
         }
@@ -304,6 +329,7 @@ def main() -> int:
         if part.get("answer"):
             print(f"  it saw:         {part['answer']}")
         if part.get("samples"):
+            print(f"  chars:          {part.get('chars')} · faces: {part.get('wears_a_face')} · laid out: {part.get('laid_out')}")
             for line in part["samples"]:
                 print(f"  she said:       {line}")
         if part.get("is_the_owner"):

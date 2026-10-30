@@ -87,14 +87,15 @@ def test_the_brief_forbids_what_was_already_used() -> None:
     block = persona.ornament_prompt("en", used={"✦", "❦"})
     assert "out of bounds" in block
     assert "✦" in block and "❦" in block
-    assert "three or four" in block
+    assert "the ornament of this message is" in block
+    assert "the face of this message is" in block
 
 
 def test_the_brief_speaks_persian_in_persian() -> None:
     from havoc import persona
 
     block = persona.ornament_prompt("fa", used={"✦"})
-    assert "تایپوگرافی" in block
+    assert "شکلِ این پیام" in block
     assert "out of bounds" not in block
 
 
@@ -127,3 +128,36 @@ async def test_an_offline_line_is_never_restyled(runtime) -> None:
     assert answer.source == "offline"
     # It is still one of her bank sentences, not a re-lettered version of one.
     assert persona.sentence_of(answer.text, "en"), answer.text
+
+
+# ---------------------------------------------------------------------------
+# Faces: the same kaomoji three messages in a row is a stamp, not a mood
+# ---------------------------------------------------------------------------
+def test_the_face_box_is_big_enough_to_rotate() -> None:
+    assert len(glyphs.FACES) >= 40
+    assert len(set(glyphs.FACES)) == len(glyphs.FACES)
+
+
+def test_a_face_is_recognised_in_a_sentence() -> None:
+    found = glyphs.collect_faces("mrrp ᵕ̈ fine")
+    assert "ᵕ̈" in found
+
+
+def test_a_worn_face_is_swapped_for_a_fresh_one() -> None:
+    out = glyphs.restyle_faces("hello ᵕ̈ there", {"ᵕ̈"})
+    assert "ᵕ̈" not in out
+    assert "hello" in out and "there" in out
+
+
+def test_a_fresh_face_is_left_alone() -> None:
+    text = "hi ₍ᐢ. .ᐢ₎ ok"
+    assert glyphs.restyle_faces(text, {"ᵕ̈"}) == text
+
+
+def test_the_brief_names_one_ornament_and_one_face_per_message() -> None:
+    from havoc import persona
+
+    block = persona.ornament_prompt("en", used={"✦"}, faces={"ᵕ̈"})
+    assert "the ornament of this message is" in block
+    assert "the face of this message is" in block
+    assert "three to five lines" in block

@@ -300,11 +300,15 @@ class YuraChat:
         # like a broken record rather than a personality.
         said = tuple(content for role, content in history if role == "assistant" and content)
         repeated = persona.repeat_prompt(said, language)
-        # The ornaments of her last few answers: what she may not use again, and
-        # what the typography brief hands her instead.
+        # The ornaments and faces of her last few answers: what she may not use
+        # again, and what the typography brief hands her instead. Eight answers is
+        # a couple of minutes of chat — long enough that a reader never sees the
+        # same sparkle twice, short enough that the pool stays rich.
         worn: set[str] = set()
-        for line in said[-3:]:
+        worn_faces: set[str] = set()
+        for line in said[-8:]:
             worn |= glyphs.collect(line)
+            worn_faces |= glyphs.collect_faces(line)
         if relationship and not block:
             # A private chat has no room to describe, so the relationship block is
             # the whole thing there. In a group the room block already says who
@@ -315,7 +319,7 @@ class YuraChat:
             block = f"{block}\n\n{taught}" if block else taught
         if repeated:
             block = f"{block}\n\n{repeated}" if block else repeated
-        ornaments = persona.ornament_prompt(language, used=worn)
+        ornaments = persona.ornament_prompt(language, used=worn, faces=worn_faces)
         block = f"{block}\n\n{ornaments}" if block else ornaments
         if block:
             system = messages[0].content if messages else ""
@@ -392,6 +396,7 @@ class YuraChat:
             # and line-perfect; swapping its ornaments would be editing a poem to
             # fix its punctuation.
             worn=worn if source == "model" else set(),
+            worn_faces=worn_faces if source == "model" else set(),
         )
         if not answer.text and not answer.files:
             answer.text = fallback
@@ -417,6 +422,7 @@ class YuraChat:
         language: str,
         incoming: str = "",
         worn: set[str] | None = None,
+        worn_faces: set[str] | None = None,
     ) -> Answer:
         """Pull directives out of a raw reply and perform them.
 
@@ -459,6 +465,9 @@ class YuraChat:
         # of the same kind — that, together with the brief above, is why the same
         # four sparkles stop appearing under every message.
         visible = glyphs.restyle(visible, worn)
+        # ...and the same for the face she wears: three answers in a row with ᵕ̈ is
+        # the exact thing that made her look like a stamp.
+        visible = glyphs.restyle_faces(visible, worn_faces)
         visible = persona.finish_sentence(visible)
         visible = re.sub(r"\n{3,}", "\n\n", visible).strip()
         if len(visible) > MAX_REPLY_CHARS:

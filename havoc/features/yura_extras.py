@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from ..command_registry import CommandContext
-from ..services.tts import TextToSpeech
+from ..services.tts import SPEECH_LANGUAGES, TextToSpeech, detect_speech_language
 from ..utils.formatting import bold, escape
 from ..utils.markup import rich
 from ..utils.mood import mood_line
@@ -176,7 +176,9 @@ async def say(ctx: CommandContext, text: str) -> None:
         await ctx.reply(escape(ctx.t("yura.say_needs_text")))
         return
     engine = tts_for(ctx.runtime)
-    language = "fa" if _is_persian(spoken) else "en"
+    # The script of the sentence decides the mouth: Russian and Japanese are read
+    # by their own voices, not by the English one.
+    language = detect_speech_language(spoken)
     result = await engine.say(spoken, language)
     if result is None:
         await ctx.reply(
@@ -233,6 +235,7 @@ async def voice(ctx: CommandContext, words: list[str]) -> None:
                 bold(escape(ctx.t("yura.voice_title"))),
                 f"`{escape(state)}`",
                 escape(ctx.t("yura.voice_spoken", count=spoken)),
+                escape(ctx.t("yura.voice_languages", languages=" · ".join(SPEECH_LANGUAGES))),
                 f"_{escape(ctx.t('yura.voice_hint', prefix=ctx.runtime.prefix))}_",
             ]
         )

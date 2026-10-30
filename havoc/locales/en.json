@@ -954,6 +954,7 @@
   "yura.voice_hint": "{prefix}yura speak <text> says it · {prefix}yura voice key <key> for a paid voice · {prefix}yura voice off returns to the built-in one",
   "yura.voice_key_saved": "Voice key stored and the message removed.",
   "yura.voice_key_usage": "Usage: {prefix}yura voice key <key>",
+  "yura.voice_languages": "voices: **{languages}** — say anything in one of them and it comes out in that mouth.",
   "yura.voice_spoken": "Voice notes sent: {count}",
   "yura.voice_title": "her voice"
 }
