@@ -412,16 +412,25 @@ async def test_tagging_him_does_not_summon_her(runtime) -> None:
     assert replies.last_skip == "not_addressed"
 
 
-async def test_her_answer_is_not_sent_as_a_reply_bubble(runtime) -> None:
-    """A reply bubble puts their message on top of her answer — "I get my prompt back"."""
+async def test_her_answer_is_threaded_under_the_message(runtime) -> None:
+    """By default her answer links back to the message it answers."""
     replies, client = await _runtime_with(runtime)
-    theirs = FakeMessage(id=661, chat_id=GROUP, sender_id=FRIEND, text="yura, hi", out=False)
 
-    await replies.on_group_message(_event("yura, hi", reply=theirs, message_id=661))
+    await replies.on_group_message(_event("yura, hi", message_id=661))
 
     assert client.sent, "she did not answer at all"
-    for _, _, kwargs in client.sent:
-        assert not kwargs.get("reply_to"), "her answer was threaded as a reply"
+    assert client.sent[-1][2].get("reply_to") == 661
+
+
+async def test_plain_mode_sends_a_standalone_bubble(runtime) -> None:
+    """``.yura reply off`` — a message with no quote on top."""
+    replies, client = await _runtime_with(runtime)
+    await replies.set_reply_style(GROUP, "plain")
+
+    await replies.on_group_message(_event("yura, hi", message_id=661))
+
+    assert client.sent, "she did not answer at all"
+    assert not client.sent[-1][2].get("reply_to")
 
 
 async def test_the_echo_at_the_top_of_her_answer_is_cut(runtime) -> None:

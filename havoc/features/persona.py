@@ -107,6 +107,8 @@ async def _card(ctx: CommandContext) -> str:
     facts = await runtime.memory.count(ctx.chat_id)
     provider = runtime.ai
     chat = getattr(runtime, "yura_chat", None)
+    replies = getattr(runtime, "persona_replies", None)
+    style = await replies._reply_style(ctx.chat_id) if replies is not None else "thread"
     rows = [
         f"{ui.bold(ctx.t('yura.state'))} {ui.state(enabled, on=ctx.t('common.on'), off=ctx.t('common.off'))}",
         f"{ui.bold(ctx.t('yura.mode'))} "
@@ -120,8 +122,8 @@ async def _card(ctx: CommandContext) -> str:
         f"{ui.bold(ctx.t('yura.memory_count'))} {ui.code(str(facts))}",
         f"{ui.bold(ctx.t('yura.turns'))} {ui.code(str(getattr(chat, 'turns', 0)))}",
         f"{ui.bold(ctx.t('yura.bank'))} {ui.code(str(persona.capacity()))}",
+        f"{ui.bold(ctx.t('yura.reply_row'))} {ui.code(style)}",
     ]
-    replies = getattr(runtime, "persona_replies", None)
     if replies is not None and replies.last_skip:
         rows.append(
             f"{ui.bold(ctx.t('yura.last_skip'))} {ui.code(escape(replies.last_skip))}"
@@ -488,6 +490,33 @@ async def _key_command(ctx: CommandContext, words: list[str]) -> str:
     )
 
 
+async def _reply_command(ctx: CommandContext, action: str, words: list[str]) -> None:
+    """``.yura reply on|off`` — does her answer land as a reply to yours?
+
+    Both shapes are legitimate and the owner has asked for each of them at
+    different times, so it is a switch he owns instead of a decision in the code.
+    """
+    replies = getattr(ctx.runtime, "persona_replies", None)
+    if replies is None:
+        await ctx.reply(ctx.t("yura.reply_usage", prefix=ctx.runtime.prefix))
+        return
+    word = words[0].lower() if words else ""
+    on = {"on", "yes", "true", "thread", "reply", "بله", "روشن", "روشنش کن"}
+    off = {"off", "no", "false", "plain", "bubble", "نه", "خاموش", "بدون"}
+    if word in on:
+        await replies.set_reply_style(ctx.chat_id, "thread")
+        await ctx.reply_ok(ctx.t("yura.reply_on"))
+        return
+    if word in off:
+        await replies.set_reply_style(ctx.chat_id, "plain")
+        await ctx.reply_ok(ctx.t("yura.reply_off"))
+        return
+    style = await replies._reply_style(ctx.chat_id)
+    await ctx.reply(
+        ctx.t("yura.reply_state", style=escape(ctx.t(f"yura.reply_style_{style}")))
+    )
+
+
 def _local_hour(runtime: Any) -> int:
     try:
         return to_local(utc_now(), runtime.config.timezone).hour
@@ -563,7 +592,12 @@ async def _chat(ctx: CommandContext, text: str, *, greeting: bool = False) -> No
         # above it. Calling her by name is a normal message, so answering it as a
         # reply put the caller's own words back on top of every answer — "I talk
         # to an AI to get a response, not to get my prompt back".
-        await ctx.reply(_visible(answer), reply=False)
+        style = "thread"
+        try:
+            style = await ctx.runtime.persona_replies._reply_style(ctx.chat_id)
+        except Exception:  # noqa: BLE001 - a missing switch means the default
+            style = "thread"
+        await ctx.reply(_visible(answer), reply=style == "thread")
         # Remember that these words are hers: a reply to this message must be
         # recognised as a reply to *her* even after a restart.
         try:
@@ -602,6 +636,9 @@ async def cmd_yura(ctx: CommandContext) -> None:
         return
     if action == "forget":
         await _memory_command(ctx, ["forget", *words])
+        return
+    if action in {"reply", "thread", "plain", "quote", "bubble"}:
+        await _reply_command(ctx, action, words)
         return
     if action in {"key", "apikey", "token"}:
         await ctx.reply(await _key_command(ctx, words))
@@ -689,6 +726,12 @@ OWN_IDS_LIMIT = 60
 #: and the reply to it, or a deleted row in the settings table.
 SAID_SETTING = "yura.said"
 SAID_LIMIT = 60
+#: Whether her answer is sent as a Telegram *reply* to the message she answered.
+#: A reply links the two bubbles and puts a one-line quote on top; a plain message
+#: does not. Both are legitimate, which is why it is a switch and not a decision
+#: buried in the code: ``.yura reply on|off``.
+REPLY_STYLE_SETTING = "yura.reply_style"
+STYLES = ("thread", "plain")
 
 
 @dataclass
@@ -757,6 +800,7 @@ class PersonaReplies:
         # marks in the Telegram copy — but the id never lies.
         self._own_ids: dict[int, deque[int]] = {}
         self._said: dict[int, deque[str]] = {}
+        self._styles: dict[int, str] = {}
         # Why the last message in a group was not answered. "She ignored me" and
         # "a gate said no" look identical from the chat, and only one is a bug.
         self.last_skip = ""
@@ -831,6 +875,30 @@ class PersonaReplies:
             await self.runtime.store.set_setting(f"{OWN_IDS_SETTING}.{chat_id}", list(bucket))
         except Exception:  # pragma: no cover - see above
             pass
+
+    async def _reply_style(self, chat_id: int) -> str:
+        """``thread`` (a Telegram reply) or ``plain``, per chat, defaulting to thread."""
+        cache = self._styles.get(chat_id)
+        if cache is not None:
+            return cache
+        style = "thread"
+        for key in (f"{REPLY_STYLE_SETTING}.{chat_id}", REPLY_STYLE_SETTING):
+            try:
+                stored = await self.runtime.store.get_setting(key, None)
+            except Exception:  # pragma: no cover - storage trouble must not silence her
+                stored = None
+            if str(stored or "").lower() in STYLES:
+                style = str(stored).lower()
+                break
+        self._styles[chat_id] = style
+        return style
+
+    async def set_reply_style(self, chat_id: int, style: str) -> str:
+        """Change it for this chat and remember it."""
+        style = style if style in STYLES else "thread"
+        self._styles[chat_id] = style
+        await self.runtime.store.set_setting(f"{REPLY_STYLE_SETTING}.{chat_id}", style)
+        return style
 
     async def _said_bucket(self, chat_id: int) -> deque[str]:
         bucket = self._said.get(chat_id)
@@ -1112,35 +1180,50 @@ class PersonaReplies:
                 self._decorate(_visible(answer), is_private=is_private),
                 answer.source,
                 text=answer.text,
+                reply_to=(
+                    event.message_id
+                    if await self._reply_style(chat_id) == "thread"
+                    else None
+                ),
             )
         for path in answer.files:
             await self.runtime.sender.send_media(
                 chat_id, str(path), caption=escape(truncate(path.name, 90))
             )
 
-    async def _deliver(self, chat_id: int, html: str, source: str, *, text: str = "") -> None:
+    async def _deliver(
+        self,
+        chat_id: int,
+        html: str,
+        source: str,
+        *,
+        text: str = "",
+        reply_to: int | None = None,
+    ) -> None:
         """Send, then edit into the real answer — the message types itself.
 
         An offline line is instant and gets no placeholder: a "…" that is replaced
         in the same frame looks like a glitch. A model answer took a second, and
         that second is worth showing.
 
-        Her answer is **not** sent as a Telegram reply. A reply bubble carries the
-        message it answers above it, so every answer arrived with the question
-        quoted on top — the owner's complaint was exactly that: "I talk to an AI
-        to get a response, not to get my prompt back". The conversation is still
-        followable: replying to *her* message is what continues it.
+        A *reply* links her answer to the message it answers; a *plain* message
+        stands on its own. Which one is right is the owner's call, so
+        ``.yura reply on|off`` decides, and this method just obeys. What never
+        comes back is a copy of their message written into the body — that was
+        the actual complaint, and ``strip_echo`` handles it.
         """
         sender = self.runtime.sender
         await self._note_said(chat_id, text)
         if source != "model":
-            result = await sender.send(chat_id, html)
+            result = await sender.send(chat_id, html, reply_to=reply_to)
             await self._note_own(chat_id, getattr(getattr(result, "message", None), "id", None))
             return
         try:
-            placeholder = await sender.send(chat_id, self.TYPING)
+            # The placeholder is the message that exists: it has to carry the
+            # reply link, because the edit that fills it cannot add one.
+            placeholder = await sender.send(chat_id, self.TYPING, reply_to=reply_to)
         except Exception:  # noqa: BLE001 - fall back to one clean message
-            result = await sender.send(chat_id, html)
+            result = await sender.send(chat_id, html, reply_to=reply_to)
             await self._note_own(chat_id, getattr(getattr(result, "message", None), "id", None))
             return
         message = getattr(placeholder, "message", None)
@@ -1156,7 +1239,7 @@ class PersonaReplies:
                 await sender.delete(chat_id, message_id)
             except Exception:  # noqa: BLE001
                 pass
-            await sender.send(chat_id, html)
+            await sender.send(chat_id, html, reply_to=reply_to)
 
     def _decorate(self, html: str, *, is_private: bool = True) -> str:
         """Sometimes a bar under the message: the body clock, made visible.
@@ -1372,7 +1455,7 @@ def register(runtime: Any) -> None:
             cmd_yura,
             category="persona",
             aliases=("person", "self"),
-            usage="[on|off|status|memory|log|clear|recap|diary|faces|speak|voice|poster|caption|react|nice|rude|neutral|note|dm|teach|rules|people|person|<anything>]",
+            usage="[on|off|status|memory|log|clear|recap|diary|faces|speak|voice|poster|caption|react|nice|rude|neutral|note|dm|reply|teach|rules|people|person|<anything>]",
             changes_state=True,
             subcommands=(
                 "on", "off", "enable", "disable", "status", "card", "who", "state",
@@ -1383,6 +1466,7 @@ def register(runtime: Any) -> None:
                 "neutral", "normal", "tone", "note", "about", "facts", "people", "humans",
                 "known", "person", "them", "whois", "dm", "privates", "dms", "teach",
                 "learn-this", "lesson", "rules", "lessons", "unteach",
+                "reply", "thread", "plain", "quote", "bubble", "bubbles",
             ),
         )
     )

@@ -90,8 +90,8 @@ async def test_a_reply_to_her_message_is_answered(runtime) -> None:
     assert client.sent, "she stayed silent on a reply"
     chat_id, text, kwargs = client.sent[-1]
     assert chat_id == GROUP
-    # Not threaded: a reply bubble would put their message on top of her answer.
-    assert not kwargs.get("reply_to")
+    # Threaded by default, so the answer is visibly a reply to hers.
+    assert kwargs.get("reply_to") == 601
     assert "lift" in _all_text(runtime.ai.calls[-1])
 
 

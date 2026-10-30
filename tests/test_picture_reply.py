@@ -258,8 +258,8 @@ async def test_what_she_said_about_the_picture_can_be_revisited(runtime) -> None
 # ---------------------------------------------------------------------------
 # Threading: the reply button continues the conversation
 # ---------------------------------------------------------------------------
-async def test_her_answer_is_not_threaded_under_the_message(runtime) -> None:
-    """A reply bubble copies the question above the answer. She just answers."""
+async def test_her_answer_is_threaded_under_the_message(runtime) -> None:
+    """A photo and the answer about it stay linked."""
     provider = StubProvider("hello again")
     client = PictureClient(PNG)
     replies = await _yura(runtime, client, provider)
@@ -267,7 +267,7 @@ async def test_her_answer_is_not_threaded_under_the_message(runtime) -> None:
     await replies.on_self_message(_photo_event("what is this", message_id=905))
 
     assert client.sent[-1].text
-    assert not client.sent[-1].kwargs.get("reply_to")
+    assert client.sent[-1].kwargs.get("reply_to") == 905
 
 
 async def test_the_message_she_replied_to_reaches_the_prompt(runtime) -> None:

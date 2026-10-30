@@ -832,3 +832,25 @@ async def test_a_long_answer_uses_the_whole_message(runtime) -> None:
     sent = html.unescape(last_text(runtime))
     assert len(sent) > 2500, "a long answer was cut down to a fragment"
     assert not sent.rstrip().endswith("…")
+
+
+# ---------------------------------------------------------------------------
+# Threaded or plain: the owner's switch
+# ---------------------------------------------------------------------------
+async def test_reply_style_defaults_to_threaded(runtime) -> None:
+    assert await runtime.persona_replies._reply_style(42) == "thread"
+
+
+async def test_the_switch_turns_threading_off_and_on(runtime) -> None:
+    await invoke(runtime, ".yura reply off")
+    assert await runtime.persona_replies._reply_style(100) == "plain"
+    assert await runtime.store.get_setting("yura.reply_style.100", None) == "plain"
+
+    await invoke(runtime, ".yura reply on")
+    assert await runtime.persona_replies._reply_style(100) == "thread"
+
+
+async def test_the_switch_without_a_word_reports_the_state(runtime) -> None:
+    await invoke(runtime, ".yura reply", language="en")
+    text = _plain(runtime).lower()
+    assert "thread" in text or "ریپلای" in text
