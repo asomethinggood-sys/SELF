@@ -279,16 +279,25 @@ async def run() -> dict[str, object]:
         ):
             voices = tts.EDGE_VOICES.get(code, ())
             tuning = tts.EDGE_TUNING.get(code, {})
-            row: dict[str, object] = {"voice": voices[0] if voices else "", "ok": False}
-            try:
-                buffer = bytearray()
-                communicate = _edge.Communicate(line, str(row["voice"]), **tuning)
-                async for chunk in communicate.stream():
-                    if chunk.get("type") == "audio" and chunk.get("data"):
-                        buffer.extend(chunk["data"])
-                row.update({"ok": len(buffer) > 1000, "bytes": len(buffer), "tuning": tuning})
-            except Exception as exc:  # noqa: BLE001 - a missing voice is a fact, not a crash
-                row["failure"] = _head(exc, 200)
+            # Every candidate is asked in turn, the way TextToSpeech.say does it:
+            # one dead voice name must not read as "she cannot speak this".
+            row: dict[str, object] = {"voice": "", "ok": False, "tried": []}
+            for name in voices:
+                attempt: dict[str, object] = {"voice": name, "ok": False}
+                try:
+                    buffer = bytearray()
+                    communicate = _edge.Communicate(line, name, **tuning)
+                    async for chunk in communicate.stream():
+                        if chunk.get("type") == "audio" and chunk.get("data"):
+                            buffer.extend(chunk["data"])
+                    attempt.update({"ok": len(buffer) > 1000, "bytes": len(buffer)})
+                except Exception as exc:  # noqa: BLE001 - a dead voice is a fact
+                    attempt["failure"] = _head(exc, 200)
+                row["tried"].append(attempt)  # type: ignore[union-attr]
+                if attempt["ok"]:
+                    row.update({"voice": name, "ok": True, "bytes": attempt["bytes"]})
+                    break
+            row["tuning"] = tuning
             speech["languages"][code] = row  # type: ignore[index]
     except Exception as exc:  # noqa: BLE001
         speech["failure"] = _head(exc, 200)

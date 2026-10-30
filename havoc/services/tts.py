@@ -41,12 +41,13 @@ GROQ_MODEL = "playai-tts"
 EDGE_VOICES: dict[str, tuple[str, ...]] = {
     "en": ("en-US-AnaNeural", "en-GB-MaisieNeural", "en-US-MichelleNeural"),
     "fa": ("fa-IR-DilaraNeural", "fa-IR-FaridNeural"),
-    # ru-RU-DariyaNeural is a child voice — the closest thing the free engine has
-    # to the way she actually sounds; Svetlana is the grown-up fallback.
-    "ru": ("ru-RU-DariyaNeural", "ru-RU-SvetlanaNeural"),
-    # Nanami is the light, soft one; Keita only exists so a broken name still
-    # produces speech instead of an error message.
-    "ja": ("ja-JP-NanamiNeural", "ja-JP-KeitaNeural"),
+    # Svetlana first: Dariya is the child voice and sounds closest to her, but it
+    # is not served on every edge backend ("no audio was received" with no other
+    # explanation), and a fallback that is never reached is not a fallback.
+    "ru": ("ru-RU-SvetlanaNeural", "ru-RU-DariyaNeural"),
+    # Nanami is the light, soft one; Mayu and Aoi are the other two bright female
+    # voices, and Keita only exists so a broken name still produces speech.
+    "ja": ("ja-JP-NanamiNeural", "ja-JP-MayuNeural", "ja-JP-AoiNeural", "ja-JP-KeitaNeural"),
 }
 #: How each language is nudged to sound like *her* rather than like a reader.
 #: ``rate`` speeds the sentence up a touch, ``pitch`` lifts it into kitten range.
