@@ -61,3 +61,14 @@ def test_history_keeps_the_bad_run_when_a_good_one_follows(tmp_path: Path) -> No
     assert any(entry["healthy"] is False for entry in document["history"])
     assert len(document["history"]) <= 10
     assert document["last_healthy_at"]
+
+
+def test_the_status_file_is_not_ignored() -> None:
+    """`git add` refuses an ignored path, and the status would vanish silently."""
+    ignore = (Path(__file__).resolve().parent.parent / ".gitignore").read_text()
+    assert "bot-status.json" not in ignore.splitlines()
+
+
+def test_publish_forces_the_file_into_the_index() -> None:
+    source = (Path(__file__).resolve().parent.parent / "scripts" / "publish_status.py").read_text()
+    assert 'git", "add", "-f"' in source

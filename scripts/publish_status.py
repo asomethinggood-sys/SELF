@@ -141,7 +141,9 @@ def publish(path: Path, document: dict[str, Any], *, commit: bool = True) -> str
         subprocess.run(
             ["git", "config", "user.email", "status@users.noreply.github.com"], cwd=ROOT, check=False
         )
-        subprocess.run(["git", "add", str(path)], cwd=ROOT, check=True)
+        # -f: the file is deliberately committed, and an ignore rule added for
+        # some other reason must not silently swallow the bot's own status.
+        subprocess.run(["git", "add", "-f", str(path)], cwd=ROOT, check=True)
         staged = subprocess.run(
             ["git", "diff", "--cached", "--quiet"], cwd=ROOT, check=False
         ).returncode
