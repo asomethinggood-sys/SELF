@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-10-30T07:47:02Z",
+  "checked_at": "2026-10-30T07:51:04Z",
   "provider": "router",
   "keys": 4,
   "formatting": {
@@ -19,14 +19,14 @@
   },
   "audience": {
     "ok": true,
-    "answer": "answering ali, obviously >_<",
+    "answer": "answering **ali** because they started talking about the bridge ᐧ ᴗ ᐧ",
     "names_the_speaker": true,
-    "block_chars": 459
+    "block_chars": 605
   },
   "marks": {
     "ok": true,
-    "raw": ">> daddaaa keeps me in here so nobody else gets to bite their fingers ᐧ ᴗ ᐧ ++pressed++",
-    "html": "<blockquote expandable>daddaaa keeps me in here so nobody else gets to bite their fingers ᐧ ᴗ ᐧ</blockquote> <u>pressed</u>",
+    "raw": ">> i bite cables when you aren't looking ᐧ ᴗ ᐧ ++pressed++",
+    "html": "<blockquote expandable>i bite cables when you aren't looking ᐧ ᴗ ᐧ</blockquote> <u>pressed</u>",
     "has_whisper": true,
     "has_underline": true
   },
