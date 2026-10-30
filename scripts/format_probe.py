@@ -235,9 +235,34 @@ async def run() -> dict[str, object]:
         echo = {"ok": False, "failure": f"{exc.kind}: {_head(exc, 200)}"}
     record["echo"] = echo
 
+    # -- 6. is she still her? ----------------------------------------------
+    # "so dry, gives short responses, no aesthetic glyphs" was the complaint
+    # after the prompt was tightened. Two ordinary messages, and the answer has
+    # to carry some of her: a glyph and more than a clipped fragment.
+    GLYPHS = set("♡✧ᵕ⸝﹏٩¬‿ᐧᴗ˶ᵔᗜ´︶`~>_<•ᐟᵎ")
+    voice: dict[str, object] = {}
+    samples: list[str] = []
+    try:
+        for ask in ("hey, how was your day?", "what are you doing right now?"):
+            answer = await provider.converse(  # type: ignore[attr-defined]
+                [AIMessage("system", system_prompt("en")), AIMessage("user", ask)],
+                max_tokens=300,
+            )
+            samples.append(_head(answer, 300))
+        with_glyph = [text for text in samples if any(char in GLYPHS for char in text)]
+        voice = {
+            "ok": bool(with_glyph) and min(len(text) for text in samples) >= 12,
+            "samples": samples,
+            "with_a_glyph": len(with_glyph),
+            "shortest": min((len(text) for text in samples), default=0),
+        }
+    except AIError as exc:
+        voice = {"ok": False, "failure": f"{exc.kind}: {_head(exc, 200)}"}
+    record["voice"] = voice
+
     record["ok"] = all(
         bool(part.get("ok"))
-        for part in (formatting, marks, vision, room, echo)  # type: ignore[union-attr]
+        for part in (formatting, marks, vision, room, echo, voice)  # type: ignore[union-attr]
     )
     return record
 
@@ -245,7 +270,7 @@ async def run() -> dict[str, object]:
 def main() -> int:
     record = asyncio.run(run())
     print(f"provider: {record['provider']} · keys: {record['keys']}")
-    for name in ("formatting", "marks", "vision", "room", "echo"):
+    for name in ("formatting", "marks", "vision", "room", "echo", "voice"):
         part = record.get(name, {})  # type: ignore[assignment]
         print(f"{name}: {'OK' if part.get('ok') else 'FAILED'}")
         if part.get("raw"):
@@ -254,6 +279,9 @@ def main() -> int:
             print(f"  telegram shows: {part['html']}")
         if part.get("answer"):
             print(f"  it saw:         {part['answer']}")
+        if part.get("samples"):
+            for line in part["samples"]:
+                print(f"  she said:       {line}")
         if part.get("whose_message"):
             print(f"  answering:      {part['whose_message']}")
         if part.get("failure"):

@@ -564,6 +564,12 @@ async def _chat(ctx: CommandContext, text: str, *, greeting: bool = False) -> No
         # reply put the caller's own words back on top of every answer — "I talk
         # to an AI to get a response, not to get my prompt back".
         await ctx.reply(_visible(answer), reply=False)
+        # Remember that these words are hers: a reply to this message must be
+        # recognised as a reply to *her* even after a restart.
+        try:
+            await ctx.runtime.persona_replies._note_said(ctx.chat_id, answer.text)
+        except Exception:  # noqa: BLE001 - bookkeeping must never lose an answer
+            pass
     for path in answer.files:
         await ctx.runtime.sender.send_media(
             ctx.chat_id,
@@ -678,6 +684,11 @@ async def cmd_yura(ctx: CommandContext) -> None:
 #: that the message being replied to was hers.
 OWN_IDS_SETTING = "yura.own_ids"
 OWN_IDS_LIMIT = 60
+#: The text of what she sent, per chat. The id is the proof; this is the second
+#: proof, for the case that breaks the first one — a restart between her answer
+#: and the reply to it, or a deleted row in the settings table.
+SAID_SETTING = "yura.said"
+SAID_LIMIT = 60
 
 
 @dataclass
@@ -720,6 +731,8 @@ class PersonaReplies:
     MAX_DM_PER_HOUR = 12
     #: Every so many answers she puts her attention bar under the message.
     MOOD_EVERY = 3
+    #: ...and how often in a group, where it is a flourish and not a footer.
+    MOOD_EVERY_GROUP = 5
 
     def __init__(self, runtime: Any) -> None:
         self.runtime = runtime
@@ -743,6 +756,7 @@ class PersonaReplies:
         # replied to was hers. Content is not enough — formatted text loses its
         # marks in the Telegram copy — but the id never lies.
         self._own_ids: dict[int, deque[int]] = {}
+        self._said: dict[int, deque[str]] = {}
         # Why the last message in a group was not answered. "She ignored me" and
         # "a gate said no" look identical from the chat, and only one is a bug.
         self.last_skip = ""
@@ -818,6 +832,43 @@ class PersonaReplies:
         except Exception:  # pragma: no cover - see above
             pass
 
+    async def _said_bucket(self, chat_id: int) -> deque[str]:
+        bucket = self._said.get(chat_id)
+        if bucket is not None:
+            return bucket
+        stored: Any = None
+        try:
+            stored = await self.runtime.store.get_setting(f"{SAID_SETTING}.{chat_id}", None)
+        except Exception:  # pragma: no cover - storage trouble must not silence her
+            stored = None
+        lines = [" ".join(str(item).split()) for item in (stored or []) if str(item).strip()]
+        bucket = deque(lines[-SAID_LIMIT:], maxlen=SAID_LIMIT)
+        self._said[chat_id] = bucket
+        return bucket
+
+    async def _note_said(self, chat_id: int, text: str) -> None:
+        """Keep the words she sent here, so a reply to them is recognised later."""
+        flat = " ".join(str(text or "").split())
+        if not flat:
+            return
+        bucket = await self._said_bucket(chat_id)
+        if flat in bucket:
+            bucket.remove(flat)
+        bucket.append(flat)
+        try:
+            await self.runtime.store.set_setting(f"{SAID_SETTING}.{chat_id}", list(bucket))
+        except Exception:  # pragma: no cover - see above
+            pass
+
+    async def _is_own_text(self, chat_id: int, text: str) -> bool:
+        """True when this exact text is something she said in this chat."""
+        flat = " ".join(str(text or "").split())
+        if not flat:
+            return False
+        if flat in await self._said_bucket(chat_id):
+            return True
+        return persona.is_own_line(flat) or self.runtime.yura_chat.was_sent(chat_id, flat)
+
     async def _is_own_id(self, chat_id: int, message_id: Any) -> bool:
         """True only for a message this account sent as *her*.
 
@@ -834,9 +885,7 @@ class PersonaReplies:
         """True when this message is one she wrote, not one the owner wrote."""
         if await self._is_own_id(chat_id, message_id):
             return True
-        if not text:
-            return False
-        return persona.is_own_line(text) or self.runtime.yura_chat.was_sent(chat_id, text)
+        return await self._is_own_text(chat_id, text)
 
     def _named(self, text: str) -> bool:
         """True when the message says her name, in either spelling or alphabet."""
@@ -1062,13 +1111,14 @@ class PersonaReplies:
                 chat_id,
                 self._decorate(_visible(answer), is_private=is_private),
                 answer.source,
+                text=answer.text,
             )
         for path in answer.files:
             await self.runtime.sender.send_media(
                 chat_id, str(path), caption=escape(truncate(path.name, 90))
             )
 
-    async def _deliver(self, chat_id: int, html: str, source: str) -> None:
+    async def _deliver(self, chat_id: int, html: str, source: str, *, text: str = "") -> None:
         """Send, then edit into the real answer — the message types itself.
 
         An offline line is instant and gets no placeholder: a "…" that is replaced
@@ -1082,6 +1132,7 @@ class PersonaReplies:
         followable: replying to *her* message is what continues it.
         """
         sender = self.runtime.sender
+        await self._note_said(chat_id, text)
         if source != "model":
             result = await sender.send(chat_id, html)
             await self._note_own(chat_id, getattr(getattr(result, "message", None), "id", None))
@@ -1110,14 +1161,13 @@ class PersonaReplies:
     def _decorate(self, html: str, *, is_private: bool = True) -> str:
         """Sometimes a bar under the message: the body clock, made visible.
 
-        Only in his own chat. In a group the same line reads as debug output
-        leaking out of a bot — someone watching a stranger's reply has no idea
-        what "attention · 70%" is, and it was reported as exactly that.
+        It is one of her typographic flourishes, so it belongs to her everywhere;
+        it is only rarer in a group, where a bar under every third answer stopped
+        looking like a mood and started looking like a status line.
         """
-        if not is_private:
-            return html
         self._since_mood += 1
-        if self._since_mood % self.MOOD_EVERY:
+        every = self.MOOD_EVERY if is_private else self.MOOD_EVERY_GROUP
+        if self._since_mood % every:
             return html
         hour = _local_hour(self.runtime)
         if html.endswith("</blockquote>"):
@@ -1280,6 +1330,11 @@ class PersonaReplies:
             # a text match would count a friend quoting her back, and "outgoing"
             # is also true for every message the owner writes from this account.
             mine = await self._is_own_id(event.chat_id, getattr(current, "id", None))
+            if not mine and ours and text:
+                # Ids are lost on a restart and after a settings reset; the words
+                # are not. Only an outgoing message can be hers, so a member who
+                # quotes her line back is still not her.
+                mine = await self._is_own_text(event.chat_id, text)
             hers = hers or mine
             if text:
                 lines.append(text[:400])

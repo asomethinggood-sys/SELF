@@ -337,7 +337,7 @@ class YuraChat:
             try:
                 reply = await self.provider.converse(
                     messages,
-                    max_tokens=FILE_TOKENS if _wants_file(prompt) else 420,
+                    max_tokens=FILE_TOKENS if _wants_file(prompt) else 700,
                 )
             except AIError as exc:
                 self.last_error = f"{exc.kind}: {exc}"

@@ -354,25 +354,27 @@ async def test_the_notes_are_never_sent_but_the_real_line_survives(runtime) -> N
     assert "Ali" not in sent
 
 
-async def test_no_mood_bar_in_a_group(runtime) -> None:
-    """``▰▰▰▱▱ attention · 70%`` under a stranger's answer was read as debug output."""
+async def test_the_bar_is_a_rare_flourish_in_a_group(runtime) -> None:
+    """It is hers to send — every fifth answer, not under every third."""
     replies, client = await _runtime_with(runtime)
-    for index in range(6):
+    for index in range(10):
         replies._group_last.clear()
         replies._group_window.clear()
         await replies.on_group_message(_event(f"yura, you there? {index}"))
 
     assert client.sent, "nothing was sent, so the bar was never tested"
-    for _, text, _ in client.sent:
-        assert "attention" not in text.lower()
-        assert "%" not in text
+    with_bar = [text for _, text, _ in client.sent if "attention" in text.lower()]
+    assert len(with_bar) == 2, "the bar is not a footer under every answer"
+    for text in with_bar:
+        assert "▰" in text and "%" in text
 
 
 async def test_a_cut_reply_never_leaves_half_a_sentence(runtime) -> None:
     """A model that hits the ceiling mid-thought used to send the fragment."""
     replies, client = await _runtime_with(runtime)
     runtime.ai = StubProvider(
-        "باشه بابا، حرف تو درسته. " * 8 + "ولی این یکی رو دیگه نمی‌تونم قبول کنم چون"
+        "باشه بابا، حرف تو درسته و قبولش دارم. " * 12
+        + "ولی این یکی رو دیگه نمی‌تونم قبول کنم چون"
     )
 
     await replies.on_group_message(_event("yura, you there?"))
@@ -441,3 +443,40 @@ async def test_her_own_verse_quote_survives(runtime) -> None:
 
     sent = client.sent[-1][1]
     assert "بیتی از حافظ" in sent
+
+
+# ---------------------------------------------------------------------------
+# A reply to her is still a reply to her after a restart
+# ---------------------------------------------------------------------------
+async def test_a_reply_to_her_words_survives_a_lost_id(runtime) -> None:
+    """Ids live in settings and can go missing; her own words do not."""
+    replies, client = await _runtime_with(runtime)
+    await replies._note_said(GROUP, "i lift, obviously")
+    await runtime.store.set_setting("yura.own_ids." + str(GROUP), [])
+    replies._own_ids.clear()  # a fresh process, and the id list is gone
+
+    hers = FakeMessage(id=602, chat_id=GROUP, sender_id=OWNER, text="i lift, obviously", out=True)
+    await replies.on_group_message(_event("what do you think", out=True, sender_id=OWNER, reply=hers))
+
+    assert client.sent, "a reply to her own words was ignored"
+
+
+async def test_his_own_message_is_still_not_hers(runtime) -> None:
+    replies, client = await _runtime_with(runtime)
+    his = FakeMessage(id=603, chat_id=GROUP, sender_id=OWNER, text="look at this bridge", out=True)
+
+    await replies.on_group_message(_event("hm", out=True, sender_id=OWNER, reply=his))
+
+    assert client.sent == []
+    assert replies.last_skip == "not_addressed"
+
+
+async def test_a_member_quoting_her_line_is_not_her(runtime) -> None:
+    """Only a message this account sent can count as hers, however it reads."""
+    replies, client = await _runtime_with(runtime)
+    await replies._note_said(GROUP, "i lift, obviously")
+    theirs = FakeMessage(id=604, chat_id=GROUP, sender_id=FRIEND, text="i lift, obviously", out=False)
+
+    await replies.on_group_message(_event("hm", reply=theirs))
+
+    assert client.sent == []

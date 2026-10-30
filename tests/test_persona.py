@@ -645,7 +645,7 @@ async def test_asking_for_code_buys_the_model_more_tokens(runtime) -> None:
     plain = StubProvider(["mrrp."])
     runtime.ai = plain
     await invoke(runtime, ".yura how was your day")
-    assert plain.last_max_tokens == 420, "ordinary chat must not ask for a program's budget"
+    assert plain.last_max_tokens == 700, "ordinary chat must not ask for a program's budget"
 
 
 async def test_a_truncated_file_block_is_salvaged_not_dropped(runtime) -> None:
@@ -784,7 +784,7 @@ async def test_the_room_block_is_the_only_room_block(runtime) -> None:
     assert prompt.count("## ") == 1
     assert "not him" in prompt
     assert "his colleague" in prompt
-    assert "one or two short lines" in prompt
+    assert "short, but alive" in prompt
 
 
 def test_the_bar_still_exists_in_his_own_chat(runtime) -> None:
@@ -798,7 +798,7 @@ def test_the_bar_still_exists_in_his_own_chat(runtime) -> None:
 
 def test_a_reply_that_stops_mid_word_is_cut_to_the_last_sentence() -> None:
     """A message that just ends was reported as "it crops messages"."""
-    complete = "این یک جملهٔ کامل است. " * 8
+    complete = "این یک جملهٔ کامل است و ادامه دارد. " * 14
     cut = complete + "و بعد یک جملهٔ نصفه که هیچ‌وقت"
     assert persona.finish_sentence(cut).endswith(".")
     assert "نصفه" not in persona.finish_sentence(cut)
@@ -810,7 +810,7 @@ def test_a_short_reply_is_never_touched() -> None:
 
 
 def test_a_long_reply_that_ends_cleanly_is_left_alone() -> None:
-    fine = "این یک جملهٔ کامل است. " * 8
+    fine = "این یک جملهٔ کامل است و ادامه دارد. " * 14
     assert persona.finish_sentence(fine) == fine.rstrip()
 
 
