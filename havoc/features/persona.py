@@ -27,6 +27,7 @@ from typing import Any
 from .. import identity, persona, ui
 from ..command_registry import Command, CommandContext, CommandError
 from ..event_engine import EventType, NormalizedEvent, normalize_message
+from ..services import people as people_service
 from ..services.context import build as build_context
 from ..services.vision import IMAGE_MEDIA_TYPES, Picture, looks_like_picture
 from ..services.vision import download as download_picture
@@ -191,6 +192,16 @@ async def _memory_command(ctx: CommandContext, words: list[str]) -> None:
         fact = rest or " ".join(words[1:]).strip()
         if not fact:
             raise CommandError("yura.memory_needs_text", prefix=ctx.runtime.prefix)
+        # A reply to someone means the fact is about *them*: "remember she is my
+        # gf" said over her message belongs in her row, not in this chat's list.
+        target, target_name = await _who(ctx, [])
+        if target is not None:
+            kept = await ctx.runtime.people.note(target, fact)
+            person = await ctx.runtime.people.get(target)
+            who = escape(((person.name if person and person.name else "") or target_name) or str(target))
+            key = "yura.note_saved" if kept else "yura.note_known"
+            await ctx.reply_ok(ctx.t(key, name=who, fact=escape(truncate(fact, 120))))
+            return
         stored = await ctx.runtime.yura_chat.learn(ctx.chat_id, fact)
         await ctx.reply_ok(
             ctx.t("yura.memory_saved" if stored else "yura.memory_known", fact=escape(truncate(fact, 120)))
@@ -212,6 +223,140 @@ async def _memory_command(ctx: CommandContext, words: list[str]) -> None:
     stored = await ctx.runtime.yura_chat.learn(ctx.chat_id, fact)
     await ctx.reply_ok(
         ctx.t("yura.memory_saved" if stored else "yura.memory_known", fact=escape(truncate(fact, 120)))
+    )
+
+
+async def _replied_to(ctx: CommandContext) -> Any:
+    """The message this command is a reply to, if any (never raises)."""
+    message = getattr(ctx, "message", None)
+    getter = getattr(message, "get_reply_message", None)
+    if getter is None:
+        return None
+    try:
+        return await getter()
+    except Exception:  # noqa: BLE001 - a deleted target is not an error
+        return None
+
+
+async def _who(ctx: CommandContext, words: list[str]) -> tuple[int | None, str]:
+    """Which person a command is about.
+
+    In order: the message it replies to, an ``@username`` (resolved through the
+    account, which is the only way to turn a name into an id), a name already in
+    her book, and finally whoever is speaking. Resolution failures are returned
+    as "no target", never as an exception — a command that cannot find a person
+    should say so, not crash the dispatcher.
+    """
+    replied = await _replied_to(ctx)
+    if replied is not None:
+        user_id = getattr(replied, "sender_id", None)
+        if user_id and not ctx.runtime.permissions.is_owner(user_id):
+            sender = getattr(replied, "sender", None)
+            name = getattr(sender, "first_name", "") if sender is not None else ""
+            return int(user_id), str(name or "")
+
+    query = " ".join(word for word in words if word.strip()).strip()
+    if query:
+        handle = query.split()[0].lstrip("@")
+        client = getattr(ctx.runtime, "client", None)
+        if query.startswith("@") and client is not None:
+            try:
+                entity = await client.get_entity(handle)
+                user_id = getattr(entity, "id", None)
+                if user_id:
+                    name = getattr(entity, "first_name", "") or handle
+                    return int(user_id), str(name)
+            except Exception:  # noqa: BLE001 - an unknown handle is a normal answer
+                pass
+        matches = await ctx.runtime.people.search(handle)
+        if matches:
+            return matches[0].user_id, matches[0].name
+
+    speaker = getattr(getattr(ctx, "message", None), "sender_id", None)
+    if speaker and not ctx.runtime.permissions.is_owner(speaker):
+        return int(speaker), ""
+    return None, ""
+
+
+async def _tone_command(ctx: CommandContext, tone: str, words: list[str]) -> None:
+    """``.yura nice`` / ``.yura rude`` / ``.yura neutral`` — how to treat someone."""
+    user_id, name = await _who(ctx, words)
+    if user_id is not None and ctx.runtime.permissions.is_owner(user_id):
+        user_id = None
+    if user_id is None:
+        raise CommandError("yura.tone_needs_target", prefix=ctx.runtime.prefix)
+    await ctx.runtime.people.set_tone(user_id, tone)
+    person = await ctx.runtime.people.get(user_id)
+    who = escape((person.name if person and person.name else name) or str(user_id))
+    await ctx.reply_ok(
+        ctx.t("yura.tone_set", name=who, tone=escape(ctx.t(f"yura.tone_{tone}")))
+    )
+
+
+async def _note_command(ctx: CommandContext, words: list[str]) -> None:
+    """``.yura note she's my gf`` — keep a fact about the person replied to."""
+    fact = " ".join(words).strip()
+    if not fact:
+        raise CommandError("yura.note_needs_text", prefix=ctx.runtime.prefix)
+    user_id, name = await _who(ctx, [])
+    if user_id is None:
+        raise CommandError("yura.note_needs_target", prefix=ctx.runtime.prefix)
+    stored = await ctx.runtime.people.note(user_id, fact)
+    person = await ctx.runtime.people.get(user_id)
+    who = escape((person.name if person and person.name else name) or str(user_id))
+    key = "yura.note_saved" if stored else "yura.note_known"
+    await ctx.reply_ok(ctx.t(key, name=who, fact=escape(truncate(fact, 120))))
+
+
+async def _people_command(ctx: CommandContext) -> None:
+    people = await ctx.runtime.people.all(20)
+    if not people:
+        await ctx.reply(ctx.t("yura.people_empty"))
+        return
+    rows = []
+    for person in people:
+        bits = [ui.bold(escape(person.name or str(person.user_id)))]
+        if person.relation:
+            bits.append(ui.note(escape(person.relation)))
+        bits.append(ui.code(escape(person.tone)))
+        if person.facts:
+            bits.append(ui.note(f"{len(person.facts)} ✎"))
+        rows.append(" ".join(bits))
+    await ctx.reply(
+        "\n\n".join(
+            [
+                ui.title("♡", ctx.t("yura.people_title", count=await ctx.runtime.people.count())),
+                ui.panel(rows),
+                ui.footer(ctx.t("yura.people_hint", prefix=ctx.runtime.prefix)),
+            ]
+        )
+    )
+
+
+async def _person_command(ctx: CommandContext, words: list[str]) -> None:
+    user_id, name = await _who(ctx, words)
+    if user_id is None:
+        await ctx.reply(ctx.t("yura.person_unknown", prefix=ctx.runtime.prefix))
+        return
+    person = await ctx.runtime.people.get(user_id)
+    if person is None:
+        await ctx.reply(ctx.t("yura.person_unknown", prefix=ctx.runtime.prefix))
+        return
+    rows = [
+        f"{ui.bold(ctx.t('yura.person_tone'))} {ui.code(escape(person.tone))}",
+    ]
+    if person.relation:
+        rows.append(f"{ui.bold(ctx.t('yura.person_relation'))} {escape(person.relation)}")
+    for fact in person.facts[-10:]:
+        rows.append(f"· {escape(fact)}")
+    await ctx.reply(
+        "\n\n".join(
+            [
+                ui.title("♡", escape(person.name or str(person.user_id))),
+                ui.panel(rows),
+                ui.footer(ctx.t("yura.person_hint", prefix=ctx.runtime.prefix)),
+            ]
+        )
     )
 
 
@@ -416,6 +561,24 @@ async def cmd_yura(ctx: CommandContext) -> None:
     if action in {"react", "reaction"}:
         await yura_extras.react(ctx, list(words))
         return
+    if action in {"nice", "kind", "polite"}:
+        await _tone_command(ctx, "nice", list(words))
+        return
+    if action in {"rude", "mean", "savage"}:
+        await _tone_command(ctx, "rude", list(words))
+        return
+    if action in {"neutral", "normal", "tone"}:
+        await _tone_command(ctx, "neutral", list(words))
+        return
+    if action in {"note", "about", "facts"}:
+        await _note_command(ctx, list(words))
+        return
+    if action in {"people", "humans", "known"}:
+        await _people_command(ctx)
+        return
+    if action in {"person", "them", "whois"}:
+        await _person_command(ctx, list(words))
+        return
 
     # Everything else is something you said to her. `raw_args` is everything
     # after the command word, which is not the same as `args`: the parser takes
@@ -440,6 +603,9 @@ class Quote:
     #: True when the replied-to message was written by this account — hers or the
     #: owner's. Replying to it is addressing the account either way.
     from_account: bool = False
+    #: Who wrote the message being replied to, so "remember this" can be attached
+    #: to the right person instead of to the room.
+    user_id: int | None = None
 
 
 class PersonaReplies:
@@ -594,6 +760,7 @@ class PersonaReplies:
             self._skip("command")
             return
         quote = await self._quote(event)
+        await self._learn_from_owner(event, quote)
         decision = await self.runtime.permissions.can_act(event.chat_id, "persona", is_private=True)
         if not decision.allowed:
             self._skip(f"permission:{decision.code}")
@@ -639,6 +806,13 @@ class PersonaReplies:
             or self._named(event.text)
             or event.mentions_me
         )
+        # Learn before the addressing gate: "remember this" is an instruction to
+        # keep something, and it is worth keeping even when she says nothing back.
+        learned = await self._learn_from_owner(event, quote)
+        # "remember this" is itself aimed at her, even when the message is a reply
+        # to someone else: she should confirm it, not silently file it.
+        if learned:
+            addressed = True
         if not addressed:
             self._skip("not_addressed", event)
             return
@@ -689,6 +863,9 @@ class PersonaReplies:
     ) -> None:
         language = await self._language(event)
         audience = await self._audience(event) if not is_private else None
+        speaker = event.sender_id or (self.self_id if is_private else None)
+        owner = self.runtime.permissions.is_owner(speaker)
+        person = None if owner else await self._person(speaker, audience)
         answer = await self.runtime.yura_chat.answer(
             event.text,
             chat_id=chat_id,
@@ -696,6 +873,9 @@ class PersonaReplies:
             picture=picture,
             quoted=quoted,
             audience=audience,
+            person=person,
+            is_owner=owner,
+            chat_title=getattr(audience, "chat_title", "") if audience is not None else "",
         )
         self.logger.info(
             "yura: answering '%s' in %s%s",
@@ -775,6 +955,46 @@ class PersonaReplies:
             self.logger.warning("yura: could not read the room: %s", exc)
             return None
 
+    async def _person(self, user_id: int | None, audience: Any = None) -> Any:
+        """Their row, or a fresh one built from the room (never raises)."""
+        if user_id is None:
+            return None
+        try:
+            person = await self.runtime.people.touch(
+                user_id, str(getattr(audience, "speaker", "") or "")
+            )
+        except Exception as exc:  # noqa: BLE001 - the reply matters more than the book
+            self.logger.warning("yura: could not read the person: %s", exc)
+            return None
+        return person
+
+    async def _learn_from_owner(self, event: NormalizedEvent, quote: Quote) -> str:
+        """Keep what the owner just told her — "remember this: …".
+
+        Returns the payload, or ``""`` when the message was not an instruction to
+        remember. A reply in a group attaches the fact to the person replied to,
+        because "she's my gf" is about *her*, not about the room.
+        """
+        if not self.runtime.permissions.is_owner(event.sender_id):
+            # A stranger cannot teach her anything about anyone.
+            return ""
+        payload = persona.extract_remember(event.text)
+        if not payload:
+            return ""
+        target = quote.user_id if not quote.hers else None
+        try:
+            if target is not None and not self.runtime.permissions.is_owner(target):
+                relation = people_service.detect_relation(payload)
+                stored = await self.runtime.people.note(target, payload, relation=relation)
+                self.logger.info("yura: kept a fact about %s (%s)", target, bool(stored))
+            else:
+                stored = await self.runtime.yura_chat.learn(event.chat_id, payload)
+                self.logger.info("yura: kept a fact for this chat (%s)", bool(stored))
+        except Exception as exc:  # noqa: BLE001 - a failed write must not lose the answer
+            self.logger.warning("yura: could not keep that fact: %s", exc)
+            return ""
+        return payload
+
     async def _picture(self, event: NormalizedEvent) -> Picture | None:
         """The image the owner attached, if there is one worth looking at."""
         if event.media_type not in IMAGE_MEDIA_TYPES:
@@ -804,6 +1024,7 @@ class PersonaReplies:
         lines: list[str] = []
         hers = False
         from_account = False
+        author: int | None = getattr(replied, "sender_id", None)
         current = replied
         for _ in range(max(1, depth)):
             if current is None:
@@ -835,9 +1056,11 @@ class PersonaReplies:
             except Exception:  # noqa: BLE001
                 break
         if not lines:
-            return Quote(hers=hers, from_account=from_account)
+            return Quote(hers=hers, from_account=from_account, user_id=author)
         # Oldest first reads like a thread; the model answers the newest.
-        return Quote(text="\n".join(reversed(lines)), hers=hers, from_account=from_account)
+        return Quote(
+            text="\n".join(reversed(lines)), hers=hers, from_account=from_account, user_id=author
+        )
 
     async def _language(self, event: NormalizedEvent) -> str:
         if event.language in {"en", "fa"}:
@@ -857,14 +1080,16 @@ def register(runtime: Any) -> None:
             cmd_yura,
             category="persona",
             aliases=("person", "self"),
-            usage="[on|off|status|memory|log|clear|recap|diary|faces|speak|voice|poster|caption|react|<anything>]",
+            usage="[on|off|status|memory|log|clear|recap|diary|faces|speak|voice|poster|caption|react|nice|rude|neutral|note|people|person|<anything>]",
             changes_state=True,
             subcommands=(
                 "on", "off", "enable", "disable", "status", "card", "who", "state",
                 "memory", "memories", "remember", "learn", "forget", "log", "history", "clear",
                 "key", "apikey", "token", "recap", "today", "diary", "journal", "faces",
                 "face", "kaomoji", "speak", "voice", "tts", "poster", "caption",
-                "react", "reaction",
+                "react", "reaction", "nice", "kind", "polite", "rude", "mean", "savage",
+                "neutral", "normal", "tone", "note", "about", "facts", "people", "humans",
+                "known", "person", "them", "whois",
             ),
         )
     )

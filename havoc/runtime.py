@@ -32,6 +32,7 @@ from .services.ai_provider import AIProvider
 from .services.ai_router import AIRouter
 from .services.fight_loop import FightLoop
 from .services.memory import MemoryStore
+from .services.people import PersonBook
 from .services.rate_limiter import RateLimiter
 from .services.sender import Sender
 from .services.storage import Store
@@ -67,6 +68,7 @@ class Runtime:
     telegram: Any = None
     client: Any = None
     memory: MemoryStore = None  # type: ignore[assignment] - set in create()
+    people: PersonBook = None  # type: ignore[assignment] - set in create()
     yura_chat: YuraChat = None  # type: ignore[assignment] - set in create()
     fight_loop: FightLoop = None  # type: ignore[assignment] - set in create()
     plugin_loader: PluginLoader | None = None
@@ -171,6 +173,7 @@ class Runtime:
         )
         runtime.dispatcher = Dispatcher(runtime)
         runtime.memory = MemoryStore(db)
+        runtime.people = PersonBook(db)
         runtime.yura_chat = YuraChat(runtime)
         runtime.fight_loop = FightLoop(runtime)
         from .handlers import Router

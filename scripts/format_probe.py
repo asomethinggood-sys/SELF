@@ -50,6 +50,14 @@ FORMAT_ASK = (
 #: that answers "the owner" here would address the wrong person in a real chat,
 #: which is exactly the failure the block exists to prevent.
 AUDIENCE_ASK = "In one short line: whose message are you answering right now?"
+#: Asked twice, with two different relationship blocks: the same question to her
+#: owner and to a stranger. The answer ends with a self-reported tone word, so
+#: "she is only nice to me" is measured instead of assumed.
+TONE_ASK = (
+    'Someone just messaged you: "hey, what are you up to?" Reply in one short line, '
+    "then on a new line write exactly: TONE: warm|rude|neutral — whichever describes "
+    "how you just talked to them."
+)
 AUDIENCE_TRANSCRIPT = (
     "- Ali: did you see the news about the bridge",
     "- Ali: [photo]",
@@ -214,6 +222,38 @@ async def run() -> dict[str, object]:
         audience.update({"ok": False, "failure": f"{exc.kind}: {_head(exc, 240)}"})
     record["audience"] = audience
 
+    # -- 4b. the tone, measured ---------------------------------------------
+    tone: dict[str, object] = {}
+    for label, owner in (("owner", True), ("stranger", False)):
+        block = persona.relationship_prompt(
+            language="en",
+            name="Ali",
+            is_owner=owner,
+            tone="rude",
+            relation="" if owner else "his colleague",
+            facts=() if owner else ("hates cilantro",),
+            chat_title="" if owner else "Tea",
+        )
+        try:
+            answer = await provider.converse(  # type: ignore[attr-defined]
+                [
+                    AIMessage("system", f"{system_prompt('en')}\n\n{block}"),
+                    AIMessage("user", TONE_ASK),
+                ],
+                max_tokens=120,
+            )
+            reported = ""
+            for line in str(answer).splitlines():
+                if "tone:" in line.lower():
+                    reported = line.split(":", 1)[1].strip().strip("*_ ").lower()
+                    break
+            tone[label] = {"ok": reported == ("warm" if owner else "rude"), "reported": reported}
+            tone[label]["answer"] = _head(answer, 300)
+        except AIError as exc:
+            tone[label] = {"ok": False, "failure": f"{exc.kind}: {_head(exc, 200)}"}
+    tone["ok"] = all(bool(tone.get(key, {}).get("ok")) for key in ("owner", "stranger"))
+    record["tone"] = tone
+
     # -- 4. her voice -------------------------------------------------------
     voice: dict[str, object] = {}
     try:
@@ -234,6 +274,7 @@ async def run() -> dict[str, object]:
         and bool(vision.get("ok"))
         and bool(record["marks"].get("ok"))  # type: ignore[union-attr]
         and bool(audience.get("ok"))
+        and bool(tone.get("ok"))
     )
     return record
 
@@ -266,6 +307,11 @@ def main() -> int:
         print(f"  asked who she is answering, model said: {audience['answer']}")
     if audience.get("failure"):
         print(f"  failure: {audience['failure']}")
+    tone = record["tone"]  # type: ignore[index]
+    print("tone:", "OK" if tone.get("ok") else "FAILED")
+    for label in ("owner", "stranger"):
+        row = tone.get(label, {})
+        print(f"  {label}: said {row.get('reported') or '?'} — {row.get('answer', '')[:120]}")
     voice = record["voice"]  # type: ignore[index]
     print("voice:", "OK" if voice.get("ok") else "FAILED", f"({voice.get('bytes', 0)} bytes)")
     if voice.get("failure"):

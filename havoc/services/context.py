@@ -44,10 +44,16 @@ class ChatContext:
     is_owner: bool = False
     is_group: bool = False
     transcript: list[str] = field(default_factory=list)
+    #: How she is supposed to treat this speaker (see ``havoc.services.people``).
+    tone: str = ""
+    #: "his girlfriend", when the owner said so.
+    relation: str = ""
+    #: What she was told about them, oldest first.
+    known: tuple[str, ...] = ()
 
     @property
     def usable(self) -> bool:
-        return bool(self.transcript or self.speaker)
+        return bool(self.transcript or self.speaker or self.known)
 
 
 def _display(message: Any) -> str:
@@ -106,6 +112,22 @@ async def build(
             except Exception:  # noqa: BLE001 - a missing sender is not an error
                 pass
         context.speaker = "the owner" if context.is_owner else _display(message)
+
+    # -- what she knows about them ----------------------------------------
+    # Only people she actually answers get a row: a companion that keeps a file
+    # on every member of every group is surveillance, which this is not.
+    book = getattr(runtime, "people", None)
+    if context.is_group and book is not None and context.speaker_id and not context.is_owner:
+        try:
+            person = await book.touch(context.speaker_id, context.speaker)
+        except Exception:  # noqa: BLE001 - the room must work without the book
+            person = None
+        if person is not None:
+            context.tone = person.tone
+            context.relation = person.relation
+            context.known = tuple(person.facts)
+            if person.name:
+                context.speaker = person.name
 
     # -- a name for the room ----------------------------------------------
     chat = getattr(message, "chat", None)

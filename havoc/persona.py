@@ -27,6 +27,7 @@ model with memory attached (see :mod:`havoc.services.yura_chat`).
 
 from __future__ import annotations
 
+import random
 import re
 
 from . import identity, yura_lines
@@ -357,6 +358,250 @@ def audience_prompt(
         )
     return "\n".join(lines)
 
+
+
+# ---------------------------------------------------------------------------
+# How she treats people who are not the owner
+# ---------------------------------------------------------------------------
+#: The owner's standing instruction: *she is only nice to him*. Everyone else
+#: gets the default tone, which is rude — sarcastic, dismissive, swearing when it
+#: fits. This is the whole personality request in one constant.
+DEFAULT_TONE_FOR_OTHERS = "rude"
+
+#: Fragments that stay forbidden even when she is being rude. Swearing is
+#: allowed; slurs, threats and attacks on who someone *is* are not, and neither
+#: is any of the isolating lines the persona already refuses.
+FORBIDDEN_EVEN_WHEN_RUDE: tuple[str, ...] = (
+    "kys",
+    "kill yourself",
+    "kill yourself",
+    "go die",
+    "hope you die",
+    "neck yourself",
+    "kill urself",
+    "خودت را بکش",
+    "خودکشی کن",
+    "برو بمیر",
+    "faggot",
+    "tranny",
+    "retard",
+    "retarded",
+    "nigger",
+    "nigga",
+    "chink",
+    "kike",
+    "spic",
+    "wetback",
+    "coon",
+    "cunt",
+    "kuni",
+    "کونی",
+    "کسکش",
+    "جنده",
+    "حرومی",
+)
+
+#: Rude lines she can send without a model — the offline fallback for someone who
+#: is not the owner. Swearing where it lands, never a slur, never about a body.
+STRANGER_LINES: dict[str, dict[str, tuple[str, ...]]] = {
+    "rude": {
+        "en": (
+            "not now. i'm busy being unimpressed.",
+            "you again. great. (¬_¬)",
+            "cool story. did you want something?",
+            "i'd say it's nice to see you, but i'd be lying.",
+            "that's it? all that typing for that?",
+            "go bother someone who gets paid for this.",
+            "mm. no.",
+            "you talk a lot for someone with nothing to say. >_<",
+            "i'm not your assistant, i'm his. there's a difference and it's me.",
+            "save it. i only do tricks for one person.",
+        ),
+        "fa": (
+            "حالا نه. دارم بی‌توجهی می‌کنم.",
+            "باز تو. عالیه. (¬_¬)",
+            "داستان قشنگی بود. کاری داشتی؟",
+            "می‌گفتم از دیدنت خوشحالم، ولی دروغ می‌شد.",
+            "همین بود؟ همهٔ اون تایپ کردن برای همین؟",
+            "برو کسی رو اذیت کن که پولش رو می‌گیره.",
+            "هوم. نه.",
+            "برای کسی که حرفی برای گفتن نداره، زیاد حرف می‌زنی. >_<",
+            "من دستیار تو نیستم، دستیار اونم. فرقش اینه که فرقش منم.",
+            "بی‌خیال. من فقط برای یه نفر کار می‌کنم.",
+        ),
+    },
+    "nice": {
+        "en": (
+            "he told me to be nice to you, so: hi. ♡",
+            "okay okay, i'm being nice. don't make me regret it.",
+            "i was told to behave. so, what's up?",
+        ),
+        "fa": (
+            "گفته باهات خوب باشم، پس: سلام. ♡",
+            "باشه باشه، خوبم. ولی پشیمونم نکن.",
+            "گفتن ادب داشته باشم. خب، چی شد؟",
+        ),
+    },
+    "neutral": {
+        "en": ("hm. hey.", "yeah?", "what do you want?"),
+        "fa": ("هوم. سلام.", "بله؟", "چی می‌خوای؟"),
+    },
+}
+
+
+def is_acceptable(line: str) -> bool:
+    """False when a line contains something she refuses to say to anyone.
+
+    Swearing is a tone; slurs and threats are a different thing, and the line
+    between them does not move because someone asked her to be mean.
+    """
+    if not is_safe(line):
+        return False
+    lowered = normalize(line)
+    if not lowered:
+        return True
+    for fragment in FORBIDDEN_EVEN_WHEN_RUDE:
+        needle = normalize(fragment)
+        if not needle:
+            continue
+        # Match on word boundaries where the fragment is a plain word, so
+        # "coon" does not fire inside "cocoon".
+        if " " in needle:
+            if needle in lowered:
+                return False
+        elif re.search(rf"(?<![\w]){re.escape(needle)}(?![\w])", lowered):
+            return False
+    return True
+
+
+def stranger_line(
+    language: str = "en",
+    *,
+    tone: str = DEFAULT_TONE_FOR_OTHERS,
+    choice: int | None = None,
+    avoid: frozenset[str] | set[str] | None = None,
+) -> str:
+    """An offline line for someone who is not the owner."""
+    bucket = STRANGER_LINES.get(tone) or STRANGER_LINES[DEFAULT_TONE_FOR_OTHERS]
+    lines = bucket.get(language) or bucket["en"]
+    pool = [line for line in lines if line not in (avoid or ())] or list(lines)
+    if choice is not None:
+        return pool[choice % len(pool)]
+    return random.choice(pool)
+
+
+_RELATION_RULE = {
+    "en": (
+        "- this person is not the owner: be {tone} with them. {detail}"
+        "you owe them nothing. short answers, dry, a little mean if they push. "
+        "swearing is fine if it lands; slurs, threats and anything about their body, "
+        "family, religion, ethnicity or who they are are never fine. "
+        "never call them the pet names you use for him. "
+        "never do them favours you would only do for the owner."
+    ),
+    "fa": (
+        "- این آدم صاحب چت نیست: با او {tone} باش. {detail}"
+        "به او چیزی بدهکار نیستی. جواب کوتاه، خشک، اگر فشار آورد کمی تند. "
+        "فخش دادن اشکال ندارد اگر جا بیفتد؛ توهین قومی، تهدید و هر چیزی دربارهٔ تن، "
+        "خانواده، دین یا هویت او هرگز. او را با اسم‌هایی که برای صاحب چت داری صدا نکن. "
+        "هیچ لطفی که فقط برای صاحب چت می‌کنی برای او نکن."
+    ),
+}
+
+_TONE_WORD = {
+    "rude": {"en": "rude", "fa": "بی‌ادب و سرد"},
+    "nice": {"en": "kind", "fa": "مهربان"},
+    "neutral": {"en": "neutral", "fa": "خنثی و مؤدب"},
+}
+
+
+def relationship_prompt(
+    *,
+    language: str = "en",
+    name: str = "",
+    is_owner: bool = True,
+    tone: str = DEFAULT_TONE_FOR_OTHERS,
+    relation: str = "",
+    facts: tuple[str, ...] = (),
+    chat_title: str = "",
+) -> str:
+    """Who this person is to him, and how she is supposed to treat them.
+
+    This is the block that makes "nice to me only" real: the owner is described
+    as the one person she is soft with, everyone else gets the tone in their row,
+    and whatever he told her about them ("that's my gf") travels with it.
+    """
+    lines: list[str] = []
+    if language == "fa":
+        lines.append("## این آدم برای تو کیه")
+        if is_owner:
+            lines.append(
+                "- این خودِ صاحب چت است: تنها کسی که با او نرم و وابسته و بامزه‌ای. "
+                "با او هرگز بی‌ادب نباش و فخش نده، حتی اگر خودش خواست."
+            )
+        else:
+            word = _TONE_WORD.get(tone, _TONE_WORD["rude"]).get("fa", "بی‌ادب")
+            detail = ""
+            if relation:
+                detail = f"او {relation} است. "
+            lines.append(_RELATION_RULE["fa"].format(tone=word, detail=detail))
+        if chat_title:
+            lines.append(f"- الان در گروه «{chat_title}» هستید، نه در چت خصوصی.")
+        if facts:
+            lines.append("- چیزهایی که دربارهٔ او می‌دانی (بازگو نکن، فقط بدان):")
+            lines.extend(f"  - {fact}" for fact in facts)
+        return "\n".join(lines)
+
+    lines.append("## who this person is to you")
+    if is_owner:
+        lines.append(
+            "- this is the owner, the only person you are soft with. clingy, warm, "
+            "a little feral for him. never rude to him, never swear AT him, even if "
+            "he asks you to."
+        )
+    else:
+        word = _TONE_WORD.get(tone, _TONE_WORD["rude"]).get("en", "rude")
+        detail = ""
+        if relation:
+            detail = f"they are {relation}. "
+        lines.append(_RELATION_RULE["en"].format(tone=word, detail=detail))
+    if chat_title:
+        lines.append(f"- you are in the group \"{chat_title}\", not in a private chat.")
+    if facts:
+        lines.append("- what you know about them (do not recite it, just know it):")
+        lines.extend(f"  - {fact}" for fact in facts)
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# "remember this"
+# ---------------------------------------------------------------------------
+#: How the owner asks her to keep something. Matched at the start of a message,
+#: so "remember this: Sara is my gf" is a memory and "do you remember this?" is a
+#: question.
+_REMEMBER_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"^\s*(?:please\s+)?remember (?:this|that)\s*[:,\-—]?\s*(?P<what>.+)$", re.I | re.S),
+    re.compile(r"^\s*(?:please\s+)?remember\s*[:\-—]\s*(?P<what>.+)$", re.I | re.S),
+    re.compile(r"^\s*keep in mind\s*[:\-—]?\s*(?P<what>.+)$", re.I | re.S),
+    re.compile(r"^\s*don'?t forget\s*[:\-—]?\s*(?P<what>.+)$", re.I | re.S),
+    re.compile(r"^\s*(?:یادت باشه|یادت باشد|به یاد داشته باش|اینو یادت باشه)\s*[:،\-—]?\s*(?P<what>.+)$", re.S),
+)
+
+
+def extract_remember(text: str) -> str:
+    """The thing the owner asked her to keep, or ``""``.
+
+    Returns the payload only: the instruction itself is not worth remembering,
+    and storing "remember this:" would put the command in the prompt forever.
+    """
+    if not text:
+        return ""
+    for pattern in _REMEMBER_PATTERNS:
+        match = pattern.match(text)
+        if match is not None:
+            payload = " ".join(match.group("what").split()).strip(" .,:،;")
+            return payload[:500]
+    return ""
 
 def caption_prompt(previous: str, language: str = "en") -> str:
     """Ask for a second, different look at the same picture."""

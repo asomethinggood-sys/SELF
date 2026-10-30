@@ -198,6 +198,9 @@ class YuraChat:
         picture: Any = None,
         quoted: str = "",
         audience: Any = None,
+        person: Any = None,
+        is_owner: bool | None = None,
+        chat_title: str = "",
     ) -> Answer:
         """Reply to ``text``. Never raises for provider problems.
 
@@ -206,12 +209,23 @@ class YuraChat:
         Telegram's reply button on, so "this one?" has something to point at.
         ``audience`` is a :class:`havoc.services.context.ChatContext`: who is
         speaking and what was being said in the room, so a group turn is not
-        answered as if the owner had typed it.
+        answered as if the owner had typed it. ``person`` is their
+        :class:`havoc.services.people.Person` row — the tone she owes them and
+        everything the owner told her about them.
         """
+        who = person if person is not None else getattr(audience, "person", None)
+        owner = bool(is_owner) if is_owner is not None else bool(
+            getattr(audience, "is_owner", True) if audience is not None else True
+        )
+        tone = str(getattr(who, "tone", "") or getattr(audience, "tone", "") or "rude")
         spoken = text.strip()
         prompt = spoken or ("" if picture is not None else persona.call_prompt(language))
+        # Who is on the other side decides what the fallback sounds like: the
+        # offline bank is written for the owner, and calling a stranger
+        # "daddaaa" would be both wrong and a leak.
+        fallback = self._fallback(chat_id, language, tone=tone, is_owner=owner)
         if not prompt and picture is None:
-            return Answer(self._offline(chat_id, language))
+            return Answer(fallback)
         if picture is not None and not prompt:
             # A photo with no caption is still a question: "what is this?".
             prompt = persona.picture_prompt(language)
@@ -234,6 +248,17 @@ class YuraChat:
         # put the same message in the prompt twice.
         _, messages = await self._context(chat_id, language, greeting=greeting)
         block = _audience_block(audience, language)
+        relationship = persona.relationship_prompt(
+            language=language,
+            name=str(getattr(who, "name", "") or getattr(audience, "speaker", "") or ""),
+            is_owner=owner,
+            tone=tone,
+            relation=str(getattr(who, "relation", "") or getattr(audience, "relation", "") or ""),
+            facts=tuple(getattr(who, "facts", ()) or getattr(audience, "known", ()) or ()),
+            chat_title=chat_title,
+        )
+        if relationship:
+            block = f"{block}\n\n{relationship}" if block else relationship
         if block:
             system = messages[0].content if messages else ""
             messages[0] = AIMessage("system", f"{system}\n\n{block}")
@@ -279,11 +304,18 @@ class YuraChat:
         if reply is None:
             source = "offline"
             self.fallbacks += 1
-            reply = self._offline(chat_id, language, avoid=avoid)
+            reply = fallback
 
+        # Swearing is a tone; slurs and "kill yourself" are not, and the line
+        # does not move because someone asked her to be mean. A reply that
+        # crosses it is replaced, not argued with.
+        if not persona.is_acceptable(reply):
+            self.logger.warning("yura: dropped a reply that crossed a line")
+            reply = fallback
+            source = "offline"
         answer = await self._apply(reply, chat_id=chat_id, language=language)
         if not answer.text and not answer.files:
-            answer.text = self._offline(chat_id, language, avoid=avoid)
+            answer.text = fallback
         if answer.text:
             self._remember_said(chat_id, answer.text)
         if picture is not None and answer.text:
@@ -462,6 +494,19 @@ class YuraChat:
                 break
             used.add(line)
             line = persona.build_line(language, avoid=used)
+        self._remember_said(chat_id, line)
+        return line
+
+    def _fallback(
+        self, chat_id: int, language: str, *, tone: str = "rude", is_owner: bool = True
+    ) -> str:
+        """What she says when no model answers, in the right voice for the room."""
+        if is_owner:
+            return self._offline(chat_id, language)
+        used = set(self._sent.get(chat_id, ()))
+        line = persona.stranger_line(language, tone=tone, avoid=used)
+        if not persona.is_acceptable(line):  # pragma: no cover - bank is checked
+            line = persona.stranger_line(language, tone="neutral", avoid=used)
         self._remember_said(chat_id, line)
         return line
 

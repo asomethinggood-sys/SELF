@@ -346,10 +346,38 @@ MIGRATION_3_YURA_MEMORY = Migration(
     ),
 )
 
+MIGRATION_4_PEOPLE = Migration(
+    version=4,
+    name="yura_people",
+    statements=(
+        # One row per person Yura has actually talked to — not everyone she has
+        # ever seen. The row is created when she answers them, and it holds what
+        # she was told about them, how she is supposed to treat them, and how
+        # they are related to the owner ("his girlfriend").
+        #
+        # ``facts`` is a JSON array: a person is a handful of sentences, not a
+        # relational model. ``tone`` is the standing instruction — ``rude`` is the
+        # default for everyone who is not the owner, and the owner can change it.
+        """
+        CREATE TABLE IF NOT EXISTS yura_people (
+            user_id    INTEGER PRIMARY KEY,
+            name       TEXT NOT NULL DEFAULT '',
+            relation   TEXT NOT NULL DEFAULT '',
+            tone       TEXT NOT NULL DEFAULT 'rude',
+            facts      TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_yura_people_updated ON yura_people(updated_at DESC)",
+    ),
+)
+
 MIGRATIONS: tuple[Migration, ...] = (
     MIGRATION_1_FOUNDATION,
     MIGRATION_2_TIMESTAMPS,
     MIGRATION_3_YURA_MEMORY,
+    MIGRATION_4_PEOPLE,
 )
 
 LATEST_VERSION = max(m.version for m in MIGRATIONS)
