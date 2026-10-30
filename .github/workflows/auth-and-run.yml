@@ -13,10 +13,19 @@ name: Auth and run
 # code is single-use and expires in a couple of minutes, so the loop is short.
 #
 # Triggers
-#   * push touching `.auth/config.json` or this workflow — a commit is enough to
-#     start the login, no dispatch permission needed
-#   * a schedule, which restarts the bot when a run hits GitHub's six-hour limit
+#   * push touching `havoc/**`, `.auth/config.json` or this workflow — a commit is
+#     enough to start the login, no dispatch permission needed
 #   * manual dispatch with optional overrides
+#
+# Staying alive
+# -------------
+# A schedule would restart the bot when a run hits GitHub's ceiling, but GitHub
+# only fires schedules for workflows on the *default* branch, and this branch is
+# not it: the schedule below never fires here. So a run cannot wait for one — it
+# queues its own successor at the start (`scripts/handover.py`) and re-checks
+# every minute in case that queue was emptied. When this job ends for any
+# reason, the queued run starts within seconds. The supervisor workflow is the
+# last resort for the case where the queue itself was lost.
 #
 # Pushing `.auth/code.txt` deliberately does *not* trigger a run: the job that is
 # already waiting polls for the file, which keeps the request and the code in the
@@ -60,20 +69,22 @@ on:
       bot_minutes:
         description: "How many minutes to run the bot afterwards (default 300)"
         required: false
-        default: "300"
+        default: "340"
 
 permissions:
   contents: write
-  # Read-only: the running bot asks which runs are queued before it steps
-  # aside, so it can never hand over to a deploy that will not happen.
-  actions: read
+  # Write, not read: the run dispatches its own successor. A chain that cannot
+  # start the next link is a six-hour job with a funeral at the end.
+  actions: write
 
 concurrency:
   group: havoc-auth
-  # A push replaces the running bot instead of queueing behind it. Without this
-  # a deploy would sit behind up to five hours of the previous run, which is
-  # exactly the wrong behaviour when iterating on features.
-  cancel-in-progress: true
+  # Queue, never cancel. Cancelling on every push is what killed the bot: a push
+  # killed the running job, and when the replacement then failed (a bad deploy,
+  # a cancelled run) nothing was left and nothing restarted it. Now a push waits
+  # its turn, and the running bot steps aside *itself* — but only after
+  # confirming a replacement is queued (see "Handing over" below).
+  cancel-in-progress: false
 
 jobs:
   login:
@@ -84,6 +95,16 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Queue the successor
+        # First thing, before the login can fail and before the bot can be
+        # killed: whoever ends this run, the next one is already waiting.
+        continue-on-error: true
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HANDOVER_WORKFLOW: auth-and-run.yml
+        run: python scripts/handover.py
 
       - uses: actions/setup-python@v5
         with:
@@ -413,7 +434,10 @@ jobs:
           AI_BASE_URL: ${{ steps.creds.outputs.ai_base_url }}
           AI_MODEL: ${{ steps.creds.outputs.ai_model }}
           AI_API_KEY: ${{ steps.creds.outputs.ai_api_key }}
-          BOT_MINUTES: ${{ inputs.bot_minutes || '300' }}
+          # 340 of the job's 355 minutes: the job must end on its own terms
+          # while it still has time to checkpoint the database, rather than be
+          # killed at the ceiling with a live WAL.
+          BOT_MINUTES: ${{ inputs.bot_minutes || '340' }}
           # The bot commits a snapshot of everything it stores every few
           # minutes, so the data survives a cache miss, an eviction, or the
           # run being cancelled before its own save step.
@@ -455,9 +479,14 @@ jobs:
               2>/dev/null || echo "unknown"
           }
 
+          # Every minute: is the successor still queued? If a cancelled run or a
+          # drained queue took it, this puts it back. One API call a minute, and
+          # it is the difference between "runs for six hours" and "runs".
           while kill -0 "$bot" 2>/dev/null; do
             sleep 60
             kill -0 "$bot" 2>/dev/null || break
+            python scripts/handover.py --json >/dev/null 2>&1 \
+              || echo "::warning::could not re-assert the successor run"
             git fetch -q origin "${GITHUB_REF_NAME}" 2>/dev/null || continue
             remote=$(git rev-parse FETCH_HEAD 2>/dev/null || echo "")
             [ -n "$remote" ] || continue

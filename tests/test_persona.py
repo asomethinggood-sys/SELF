@@ -637,3 +637,56 @@ async def test_a_truncated_file_block_is_salvaged_not_dropped(runtime) -> None:
     with open(files[-1].kwargs["file"], encoding="utf-8") as handle:
         assert "pygame.init()" in handle.read()
     assert "[[file" not in _plain(runtime)
+
+
+# ---------------------------------------------------------------------------
+# Calling her by name, without the prefix
+# ---------------------------------------------------------------------------
+async def _say(runtime, text: str) -> list[str]:
+    """Send ``text`` as the owner, the way the router sees an outgoing message."""
+    client = runtime.client
+    before = len(client.sent)
+    message = FakeMessage(id=910, chat_id=100, sender_id=42, text=text, out=True)
+    event = FakeEvent(message, chat_id=100, out=True)
+    await runtime.handlers.on_outgoing(event)
+    return [html.unescape(sent.text) for sent in client.sent[before:]]
+
+
+async def test_her_name_alone_is_a_greeting(runtime) -> None:
+    provider = StubProvider(["mrrp. you called?"])
+    runtime.ai = provider
+    runtime.permissions.set_self_id(42)
+    replies = await _say(runtime, "Yura")
+    assert replies, "a bare name must answer"
+    assert provider.calls, "the model was never asked"
+    assert "mrrp" in replies[-1]
+
+
+async def test_her_name_then_a_question_is_the_question(runtime) -> None:
+    """"yura what is the capital of France" — no prefix, no lost first word."""
+    provider = StubProvider(["paris. obviously. (¬‿¬)"])
+    runtime.ai = provider
+    runtime.permissions.set_self_id(42)
+    replies = await _say(runtime, "yura what is the capital of France")
+    assert provider.calls, "the question never reached the model"
+    asked = provider.calls[-1][-1].content
+    assert "what is the capital of France" in asked, asked
+    assert "paris" in replies[-1].lower()
+
+
+async def test_the_persian_name_works_the_same_way(runtime) -> None:
+    provider = StubProvider(["پاریس. معلومه دیگه (¬‿¬)"])
+    runtime.ai = provider
+    runtime.permissions.set_self_id(42)
+    replies = await _say(runtime, "یورا پایتخت فرانسه چیه؟")
+    assert provider.calls, "the Persian name did not reach her"
+    assert "پایتخت فرانسه" in provider.calls[-1][-1].content
+    assert replies
+
+
+async def test_another_bare_command_still_needs_its_own_subcommand(runtime) -> None:
+    """Only her name swallows free text; "poem goethe" must not become chat."""
+    handler = runtime.handlers
+    assert handler._bare_command("poem poets") is not None
+    assert handler._bare_command("poem nonsense words here") is None
+    assert handler._bare_command("yura nonsense words here") is not None

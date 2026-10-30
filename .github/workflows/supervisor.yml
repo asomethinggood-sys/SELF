@@ -1,0 +1,83 @@
+name: Supervisor
+
+# Last resort for staying alive.
+#
+# The normal path is a chain: every run of `auth-and-run.yml` queues its own
+# successor before it starts working, so a run that ends — normally, at the
+# six-hour ceiling, or because it was cancelled — is replaced within seconds.
+#
+# This workflow covers the one case the chain cannot: nothing is running *and*
+# nothing is queued. That happens when a run is cancelled while it is still
+# booting (before it queued anything), when the queue is drained by hand, or when
+# a run fails so early that its own successor dispatch did not happen. The only
+# thing that can start a workflow is another workflow, so this one asks GitHub
+# whether anything is queued or in progress and starts a run when the answer is
+# no.
+#
+# Why the schedule is every five minutes: that is the fastest GitHub promises
+# (`*/5`). It may run a few minutes late on a busy queue, which is why it is the
+# fallback and not the mechanism. It costs nothing when the chain is healthy —
+# one API call, then it exits.
+#
+# It never runs the bot itself, so it can never hold the concurrency group the
+# bot needs.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+  # Editing the supervisor should prove the supervisor works.
+  push:
+    paths:
+      - ".github/workflows/supervisor.yml"
+      - "scripts/handover.py"
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: havoc-supervisor
+  cancel-in-progress: false
+
+jobs:
+  supervise:
+    name: ensure one run is queued or alive
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check, and queue a replacement if nothing is alive
+        id: handover
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HANDOVER_WORKFLOW: auth-and-run.yml
+        run: |
+          set -uo pipefail
+          # One implementation, shared with the run itself: "is anything queued
+          # or in progress, and if not, dispatch one". `--json` prints the
+          # decision so the log and the summary say what happened.
+          log=handover.json
+          if python3 scripts/handover.py --json > "$log" 2>handover.err; then
+            action=$(python3 -c 'import json;print(json.load(open("handover.json"))["action"])')
+          else
+            action="error"
+            cat handover.err || true
+          fi
+          cat "$log" 2>/dev/null || true
+          echo "action=$action" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Supervisor"
+            echo ""
+            case "$action" in
+              already-covered) echo "A run was already queued or running; nothing to do." ;;
+              dispatched)      echo "Nothing was alive. Queued \`auth-and-run.yml\`." ;;
+              *)               echo "Could not queue a replacement. See the log." ;;
+            esac
+            echo ""
+            echo '```json'
+            cat "$log" 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ "$action" != "error" ]

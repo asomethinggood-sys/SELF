@@ -17,6 +17,7 @@ import traceback
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from .aliases import FREE_TEXT_COMMANDS
 from .event_engine import EventType, NormalizedEvent, normalize_message, now_event
 from .utils.parsing import looks_like_command, parse_command, strip_prefix
 from .utils.security import redact_text
@@ -137,9 +138,15 @@ class Router:
         """Parse a prefix-less command, or return None.
 
         Only an exact first word from :data:`havoc.aliases.BARE_COMMANDS`
-        triggers this, and only when it stands alone or is followed by one of
-        that command's own subcommands — so a sentence that merely starts with
-        the word "yura" is still just a sentence.
+        triggers this. For most of them the next word has to be one of the
+        command's own subcommands, so a sentence that merely starts with "poem"
+        is still a sentence.
+
+        ``yura`` is the exception, and it is the whole point of calling her by
+        name: everything after the name is what you are saying to her. "yura
+        what is the capital of France" is a question, not a command with a
+        subcommand called "what". Her name standing alone is a greeting, which
+        ``cmd_yura`` already handles.
         """
         from .aliases import bare_command
 
@@ -155,13 +162,16 @@ class Router:
         if command is None:  # the feature that owns it is not registered
             return None
         words = [part for part in rest.split() if part]
-        if words:
-            token = words[0].lower()
-            if token not in command.subcommands:
-                return None
+        if not words:
+            rest = fixed
+        elif name in FREE_TEXT_COMMANDS:
+            # Her name, then whatever they said. Keep the words exactly as typed:
+            # the sentence is the question.
+            rest = " ".join(words)
+        elif words[0].lower() in command.subcommands:
             rest = " ".join(words)
         else:
-            rest = fixed
+            return None
         built = f"{self.runtime.prefix}{name} {rest}".strip()
         return parse_command(built, self.runtime.prefix)
 

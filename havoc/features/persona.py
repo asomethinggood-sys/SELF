@@ -312,8 +312,11 @@ async def cmd_yura(ctx: CommandContext) -> None:
         await ctx.reply_ok(ctx.t("yura.log_cleared", count=removed))
         return
 
-    # Everything else is something you said to her.
-    text = " ".join(words).strip()
+    # Everything else is something you said to her. `raw_args` is everything
+    # after the command word, which is not the same as `args`: the parser takes
+    # the *first* word as the subcommand, so "what is the capital" would lose
+    # "what" and she would be asked "is the capital of France".
+    text = (ctx.raw_args or " ".join(words)).strip()
     await _chat(ctx, text)
 
 

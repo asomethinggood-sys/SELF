@@ -17,7 +17,7 @@ yaml = pytest.importorskip("yaml")
 ROOT = Path(__file__).resolve().parent.parent
 WORKFLOWS = ROOT / ".github" / "workflows"
 
-EXPECTED = {"ci.yml", "telegram-login.yml", "telegram-run.yml"}
+EXPECTED = {"ci.yml", "telegram-login.yml", "telegram-run.yml", "auth-and-run.yml", "supervisor.yml"}
 
 
 def _load(name: str) -> dict:
@@ -259,9 +259,15 @@ def test_docs_and_tests_do_not_restart_the_bot() -> None:
     assert "README.md" not in paths
 
 
-def test_a_deploy_replaces_the_running_bot() -> None:
-    """Otherwise a push queues behind up to five hours of the previous run."""
-    assert _load("auth-and-run.yml")["concurrency"]["cancel-in-progress"] is True
+def test_a_deploy_queues_instead_of_cancelling_the_running_bot() -> None:
+    """Cancelling on every push is how the bot was left dead.
+
+    A push used to cancel the running job; if the replacement then failed there
+    was nothing running and nothing queued. Now the push waits, and the running
+    bot stands itself down only once it has confirmed the replacement exists
+    (see ``test_the_bot_only_stands_down_for_a_run_that_exists``).
+    """
+    assert _load("auth-and-run.yml")["concurrency"]["cancel-in-progress"] is False
 
 
 def test_the_restored_session_skips_the_login() -> None:
@@ -408,9 +414,10 @@ def test_the_bot_only_stands_down_for_a_run_that_exists() -> None:
     assert "continue" in script[guard:handover]
 
 
-def test_asking_github_about_runs_needs_permission() -> None:
+def test_asking_github_about_runs_and_queuing_one_needs_permission() -> None:
     workflow = _load("auth-and-run.yml")
-    assert workflow["permissions"].get("actions") == "read"
+    # Write, because the run dispatches its own successor, not just reads.
+    assert workflow["permissions"].get("actions") == "write"
     # Still only writing what it already writes.
     assert workflow["permissions"].get("contents") == "write"
 

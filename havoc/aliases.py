@@ -120,6 +120,12 @@ BARE_COMMANDS: dict[str, tuple[str, str]] = {
 }
 
 
+#: Commands whose bare form swallows the rest of the message as text instead of
+#: demanding a subcommand. ``yura what is the capital of France`` is a question;
+#: ``poem goethe`` is not, because a poem command has no conversation in it.
+FREE_TEXT_COMMANDS: frozenset[str] = frozenset({"yura"})
+
+
 def aliases_for(name: str) -> tuple[str, ...]:
     return PERSIAN_ALIASES.get(name, ())
 
