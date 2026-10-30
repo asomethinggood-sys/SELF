@@ -405,7 +405,13 @@ class CommandRegistry:
     HELP_CHUNK_LIMIT = 3600
 
     def help_sections(
-        self, locales: LocaleManager, language: str, prefix: str, features: dict[str, bool] | None = None
+        self,
+        locales: LocaleManager,
+        language: str,
+        prefix: str,
+        features: dict[str, bool] | None = None,
+        *,
+        disabled: set[str] | frozenset[str] = frozenset(),
     ) -> list[str]:
         """The help index, as one string per message, split between categories."""
         locales.enabled_features = {name for name, on in (features or {}).items() if on}
@@ -424,12 +430,22 @@ class CommandRegistry:
                 description = locales.t(
                     command.description_key, language, default=command.description or command.name
                 )
-                marker = "●" if command.feature and (features or {}).get(command.feature) else ""
+                # Two states a person needs to see in the index: a feature that is
+                # off, and a command he switched off by name. A command that refuses
+                # to run and looks identical to a working one is the dead end.
+                if command.name in disabled:
+                    marker = "×"
+                elif command.feature and (features or {}).get(command.feature):
+                    marker = "●"
+                else:
+                    marker = ""
                 rows.append(ui.item(prefix + command.name, description, marker=marker))
             sections.append(
                 ui.section(icon, locales.t(f"help.category.{category}", language, default=category.title()), rows)
             )
         footer = ui.footer(locales.t("help.footer", language, prefix=prefix, count=len(self.visible())))
+        if disabled:
+            footer = f"{footer}\n{ui.note(locales.t('help.legend_off', language, prefix=prefix))}"
 
         chunks: list[str] = []
         current: list[str] = [header]

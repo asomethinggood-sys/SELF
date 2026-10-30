@@ -1024,5 +1024,6 @@
   "cmd.enable.usage": "[command]",
   "actions.intent_capabilities": "what i can do",
   "actions.intent_counts": "{commands} commands · {features} features",
-  "errors.needs_arguments": "⌁ {name} needs something to work on.\n\n  {usage}"
+  "errors.needs_arguments": "⌁ {name} needs something to work on.\n\n  {usage}",
+  "help.legend_off": "× is switched off — `{prefix}enable <command>` brings it back"
 }

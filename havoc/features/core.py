@@ -34,7 +34,13 @@ async def cmd_help(ctx: CommandContext) -> None:
         features = await ctx.runtime.feature_manager.refresh()
         # The index is longer than one Telegram message; the registry decides
         # where to cut, between categories rather than mid-line.
-        chunks = registry.help_sections(ctx.runtime.locales, ctx.language, ctx.runtime.prefix, features)
+        chunks = registry.help_sections(
+            ctx.runtime.locales,
+            ctx.language,
+            ctx.runtime.prefix,
+            features,
+            disabled=await disabled_commands(ctx.runtime),
+        )
         for index, chunk in enumerate(chunks):
             await ctx.reply(chunk, reply=index == 0)
         return

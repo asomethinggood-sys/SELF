@@ -1024,5 +1024,6 @@
   "cmd.enable.usage": "[command]",
   "actions.intent_capabilities": "کارهایی که می‌توانم",
   "actions.intent_counts": "{commands} فرمان · {features} قابلیت",
-  "errors.needs_arguments": "⌁ {name} چیزی برای کار کردن می‌خواهد.\n\n  {usage}"
+  "errors.needs_arguments": "⌁ {name} چیزی برای کار کردن می‌خواهد.\n\n  {usage}",
+  "help.legend_off": "× خاموش است — با `{prefix}enable <command>` برمی‌گردد"
 }
