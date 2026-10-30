@@ -35,6 +35,7 @@ from pathlib import Path
 from havoc import persona
 from havoc.config import load_config
 from havoc.persona import picture_prompt, system_prompt
+from havoc.services import tts
 from havoc.services.ai_provider import AIError, AIMessage, AIProvider
 from havoc.services.ai_router import AIRouter
 from havoc.services.vision import make_picture
@@ -262,6 +263,41 @@ async def run() -> dict[str, object]:
     # messages, at full length (no truncation before measuring): the answer has
     # to fill a paragraph or three, carry an ornament, wear a face and be *laid
     # out* — more than one paragraph, or at least a divider on its own line.
+    # -- 5b. does she have a voice in each language? ------------------------
+    # A voice name is the one thing a unit test cannot check: the wrong name only
+    # shows up when the service answers. Throat, not opinion — a real note is
+    # requested in every language she was given and the bytes are recorded.
+    speech: dict[str, object] = {"provider": "edge", "languages": {}}
+    try:
+        import edge_tts as _edge
+
+        for code, line in (
+            ("en", "daddaaa. you called?"),
+            ("fa", "یورا. صدام زدی؟"),
+            ("ru", "привет, я тут."),
+            ("ja", "ねえ、呼んだ？"),
+        ):
+            voices = tts.EDGE_VOICES.get(code, ())
+            tuning = tts.EDGE_TUNING.get(code, {})
+            row: dict[str, object] = {"voice": voices[0] if voices else "", "ok": False}
+            try:
+                buffer = bytearray()
+                communicate = _edge.Communicate(line, str(row["voice"]), **tuning)
+                async for chunk in communicate.stream():
+                    if chunk.get("type") == "audio" and chunk.get("data"):
+                        buffer.extend(chunk["data"])
+                row.update({"ok": len(buffer) > 1000, "bytes": len(buffer), "tuning": tuning})
+            except Exception as exc:  # noqa: BLE001 - a missing voice is a fact, not a crash
+                row["failure"] = _head(exc, 200)
+            speech["languages"][code] = row  # type: ignore[index]
+    except Exception as exc:  # noqa: BLE001
+        speech["failure"] = _head(exc, 200)
+    language_rows = speech["languages"]
+    speech["ok"] = bool(language_rows) and all(
+        bool(row.get("ok")) for row in language_rows.values()  # type: ignore[union-attr]
+    )
+    record["speech"] = speech
+
     voice: dict[str, object] = {}
     samples: list[str] = []
     sizes: list[int] = []
@@ -315,7 +351,7 @@ async def run() -> dict[str, object]:
 
     record["ok"] = all(
         bool(part.get("ok"))
-        for part in (formatting, marks, vision, room, echo, voice)  # type: ignore[union-attr]
+        for part in (formatting, marks, vision, room, echo, speech, voice)  # type: ignore[union-attr]
     )
     return record
 
@@ -323,7 +359,7 @@ async def run() -> dict[str, object]:
 def main() -> int:
     record = asyncio.run(run())
     print(f"provider: {record['provider']} · keys: {record['keys']}")
-    for name in ("formatting", "marks", "vision", "room", "echo", "voice"):
+    for name in ("formatting", "marks", "vision", "room", "echo", "speech", "voice"):
         part = record.get(name, {})  # type: ignore[assignment]
         print(f"{name}: {'OK' if part.get('ok') else 'FAILED'}")
         if part.get("raw"):
@@ -332,6 +368,9 @@ def main() -> int:
             print(f"  telegram shows: {part['html']}")
         if part.get("answer"):
             print(f"  it saw:         {part['answer']}")
+        for code, row in (part.get("languages") or {}).items():
+            state = f"{row.get('bytes', 0)} bytes" if row.get("ok") else row.get("failure", "?")
+            print(f"  {code}: {row.get('voice')} · {state}")
         if part.get("samples"):
             print(f"  chars:          {part.get('chars')} · faces: {part.get('wears_a_face')} · laid out: {part.get('laid_out')}")
             for line in part["samples"]:
