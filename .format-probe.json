@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-10-30T07:03:37Z",
+  "checked_at": "2026-10-30T07:09:20Z",
   "provider": "router",
   "keys": 4,
   "formatting": {
@@ -19,8 +19,8 @@
   },
   "marks": {
     "ok": true,
-    "raw": ">> i told the ceiling lamp it has to be quiet when you're here. ++pressed++",
-    "html": "<blockquote expandable>i told the ceiling lamp it has to be quiet when you're here.</blockquote> <u>pressed</u>",
+    "raw": ">> *you're my favorite person in the whole telegram* (¬‿¬) ++pressed++",
+    "html": "<blockquote expandable><i>you're my favorite person in the whole telegram</i> (¬‿¬)</blockquote> <u>pressed</u>",
     "has_whisper": true,
     "has_underline": true
   },
