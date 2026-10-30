@@ -380,3 +380,64 @@ async def test_a_cut_reply_never_leaves_half_a_sentence(runtime) -> None:
     sent = client.sent[-1][1]
     assert "قبول کنم چون" not in sent
     assert "حرف تو درسته" in sent
+
+
+# ---------------------------------------------------------------------------
+# "It replies to everyone that replies to me, and whenever someone tags me"
+# ---------------------------------------------------------------------------
+async def test_a_reply_to_him_is_not_addressed_even_when_telegram_flags_it(runtime) -> None:
+    """Telegram sets ``mentioned`` on every reply to the account, not just on
+    mentions. Trusting that flag made her answer each person who replied to him.
+    """
+    replies, client = await _runtime_with(runtime)
+    his = FakeMessage(id=660, chat_id=GROUP, sender_id=OWNER, text="look at this", out=True)
+
+    event = _event("hm, what is that", reply=his)
+    event.mentions_me = True  # what the server really sends
+
+    await replies.on_group_message(event)
+    assert client.sent == []
+    assert replies.last_skip == "not_addressed"
+
+
+async def test_tagging_him_does_not_summon_her(runtime) -> None:
+    replies, client = await _runtime_with(runtime)
+    event = _event("hey @him look")
+    event.mentions_me = True
+
+    await replies.on_group_message(event)
+    assert client.sent == []
+    assert replies.last_skip == "not_addressed"
+
+
+async def test_her_answer_is_not_sent_as_a_reply_bubble(runtime) -> None:
+    """A reply bubble puts their message on top of her answer — "I get my prompt back"."""
+    replies, client = await _runtime_with(runtime)
+    theirs = FakeMessage(id=661, chat_id=GROUP, sender_id=FRIEND, text="yura, hi", out=False)
+
+    await replies.on_group_message(_event("yura, hi", reply=theirs, message_id=661))
+
+    assert client.sent, "she did not answer at all"
+    for _, _, kwargs in client.sent:
+        assert not kwargs.get("reply_to"), "her answer was threaded as a reply"
+
+
+async def test_the_echo_at_the_top_of_her_answer_is_cut(runtime) -> None:
+    replies, client = await _runtime_with(runtime)
+    runtime.ai = StubProvider("> یورا این کیه\n\nگمشو، حوصله ندارم")
+
+    await replies.on_group_message(_event("یورا این کیه"))
+
+    sent = client.sent[-1][1]
+    assert "یورا این کیه" not in sent
+    assert "گمشو" in sent
+
+
+async def test_her_own_verse_quote_survives(runtime) -> None:
+    replies, client = await _runtime_with(runtime)
+    runtime.ai = StubProvider("> بیتی از حافظ\n\nخوش است")
+
+    await replies.on_group_message(_event("یورا یه بیت بگو"))
+
+    sent = client.sent[-1][1]
+    assert "بیتی از حافظ" in sent

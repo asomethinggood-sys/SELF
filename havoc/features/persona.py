@@ -557,9 +557,13 @@ async def _chat(ctx: CommandContext, text: str, *, greeting: bool = False) -> No
     if answer.text:
         # `rich` for model text, not `escape`: she writes **bold** and > quotes
         # because that is how a model writes, and escaping them shipped the
-        # asterisks. `ctx.reply` already threads to the message that asked, so the
-        # answer can be replied to in turn.
-        await ctx.reply(_visible(answer))
+        # asterisks.
+        #
+        # ``reply=False``: a Telegram reply bubble carries the message it answers
+        # above it. Calling her by name is a normal message, so answering it as a
+        # reply put the caller's own words back on top of every answer — "I talk
+        # to an AI to get a response, not to get my prompt back".
+        await ctx.reply(_visible(answer), reply=False)
     for path in answer.files:
         await ctx.runtime.sender.send_media(
             ctx.chat_id,
@@ -814,9 +818,21 @@ class PersonaReplies:
         except Exception:  # pragma: no cover - see above
             pass
 
+    async def _is_own_id(self, chat_id: int, message_id: Any) -> bool:
+        """True only for a message this account sent as *her*.
+
+        The owner's messages are sent by the same account, so "outgoing" cannot
+        tell the two apart — the id can. Nothing here looks at the text: a friend
+        who quotes one of her lines is not her, and a reply pointed at his
+        message must never be mistaken for a reply pointed at hers.
+        """
+        if message_id is None:
+            return False
+        return int(message_id) in await self._own_bucket(chat_id)
+
     async def _is_own(self, chat_id: int, message_id: Any, text: str) -> bool:
         """True when this message is one she wrote, not one the owner wrote."""
-        if message_id is not None and int(message_id) in await self._own_bucket(chat_id):
+        if await self._is_own_id(chat_id, message_id):
             return True
         if not text:
             return False
@@ -897,11 +913,14 @@ class PersonaReplies:
         if event.is_outgoing and self._is_command(event.text):
             self._skip("command", event)
             return
-        # Addressed means aimed at *her*: a reply to one of her messages, her name,
-        # or a mention. A reply to the owner's message used to count too, which
-        # made her answer every conversation he was having — a lot of model spend
-        # for something nobody asked her.
-        addressed = quote.hers or self._named(event.text) or event.mentions_me
+        # Addressed means aimed at *her*, and only two things count now: a reply
+        # to a message she sent, or her name in the text.
+        #
+        # ``event.mentions_me`` is deliberately not used. Telegram sets its
+        # ``mentioned`` flag for a mention **and for every reply to the account**,
+        # so trusting it made her answer each person who replied to the owner, and
+        # each person who tagged him. His name is not her name.
+        addressed = quote.hers or self._named(event.text)
         # "remember this" is itself aimed at her, even when the message is a reply
         # to someone else: she should confirm it, not silently file it. A
         # correction counts the same way — if he bothered to teach her, she
@@ -1042,7 +1061,6 @@ class PersonaReplies:
             await self._deliver(
                 chat_id,
                 self._decorate(_visible(answer), is_private=is_private),
-                event.message_id,
                 answer.source,
             )
         for path in answer.files:
@@ -1050,22 +1068,28 @@ class PersonaReplies:
                 chat_id, str(path), caption=escape(truncate(path.name, 90))
             )
 
-    async def _deliver(self, chat_id: int, html: str, reply_to: Any, source: str) -> None:
+    async def _deliver(self, chat_id: int, html: str, source: str) -> None:
         """Send, then edit into the real answer — the message types itself.
 
         An offline line is instant and gets no placeholder: a "…" that is replaced
         in the same frame looks like a glitch. A model answer took a second, and
         that second is worth showing.
+
+        Her answer is **not** sent as a Telegram reply. A reply bubble carries the
+        message it answers above it, so every answer arrived with the question
+        quoted on top — the owner's complaint was exactly that: "I talk to an AI
+        to get a response, not to get my prompt back". The conversation is still
+        followable: replying to *her* message is what continues it.
         """
         sender = self.runtime.sender
         if source != "model":
-            result = await sender.send(chat_id, html, reply_to=reply_to)
+            result = await sender.send(chat_id, html)
             await self._note_own(chat_id, getattr(getattr(result, "message", None), "id", None))
             return
         try:
-            placeholder = await sender.send(chat_id, self.TYPING, reply_to=reply_to)
+            placeholder = await sender.send(chat_id, self.TYPING)
         except Exception:  # noqa: BLE001 - fall back to one clean message
-            result = await sender.send(chat_id, html, reply_to=reply_to)
+            result = await sender.send(chat_id, html)
             await self._note_own(chat_id, getattr(getattr(result, "message", None), "id", None))
             return
         message = getattr(placeholder, "message", None)
@@ -1081,7 +1105,7 @@ class PersonaReplies:
                 await sender.delete(chat_id, message_id)
             except Exception:  # noqa: BLE001
                 pass
-            await sender.send(chat_id, html, reply_to=reply_to)
+            await sender.send(chat_id, html)
 
     def _decorate(self, html: str, *, is_private: bool = True) -> str:
         """Sometimes a bar under the message: the body clock, made visible.
@@ -1252,9 +1276,10 @@ class PersonaReplies:
                 # must not be folded into a prompt by being pointed at.
                 break
             from_account = from_account or ours
-            # ...and "hers" means she wrote it, which in a group is only knowable
-            # from the id she sent or the shape of her own lines.
-            mine = await self._is_own(event.chat_id, getattr(current, "id", None), text)
+            # ...and "hers" means she wrote it. Only the id she sent proves that:
+            # a text match would count a friend quoting her back, and "outgoing"
+            # is also true for every message the owner writes from this account.
+            mine = await self._is_own_id(event.chat_id, getattr(current, "id", None))
             hers = hers or mine
             if text:
                 lines.append(text[:400])

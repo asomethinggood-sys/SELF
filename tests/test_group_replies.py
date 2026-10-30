@@ -90,7 +90,8 @@ async def test_a_reply_to_her_message_is_answered(runtime) -> None:
     assert client.sent, "she stayed silent on a reply"
     chat_id, text, kwargs = client.sent[-1]
     assert chat_id == GROUP
-    assert kwargs.get("reply_to") == 601
+    # Not threaded: a reply bubble would put their message on top of her answer.
+    assert not kwargs.get("reply_to")
     assert "lift" in _all_text(runtime.ai.calls[-1])
 
 
@@ -106,10 +107,12 @@ async def test_the_persian_name_works_too(runtime) -> None:
     assert client.sent
 
 
-async def test_a_mention_is_enough(runtime) -> None:
+async def test_a_mention_of_the_account_is_not_enough(runtime) -> None:
+    """Tagging *him* is not tagging her. Telegram's mention flag covers both."""
     replies, client = await _replies(runtime)
     await replies.on_group_message(_incoming("tg://user?id=42 come here"))
-    assert client.sent
+    assert client.sent == []
+    assert replies.last_skip == "not_addressed"
 
 
 # ---------------------------------------------------------------------------

@@ -358,9 +358,9 @@ def audience_prompt(
             lines.append("- آخرین پیام‌های این چت (از قدیم به جدید):")
             lines.extend(f"  {line}" for line in transcript)
         lines.append(
-            "- با حرف خودت جواب بده، در یک دو خط کوتاه. این یادداشت‌ها را نقل نکن، "
-            "پیام طرف را برایش تکرار نکن و اگر معنی «این» را نمی‌دانی، از خودِ "
-            "پیام‌ها بخوان."
+            "- با حرف خودت شروع کن، در یک دو خط کوتاه. پیام طرف را با > یا «» "
+            "بالای جوابت تکرار نکن، یادداشت‌هایت را نقل نکن و اگر معنی «این» را "
+            "نمی‌دانی، از خودِ پیام‌ها بخوان."
         )
         return "\n".join(lines)
 
@@ -383,9 +383,10 @@ def audience_prompt(
         lines.append("- the last few messages here, oldest first:")
         lines.extend(f"  {line}" for line in transcript)
     lines.append(
-        "- answer in your own words, in one or two short lines. do not repeat these "
-        "notes, do not quote their message back at them, and read "
-        '"this"/"that" from the lines above instead of guessing.'
+        "- start with your own words, in one or two short lines. never put their "
+        "message at the top of your answer with > or «» — they already know what "
+        'they wrote. do not repeat these notes, and read "this"/"that" from the '
+        "lines above instead of guessing."
     )
     return "\n".join(lines)
 
@@ -611,6 +612,69 @@ def repeat_prompt(previous: Sequence[str], language: str = "en") -> str:
             "their kaomoji are used up:"
         )
     return "\n".join([head, *(f"  - {line}" for line in lines)])
+
+
+_WORD_RE = re.compile(r"[^\W_]+", re.UNICODE)
+#: Wrappers a model puts around the line it is about to answer.
+_QUOTE_WRAP = (("«", "»"), ('"', '"'), ("“", "”"), ("'", "'"))
+
+
+def _tokens(text: str) -> set[str]:
+    return {word for word in _WORD_RE.findall(str(text).lower()) if len(word) > 1}
+
+
+def _is_echo(quoted: str, incoming: str) -> bool:
+    """True when ``quoted`` is the message she is answering, not something else."""
+    quoted_words = _tokens(quoted)
+    incoming_words = _tokens(incoming)
+    if not quoted_words or not incoming_words:
+        return False
+    shared = quoted_words & incoming_words
+    if len(shared) / len(quoted_words) >= 0.5:
+        return True
+    flat_quoted = " ".join(str(quoted).lower().split())
+    flat_incoming = " ".join(str(incoming).lower().split())
+    return len(flat_quoted) > 12 and flat_quoted in flat_incoming
+
+
+def strip_echo(text: str, incoming: str) -> str:
+    """Drop the copy of their message she put at the top of her answer.
+
+    Telegram shows a reply bubble on its own; a *second* copy written into the
+    body is the thing the owner kept seeing — "I talk to an AI to get a response,
+    not to get my prompt back". Only a leading block made of their own words is
+    removed, so quoting a verse of her own is still allowed.
+    """
+    body = str(text or "")
+    if not body.strip() or not str(incoming or "").strip():
+        return body
+    lines = body.split("\n")
+    index = 0
+    while index < len(lines) and not lines[index].strip():
+        index += 1
+    start = index
+    quoted: list[str] = []
+    while index < len(lines):
+        stripped = lines[index].strip()
+        if not stripped.startswith(">"):
+            break
+        quoted.append(stripped.lstrip(">").strip())
+        index += 1
+    if quoted and _is_echo("\n".join(quoted), incoming):
+        return "\n".join(lines[index:]).lstrip("\n")
+
+    # A leading paragraph wrapped in guillemets or quotes, with nothing else.
+    stripped = lines[start].strip() if start < len(lines) else ""
+    for opening, closing in _QUOTE_WRAP:
+        if stripped.startswith(opening) and stripped.endswith(closing) and len(stripped) > 4:
+            inner = stripped[1:-1].strip()
+            if _is_echo(inner, incoming):
+                return "\n".join(lines[start + 1 :]).lstrip("\n")
+            break
+    # The bare echo: their sentence copied as the first line, no markers at all.
+    if stripped and _is_echo(stripped, incoming) and len(lines) - start > 1:
+        return "\n".join(lines[start + 1 :]).lstrip("\n")
+    return body
 
 
 #: A sentence can end with any of these, in either language.

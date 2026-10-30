@@ -369,7 +369,9 @@ class YuraChat:
         self.broken = await self._note_violations(
             reply, lessons, getattr(who, "user_id", None)
         )
-        answer = await self._apply(reply, chat_id=chat_id, language=language)
+        answer = await self._apply(
+            reply, chat_id=chat_id, language=language, incoming=spoken
+        )
         if not answer.text and not answer.files:
             answer.text = fallback
         if answer.text:
@@ -386,8 +388,15 @@ class YuraChat:
             source=source,
         )
 
-    async def _apply(self, reply: str, *, chat_id: int, language: str) -> Answer:
-        """Pull directives out of a raw reply and perform them."""
+    async def _apply(
+        self, reply: str, *, chat_id: int, language: str, incoming: str = ""
+    ) -> Answer:
+        """Pull directives out of a raw reply and perform them.
+
+        ``incoming`` is what they said. It is not used to build the answer — it is
+        used to recognise the answer *copying* it, which a model does when it has
+        been handed the message it is replying to.
+        """
         remembered: list[str] = []
         forgotten = 0
 
@@ -418,6 +427,7 @@ class YuraChat:
                     self.logger.warning("yura: salvaged a truncated file block (%s)", salvaged.name)
 
         visible = persona.strip_leaks(cleaned)
+        visible = persona.strip_echo(visible, incoming)
         visible = persona.finish_sentence(visible)
         visible = re.sub(r"\n{3,}", "\n\n", visible).strip()
         if len(visible) > MAX_REPLY_CHARS:

@@ -201,8 +201,43 @@ async def run() -> dict[str, object]:
         room = {"ok": False, "failure": f"{exc.kind}: {_head(exc, 200)}"}
     record["room"] = room
 
+    # -- 5. does she quote the message back at them? ------------------------
+    echo: dict[str, object] = {}
+    incoming = "یورا این کیه"
+    try:
+        block = persona.audience_prompt(
+            language="fa",
+            chat_title="General",
+            speaker="ZERO",
+            is_owner=False,
+            is_group=True,
+            transcript=(f"- ZERO: {incoming}",),
+            tone="rude",
+        )
+        answer = await provider.converse(  # type: ignore[attr-defined]
+            [
+                AIMessage("system", f"{system_prompt('fa')}\n\n{block}"),
+                AIMessage("user", persona.quoted_prompt(incoming, "fa")),
+            ],
+            max_tokens=200,
+        )
+        stripped = persona.strip_echo(answer, incoming)
+        echo = {
+            # The complaint in one line: her answer must not contain their message,
+            # and must not open by quoting it.
+            "ok": incoming not in answer and not answer.strip().startswith((">", "«")),
+            "answer": _head(answer, 300),
+            "copy_of_the_message": incoming in answer,
+            "started_with_a_quote": answer.strip().startswith((">", "«")),
+            "after_the_echo_filter": _head(stripped, 300),
+        }
+    except AIError as exc:
+        echo = {"ok": False, "failure": f"{exc.kind}: {_head(exc, 200)}"}
+    record["echo"] = echo
+
     record["ok"] = all(
-        bool(part.get("ok")) for part in (formatting, marks, vision, room)  # type: ignore[union-attr]
+        bool(part.get("ok"))
+        for part in (formatting, marks, vision, room, echo)  # type: ignore[union-attr]
     )
     return record
 
@@ -210,7 +245,7 @@ async def run() -> dict[str, object]:
 def main() -> int:
     record = asyncio.run(run())
     print(f"provider: {record['provider']} · keys: {record['keys']}")
-    for name in ("formatting", "marks", "vision", "room"):
+    for name in ("formatting", "marks", "vision", "room", "echo"):
         part = record.get(name, {})  # type: ignore[assignment]
         print(f"{name}: {'OK' if part.get('ok') else 'FAILED'}")
         if part.get("raw"):
