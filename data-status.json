@@ -1,23 +1,23 @@
 {
   "path": "/home/runner/work/SELF/SELF/.runtime/data/havoc.db",
   "exists": true,
-  "schema_version": 5,
+  "schema_version": 6,
   "integrity": "ok",
   "populated": {
     "bookmarks": 1,
     "chat_settings": 1,
     "features": 17,
-    "jobs": 473,
+    "jobs": 482,
     "language_prefs": 1,
-    "profile_history": 472,
+    "profile_history": 481,
     "profile_snapshots": 3,
-    "schema_migrations": 5,
+    "schema_migrations": 6,
     "settings": 10,
     "sqlite_sequence": 6,
     "usage_stats": 14,
     "yura_history": 54,
     "yura_memory": 10,
-    "yura_people": 97
+    "yura_people": 103
   },
   "tables": {
     "aliases": 0,
@@ -30,17 +30,17 @@
     "diagnostics": 0,
     "features": 17,
     "interactive_sessions": 0,
-    "jobs": 473,
+    "jobs": 482,
     "language_prefs": 1,
     "notes": 0,
     "plugins": 0,
-    "profile_history": 472,
+    "profile_history": 481,
     "profile_presets": 0,
     "profile_snapshots": 3,
     "reaction_rules": 0,
     "reminders": 0,
     "schedules": 0,
-    "schema_migrations": 5,
+    "schema_migrations": 6,
     "settings": 10,
     "sqlite_sequence": 6,
     "templates": 0,
@@ -48,18 +48,19 @@
     "usage_stats": 14,
     "watches": 0,
     "yura_history": 54,
+    "yura_lessons": 0,
     "yura_memory": 10,
-    "yura_people": 97
+    "yura_people": 103
   },
   "restored_from": {
     "cache_hit": "false",
-    "run_id": "41030028987"
+    "run_id": "41031007594"
   },
-  "boot_log_lines": 17,
+  "boot_log_lines": 18,
   "boot_log_tail": [
-    "2026-10-30T08:08:04+00:00 run=41024303913 boots=15 db=397312B",
     "2026-10-30T08:16:45+00:00 run=41025221905 boots=16 db=413696B",
-    "2026-10-30T08:59:12+00:00 run=41030028987 boots=17 db=425984B"
+    "2026-10-30T08:59:12+00:00 run=41030028987 boots=17 db=425984B",
+    "2026-10-30T09:07:58+00:00 run=41031007594 boots=18 db=434176B"
   ],
-  "boots": 17
+  "boots": 18
 }
