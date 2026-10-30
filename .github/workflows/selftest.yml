@@ -42,7 +42,19 @@ jobs:
             sleep 10
           done
           echo "action=$action"
-          echo "{\"action\":\"$action\",\"at\":\"$(date -u +%FT%TZ)\"}" > .handover-selftest.json
+          # Publish the whole report, detail included: the run log is not always
+          # reachable, and "error" without the reason is useless.
+          python3 - <<'PYEOF'
+          import datetime, json, pathlib
+          try:
+              report = json.loads(pathlib.Path("report.json").read_text())
+          except (OSError, ValueError):
+              report = {"action": "error", "detail": "no report written"}
+          report["at"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+          report["err"] = pathlib.Path("report.err").read_text()[-800:] if pathlib.Path("report.err").exists() else ""
+          pathlib.Path(".handover-selftest.json").write_text(json.dumps(report, indent=2) + "\n")
+          PYEOF
+          cat .handover-selftest.json
           exit 0
 
       - name: Did a no-op run appear?
