@@ -199,6 +199,35 @@ which code is live:
 If you ever want to *keep* a session somewhere permanent (a VPS), the string in
 the cache is all you need; docs/CONFIGURATION.md explains `SESSION_STRING`.
 
+## Staying alive
+
+A job on a runner can only last six hours, so "24/7" here means *a chain of runs
+with no gap in the middle*, not one immortal process. Three things make that
+chain hold:
+
+1. **Each run queues its own successor in its first step**
+   (`scripts/handover.py` → `workflow_dispatch`). Whoever ends the run — a
+   normal finish, the six-hour ceiling, a crash, a cancellation by hand — the
+   next run is already waiting and starts within seconds. The dispatch is the
+   documented exception to "the token's events do not trigger workflows", and
+   this repository has measured it: the selftest workflow dispatches a run and
+   finds it, and the result is committed to `.handover-selftest.json`.
+2. **The queue is re-asserted every minute.** If the queued run is cancelled, the
+   running bot notices the empty queue and queues another. A push *queues*
+   behind the running bot (it does not cancel it any more), and the bot stands
+   down only once it has confirmed a replacement exists.
+3. **The supervisor is the last resort.** If nothing is running *and* nothing is
+   queued — a cancellation during the first few seconds of a run, for example —
+   `.github/workflows/supervisor.yml` dispatches one. GitHub only fires
+   `schedule` for workflows on the **default branch**, so this one is only a
+   working safety net once it lives on `main`; from any other branch it runs
+   when you press *Run workflow*, not on a timer.
+
+Two honest limits: there is a boot gap of about a minute while the next runner
+installs the package, and a bot that is not running cannot hear you — nothing
+can start it from inside Telegram, which is exactly why the queue is kept full
+before anything goes wrong.
+
 ## What survives a restart, and how it was checked
 
 Two mechanisms keep your data, and they fail independently:

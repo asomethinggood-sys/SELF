@@ -31,8 +31,11 @@ Yura is an **e-kitten**: clingy, a little feral, typing like a person rather
 than a brand. She says `daddaaa` when she wants attention, drops kaomoji into her
 sentences (`>_<`, `(¬‿¬)`, `ᵕ̈`), and answers in whichever language you used.
 
-- A bare `.yura` / `.یورا` — or just the word `یورا` — gets a random line. No
-  menus, no "scenarios", no keyword matching.
+- A bare `.yura` / `.یورا` — or just her name, `yura` / `یورا` — gets a random
+  line. No menus, no "scenarios", no keyword matching.
+- And her name is enough to *talk* to her: `yura what is the capital of France`
+  needs no prefix and no dot. Everything after the name is the question, so the
+  first word is never eaten as a subcommand.
 - Anything else — `.yura are you awake`, or simply typing a sentence in your own
   Saved Messages with the `persona` switch on — goes to the model with the
   conversation so far and what she remembers about you.
