@@ -179,7 +179,15 @@ async def say(ctx: CommandContext, text: str) -> None:
     language = "fa" if _is_persian(spoken) else "en"
     result = await engine.say(spoken, language)
     if result is None:
-        await ctx.reply(escape(ctx.t("yura.say_failed", error=engine.last_error or "unknown")))
+        await ctx.reply(
+            escape(
+                ctx.t(
+                    "yura.say_failed",
+                    error=engine.last_error or "unknown",
+                    prefix=ctx.runtime.prefix,
+                )
+            )
+        )
         return
     folder = Path(ctx.runtime.config.data_dir) / "voice"
     folder.mkdir(parents=True, exist_ok=True)

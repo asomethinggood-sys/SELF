@@ -362,7 +362,8 @@ async def cmd_yura(ctx: CommandContext) -> None:
         await yura_extras.faces(ctx, list(words))
         return
     if action in {"say", "speak", "voice-note"}:
-        spoken = (ctx.raw_args or " ".join(words)).strip()
+        # `rest_raw`, not `raw_args`: the subcommand itself is not something to say.
+        spoken = (ctx.rest_raw or "").strip()
         engine = yura_extras.tts_for(ctx.runtime)
         # With an engine configured, ".yura say" is a voice note. Without one it
         # stays what it always was — something you said to her — because a word

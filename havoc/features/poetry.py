@@ -119,16 +119,21 @@ def _poem_card(poem: dict[str, Any], *, note: str = "") -> str:
     lines = text.count("\n") + 1
     # Persian verse is set in italics: it separates the quoted couplets from
     # Yura's own voice, which is never italic.
+    title = str(poem.get("title", "")).strip()
+    poet = str(poem.get("poet", "")).strip()
+    # The card is a fixed grid: a bold headline you can recognise from across a
+    # chat list, then the verse as a quotation, then where it came from.
+    # Title on top in bold, verse in a quotation, poet in italics under it: the
+    # shape of a printed card, and the same shape every time.
+    headline = title if title and title not in text else ""
+    header = ui.bold(f"❦ {escape(truncate(headline, 90))}") if headline else ""
     card = ui.quote_card(
         text,
-        str(poem.get("poet", "")),
+        poet,
         expandable=lines > _COLLAPSE_AFTER,
         italics=poem.get("language") == "fa",
     )
-    title = str(poem.get("title", "")).strip()
-    blocks = [card]
-    if title and title not in text:
-        blocks.append(ui.note(escape(truncate(title, 90))))
+    blocks = [f"{header}\n{card}" if header else card]
     if note:
         blocks.append(ui.footer(note))
     return "\n".join(blocks)

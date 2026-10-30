@@ -1,0 +1,89 @@
+name: Posters
+
+# Renders verse posters and commits them, because the bot only sends files that
+# already exist. Chromium is used for one reason: Persian shaping and bidi are
+# correct there, and Telegram needs a raster image, not an SVG.
+#
+# Run on demand, or on a change to the renderer. The output is small (a dozen
+# 1080x1350 PNGs) and lives in havoc/data/posters/.
+
+on:
+  workflow_dispatch:
+    inputs:
+      count:
+        description: "How many posters to render"
+        required: false
+        default: "12"
+  push:
+    paths:
+      - "scripts/build_posters.py"
+      - ".github/workflows/posters.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: havoc-posters
+  cancel-in-progress: true
+
+jobs:
+  render:
+    name: render verse posters
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e . playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Fonts that can shape Persian
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fonts-noto-core fonts-noto-color-emoji
+
+      - name: Render
+        run: |
+          set -euo pipefail
+          python scripts/build_posters.py --count "${{ inputs.count || '12' }}"
+          ls -la havoc/data/posters | head -20
+
+      - name: Commit the cards
+        run: |
+          set -uo pipefail
+          git config user.name "HAVOC posters"
+          git config user.email "posters@users.noreply.github.com"
+          git add havoc/data/posters
+          if git diff --cached --quiet; then
+            echo "nothing new to publish"
+            exit 0
+          fi
+          git commit -qm "content: verse posters [skip ci]"
+          for attempt in 1 2 3; do
+            if git pull -q --rebase origin "${GITHUB_REF_NAME}" && \
+               git push -q origin "HEAD:refs/heads/${GITHUB_REF_NAME}"; then
+              echo "published on attempt ${attempt}"
+              exit 0
+            fi
+            git rebase --abort 2>/dev/null || true
+            sleep 5
+          done
+          echo "::warning::Could not publish the posters; the artifact still has them."
+
+      - name: Keep them as an artifact too
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: posters
+          path: havoc/data/posters
+          if-no-files-found: warn

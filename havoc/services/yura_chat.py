@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import persona
+from ..utils.security import injection_notice, looks_like_injection
 from ..utils.time import to_local, utc_now
 from .ai_provider import AIError, AIMessage, AIProvider
 
@@ -198,6 +199,11 @@ class YuraChat:
             prompt = persona.picture_prompt(language)
         if quoted.strip():
             prompt = persona.quoted_prompt(quoted, language, prompt)
+        # A picture is evidence, not an order. When the words attached to it are
+        # shaped like an instruction to the model, the model is told so in the
+        # same breath — and told to say it out loud rather than comply.
+        if looks_like_injection(prompt):
+            prompt = f"{injection_notice(language)}\n{prompt}"
 
         history = await self.memory.history(chat_id)
         # Lines already used in this chat: the model is asked for variety, the

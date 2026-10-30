@@ -70,6 +70,42 @@ def test_a_bullet_may_be_a_star_without_becoming_italic() -> None:
 
 
 # ---------------------------------------------------------------------------
+# The project's own marks
+# ---------------------------------------------------------------------------
+def test_a_whisper_is_a_collapsible_quote() -> None:
+    assert rich(">> not for everyone") == "<blockquote expandable>not for everyone</blockquote>"
+
+
+def test_a_whisper_and_a_quote_do_not_merge() -> None:
+    rendered = rich("> said out loud\n>> said quietly")
+    assert "<blockquote>said out loud</blockquote>" in rendered
+    assert "<blockquote expandable>said quietly</blockquote>" in rendered
+
+
+def test_underline_is_an_entity() -> None:
+    assert rich("++pressed++") == "<u>pressed</u>"
+
+
+def test_small_caps_shrink_a_word() -> None:
+    assert rich("^^loud^^") == "ʟᴏᴜᴅ"
+
+
+def test_spaced_draws_a_word_out() -> None:
+    assert rich("%%slow%%") == "s l o w"
+
+
+def test_the_new_marks_do_not_fire_inside_code() -> None:
+    # The escapes survive because the text is escaped *before* it is styled, and
+    # > is escaped before the quote patterns ever see it.
+    assert rich("`^^x^^ ++y++ %%z%% >> w`") == "<code>^^x^^ ++y++ %%z%% &gt;&gt; w</code>"
+
+
+def test_they_are_recognised_as_formatting() -> None:
+    for sample in (">> hush", "++press++", "^^small^^", "%%slow%%"):
+        assert looks_formatted(sample) is True
+
+
+# ---------------------------------------------------------------------------
 # Staying safe and staying readable
 # ---------------------------------------------------------------------------
 def test_html_in_the_message_cannot_become_markup() -> None:

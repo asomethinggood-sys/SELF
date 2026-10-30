@@ -31,6 +31,11 @@ media = [
     "arabic-reshaper>=3",
     "python-bidi>=0.4",
 ]
+# Her voice, with no account and no key. `.yura speak` is silent without this
+# extra, and says so rather than half-working.
+voice = [
+    "edge-tts>=6.1",
+]
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.23",

@@ -508,19 +508,29 @@ async def cmd_fight(ctx: CommandContext) -> None:
         f"{ui.bold(ctx.t('fight.intensity'))} {escape(fight.INTENSITY_LABELS.get(language, fight.INTENSITY_LABELS['en']).get(intensity, intensity))}",
         f"{ui.bold(ctx.t('fight.source'))} {ui.note(escape(result.source))}",
     ]
-    await ctx.reply(
-        "\n\n".join(
-            [
-                ui.title("⚔", ctx.t("fight.header")),
-                ui.note(ctx.t("fight.their_line")),
-                ui.quote_card(" ".join(source.split())[:280], ""),
-                ui.note(ctx.t("fight.your_line")),
-                ui.quote_card(result.text, ""),
-                ui.panel(facts),
-                ui.footer(ctx.t("fight.preview_hint", prefix=runtime.prefix)),
-            ]
+    blocks = [
+        ui.title("⚔", ctx.t("fight.header")),
+        ui.note(ctx.t("fight.their_line")),
+        ui.quote_card(" ".join(source.split())[:280], ""),
+        ui.note(ctx.t("fight.your_line")),
+        ui.quote_card(result.text, ""),
+        ui.panel(facts),
+    ]
+    if intensity in {"intense", "unhinged"}:
+        # The escalation has to be visible, not just advertised: at this level
+        # the card ends with a terminal readout, monospaced and dry.
+        blocks.append(
+            ui.code_block(
+                [
+                    f"target  : {truncate(' '.join(source.split()), 48)}",
+                    f"style   : {style}",
+                    f"verdict : {'annihilated' if intensity == 'unhinged' else 'dismantled'}",
+                    f"damage  : {'██████████' if intensity == 'unhinged' else '██████▱▱▱▱'}",
+                ]
+            )
         )
-    )
+    blocks.append(ui.footer(ctx.t("fight.preview_hint", prefix=runtime.prefix)))
+    await ctx.reply("\n\n".join(blocks))
 
 
 async def _start_loop(
