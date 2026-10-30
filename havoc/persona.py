@@ -313,10 +313,19 @@ def quoted_prompt(quoted: str, language: str = "en", question: str = "") -> str:
     could not see.
     """
     quoted = " ".join(str(quoted).split())[:600]
+    # No guillemets and no quotation marks around it: a model handed «their
+    # message» in a pair of quote marks writes it back with the marks attached.
+    # The instruction is part of the block so the answer starts with her.
     if language == "fa":
-        head = f"(به این پیام جواب دادی: «{quoted}»)"
+        head = (
+            f"(پیامی که به آن جواب می‌دهی، فقط برای اینکه بدانی دربارهٔ چیست: {quoted}) "
+            "با حرف خودت جواب بده و این پیام را تکرار نکن."
+        )
     else:
-        head = f'(replying to: "{quoted}")'
+        head = (
+            f"(the message you are answering, only so you know what it is about: {quoted}) "
+            "answer in your own words, do not repeat it."
+        )
     return f"{head}\n{question}".strip() if question else head
 
 

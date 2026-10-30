@@ -812,3 +812,12 @@ def test_a_short_reply_is_never_touched() -> None:
 def test_a_long_reply_that_ends_cleanly_is_left_alone() -> None:
     fine = "این یک جملهٔ کامل است. " * 8
     assert persona.finish_sentence(fine) == fine.rstrip()
+
+
+def test_the_message_she_answers_is_described_not_quoted() -> None:
+    """Quote marks in the prompt come back as quote marks in the answer."""
+    for language in ("en", "fa"):
+        block = persona.quoted_prompt("یورا این کیه", language)
+        assert "«" not in block and "»" not in block
+        assert "یورا این کیه" in block
+    assert "do not repeat it" in persona.quoted_prompt("hi", "en")
