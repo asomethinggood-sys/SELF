@@ -1,0 +1,36 @@
+name: Handover selftest
+
+# Proves the handover script — not a hand-written curl — can start a workflow
+# with the token a normal run gets. Dispatches `noop.yml` and then checks that a
+# run of it appeared.
+
+on:
+  push:
+    paths:
+      - ".github/workflows/selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dispatch a no-op workflow through scripts/handover.py
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HANDOVER_WORKFLOW: noop.yml
+        run: |
+          set -uo pipefail
+          python3 scripts/handover.py --json | tee report.json
+          action=$(python3 -c 'import json;print(json.load(open("report.json"))["action"])')
+          echo "action=$action"
+          [ "$action" = "dispatched" ] || { echo "::error::handover did not dispatch"; exit 1; }
+          sleep 25
+          curl -sS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/runs?per_page=20" \
+            | python -c "import json,sys;d=json.load(sys.stdin);n=[r for r in d.get('workflow_runs',[]) if r['name']=='Noop' and r['event']=='workflow_dispatch'];print('noop runs:',len(n));sys.exit(0 if n else 1)"

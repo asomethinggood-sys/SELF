@@ -1,0 +1,13 @@
+name: Noop
+
+# Does nothing. Exists only so another workflow can prove it dispatched one.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - run: echo "noop"
