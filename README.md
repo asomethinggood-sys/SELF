@@ -205,6 +205,30 @@ auto-forwarding of everything, or anything designed to dodge Telegram's limits.
 Automation that could annoy people is opt-in, rate-limited, and can be stopped
 with one command.
 
+## Staying alive on GitHub Actions
+
+A runner job cannot last more than six hours, so "always on" is a **chain of
+runs with no gap**, not one immortal process. Each run of
+`.github/workflows/auth-and-run.yml` queues its own successor in its very first
+step, re-checks that queue every minute, and steps aside for a push only after
+confirming a replacement exists. If a queued run is cancelled, the running bot
+notices and queues another; if nothing is alive at all, the **Supervisor**
+workflow refills the queue, and the **Restart** workflow stops everything and
+starts clean in one click.
+
+Two things worth knowing:
+
+- The supervisor's `schedule` only fires for workflows on the **default branch**.
+  From a feature branch it runs when you press *Run workflow*, so the chain is
+  what keeps the bot up there — which is why the chain is the mechanism and the
+  supervisor is the fallback.
+- `GITHUB_TOKEN` is a secret, not one of the automatic `GITHUB_*` variables. A
+  step that calls the API without it in its own `env` gets a 401; every step
+  here that does is covered by a test.
+
+Details, failure modes and the measurements behind them:
+[docs/INSTALL.md](docs/INSTALL.md#staying-alive).
+
 ## Quick start
 
 ```bash
