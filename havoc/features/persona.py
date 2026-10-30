@@ -966,7 +966,10 @@ class PersonaReplies:
         if speaker is None or self.runtime.permissions.is_owner(speaker):
             self._skip("owner_chat", event)
             return
-        person = await self._person(speaker)
+        # A read, not a touch: a row is only created for someone she actually
+        # answers. A stranger messaging the account must not leave a file behind
+        # just by knocking.
+        person = await self.runtime.people.get(speaker)
         if person is None or not getattr(person, "dm", False):
             self._skip("dm_not_allowed", event)
             return

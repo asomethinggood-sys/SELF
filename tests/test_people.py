@@ -380,3 +380,38 @@ async def test_the_owner_can_turn_it_on_and_off(runtime) -> None:
     await invoke(runtime, ".yura dm off Ali", chat_id=GROUP, is_private=False)
     person = await runtime.people.get(FRIEND)
     assert person is not None and person.dm is False
+
+
+# ---------------------------------------------------------------------------
+# The book holds people she knows, not people who knocked
+# ---------------------------------------------------------------------------
+async def test_a_stranger_knocking_leaves_no_row(runtime) -> None:
+    """A private message from someone she has not been told about keeps nothing."""
+    await _enable(runtime)
+    message = FakeMessage(
+        id=960, chat_id=1234, sender_id=1234, text="hi", out=False,
+        is_private=True, is_group=False,
+    )
+    message.sender = FakeUser(user_id=1234, first_name="Someone")
+    event = normalize_message(message, self_id=OWNER, prefix=".", event_type=EventType.MESSAGE)
+    await runtime.persona_replies.on_private_message(event)
+    assert await runtime.people.count() == 0
+    assert runtime.persona_replies.last_skip == "dm_not_allowed"
+
+
+async def test_the_empty_rows_are_swept(runtime) -> None:
+    await runtime.people.touch(1111, "Knocker")
+    await runtime.people.touch(2222, "Real")
+    await runtime.people.note(2222, "she is my gf")
+    removed = await runtime.people.prune()
+    assert removed == 1
+    assert await runtime.people.get(1111) is None
+    kept = await runtime.people.get(2222)
+    assert kept is not None and kept.relation == "his girlfriend"
+
+
+async def test_a_tone_choice_survives_the_sweep(runtime) -> None:
+    await runtime.people.touch(3333, "Ali")
+    await runtime.people.set_tone(3333, "nice")
+    assert await runtime.people.prune() == 0
+    assert await runtime.people.get(3333) is not None

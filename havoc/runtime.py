@@ -176,6 +176,14 @@ class Runtime:
         runtime.dispatcher = Dispatcher(runtime)
         runtime.memory = MemoryStore(db)
         runtime.people = PersonBook(db)
+        # The book is for people she knows, not people who knocked. Rows that
+        # hold nothing (an old build created them on sight) are swept at boot.
+        try:
+            pruned = await runtime.people.prune()
+            if pruned:
+                logger.info("yura: swept %s empty person row(s)", pruned)
+        except Exception:  # noqa: BLE001 - a housekeeping miss must not stop a boot
+            pass
         runtime.lessons = LessonBook(db)
         runtime.yura_chat = YuraChat(runtime)
         runtime.fight_loop = FightLoop(runtime)

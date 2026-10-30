@@ -330,6 +330,22 @@ class PersonBook:
             )
         return removed
 
+    async def prune(self) -> int:
+        """Delete the rows that hold nothing.
+
+        A row is created when she answers someone, and it is only worth keeping
+        once something is in it: a name is not a memory. This sweeps the empty
+        ones — including any created by an older build that looked at a stranger's
+        message without answering it — so the table means "people I know", not
+        "people who have ever written to this account".
+        """
+        removed = await self.db.execute(
+            "DELETE FROM yura_people WHERE facts = '[]' AND relation = '' AND dm = 0"
+            " AND tone = ?",
+            (DEFAULT_TONE,),
+        )
+        return int(removed or 0)
+
     async def all(self, limit: int = 40) -> list[Person]:
         rows = await self.db.fetch_all(
             "SELECT * FROM yura_people ORDER BY updated_at DESC LIMIT ?", (max(1, int(limit)),)
