@@ -528,3 +528,25 @@ async def invoke_cmd(runtime, text: str, *, chat_id: int) -> None:
     event = FakeEvent(message, chat_id=chat_id, out=True)
     parsed = parse_command(text, runtime.prefix)
     await runtime.dispatcher.handle(event, message, parsed, "en")
+
+
+async def test_a_reply_after_a_restart_is_still_hers(runtime) -> None:
+    """A new process, a fresh ledger object, an answer sent a moment ago."""
+    from havoc.services.sent_ledger import SentLedger
+
+    runtime.sender.ledger = SentLedger(runtime.store)
+    sent = await runtime.sender.send(GROUP, "mrrp. hi.")
+
+    runtime.sent_ledger = SentLedger(runtime.store)  # what a restart builds
+    runtime.sender.ledger = runtime.sent_ledger
+    replies, client = await _runtime_with(runtime)
+    replies._own_ids.clear()
+
+    hers = FakeMessage(
+        id=sent.message.id, chat_id=GROUP, sender_id=OWNER, text="mrrp. hi.", out=True
+    )
+    await replies.on_group_message(
+        _event("what was that", out=True, sender_id=OWNER, reply=hers, message_id=999)
+    )
+
+    assert client.sent, "a reply to her message was lost across a restart"
