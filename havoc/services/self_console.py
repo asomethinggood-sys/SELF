@@ -100,13 +100,32 @@ class _CapturingSender:
     def __getattr__(self, name: str) -> Any:
         return getattr(self._inner, name)
 
+    def _simulate(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+        # A command forces ``dry_run=False`` on its own reply (a command's answer
+        # is never a side effect). In a dry run that would try to reach Telegram
+        # through a client that may not exist — so the simulation is restored
+        # here, one layer up, where it belongs.
+        if getattr(self._inner, "dry_run", False):
+            kwargs["dry_run"] = True
+        return kwargs
+
     async def respond(self, event: Any, text: str, **kwargs: Any) -> Any:
         self._lines.append(_plain(text)[:400])
-        return await self._inner.respond(event, text, **kwargs)
+        return await self._inner.respond(event, text, **self._simulate(kwargs))
 
     async def send(self, chat_id: Any, text: str, **kwargs: Any) -> Any:
         self._lines.append(_plain(text)[:400])
-        return await self._inner.send(chat_id, text, **kwargs)
+        return await self._inner.send(chat_id, text, **self._simulate(kwargs))
+
+    async def send_media(self, chat_id: Any, media: Any, **kwargs: Any) -> Any:
+        self._lines.append(f"[media] {getattr(media, 'name', media)}")
+        if getattr(self._inner, "dry_run", False):
+            kwargs["dry_run"] = True
+        try:
+            return await self._inner.send_media(chat_id, media, **kwargs)
+        except Exception as exc:  # noqa: BLE001 - a picture is not worth an answer
+            self._lines.append(f"[media failed: {type(exc).__name__}]")
+            return None
 
 
 class _Proxy:

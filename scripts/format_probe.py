@@ -286,6 +286,10 @@ async def run() -> dict[str, object]:
         # The account is the owner of itself, exactly as after a login; the
         # console dispatches as id 1.
         scratch.permissions.set_self_id(1)
+        # A feature the owner has switched on, as he would have: a gated command
+        # is *supposed* to refuse until its feature is enabled.
+        await scratch.feature_manager.set_enabled("poetry", True)
+        await scratch.feature_manager.refresh()
         layer = scratch.actions
         agent = Agent(layer, logger=scratch.logger)
         turn = Turn(chat_id=1, actor_id=1, language="en", is_owner=True)
@@ -356,7 +360,7 @@ async def run() -> dict[str, object]:
             "blocks_owner_changes": ".owner" not in listing and ".key" not in listing,
         }
         commands: list[dict[str, object]] = []
-        for line in ("about", "fal page 166", "clock on -- timezone Asia/Tehran"):
+        for line in ("about", "fal page 166", "clock status"):
             reply = await self_console.run(
                 scratch, line, chat_id=1, sender_id=1, language="en"
             )
@@ -402,7 +406,9 @@ async def run() -> dict[str, object]:
             console.get("mentions_fal")
             and console.get("mentions_clock")
             and console.get("blocks_owner_changes")
-            and any(entry["ok"] for entry in hands.get("commands", []) if entry["line"] == "about")
+            and all(
+                entry["ok"] for entry in hands.get("commands", []) if entry["line"] in {"about", "fal page 166"}
+            )
         )
         hands["ok"] = bool(
             layer.tools
