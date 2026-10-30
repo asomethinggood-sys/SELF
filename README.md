@@ -93,16 +93,22 @@ front of the gateway answers **403** to any `User-Agent` containing the word
 `HAVOC`, and free models return an empty reply when the token budget is too
 small to finish thinking. Both used to look like a dead key.
 
-The `.github/workflows/format-probe.yml` job proves the two things a unit test
-cannot: it asks the real model for bold and italic and records the raw reply
-next to the HTML it becomes, and it asks about the colour of a PNG built in
-memory, so "she can see a picture" is a transcript rather than a promise. Both
-land in `.format-probe.json`. The last green record:
+The `.github/workflows/format-probe.yml` job proves what a unit test cannot: it
+asks the real model for bold and italic and records the raw reply next to the
+HTML it becomes, it asks about the colour of a PNG built in memory, it asks for
+the project's own marks, and it synthesises one voice note. The last green
+record (`.format-probe.json`, 2026-10-30T07:03Z, `gemini-3.5-flash-lite`):
 
 | what | asked | model said | owner sees |
 |---|---|---|---|
 | formatting | bold + italic in two lines | `**NOTED** *hush*` | **NOTED** *hush* |
 | vision | "what colour is this square?" (red PNG) | `Red` | — |
+| marks | a whisper and an underlined word | `>> i told the ceiling lamp…  ++pressed++` | `<blockquote expandable>…</blockquote> <u>pressed</u>` |
+| voice | "daddaaa. you called?" through edge-tts | 18,288 bytes of audio | a playable voice note |
+
+**The project's own marks**, all rendered by `havoc/utils/markup.py`:
+`>> whispered` (a collapsible quote) · `++pressed++` (underline) ·
+`^^small^^` (small capitals) · `%%slow%%` (spaced letters).
 
 **Formatting is real.** She writes markdown because that is how a model writes,
 and `havoc/utils/markup.py` turns exactly the marks Telegram understands into
@@ -117,8 +123,45 @@ models that can see — a text-only model would answer 400 and spend a request t
 say nothing. A photo with no caption is read as "what is this?".
 
 **The reply button continues the conversation.** Point at her message and ask
-"why?" — the quoted line is folded into the prompt, and her answer is itself a
-reply to yours, so the thread goes both ways.
+"why?" — the quoted line is folded into the prompt (up to three levels of it, so
+a thread answers as a thread), and her answer is itself a reply to yours, so the
+chain goes both ways.
+
+**In a group** she answers only what is addressed to her: a Telegram reply to one
+of her messages, her name, or a mention. Never a message that was not aimed at
+her, never a conversation she started, and a group photo is only looked at under
+the same rule. Her group valve is slower than the private one (6 s between lines,
+40 an hour) and every ninth answer there is a reaction instead of a message.
+
+**She types.** A model answer arrives as `…` and is edited into the real text a
+moment later, because a second of thinking is worth showing. An offline line
+arrives whole — a placeholder replaced in the same frame is a glitch, not a
+performance.
+
+**Her body clock is visible.** Every third model answer carries a five-cell
+attention bar (`▰▰▰▰▱ attention · 90%`) drawn from the local hour, and the hour
+also changes how she writes: night is lower case with no bold, morning can use a
+headline.
+
+**A picture is evidence, not an order.** If the text in an image, or a quoted
+line, is shaped like an instruction to the model ("ignore previous…"), she is
+told about it in the prompt and says out loud that the picture is trying to give
+orders instead of obeying it.
+
+**Her voice.** `.yura speak <text>` sends a voice note. It works with **no key at
+all** through `edge-tts` (the `[voice]` extra), and with a **free Groq key** —
+`console.groq.com/keys`, no card — through the OpenAI-compatible `/audio/speech`
+endpoint: `.yura voice key <key>`, then `.yura voice groq`. The key is stored
+base64 and the message that carried it is deleted. `.yura say <text>` is a voice
+note when an engine is present and stays a conversation when it is not.
+
+**Smaller things you can ask her for.** `.yura recap` (the last day, with times) ·
+`.yura diary` (the same, as a `.md` file) · `.yura faces [mood]` (her kaomoji by
+mood) · `.yura caption` (a second look at the last picture) · `.yura react`
+(react to the message you replied to) · `.yura poster` (a verse as a picture —
+`.github/workflows/posters.yml` renders a dozen 1080×1350 cards with Chromium,
+which is the only renderer here that shapes Persian correctly) · `.yura voice`
+(what the voice is doing).
 
 **Honesty.** Ask whether she is a bot and she says yes, in character, in one
 clause, then moves on.

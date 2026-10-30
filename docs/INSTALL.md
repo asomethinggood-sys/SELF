@@ -292,3 +292,18 @@ pip install -e ".[media]"      # pillow, arabic-reshaper, python-bidi
 Without them the bot still runs — `.fal` notices at runtime, says so in one
 quiet line, and sends the reading as text instead of failing. The fonts and the
 divination table ship inside the package, so there is nothing else to install.
+
+## Her voice
+
+`.yura speak <text>` needs one of two things, and the first needs nothing:
+
+* **No key.** `pip install -e ".[voice]"` installs `edge-tts`, which speaks
+  through Microsoft's read-aloud engine. The runtime workflow already installs
+  this extra. `.yura voice` says `edge · ready` when it is there.
+* **A free Groq key.** <https://console.groq.com/keys> — free tier, no card,
+  model `playai-tts`, OpenAI-compatible endpoint. Send `.yura voice key <key>`
+  (the message is deleted straight away, the key is stored base64), then
+  `.yura voice groq`. `.yura voice off` goes back to the keyless voice.
+
+If neither is available, `.yura say` stays a conversation instead of failing:
+a word silently changing meaning is worse than a feature being absent.
