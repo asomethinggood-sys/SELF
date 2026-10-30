@@ -1,0 +1,21 @@
+{
+  "checked_at": "2026-10-30T06:36:45Z",
+  "provider": "router",
+  "keys": 4,
+  "formatting": {
+    "ok": true,
+    "model": "gemini-3.5-flash-lite",
+    "raw": "**NOTED** *hush*",
+    "html": "<b>NOTED</b> <i>hush</i>",
+    "has_bold": true,
+    "has_italic": true
+  },
+  "vision": {
+    "ok": true,
+    "mime": "image/png",
+    "bytes": 79,
+    "model": "gemini-3.5-flash-lite",
+    "answer": "Red"
+  },
+  "ok": true
+}
