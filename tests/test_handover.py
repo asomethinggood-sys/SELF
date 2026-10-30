@@ -187,3 +187,21 @@ def test_no_workflow_dispatches_a_workflow_that_is_not_there() -> None:
         for name in existing | {"telegram-run.yml"}:
             if f"workflow run {name}" in text or f"/{name}/dispatches" in text:
                 assert name in existing, f"{path.name} dispatches missing {name}"
+
+
+def test_every_step_that_asks_github_about_runs_has_a_token() -> None:
+    """`GITHUB_TOKEN` is a secret, not an automatic variable.
+
+    Without it in a step's own `env`, the curl in the run loop got a 401, the
+    answer was "unknown", and the bot never stood down — it sat in front of the
+    queued deploy for the whole six hours. Every step that talks to the API must
+    carry the token itself.
+    """
+    job = _load("auth-and-run.yml")["jobs"]["login"]
+    for step in job["steps"]:
+        script = step.get("run", "")
+        if "scripts/handover.py" not in script and "GITHUB_TOKEN" not in script:
+            continue
+        env = step.get("env") or {}
+        assert "GITHUB_TOKEN" in env, step.get("name")
+        assert env["GITHUB_TOKEN"] == "${{ secrets.GITHUB_TOKEN }}", step.get("name")

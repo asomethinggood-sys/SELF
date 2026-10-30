@@ -438,6 +438,10 @@ jobs:
           # while it still has time to checkpoint the database, rather than be
           # killed at the ceiling with a live WAL.
           BOT_MINUTES: ${{ inputs.bot_minutes || '340' }}
+          # Needed by the loop below: it asks GitHub which runs are queued, and
+          # without the token in *this step's* environment the answer was always
+          # "unknown", so the bot never stood down and held the deploy behind it.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # The bot commits a snapshot of everything it stores every few
           # minutes, so the data survives a cache miss, an eviction, or the
           # run being cancelled before its own save step.
