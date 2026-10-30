@@ -44,6 +44,7 @@ from havoc.services.ai_router import AIRouter
 from havoc.services.vision import make_picture
 from havoc.utils import glyphs
 from havoc.utils.markup import rich
+from havoc.version import label
 
 RECORD = Path(".format-probe.json")
 #: ``[[remember: …]]`` is a hidden directive, not scaffolding: the reply path pulls
@@ -552,6 +553,74 @@ async def run() -> dict[str, object]:
     )
     record["speech"] = speech
 
+    # -- 6. the sentence as an instruction (1.7) ---------------------------
+    # The floor under the hands: a model that only writes words must still get the
+    # clock turned off. Measured with a stub that never sends a tool block, so this
+    # is deterministic — the claim is about our code, not about the free model's
+    # mood that minute.
+    instructions: dict[str, object] = {}
+    try:
+        from havoc.runtime import Runtime
+        from havoc.services import intent
+        from havoc.services.yura_chat import YuraChat
+
+        scratch2 = await Runtime.create(config, logging.getLogger("probe-intent"))
+        scratch2.sender.dry_run = False
+        scratch2.load_features()
+        scratch2.permissions.set_self_id(1)
+        await scratch2.feature_manager.set_enabled("clock", True)
+
+        class _WordsOnly:
+            model = "probe-stub"
+            available = True
+
+            async def converse(self, messages, *, max_tokens: int = 400, temperature: float = 0.8):
+                return "باشه دَدّا ✦"
+
+            async def converse_tools(self, messages, *, tools, max_tokens: int = 400):
+                return "باشه دَدّا ✦", []
+
+        scratch2.ai = _WordsOnly()
+        chat = YuraChat(scratch2)
+        answered = await chat.answer("yura turn off my live clock on my profile", chat_id=1, is_owner=True)
+        turned_off = await scratch2.store.get_setting("clock.enabled", "unset") is False
+        await chat.answer("set a timer in one hour", chat_id=1, is_owner=True)
+        reminders = await scratch2.store.list_reminders(status="pending", limit=5)
+
+        # The grammar itself, in both languages, including two names in one breath.
+        parsed = {
+            "clock": intent.detect("turn off my live clock", features={"clock"}, commands={"clock"}),
+            "two": intent.detect(
+                "leena turn off fal and poetry", features={"poetry"}, commands={"fal", "poetry"}
+            ),
+            "timer": intent.detect("remind me to drink water in 35 minutes", features=set(), commands={"remind"}),
+            "farsi": intent.detect("ساعت رو خاموش کن", features={"clock"}, commands={"clock"}),
+            "talk": intent.detect("do you like the clock on my profile?", features={"clock"}, commands={"clock"}),
+        }
+        instructions = {
+            "ok": bool(
+                turned_off
+                and reminders
+                and answered.rendered
+                and "```" not in answered.text
+                and parsed["clock"] is not None
+                and parsed["two"] is not None
+                and parsed["timer"] is not None
+                and parsed["farsi"] is not None
+                and parsed["talk"] is None
+            ),
+            "clock_off_without_a_tool_block": turned_off,
+            "timer_without_a_tool_block": len(reminders),
+            "card_rendered": bool(answered.rendered),
+            "said": _head(answered.text, 240),
+            "lines": {name: (found.lines if found else None) for name, found in parsed.items()},
+            "version": label(),
+        }
+        await scratch2.db.close()
+    except Exception as exc:  # noqa: BLE001 - a broken reader is a finding
+        instructions = {"ok": False, "failure": _head(f"{type(exc).__name__}: {exc}", 240)}
+    record["instructions"] = instructions
+
     voice: dict[str, object] = {}
     samples: list[str] = []
     sizes: list[int] = []
@@ -625,6 +694,7 @@ async def run() -> dict[str, object]:
             echo,
             translation,
             hands,
+            instructions,
             speech,
             voice,
         )  # type: ignore[union-attr]
@@ -673,6 +743,10 @@ def main() -> int:
             print(f"  owner by id?    {part.get('owner_by_default')} · card html {part.get('card_is_html')}")
             print(f"  two in a fence? {part.get('two_in_one_fence')}")
             print(f"  guest refused?  {part.get('guest_refused')}")
+        part = record.get("instructions", {})
+        if isinstance(part, dict):
+            print(f"instructions {'ok' if part.get('ok') else 'FAIL'} · clock off without a block "
+                  f"{part.get('clock_off_without_a_tool_block')} · timer {part.get('timer_without_a_tool_block')}")
         if part.get("voice_chars"):
             print(f"  voice with hands: {part['voice_chars']} chars · glyphs {part['voice_glyphs']}")
         if part.get("model"):

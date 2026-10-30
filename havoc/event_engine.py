@@ -24,7 +24,7 @@ import asyncio
 import enum
 import time
 import traceback
-from collections import Counter, defaultdict, deque
+from collections import Counter, deque
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any
@@ -474,18 +474,8 @@ class EventEngine:
         }
 
 
-def aggregate_languages(events: Iterable[NormalizedEvent]) -> dict[str, int]:
-    counts: Counter = Counter()
-    for event in events:
-        counts[event.language] += 1
-    return dict(counts)
 
 
-def group_by_chat(events: Iterable[NormalizedEvent]) -> dict[int, list[NormalizedEvent]]:
-    grouped: dict[int, list[NormalizedEvent]] = defaultdict(list)
-    for event in events:
-        grouped[event.chat_id].append(event)
-    return dict(grouped)
 
 
 def now_event(event_type: EventType, *, chat_id: int = 0, **extra: Any) -> NormalizedEvent:

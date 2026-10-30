@@ -390,17 +390,5 @@ def _content_of_message(message: object) -> str:
     return content.strip() if isinstance(content, str) else ""
 
 
-def _content_of(data: object) -> str:
-    """The reply text in a completion, or ``""`` when the shape is unusable."""
-    try:
-        content = data["choices"][0]["message"]["content"]  # type: ignore[index]
-    except (KeyError, IndexError, TypeError):
-        return ""
-    if not isinstance(content, str):
-        return ""
-    return content.strip()
 
 
-def neutral_ai_provider() -> AIProvider:
-    """An always-unavailable provider, used as a safe default in tests."""
-    return AIProvider(enabled=False)

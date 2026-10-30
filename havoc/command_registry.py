@@ -237,6 +237,41 @@ class CommandContext:
         return self._reply_cache
 
 
+#: Settings key holding the names of commands the owner switched off.
+DISABLED_SETTING = "commands.disabled"
+
+
+async def disabled_commands(runtime: Any) -> set[str]:
+    """Commands he told her to stop serving.
+
+    A feature covers a *family* (poetry, roasts, clock). Some things are a single
+    command with no feature behind it — ``fal``, ``fight`` — and "turn off fal"
+    has to mean something. This is that something, and it is one list, read from
+    one place, so the dispatcher, ``.help``, her prompt and her hands agree.
+    """
+    try:
+        stored = await runtime.store.get_setting(DISABLED_SETTING, [])
+    except Exception:  # noqa: BLE001 - an unreadable switch must not switch things off
+        return set()
+    if isinstance(stored, str):
+        stored = [chunk.strip() for chunk in stored.split(",")]
+    if not isinstance(stored, (list, tuple, set)):
+        return set()
+    return {str(name).strip().lower() for name in stored if str(name).strip()}
+
+
+async def set_command_disabled(runtime: Any, name: str, disabled: bool) -> set[str]:
+    """Add or remove one name from the list and return the new one."""
+    current = await disabled_commands(runtime)
+    key = (name or "").strip().lower()
+    if disabled:
+        current.add(key)
+    else:
+        current.discard(key)
+    await runtime.store.set_setting(DISABLED_SETTING, sorted(current))
+    return current
+
+
 class CommandRegistry:
     def __init__(self) -> None:
         self._commands: dict[str, Command] = {}
@@ -483,6 +518,17 @@ class Dispatcher:
             await runtime.sender.respond(event, runtime.t("errors.permission_denied", base_lang))
             return False
 
+        # Switched off by name ("turn off fal"). ``enable`` itself must always be
+        # reachable, or a switched-off account would have no way back on.
+        if command.name not in {"enable", "help", "commands", "features", "status"} and command.name in await disabled_commands(runtime):
+            await runtime.sender.respond(
+                event,
+                runtime.t("errors.command_disabled", base_lang, name=escape(command.name), prefix=runtime.prefix),
+                reply=True,
+                dry_run=False,
+            )
+            return False
+
         if parsed.subcommand is not None and parsed.subcommand not in command.subcommands:
             parsed = demote_subcommand(parsed)
 
@@ -514,9 +560,12 @@ class Dispatcher:
             return False
 
         # -- per-command cooldown ------------------------------------
+        # Checked here, *started* after the handler succeeds. Touching it before
+        # the run meant a command that failed on a typo locked itself for its whole
+        # cooldown — the stale lock behind "why is it refusing me now?".
+        cooldown_key = f"command:{command.name}:{sender_id}"
         if command.cooldown > 0:
-            key = f"command:{command.name}:{sender_id}"
-            remaining = runtime.limiter.cooldown_remaining(key, command.cooldown)
+            remaining = runtime.limiter.cooldown_remaining(cooldown_key, command.cooldown)
             if remaining > 0:
                 await runtime.sender.respond(
                     event,
@@ -525,7 +574,6 @@ class Dispatcher:
                     dry_run=False,
                 )
                 return False
-            runtime.limiter.touch(key)
 
         # -- emergency stop ------------------------------------------
         # ``stop`` itself must stay usable, and read-only commands keep working
@@ -540,7 +588,13 @@ class Dispatcher:
             return False
 
         # -- dry run -------------------------------------------------
-        if context.dry_run and command.changes_state:
+        # The switches themselves are exempt: a dry run that also blocks ``.dryrun
+        # off`` is a lock with the key inside it.
+        if (
+            context.dry_run
+            and command.changes_state
+            and command.name not in {"dryrun", "stop"}
+        ):
             await runtime.sender.respond(
                 event,
                 runtime.t(
@@ -586,7 +640,10 @@ class Dispatcher:
                 return False
             message._havoc_reply = reply
 
-        return await self.execute(context)
+        ran = await self.execute(context)
+        if ran and command.cooldown > 0:
+            runtime.limiter.touch(cooldown_key)
+        return ran
 
     # ------------------------------------------------------------------
     async def execute(self, context: CommandContext) -> bool:
@@ -594,10 +651,31 @@ class Dispatcher:
         command = context.command
         language = context.language
         start = time.monotonic()
+        sent_before = int(getattr(runtime.sender, "sent_count", 0) or 0)
         try:
             await command.handler(context)
             runtime.stats["commands_ok"] += 1
             await runtime.store.bump_usage(command.feature or command.name, "calls")
+            # A command that answers nothing is a dead end: the person typed
+            # `.calc`, pressed send and got silence. If the handler said nothing and
+            # the command has arguments, show what it wants. One net here beats
+            # remembering to add a usage line to every handler that forgets.
+            if (
+                int(getattr(runtime.sender, "sent_count", 0) or 0) == sent_before
+                and (command.usage or "").strip()
+            ):
+                await runtime.sender.respond(
+                    context.event,
+                    runtime.t(
+                        "errors.needs_arguments",
+                        language,
+                        usage=escape(context.usage_text()),
+                        prefix=escape(runtime.prefix),
+                        name=escape(command.name),
+                    ),
+                    reply=True,
+                    dry_run=False,
+                )
             return True
         except CommandError as exc:
             await runtime.sender.respond(context.event, runtime.t(exc.key, language, **exc.variables), reply=True)

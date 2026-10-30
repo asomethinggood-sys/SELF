@@ -131,7 +131,3 @@ def recent_errors(log_dir: Path | str = "logs", limit: int = 5) -> list[str]:
     return errors[-limit:]
 
 
-def error_summary(exc: BaseException, *, limit: int = 300) -> str:
-    """One-line, redacted exception summary suitable for Telegram."""
-    text = f"{type(exc).__name__}: {exc}"
-    return redact_text(text)[:limit]

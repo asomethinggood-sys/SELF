@@ -144,9 +144,6 @@ def available_models(provider: str | None = None) -> tuple[ModelSpec, ...]:
     )
 
 
-def vision_models() -> tuple[ModelSpec, ...]:
-    """Models that can look at a picture, best first."""
-    return tuple(spec for spec in auto_plan() if spec.vision)
 
 
 def auto_plan() -> tuple[ModelSpec, ...]:

@@ -81,8 +81,6 @@ def safe_zone(name: str | None, default: str = "UTC") -> ZoneInfo:
         return get_zone(default)
 
 
-def local_now(tz_name: str | None = "UTC") -> datetime:
-    return utc_now().astimezone(safe_zone(tz_name))
 
 
 def to_local(dt: datetime, tz_name: str | None) -> datetime:
@@ -184,18 +182,6 @@ def parse_date(text: str) -> date:
     raise TimeParseError("date must look like YYYY-MM-DD or DD.MM.YYYY")
 
 
-def parse_timezone_offset(text: str) -> float | None:
-    """Parse ``+03:30`` / ``-5`` / ``UTC+2`` into an hour offset."""
-    normalized = _normalize_digits(text.strip()).upper().replace("UTC", "").replace("GMT", "")
-    match = re.fullmatch(r"([+-])(\d{1,2})(?::(\d{2}))?", normalized)
-    if not match:
-        return None
-    sign = -1 if match.group(1) == "-" else 1
-    hours = int(match.group(2))
-    minutes = int(match.group(3) or 0)
-    if hours > 14 or minutes > 59:
-        return None
-    return sign * (hours + minutes / 60)
 
 
 def parse_local_datetime(
@@ -486,5 +472,3 @@ def in_quiet_hours(moment: datetime, quiet_start: str, quiet_end: str, tz_name: 
     return local >= start or local < end
 
 
-def to_unix(dt: datetime) -> int:
-    return int(to_utc(dt).timestamp())

@@ -11,8 +11,6 @@ Feature areas: 10, 81, 83, 88, 89, 100.
 
 from __future__ import annotations
 
-import asyncio
-import os
 import time
 from collections import Counter, deque
 from collections.abc import Iterable
@@ -355,11 +353,6 @@ def summarize_checks(results: Iterable[CheckResult]) -> tuple[bool, int, int]:
     return failures == 0, failures, warnings
 
 
-def file_size_mb(path: Path) -> float:
-    try:
-        return round(os.path.getsize(path) / (1024 * 1024), 2)
-    except OSError:
-        return 0.0
 
 
 async def timed(coro: Any) -> tuple[Any, float]:
@@ -368,5 +361,3 @@ async def timed(coro: Any) -> tuple[Any, float]:
     return result, round((time.monotonic() - started) * 1000, 2)
 
 
-async def wait_for_any(*aws: Any) -> Any:  # pragma: no cover - helper
-    return await asyncio.gather(*aws, return_exceptions=True)

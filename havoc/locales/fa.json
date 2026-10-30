@@ -1010,5 +1010,19 @@
   "remind.card_id": "یادآور #{id}",
   "actions.auto_on": "⌁ از این به بعد کارهای کوچک بی‌سؤال انجام می‌شوند. فقط پاک کردن اجازه می‌خواهد.",
   "actions.auto_off": "⌁ برگشتیم به روش قبلی: اولین بارِ هر ابزار یک‌بار از تو اجازه می‌گیرد.",
-  "actions.auto_state": "⌁ پرسیدن برای کارهای کوچک {state} است. با `{prefix}yura auto on` یا `{prefix}yura auto off` عوضش کن."
+  "actions.auto_state": "⌁ پرسیدن برای کارهای کوچک {state} است. با `{prefix}yura auto on` یا `{prefix}yura auto off` عوضش کن.",
+  "errors.command_disabled": "⌁ {name} خاموش است. با `{prefix}enable {name}` روشنش کن.",
+  "errors.cannot_disable": "⌁ {name} همان راه برگشت است — روشن می‌ماند.",
+  "commands.disabled_one": "⌁ {name} حالا خاموش است. اگر پشیمان شدی: `{prefix}enable {name}`.",
+  "commands.enabled_one": "⌁ {name} دوباره روشن شد.",
+  "commands.disabled_list": "⌁ خاموش‌شده‌ها: {list}\n\nبا `{prefix}disable <command>` و `{prefix}enable <command>` عوض می‌شود.",
+  "common.none": "هیچ‌چیز",
+  "actions.intent_title": "{what}",
+  "cmd.disable.description": "یک فرمان را با نامش خاموش می‌کند — `fal`، `fight`، هر چیزی که قابلیت جدا ندارد.",
+  "cmd.disable.usage": "[command]",
+  "cmd.enable.description": "فرمان را دوباره روشن می‌کند. خودش هرگز خاموش نمی‌شود.",
+  "cmd.enable.usage": "[command]",
+  "actions.intent_capabilities": "کارهایی که می‌توانم",
+  "actions.intent_counts": "{commands} فرمان · {features} قابلیت",
+  "errors.needs_arguments": "⌁ {name} چیزی برای کار کردن می‌خواهد.\n\n  {usage}"
 }

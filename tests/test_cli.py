@@ -31,7 +31,11 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
 def test_version_prints_versions(env, capsys) -> None:
     assert cli_main.cli(["version"]) == cli_main.EXIT_OK
     out = capsys.readouterr().out
-    assert "Y.U.R.A 1.6" in out
+    # Against the source of truth, not a copy of it: a hard-coded number here is
+    # how a release turns into a failing test instead of a version bump.
+    from havoc.version import label
+
+    assert label() in out
     assert "Telethon installed" in out
 
 

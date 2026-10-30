@@ -38,7 +38,6 @@ from pathlib import Path
 from typing import Any
 
 from ..ai_models import (
-    OPENROUTER_MODEL,
     PROVIDER_ENDPOINTS,
     ModelSpec,
     auto_plan,
@@ -668,9 +667,6 @@ class AIRouter:
         await self._save_usage()
 
 
-def openrouter_placeholder() -> ModelSpec:
-    """The OpenRouter pseudo-model, exported for the UI's provider header."""
-    return next(spec for spec in catalogue() if spec.key == f"openrouter:{OPENROUTER_MODEL}")
 
 
 __all__ = [

@@ -342,6 +342,3 @@ def _centered(draw: Any, text: str, font: Any, y: int, width: int, colour: tuple
     _draw_line(draw, text, font, (width - _width(draw, text, font)) / 2, y, colour)
 
 
-def save_png(payload: bytes, path: Path) -> Path:
-    path.write_bytes(payload)
-    return path

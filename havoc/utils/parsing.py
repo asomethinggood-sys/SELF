@@ -230,13 +230,6 @@ def demote_subcommand(parsed: ParsedCommand) -> ParsedCommand:
     )
 
 
-def split_command_and_body(text: str, prefix: str) -> tuple[str, str]:
-    """Split ``.cmd body text`` into ``("cmd", "body text")``."""
-    remainder = strip_prefix(text, prefix)
-    if remainder is None:
-        return "", text
-    first, _, rest = remainder.partition(" ")
-    return first.lower(), rest.strip()
 
 
 def parse_keyword_list(text: str) -> list[str]:
@@ -278,17 +271,9 @@ def paginate(items: list[str], page: int = 1, per_page: int = 10) -> tuple[list[
     return items[start : start + per_page], total_pages
 
 
-def split_target(raw: str) -> tuple[str, str]:
-    """Split ``@user hello there`` into ``("@user", "hello there")``."""
-    pieces = raw.strip().split(maxsplit=1)
-    if not pieces:
-        return "", ""
-    return pieces[0], pieces[1] if len(pieces) > 1 else ""
 
 
 def looks_like_command(text: str, prefix: str) -> bool:
     return strip_prefix(text, prefix) is not None
 
 
-def is_emoji_only(text: str) -> bool:
-    return bool(text) and bool(_TELEGRAM_EMOJI_ONLY.match(text))

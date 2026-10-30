@@ -11,8 +11,6 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from .text import to_latin_digits
-
 TELEGRAM_MESSAGE_LIMIT = 4096
 TELEGRAM_CAPTION_LIMIT = 1024
 PROFILE_NAME_LIMIT = 64
@@ -30,20 +28,8 @@ class ValidationError(ValueError):
         super().__init__(f"{code}: {params}" if params else code)
 
 
-def require_text(value: str | None, *, field: str = "text", max_length: int = 1000, min_length: int = 1) -> str:
-    text = (value or "").strip()
-    if len(text) < min_length:
-        raise ValidationError("errors.empty_value", field=field)
-    if len(text) > max_length:
-        raise ValidationError("errors.too_long", field=field, limit=max_length)
-    return text
 
 
-def validate_command_name(value: str) -> str:
-    name = (value or "").strip().lower()
-    if not COMMAND_NAME_RE.match(name):
-        raise ValidationError("errors.invalid_command_name", value=name)
-    return name
 
 
 def validate_template_name(value: str) -> str:
@@ -90,18 +76,8 @@ def validate_int(value: Any, *, minimum: int | None = None, maximum: int | None 
     return number
 
 
-def validate_float(value: Any, *, field: str = "value") -> float:
-    try:
-        return float(to_latin_digits(str(value).strip()).replace(",", "."))
-    except (TypeError, ValueError) as exc:
-        raise ValidationError("errors.not_a_number", field=field) from exc
 
 
-def validate_choice(value: str, choices: tuple[str, ...] | list[str], *, field: str = "value") -> str:
-    normalized = (value or "").strip().lower()
-    if normalized not in choices:
-        raise ValidationError("errors.invalid_choice", field=field, choices=", ".join(choices))
-    return normalized
 
 
 def validate_chat_id(value: Any) -> int:
@@ -120,15 +96,6 @@ class TimeRange:
     end_hhmm: str
 
 
-def validate_quiet_hours(start: str, end: str) -> TimeRange:
-    from .time import TimeParseError, parse_clock
-
-    try:
-        parse_clock(start)
-        parse_clock(end)
-    except TimeParseError as exc:
-        raise ValidationError("errors.invalid_time", value=f"{start}-{end}") from exc
-    return TimeRange(start_hhmm=start, end_hhmm=end)
 
 
 #: ``(a+)+`` and friends backtrack catastrophically on ordinary input.
@@ -178,16 +145,8 @@ def validate_timezone(value: str) -> str:
     return name
 
 
-def validate_percentage(value: Any) -> int:
-    return validate_int(value, minimum=0, maximum=100, field="percent")
 
 
-def validate_page(value: Any, default: int = 1) -> int:
-    try:
-        page = int(str(value).strip())
-    except (TypeError, ValueError):
-        return default
-    return max(1, page)
 
 
 def validate_url(value: str) -> str:

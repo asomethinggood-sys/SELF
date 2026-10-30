@@ -25,7 +25,6 @@ import hashlib
 import json
 import os
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any
 
 from .services.http import HttpError, request
@@ -212,15 +211,5 @@ async def push(settings: SnapshotSettings, payload: dict[str, Any], *, timeout: 
     raise HttpError("could not commit the snapshot", kind="conflict")
 
 
-async def store_tables(store: Any, *, timeout: float = 20.0) -> dict[str, list[dict[str, Any]]]:
-    return await store.export_tables()
 
 
-def parse_timestamp(payload: dict[str, Any]) -> datetime | None:
-    raw = payload.get("created_at")
-    if not isinstance(raw, str):
-        return None
-    try:
-        return datetime.fromisoformat(raw)
-    except ValueError:
-        return None

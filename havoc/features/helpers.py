@@ -8,14 +8,13 @@ testable) rather than being duplicated in every module.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Sequence
-from datetime import datetime
+from collections.abc import Sequence
 from typing import Any
 
 from ..command_registry import CommandContext, CommandError
-from ..utils.formatting import bold, escape, key_value_block, pre
-from ..utils.text import split_message, truncate
-from ..utils.time import format_datetime, parse_iso, utc_now
+from ..utils.formatting import bold, escape
+from ..utils.text import truncate
+from ..utils.time import format_datetime, parse_iso
 
 
 # ---------------------------------------------------------------------------
@@ -66,12 +65,8 @@ def section(title: str, body: str) -> str:
     return f"{bold(title)}\n{body}"
 
 
-def kv_block(pairs: Iterable[tuple[str, Any]]) -> str:
-    return key_value_block(pairs)
 
 
-def mono_list(lines: Sequence[str]) -> str:
-    return pre("\n".join(lines)) if lines else "—"
 
 
 def fmt_time(iso_value: str | None, tz: str, language: str) -> str:
@@ -85,14 +80,6 @@ def snippet(text: str, limit: int = 60) -> str:
     return escape(truncate(" ".join(text.split()), limit))
 
 
-def link_to_message(chat_id: int, message_id: int | None) -> str | None:
-    """Build a t.me link for public supergroups/channels when possible."""
-    if message_id is None:
-        return None
-    raw = str(chat_id)
-    if raw.startswith("-100"):
-        return f"https://t.me/c/{raw[4:]}/{message_id}"
-    return None
 
 
 # ---------------------------------------------------------------------------
@@ -114,9 +101,6 @@ async def feature_on(ctx: CommandContext, name: str) -> bool:
     return await ctx.runtime.feature_manager.is_enabled(name)
 
 
-async def require_feature(ctx: CommandContext, name: str) -> None:
-    if not await feature_on(ctx, name):
-        raise CommandError("errors.feature_disabled", feature=name, prefix=ctx.runtime.prefix)
 
 
 async def resolve_target(ctx: CommandContext, raw: str) -> tuple[int | None, Any | None, str | None]:
@@ -173,32 +157,14 @@ def paginate(items: Sequence[Any], page: int, per_page: int = 10) -> tuple[list[
     return list(items[start : start + per_page]), total_pages
 
 
-def rows_to_lines(rows: Sequence[Any], renderer) -> list[str]:
-    return [renderer(row) for row in rows]
 
 
-async def send_long(ctx: CommandContext, text: str) -> None:
-    for chunk in split_message(text):
-        await ctx.reply(chunk)
 
 
-def now_local(tz: str) -> str:
-    return format_datetime(utc_now(), tz, "en")
 
 
-def json_list(raw: Any) -> list[str]:
-    if isinstance(raw, list):
-        return [str(item) for item in raw]
-    if not raw:
-        return []
-    return [item for item in str(raw).split(",") if item]
 
 
-def safe_int(value: Any, default: int = 0) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
 
 
 def parse_page_arg(raw: str | None) -> int:
@@ -208,34 +174,14 @@ def parse_page_arg(raw: str | None) -> int:
         return 1
 
 
-def format_count(language: str, value: int) -> str:
-    from ..localization import digits_for
-
-    return digits_for(language, value)
 
 
-def iso_now() -> str:
-    return utc_now().isoformat()
 
 
-def truncate_lines(text: str, lines: int = 5) -> str:
-    parts = text.splitlines()
-    if len(parts) <= lines:
-        return escape(text)
-    return escape("\n".join(parts[:lines]) + "…")
 
 
-def strip_code_fence(text: str) -> str:
-    stripped = text.strip()
-    if stripped.startswith("```") and stripped.endswith("```"):
-        return stripped.strip("`").strip()
-    return text
 
 
-def detect_reply_language(text: str) -> str:
-    from ..language_detection import detect_language
-
-    return detect_language(text).resolve("en")
 
 
 def chat_link(entity: Any) -> str | None:
@@ -270,7 +216,3 @@ def human_duration(seconds: int | None) -> str:
     return f"{minutes}:{secs:02d}"
 
 
-def human_datetime(value: datetime | None, tz: str, language: str) -> str:
-    if value is None:
-        return "—"
-    return format_datetime(value, tz, language)

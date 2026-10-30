@@ -41,7 +41,7 @@ from .localization import LocaleManager
 from .logging_setup import get_logger, setup_logging
 from .migrations import LATEST_VERSION, apply_migrations, current_version
 from .runtime import Runtime
-from .version import CODENAME
+from .version import CODENAME, label
 
 EXIT_OK = 0
 EXIT_CONFIG = 2
@@ -474,7 +474,7 @@ async def command_ai(args: argparse.Namespace) -> int:
 
 async def command_check(args: argparse.Namespace) -> int:
     config, issues = load_config(dotenv_path=project_env_file())
-    print(f"{CODENAME} {__version__} — configuration check")
+    print(f"{label()} — configuration check")
     print("=" * 48)
     if issues:
         print("Configuration issues:")
@@ -670,7 +670,7 @@ def command_data(args: argparse.Namespace) -> int:
 
 
 def command_version(_args: argparse.Namespace) -> int:
-    print(f"{CODENAME} {__version__}")
+    print(label())
     print(f"Python: {sys.version.split()[0]}")
     print(f"Telethon installed: {'yes' if telethon_available() else 'no'}")
     return EXIT_OK
@@ -685,7 +685,7 @@ def build_parser() -> argparse.ArgumentParser:
         description=f"{CODENAME} — bilingual (English/Farsi) Telegram userbot",
         epilog="Docs: README.md | Support: check `.selfcheck` inside Telegram",
     )
-    parser.add_argument("--version", action="version", version=f"{CODENAME} {__version__}")
+    parser.add_argument("--version", action="version", version=label())
     subparsers = parser.add_subparsers(dest="command")
 
     run = subparsers.add_parser("run", help="start the userbot")

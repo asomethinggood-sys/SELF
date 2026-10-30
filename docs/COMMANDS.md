@@ -9,7 +9,7 @@ account other than the logged-in user.
 `.` in the usage column stands for the active prefix (default `.`).
 
 
-Total: **73 commands**.
+Total: **75 commands**.
 
 
 ## Ai
@@ -89,6 +89,8 @@ Total: **73 commands**.
 | `.backup` | Export, import and schedule local backups _(owner only; changes state)._ | `.backup [export|list|import|auto]` | `.پشتیبان` |
 | `.chatsettings` | View or override settings for this chat _(owner only; changes state)._ | `.chatsettings [show|set|reset]` | `.cs`, `.تنظیمات‌چت` |
 | `.config` | Show the effective configuration with secrets redacted _(owner only)._ | `.config` | `.پیکربندی` |
+| `.disable` | Switches one command off by name — `fal`, `fight`, anything with no feature behind it _(owner only; changes state)._ | `.disable [command]` | `.switch-off` |
+| `.enable` | Switches a command back on. It is never itself switchable off _(owner only; changes state)._ | `.enable [command]` | `.switch-on` |
 | `.export` | Export selected application data as a JSON file _(owner only; changes state)._ | `.export <bookmarks|notes|settings|reminders|templates|rules|all>` | `.خروجی` |
 | `.labels` | Label this chat locally _(owner only; changes state)._ | `.labels [list|add|remove]` | `.label`, `.برچسب‌ها` |
 | `.owner` | Who owns her: the only accounts that can change her mind _(owner only; changes state)._ | `.owner [list | add @handle | remove <id>]` | — |

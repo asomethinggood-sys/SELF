@@ -242,8 +242,6 @@ async def voice(ctx: CommandContext, words: list[str]) -> None:
     )
 
 
-def _is_persian(text: str) -> bool:
-    return any("\u0600" <= character <= "\u06ff" for character in text)
 
 
 def _best_effort_delete(ctx: CommandContext) -> None:

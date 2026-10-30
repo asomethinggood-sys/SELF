@@ -113,11 +113,6 @@ def _as_bool(raw: Any, default: bool = False) -> bool:
     return str(raw).strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _as_int(raw: Any, default: int = 0) -> int:
-    try:
-        return int(raw)
-    except (TypeError, ValueError):
-        return default
 
 
 class Store:

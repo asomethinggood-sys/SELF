@@ -11,7 +11,6 @@ filenames), 86 (backup hygiene), 9 (security).
 from __future__ import annotations
 
 import hashlib
-import hmac
 import re
 from pathlib import Path
 
@@ -119,14 +118,8 @@ def ensure_within(base: Path, candidate: Path) -> Path:
     return candidate_resolved
 
 
-def safe_join(base: Path, name: str) -> Path:
-    """Join a sanitized filename onto ``base`` and re-validate the result."""
-    filename = safe_filename(name)
-    return ensure_within(base, base / filename)
 
 
-def constant_time_equals(first: str, second: str) -> bool:
-    return hmac.compare_digest(first.encode("utf-8"), second.encode("utf-8"))
 
 
 def fingerprint(value: str) -> str:
@@ -134,12 +127,6 @@ def fingerprint(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:10]
 
 
-def mask_middle(value: str, visible: int = 4) -> str:
-    if not value:
-        return ""
-    if len(value) <= visible * 2:
-        return "*" * len(value)
-    return f"{value[:visible]}{'*' * (len(value) - visible * 2)}{value[-visible:]}"
 
 
 def scrub_message_preview(text: str, limit: int = 80) -> str:

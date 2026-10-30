@@ -19,7 +19,7 @@ from typing import Any
 
 from .aliases import FREE_TEXT_COMMANDS
 from .event_engine import EventType, NormalizedEvent, normalize_message, now_event
-from .utils.parsing import looks_like_command, parse_command, strip_prefix
+from .utils.parsing import looks_like_command, parse_command
 from .utils.security import redact_text
 
 
@@ -241,6 +241,3 @@ class SystemEventBridge:
         await self.runtime.event_engine.emit(now_event(EventType.FLOOD_WAIT, seconds=seconds))
 
 
-def command_text(runtime: Any, message: Any) -> str | None:
-    text = getattr(message, "raw_text", None) or getattr(message, "message", None) or ""
-    return strip_prefix(text, runtime.prefix)

@@ -554,8 +554,6 @@ def session_permissions_warning(session_path: Path) -> str | None:
     return None
 
 
-async def prompt_async(prompt: str, *, secret: bool = False) -> str:
-    return await asyncio.to_thread(_stdin_prompt, prompt, secret=secret)
 
 
 if sys.platform == "win32":  # pragma: no cover - documented platform note

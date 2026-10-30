@@ -387,13 +387,16 @@ live account from this environment.
 
 ### Working with limits you should know about
 
-- **She is Y.U.R.A 1.6 Open beta**, and she knows her own console: every command
+- **She is Y.U.R.A 1.7 Open beta**, and she knows her own console: every command
   in `.help`, with its usage, is in her prompt, and she can run any of them for
   you through one gated tool — "yura, fal page 166" is the `.fal` you already
   have, not a second version of it. Answers that do something are drawn: a mark,
   a bold title, a ruled line, italic facts and one closing glyph, changing every
   time. Small things happen when he asks — a reminder, a clock, a stored fact —
-  without a yes/no question; only deleting stops to ask.
+  without a yes/no question; only deleting stops to ask. And they happen even on a
+  turn where the model only writes words: the sentence itself is read as an
+  instruction (`havoc/services/intent.py`) and dispatched through the same console,
+  so "turn off my live clock" cannot end as a paragraph again.
 - **One owner, in settings.** `OWNER_IDS=7542695649` is the default, so ownership
   is a number and not a lookup; `OWNER_USERNAMES=edited_by_nyx` is also resolved
   to an id once at login and remembered, and the logged-in account is always an

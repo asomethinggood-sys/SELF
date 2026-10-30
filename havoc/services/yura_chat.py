@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import re
 from collections import deque
-from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -31,9 +30,12 @@ from typing import Any
 
 from .. import persona, ui
 from ..utils import glyphs
+from ..utils.formatting import strip_html
 from ..utils.markup import rich
 from ..utils.security import injection_notice, looks_like_injection
 from ..utils.time import to_local, utc_now
+from . import intent as intent_module
+from . import self_console
 from .actions import ActionLayer, Turn, scrub_tool_text
 from .agent import Agent
 from .ai_provider import AIError, AIMessage, AIProvider
@@ -158,6 +160,8 @@ class YuraChat:
         self.broken: tuple[str, ...] = ()
         #: Tools this turn actually used, for the receipt line under the answer.
         self._receipts: list[str] = []
+        #: What the sentence itself asked for and got done this turn (1.7).
+        self._intent_done: list[str] = []
         #: The cards of the tools that ran, drawn under her answer.
         self._cards: list[tuple[str, tuple[str, ...]]] = []
         #: The last tool turn, so ``.yura actions`` can point at it.
@@ -412,6 +416,7 @@ class YuraChat:
 
         reply: str | None = None
         source = "model"
+        did: list[str] = []
         if self.enabled and self._quota_spent():
             self.logger.debug("yura: daily model allowance spent, answering offline")
         elif self.enabled:
@@ -429,6 +434,7 @@ class YuraChat:
                 if step is not None and step.did:
                     self._receipts = step.did
                     self._cards = list(getattr(step, "cards", ()))
+                    did = list(step.did)
             except AIError as exc:
                 self.last_error = f"{exc.kind}: {exc}"
                 self.logger.warning("yura: provider failed (%s)", exc.kind)
@@ -449,6 +455,11 @@ class YuraChat:
             if scrubbed != reply:
                 self.logger.warning("yura: removed a leftover tool block from a reply")
                 reply = scrubbed
+        # Whether anything actually happened. The model's block is the first route
+        # and the sentence itself is the second: "turn off my live clock" must turn
+        # the clock off even on a turn where the model only wrote a paragraph.
+        if owner and not did:
+            await self._run_intent(spoken, chat_id=chat_id, language=language)
         if reply is None:
             source = "offline"
             self.fallbacks += 1
@@ -504,6 +515,110 @@ class YuraChat:
             source=source,
             rendered=answer.rendered,
         )
+
+    async def _run_intent(self, text: str, *, chat_id: int, language: str) -> None:
+        """Read the sentence as an instruction and *do* it.
+
+        This is the floor under her hands: a model that answers but sends no block
+        no longer means "nothing happens". One console line, dispatched by the same
+        code ``.clock off`` uses, so the state change, the reply and the audit trail
+        are the real ones — not a second implementation that can drift.
+        """
+        if not text.strip():
+            return
+        try:
+            found = intent_module.detect(
+                text,
+                features=frozenset(self.runtime.feature_manager.names()),
+                commands=frozenset(self.runtime.registry.reserved_names()),
+            )
+        except Exception as exc:  # noqa: BLE001 - a reader that throws is not a lockout
+            self.logger.warning("yura: could not read the sentence as an instruction: %s", exc)
+            return
+        if found is None:
+            return
+        lines: list[str] = []
+        ran_any = False
+        for line in found.lines:
+            if line in {"help", "commands"}:
+                # A menu is not "work", so the console refuses it — but "what can
+                # you do" deserves a real answer, counted from the real registry.
+                lines.extend(self._capability_lines(language))
+                continue
+            try:
+                reply = await self_console.run(
+                    self.runtime,
+                    line,
+                    chat_id=chat_id,
+                    sender_id=int(getattr(self.runtime.permissions, "self_id", None) or 0),
+                    language=language,
+                )
+            except Exception as exc:  # noqa: BLE001 - a failed hand is a sentence
+                self.logger.warning("yura: intent %r failed: %s", line, exc)
+                continue
+            if getattr(reply, "ok", False):
+                ran_any = True
+            said = getattr(reply, "said", None) or [getattr(reply, "note", "")]
+            if isinstance(said, str):
+                said = [said]
+            for chunk in self._intent_lines([str(item) for item in said]):
+                lines.append(chunk)
+                if len(lines) >= 6:
+                    break
+        if not lines and not ran_any:
+            return
+        title = self._intent_title(language, found.detail or found.label)
+        self._cards = [(title, tuple(lines[:6]))] + list(self._cards)
+        self._intent_done.append(found.detail or found.label)
+
+    @staticmethod
+    def _intent_lines(said: list[str]) -> list[str]:
+        """The useful words of a command's reply, without its own drawing.
+
+        The command already drew a card. Nesting that card inside this one would be
+        two frames and two closing glyphs, so the rule lines and the lone glyphs are
+        dropped and the facts are kept.
+        """
+        out: list[str] = []
+        for item in said:
+            for raw in strip_html(item).splitlines():
+                chunk = raw.strip()
+                if not chunk:
+                    continue
+                # A line that is nothing but rules and glyphs is the command's own
+                # drawing; this card draws its own.
+                ignore = set("ـ-—_.·•~ ") | set(ui.RULE_GLYPHS) | set(ui.CLOSING_GLYPHS)
+                if set(chunk) <= ignore:
+                    continue
+                if len(chunk) <= 2 and not chunk.isalnum():
+                    continue
+                out.append(chunk[:220])
+        return out
+
+    def _capability_lines(self, language: str) -> list[str]:
+        registry = self.runtime.registry
+        features = self.runtime.feature_manager.names()
+        groups = registry.by_category()
+        lines = [
+            str(
+                self.runtime.t(
+                    "actions.intent_counts",
+                    language,
+                    commands=len(registry.visible()),
+                    features=len(features),
+                )
+            )
+        ]
+        for category, commands in list(groups.items())[:5]:
+            names = " ".join(f"{self.runtime.prefix}{command.name}" for command in commands[:6])
+            lines.append(f"{category}: {names}")
+        return lines
+
+    def _intent_title(self, language: str, detail: str) -> str:
+        try:
+            return str(self.runtime.t("actions.intent_title", language, what=detail))
+        except Exception:  # pragma: no cover - a stripped runtime has no locales
+            return detail
 
     def _receipt(self, language: str) -> str:
         """The card under her answer: what ran, and the minute it was asked for."""
@@ -887,6 +1002,3 @@ def _kind_of(fact: str) -> str:
     return "note"
 
 
-def clean_messages(messages: Sequence[tuple[str, str]]) -> list[AIMessage]:
-    """Small helper used by tests and by any future summariser."""
-    return [AIMessage(role, content) for role, content in messages]

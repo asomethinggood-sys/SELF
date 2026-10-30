@@ -506,11 +506,3 @@ class Scheduler:
         }
 
 
-def next_run_display(row: Any, config: Any, language: str = "en") -> str:
-    """Helper shared by ``.tasks``/``.reminders`` output."""
-    from .utils.time import format_datetime
-
-    when = parse_iso(row.get("remind_at") or row.get("run_at") or "")
-    if when is None:
-        return "—"
-    return format_datetime(when, config.timezone, language)

@@ -57,6 +57,14 @@ jobs:
             echo "::error::${line//$'\n'/ }"
           done
 
+      # Every registered command, dispatched for real with a battery of arguments,
+      # plus locale coverage, feature switches, tool schemas and dead code. Static
+      # checks cannot see a command that answers with its own key or a reply that
+      # never arrives; this can.
+      - name: Walk the whole project
+        run: python scripts/audit_live.py --json .audit.json
+        if: matrix.python-version == '3.11'
+
       - name: CLI smoke test
         run: |
           python -m havoc version

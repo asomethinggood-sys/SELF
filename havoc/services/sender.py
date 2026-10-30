@@ -179,7 +179,14 @@ class Sender:
         reply: bool = True,
         **kwargs: Any,
     ) -> SendResult:
-        """Send to the event's chat, optionally as a reply to its message."""
+        """Send to the event's chat, optionally as a reply to its message.
+
+        An answer to something a person just typed is *always* delivered, even in
+        dry run. Dry run exists to hold back side effects — a scheduled message, an
+        auto-reply — not to leave someone staring at a chat where the bot silently
+        swallowed every reply, which is what happened after ``.dryrun on``.
+        """
+        kwargs.setdefault("dry_run", False)
         return await self.send(
             event.chat_id,
             text,

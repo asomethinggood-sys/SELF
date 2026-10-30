@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Iterable, Sequence
 
-from .utils.formatting import bold, code, escape, italic, pre, quote
+from .utils.formatting import bold, code, escape, italic, pre
 
 #: Section icons, one per command category. Deliberately geometric rather than
 #: emoji soup: consistent weight, works in every client.
@@ -139,14 +139,8 @@ def rule() -> str:
     return italic(LINE)
 
 
-def panel_text(lines: Iterable[str]) -> str:
-    """Like :func:`panel` but for plain text, which is escaped for you."""
-    return quote("\n".join(str(line) for line in lines))
 
 
-def split_sections(sections: Sequence[str]) -> str:
-    """Join blocks with a blank line, dropping the empty ones."""
-    return "\n\n".join(section for section in sections if str(section).strip())
 
 
 def quote_card(

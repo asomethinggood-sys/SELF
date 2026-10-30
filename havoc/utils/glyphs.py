@@ -270,8 +270,6 @@ def count() -> int:
     return len(ALL)
 
 
-def category_of(glyph: str) -> str:
-    return _OWNER.get(glyph, "")
 
 
 def collect(text: str) -> set[str]:

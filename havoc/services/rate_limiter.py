@@ -140,34 +140,3 @@ class FloodGuard:
         return seconds
 
 
-async def retry_async(
-    operation: Callable[[], asyncio.Future | object],
-    *,
-    attempts: int = 3,
-    base_delay: float = 0.5,
-    max_delay: float = 8.0,
-    retry_on: tuple[type[BaseException], ...] = (OSError, asyncio.TimeoutError),
-    on_retry: Callable[[int, BaseException], None] | None = None,
-) -> object:
-    """Bounded retry with exponential backoff (feature area 84).
-
-    Only ``retry_on`` exceptions are retried; everything else propagates so
-    genuine bugs are not masked.
-    """
-    last_exc: BaseException | None = None
-    for attempt in range(1, max(1, attempts) + 1):
-        try:
-            result = operation()
-            if asyncio.iscoroutine(result) or isinstance(result, asyncio.Future):
-                return await result
-            return result
-        except retry_on as exc:
-            last_exc = exc
-            if attempt >= attempts:
-                break
-            delay = min(max_delay, base_delay * (2 ** (attempt - 1)))
-            if on_retry:
-                on_retry(attempt, exc)
-            await asyncio.sleep(delay)
-    assert last_exc is not None
-    raise last_exc

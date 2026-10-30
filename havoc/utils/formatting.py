@@ -17,7 +17,7 @@ import html
 import re
 from collections.abc import Iterable, Sequence
 
-from .text import mixed_direction_safe, split_message
+from .text import split_message
 
 MAX_MESSAGE_LENGTH = 4000
 
@@ -71,12 +71,8 @@ def quote(text: object) -> str:
     return f"<blockquote>{escape(text)}</blockquote>"
 
 
-def expandable_quote(text: object) -> str:
-    return f"<blockquote expandable>{escape(text)}</blockquote>"
 
 
-def mono_block(lines: Iterable[str]) -> str:
-    return pre("\n".join(str(line) for line in lines))
 
 
 def kv(key: str, value: object) -> str:
@@ -84,12 +80,8 @@ def kv(key: str, value: object) -> str:
     return f"{bold(key)}: {escape(value)}"
 
 
-def bullet_list(items: Iterable[str], bullet: str = "•") -> str:
-    return "\n".join(f"{bullet} {item}" for item in items if item is not None)
 
 
-def numbered_list(items: Iterable[str]) -> str:
-    return "\n".join(f"{index}. {item}" for index, item in enumerate(items, start=1))
 
 
 def key_value_block(pairs: Iterable[tuple[str, object]]) -> str:
@@ -133,14 +125,5 @@ def table(rows: Sequence[Sequence[object]], headers: Sequence[str] | None = None
     return pre("\n".join(lines))
 
 
-def rtl_safe(text: str) -> str:
-    """Apply mixed-direction isolation to already-escaped content."""
-    return mixed_direction_safe(text)
 
 
-def progress_bar(current: int, total: int, width: int = 10, filled: str = "█", empty: str = "░") -> str:
-    if total <= 0:
-        return empty * width
-    ratio = max(0.0, min(1.0, current / total))
-    count = round(ratio * width)
-    return filled * count + empty * (width - count)

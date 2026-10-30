@@ -1010,5 +1010,19 @@
   "remind.card_id": "reminder #{id}",
   "actions.auto_on": "⌁ small things just happen now. only deleting still asks you first.",
   "actions.auto_off": "⌁ back to the old way: the first use of each tool asks you once.",
-  "actions.auto_state": "⌁ asking before small things is {state}. `{prefix}yura auto on` or `{prefix}yura auto off` decides it."
+  "actions.auto_state": "⌁ asking before small things is {state}. `{prefix}yura auto on` or `{prefix}yura auto off` decides it.",
+  "errors.command_disabled": "⌁ {name} is switched off. `{prefix}enable {name}` turns it back on.",
+  "errors.cannot_disable": "⌁ {name} is the way back — it stays available.",
+  "commands.disabled_one": "⌁ {name} is off now. `{prefix}enable {name}` if you change your mind.",
+  "commands.enabled_one": "⌁ {name} is back on.",
+  "commands.disabled_list": "⌁ switched off: {list}\n\n`{prefix}disable <command>` and `{prefix}enable <command>` change this.",
+  "common.none": "nothing",
+  "actions.intent_title": "{what}",
+  "cmd.disable.description": "Switches one command off by name — `fal`, `fight`, anything with no feature behind it.",
+  "cmd.disable.usage": "[command]",
+  "cmd.enable.description": "Switches a command back on. It is never itself switchable off.",
+  "cmd.enable.usage": "[command]",
+  "actions.intent_capabilities": "what i can do",
+  "actions.intent_counts": "{commands} commands · {features} features",
+  "errors.needs_arguments": "⌁ {name} needs something to work on.\n\n  {usage}"
 }

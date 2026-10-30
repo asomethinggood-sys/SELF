@@ -7,7 +7,12 @@ pulling in Telethon or performing network access.
 
 from __future__ import annotations
 
-__version__ = "1.6"
+from .version import VERSION as _VERSION
+
+#: One number, one place. ``havoc/version.py`` owns the release; this is the
+#: import everyone reaches for. Two copies is how the CLI said 1.6 while the about
+#: card said something else.
+__version__ = _VERSION
 __all__ = ["__version__"]
 
 # Persistence is verified on every boot by `havoc data --boot-probe`.

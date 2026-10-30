@@ -75,16 +75,10 @@ def strip_invisible(text: str) -> str:
     return _RE_INVISIBLE.sub("", text)
 
 
-def is_persian_char(ch: str) -> bool:
-    return bool(_RE_PERSIAN_CHAR.match(ch))
 
 
-def is_persian_letter(ch: str) -> bool:
-    return bool(_RE_PERSIAN_LETTER.match(ch))
 
 
-def is_latin_letter(ch: str) -> bool:
-    return bool(_RE_LATIN_LETTER.match(ch))
 
 
 def script_counts(text: str) -> tuple[int, int]:
@@ -131,16 +125,6 @@ def localize_digits(text: str, lang: str) -> str:
     return text
 
 
-def rtl_isolate(text: str) -> str:
-    """Wrap text in Unicode isolates so mixed runs render predictably.
-
-    Only applied to single-line snippets that are visibly RTL; wrapping a
-    full RTL message is unnecessary because the client's bidi algorithm
-    already handles it.
-    """
-    if not text or not is_rtl(text):
-        return text
-    return f"\u2067{text}\u2069"
 
 
 def mixed_direction_safe(text: str) -> str:
@@ -323,12 +307,8 @@ def split_message(text: str, limit: int = 4000) -> list[str]:
     return chunks
 
 
-def contains_persian(text: str) -> bool:
-    return bool(_RE_PERSIAN_CHAR.search(text))
 
 
-def has_url(text: str) -> bool:
-    return bool(_RE_URL.search(text))
 
 
 def extract_urls(text: str) -> list[str]:
@@ -343,9 +323,5 @@ def extract_mentions(text: str) -> list[str]:
     return [m[1:] for m in _RE_MENTION.findall(text)]
 
 
-def collapse_blank_lines(text: str) -> str:
-    return re.sub(r"\n{3,}", "\n\n", text)
 
 
-def quote_lines(text: str) -> str:
-    return "\n".join(f"> {line}" if line else ">" for line in text.splitlines())

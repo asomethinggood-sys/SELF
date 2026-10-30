@@ -12,7 +12,13 @@ import time
 from typing import Any
 
 from .. import ui
-from ..command_registry import Command, CommandContext, CommandError
+from ..command_registry import (
+    Command,
+    CommandContext,
+    CommandError,
+    disabled_commands,
+    set_command_disabled,
+)
 from ..localization import normalize_language_code
 from ..utils.formatting import bold, code, escape, key_value_block, pre
 from ..version import STAGE, VERSION
@@ -214,6 +220,43 @@ async def cmd_feature(ctx: CommandContext) -> None:
     except ValueError as exc:
         raise CommandError("errors.missing_dependencies", detail=escape(str(exc))) from exc
     await ctx.reply(ctx.t("features.changed", feature=escape(name), state=ctx.t("common.on" if enabled else "common.off")))
+
+
+# ---------------------------------------------------------------------------
+# One command at a time
+# ---------------------------------------------------------------------------
+async def cmd_disable(ctx: CommandContext) -> None:
+    """`.disable fal` — stop serving one command without touching its family."""
+    await _switch_command(ctx, disabled=True)
+
+
+async def cmd_enable(ctx: CommandContext) -> None:
+    """`.enable fal` — the way back, and it works even for itself."""
+    await _switch_command(ctx, disabled=False)
+
+
+async def _switch_command(ctx: CommandContext, *, disabled: bool) -> None:
+    runtime = ctx.runtime
+    name = ctx.arg(0).lower().lstrip(".")
+    if not name:
+        current = await disabled_commands(runtime)
+        listing = ", ".join(f"{runtime.prefix}{entry}" for entry in sorted(current)) or ctx.t("common.none")
+        await ctx.reply(ctx.t("commands.disabled_list", list=escape(listing), prefix=runtime.prefix))
+        return
+    command = runtime.registry.resolve(name)
+    if command is None:
+        raise CommandError("errors.unknown_command", name=escape(name), prefix=runtime.prefix)
+    if command.name in {"enable", "disable", "help", "commands"} and disabled:
+        # Switching off the way back is how an account locks itself out.
+        raise CommandError("errors.cannot_disable", name=escape(command.name))
+    await set_command_disabled(runtime, command.name, disabled)
+    await ctx.reply(
+        ctx.t(
+            "commands.disabled_one" if disabled else "commands.enabled_one",
+            name=escape(command.name),
+            prefix=runtime.prefix,
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -471,6 +514,8 @@ def register(runtime: Any) -> None:
             Command("diagnostics", cmd_diagnostics, category="core", aliases=("diag",)),
             Command("features", cmd_features, category="core"),
             Command("feature", cmd_feature, category="core", usage="<name> <on|off>", changes_state=True),
+            Command("disable", cmd_disable, category="management", aliases=("switch-off",), usage="[command]", changes_state=True, subcommands=()),
+            Command("enable", cmd_enable, category="management", aliases=("switch-on",), usage="[command]", changes_state=True, subcommands=()),
             Command("stop", cmd_stop, category="core", usage="[on|resume|status]", changes_state=True, subcommands=('on', 'resume', 'off', 'start', 'status', 'state', 'stop', 'halt', 'توقف', 'ادامه', 'وضعیت')),
             Command("lang", cmd_lang, category="core", aliases=("language", "زبان"), usage="[en|fa|auto|chat|user|status]", changes_state=True, subcommands=("chat", "user", "global", "en", "fa", "auto", "status", "وضعیت")),
             Command("config", cmd_config, category="management"),
