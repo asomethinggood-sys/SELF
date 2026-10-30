@@ -698,6 +698,15 @@ _SAY = re.compile(
     r"\s*(?:,|and)?\s*(?:saying|say|that|to say|telling (?:him|her|them))?\s*(?P<body>.+)$",
     re.I,
 )
+#: "write to @x and wish him a happy birthday": the verb is *write*, so the body
+#: is an instruction, not a quote. `send`/`message` stay literal — "message @x and
+#: say I'm late" must send those words, not ask a model what to say.
+_COMPOSE = re.compile(
+    r"^(?:please\s+)?(?:write|compose|draft)\s+(?:a\s+(?:message|note)\s+)?"
+    r"(?:to\s+|for\s+)?(?P<who>@[\w.]+|saved messages|our saved messages|my saved messages|saved)"
+    r"\s*(?:,|and)?\s*(?:saying|say|that|to say|telling (?:him|her|them))?\s*(?P<body>.+)$",
+    re.I,
+)
 #: The target first, no "to": "send @sara surprise with a spoiler". Only shapes
 #: that are unmistakably a chat — a handle, a number, saved messages — because a
 #: bare word here would turn "send him the file" into a send to a person "him".
@@ -886,6 +895,17 @@ def _reach(text: str, *, allow_plan: bool = True) -> Intent | None:
         if who and body and len(body) > 1 and body.lower() not in _NOISE:
             return Intent(
                 lines=(" ".join(["send", who, body, *flags]),), label="send", detail=f"send · {who}"
+            )
+
+    match = _COMPOSE.match(original)
+    if match:
+        body, flags = _reach_options(match.group("body"))
+        who = _who(match.group("who"))
+        if body and len(body) > 1:
+            return Intent(
+                lines=(" ".join(["send", who, body, "--compose", *flags]),),
+                label="send",
+                detail=f"write · {who}",
             )
 
     match = _SEND_FIRST.match(original)

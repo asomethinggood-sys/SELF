@@ -24,11 +24,13 @@ The shapes his messages actually take:
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from ..command_registry import Command, CommandContext, CommandError
 from ..services import reach as reach_module
 from ..utils.formatting import bold, code, escape, strip_html
+from ..utils.security import redact_text
 from ..utils.text import truncate
 
 #: A broadcast is not a conversation. Past this many targets it needs `--yes`.
@@ -122,32 +124,37 @@ async def cmd_send(ctx: CommandContext) -> None:
     targets, text = _split_targets_and_text(ctx)
     if not text.strip():
         raise CommandError("reach.usage_send", prefix=ctx.runtime.prefix)
-    if len(targets) > 1:
-        # Several names in one send is a broadcast, and a broadcast is paced and
-        # counted. It must not silently become N unthrottled sends.
-        ctx.runtime.logger.info("reach: multi-target send to %s chats", len(targets))
     repeat = max(1, min(_flag_int(ctx, "repeat", 1), reach_module.MAX_REPEAT))
     every = _flag_seconds(ctx, "every") or 0.0
     delete_after = _flag_seconds(ctx, "delete_after") or _flag_seconds(ctx, "ttl")
     at = (ctx.flag("at") or "").strip() or None
     dry = bool(ctx.has_flag("dry"))
+    compose = bool(ctx.has_flag("compose"))
     if len(targets) == 1:
         resolved = [await _resolve_or_explain(ctx, targets[0])]
     else:
         resolved, missing = await ctx.runtime.reach.resolve_many(targets)
         if missing:
-            raise CommandError(
-                "reach.unknown_target", name=escape(", ".join(missing))
-            )
+            raise CommandError("reach.unknown_target", name=escape(", ".join(missing)))
     lines: list[str] = []
     for target in resolved:
+        # `--compose`: he gave her a job, not a script ("wish him a happy
+        # birthday"), and a repeat is a *different* sentence each time — nobody
+        # wants the same wish ten times in a row.
+        bodies = [text]
+        if compose:
+            written = await _compose(ctx, text, target, count=repeat if repeat > 1 else 1)
+            if not written:
+                lines.append(f"{escape(target.label)} · {ctx.t('reach.compose_failed')}")
+                continue
+            bodies = written
         try:
             report = await ctx.runtime.reach.deliver(
                 target,
-                text,
+                bodies[0],
                 spoiler_hidden=bool(ctx.has_flag("spoiler")),
                 silent=bool(ctx.has_flag("silent")),
-                repeat=repeat,
+                repeat=1 if compose else repeat,
                 every=every,
                 delete_after=delete_after,
                 at=at,
@@ -156,9 +163,97 @@ async def cmd_send(ctx: CommandContext) -> None:
         except reach_module.ReachError as exc:
             lines.append(f"{escape(target.label)} · {escape(str(exc))}")
             continue
+        if compose and len(bodies) > 1 and report.ok and not dry:
+            queued = await _queue_lines(ctx, target, bodies[1:], every=every, start=at)
+            if queued:
+                report.note = (report.note + " " if report.note else "") + ctx.t(
+                    "reach.queued_more", count=queued
+                )
         lines.append(_report_line(report))
     await ctx.reply("\n".join([bold(ctx.t("reach.sent_header", count=len(lines))), *lines]))
 
+
+async def _compose(ctx: CommandContext, instruction: str, target: Any, *, count: int = 1) -> list[str]:
+    """Write the message(s) he asked for, in her voice, one per line.
+
+    The model is asked for the *body only* — no quotes, no preamble — and the
+    result is cleaned here rather than trusted: a model that answers with
+    'Sure! Here are three messages:' must not get that sent to a person.
+    """
+    provider = getattr(ctx.runtime, "ai", None)
+    if provider is None or not getattr(provider, "available", False):
+        return []
+    wanted = max(1, min(int(count), reach_module.MAX_REPEAT))
+    who = getattr(target, "label", "") or str(getattr(target, "id", ""))
+    ask = [
+        {
+            "role": "system",
+            "content": (
+                "You write short Telegram messages on behalf of a person's assistant. "
+                "Answer with the message text only — no quotes, no numbering, no "
+                "explanation. Plain words, no emoji unless asked. "
+                + (
+                    f"Write {wanted} different messages, one per line."
+                    if wanted > 1
+                    else "Write one message."
+                )
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"Recipient: {who}. What it must do: {instruction}",
+        },
+    ]
+    try:
+        reply = await provider.converse(ask, max_tokens=120 * wanted + 80)
+    except Exception as exc:  # noqa: BLE001 - a failed write must not lose the command
+        ctx.runtime.logger.warning("reach: compose failed (%s)", redact_text(str(exc)))
+        return []
+    return _clean_written(str(reply or ""), wanted)
+
+
+def _clean_written(reply: str, wanted: int) -> list[str]:
+    """The message bodies out of a model answer, stripped of model habits."""
+    rows: list[str] = []
+    for raw in reply.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        line = re.sub(r"^(?:[-*•>]|\d+[.)])\s*", "", line).strip()
+        line = line.strip('"\'“”«»')
+        if not line or line.endswith(":") and len(line) < 60:
+            continue
+        rows.append(line)
+        if len(rows) >= max(1, wanted):
+            break
+    return rows
+
+
+async def _queue_lines(
+    ctx: CommandContext, target: Any, bodies: list[str], *, every: float, start: str | None
+) -> int:
+    """Queue the rest of a composed sequence, spaced out, one job per line."""
+    from datetime import timedelta
+
+    from ..utils.time import parse_when, utc_now
+
+    base = utc_now()
+    if start:
+        try:
+            base = parse_when(start, ctx.runtime.config.timezone)
+        except Exception:  # noqa: BLE001 - a bad --at is caught by deliver()
+            base = utc_now()
+    gap = max(float(every or 0.0), 0.0)
+    queued = 0
+    for index, body in enumerate(bodies, start=1):
+        when = base + timedelta(seconds=gap * index if gap else 2.5 * index)
+        await ctx.runtime.scheduler.enqueue(
+            "reach_send",
+            when,
+            {"chat_id": target.id, "text": body, "delete_after": None, "plan_id": None},
+        )
+        queued += 1
+    return queued
 
 # ---------------------------------------------------------------------------
 # .broadcast
@@ -446,8 +541,11 @@ def register(runtime: Any) -> None:
             category="reach",
             aliases=("say", "msg", "message"),
             usage="<to> <text> [--repeat N] [--every 30s] [--spoiler] [--silent] "
-                  "[--delete-after 10s] [--at 21:00] [--dry]",
-            description="Send a message, with repeats, spoilers and self-destruct.",
+                  "[--delete-after 10s] [--at 21:00] [--compose] [--dry]",
+            description=(
+                "Send a message — repeated, hidden behind a spoiler, self-destructing, "
+                "later, or written by her."
+            ),
             owner_only=True,
             changes_state=True,
             examples=(
@@ -455,6 +553,7 @@ def register(runtime: Any) -> None:
                 ".send @sara,amir the meeting moved",
                 ".send @sara boo --spoiler --delete-after 10s",
                 ".send @sara still here? --repeat 3 --every 1m",
+                ".send @sara --compose wish her luck with the exam",
             ),
             subcommands=("list",),
         )

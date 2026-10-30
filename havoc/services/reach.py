@@ -80,6 +80,7 @@ class SendReport:
     dry_run: bool = False
     scheduled_for: str = ""
     deletes_at: str = ""
+    note: str = ""
 
     @property
     def summary(self) -> str:
@@ -90,7 +91,8 @@ class SendReport:
         if self.dry_run:
             return "dry run — nothing was sent"
         if self.sent:
-            return f"sent ×{self.sent}" if self.sent > 1 else "sent"
+            base = f"sent ×{self.sent}" if self.sent > 1 else "sent"
+            return f"{base} · {self.note}" if self.note else base
         return "nothing to send"
 
 

@@ -1059,8 +1059,8 @@
   "ignore.removed": "I answer {name} again.",
   "ignore.unknown": "I don't know anyone called {name}",
   "ignore.usage": "the form is {prefix}ignore [list|on <name>|off <name>]",
-  "cmd.send.description": "Send a message, with repeats, spoilers and self-destruct.",
-  "cmd.send.usage": "<to> <text> [--repeat N] [--every 30s] [--spoiler] [--silent] [--delete-after 10s] [--at 21:00] [--dry]",
+  "cmd.send.description": "Send a message — repeated, hidden behind a spoiler, self-destructing, later, or written by her.",
+  "cmd.send.usage": "<to> <text> [--repeat N] [--every 30s] [--spoiler] [--silent] [--delete-after 10s] [--at 21:00] [--compose] [--dry]",
   "cmd.broadcast.description": "Send the same message to a list of chats, paced.",
   "cmd.broadcast.usage": "<to…|groups|dms> <text> [--limit N] [--dry] [--yes]",
   "cmd.outbox.description": "The last messages this account sent, from the database.",
@@ -1073,5 +1073,7 @@
   "cmd.plan.usage": "[list|stop [word]|add <sentence>]",
   "cmd.ignore.description": "Never answer this person again.",
   "cmd.ignore.usage": "[list|on <who>|off <who>]",
-  "reach.outbox_total": "{count} lines · {total} in all"
+  "reach.outbox_total": "{count} lines · {total} in all",
+  "reach.compose_failed": "I couldn't write that one.",
+  "reach.queued_more": "and {count} more on the clock"
 }

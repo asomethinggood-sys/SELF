@@ -141,7 +141,7 @@ Total: **82 commands**.
 | `.ignore` | Never answer this person again _(owner only; changes state)._ | `.ignore [list|on <who>|off <who>]` | `.mute-person` |
 | `.outbox` | The last messages this account sent, from the database _(owner only)._ | `.outbox [limit]` | `.sent` |
 | `.plan` | Timelines: one sentence, many moments _(owner only; changes state)._ | `.plan [list|stop [word]|add <sentence>]` | `.timeline` |
-| `.send` | Send a message, with repeats, spoilers and self-destruct _(owner only; changes state)._ | `.send <to> <text> [--repeat N] [--every 30s] [--spoiler] [--silent] [--delete-after 10s] [--at 21:00] [--dry]` | `.say`, `.msg`, `.message` |
+| `.send` | Send a message — repeated, hidden behind a spoiler, self-destructing, later, or written by her _(owner only; changes state)._ | `.send <to> <text> [--repeat N] [--every 30s] [--spoiler] [--silent] [--delete-after 10s] [--at 21:00] [--compose] [--dry]` | `.say`, `.msg`, `.message` |
 | `.unsend` | Delete a message by its outbox number _(owner only; changes state)._ | `.unsend <outbox id>` | — |
 
 ## Scheduling & time

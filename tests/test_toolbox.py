@@ -6,6 +6,7 @@ sentence in here stops working, his phone stopped working.
 
 from __future__ import annotations
 
+import json
 from datetime import timedelta
 
 import pytest
@@ -242,6 +243,7 @@ async def test_a_cancelled_plan_does_not_fire(runtime) -> None:
         ("message @sara boo 10 times", "send @sara boo --repeat 10"),
         ("send @sara surprise with a spoiler", "send @sara surprise --spoiler"),
         ("react with ❤", "emoji ❤"),
+        ("write to @sara and wish her a happy birthday", "send @sara wish her a happy birthday --compose"),
         ("don't talk to @ali", "ignore on @ali"),
         ("talk to ali again", "ignore off ali"),
     ),
@@ -297,3 +299,34 @@ async def test_a_plan_step_runs_a_real_console_line(runtime) -> None:
     assert await runtime.store.get_setting("clock.enabled", "unset") is False
     steps = await runtime.store.plan_steps(created["id"])
     assert steps[0]["status"] == "done"
+
+
+# ---------------------------------------------------------------------------
+# Sentences she writes herself
+# ---------------------------------------------------------------------------
+async def test_compose_writes_the_message_instead_of_copying_it(runtime) -> None:
+    runtime.ai = _StubProvider(reply="happy birthday!\nmay the year be soft on you.\nall the best, truly.")
+    sent = await invoke(
+        runtime, ".send saved --compose wish him a happy birthday", chat_id=OWNER
+    )
+    assert [row for row in runtime.client.sent if "happy birthday" in row.text], sent
+    assert not [row for row in runtime.client.sent if "wish him" in row.text]
+
+
+async def test_a_composed_repeat_is_a_different_sentence_each_time(runtime) -> None:
+    """Ten times must not be the same wish ten times — she writes each one."""
+    runtime.ai = _StubProvider(reply="one.\ntwo.\nthree.")
+    await invoke(
+        runtime, ".send saved --compose say goodnight --repeat 3", chat_id=OWNER
+    )
+    jobs = await runtime.db.fetch_all("SELECT payload FROM jobs WHERE kind = 'reach_send'")
+    bodies = [json.loads(row["payload"])["text"] for row in jobs]
+    assert len(bodies) == 2, bodies
+    assert bodies == ["two.", "three."]
+
+
+def test_a_model_answer_is_cleaned_before_it_is_sent() -> None:
+    from havoc.features.reach import _clean_written
+
+    reply = '1. "hey, are you free tonight?"\n2. hi! how did it go?\nSure! Here they are:'
+    assert _clean_written(reply, 5) == ["hey, are you free tonight?", "hi! how did it go?"]

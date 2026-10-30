@@ -1059,8 +1059,8 @@
   "ignore.removed": "دوباره به {name} جواب می‌دهم.",
   "ignore.unknown": "کسی به اسم {name} نمی‌شناسم",
   "ignore.usage": "شکلش این است: {prefix}ignore [list|on <نام>|off <نام>]",
-  "cmd.send.description": "پیام بفرست، با تکرار، اسپویلر و خودتخریبی.",
-  "cmd.send.usage": "<به> <متن> [--repeat N] [--every 30s] [--spoiler] [--silent] [--delete-after 10s] [--at 21:00] [--dry]",
+  "cmd.send.description": "پیام بفرست — تکراری، پشت اسپویلر، خودحذف‌شو، بعداً، یا نوشته‌ی خودش.",
+  "cmd.send.usage": "<به> <متن> [--repeat N] [--every 30s] [--spoiler] [--silent] [--delete-after 10s] [--at 21:00] [--compose] [--dry]",
   "cmd.broadcast.description": "یک پیام را به چند چت بفرست، با فاصله.",
   "cmd.broadcast.usage": "<به…|groups|dms> <متن> [--limit N] [--dry] [--yes]",
   "cmd.outbox.description": "آخرین پیام‌هایی که این حساب فرستاده، از دیتابیس.",
@@ -1073,5 +1073,7 @@
   "cmd.plan.usage": "[list|stop [واژه]|add <جمله>]",
   "cmd.ignore.description": "دیگر به این شخص جواب نده.",
   "cmd.ignore.usage": "[list|on <کی>|off <کی>]",
-  "reach.outbox_total": "{count} خط · {total} در کل"
+  "reach.outbox_total": "{count} خط · {total} در کل",
+  "reach.compose_failed": "نتونستم بنویسمش.",
+  "reach.queued_more": "و {count} تای دیگر روی ساعت"
 }
