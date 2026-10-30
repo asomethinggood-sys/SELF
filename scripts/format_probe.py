@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 import struct
 import sys
@@ -36,8 +37,13 @@ from havoc import persona
 from havoc.config import load_config
 from havoc.persona import picture_prompt, system_prompt
 from havoc.services import translation_provider, tts
+from havoc.services.actions import ActionLayer, Turn
+from havoc.services.agent import Agent
 from havoc.services.ai_provider import AIError, AIMessage, AIProvider
 from havoc.services.ai_router import AIRouter
+from havoc.services.memory import MemoryStore
+from havoc.services.storage import Store
+from havoc.services.tools import build_tools
 from havoc.services.vision import make_picture
 from havoc.utils import glyphs
 from havoc.utils.markup import rich
@@ -263,6 +269,107 @@ async def run() -> dict[str, object]:
     # messages, at full length (no truncation before measuring): the answer has
     # to fill a paragraph or three, carry an ornament, wear a face and be *laid
     # out* — more than one paragraph, or at least a divider on its own line.
+    # -- 5. her hands: does a real model use one, and does it ask first? ----
+    # Two claims are measured here. That she can act at all (a reminder actually
+    # lands in the database, after a confirmation she asked for), and that having
+    # hands does not change her voice (the same layout/ornament checks the voice
+    # section uses, run on an answer written with the tool catalogue in the prompt).
+    hands: dict[str, object] = {}
+    try:
+        from types import SimpleNamespace
+
+        from havoc.database import Database
+        from havoc.migrations import apply_migrations
+        from havoc.services import persona as persona_module
+
+        db = Database(":memory:")
+        await db.connect()
+        await apply_migrations(db)
+        store = Store(db)
+        scratch = SimpleNamespace(
+            store=store,
+            memory=MemoryStore(db),
+            logger=logging.getLogger("probe"),
+            client=None,
+            metrics=None,
+            translator=None,
+            config=SimpleNamespace(timezone="UTC", data_dir="/tmp"),
+        )
+        layer = ActionLayer(scratch, build_tools(scratch))
+        agent = Agent(layer, logger=scratch.logger)
+        turn = Turn(chat_id=1, actor_id=1, language="en", is_owner=True)
+        brief = persona_module.ornament_prompt("en")
+        system = f"{system_prompt('en')}\n\n{layer.catalogue('en')}\n\n{brief}"
+        ask = "remind me to call mom in 30 minutes, and tell me you did it."
+        step = await agent.run(
+            provider,
+            [AIMessage("system", system), AIMessage("user", ask)],
+            turn=turn,
+            max_tokens=900,
+        )
+        outcomes = [
+            {"tool": o.tool, "status": o.status, "note": _head(o.note, 160)} for o in step.outcomes
+        ]
+        hands.update(
+            {
+                "tools": [tool.name for tool in layer.tools],
+                "asked_first": step.waiting is not None,
+                "outcomes": outcomes,
+                "said": _head(step.text, 300),
+            }
+        )
+        # The yes. A user account cannot send an inline keyboard, so the confirm
+        # is typed — but the *policy* is the same one a button would have used.
+        if step.waiting is not None:
+            resolved = await layer.resolve(turn.chat_id, approve=True)
+            reminders = await store.list_reminders(status="pending", limit=5)
+            actions = await layer.recent(turn.chat_id, limit=5)
+            hands.update(
+                {
+                    "after_yes": {"status": resolved.status, "note": _head(resolved.note, 120)},
+                    "reminders_stored": len(reminders),
+                    "audit_rows": [
+                        {"tool": r["tool"], "decision": r["decision"], "status": r["status"]}
+                        for r in actions
+                    ],
+                }
+            )
+
+        # The voice, with hands available. If the catalogue made her terse, this
+        # number drops and the probe says so.
+        plain = await provider.converse(
+            [
+                AIMessage("system", system),
+                AIMessage("user", "hey, how was your day?"),
+            ],
+            max_tokens=1200,
+        )
+        text = str(plain).strip()
+        hands.update(
+            {
+                "voice_chars": len(text),
+                "voice_faces": bool(glyphs.collect_faces(text)),
+                "voice_laid_out": "\n" in text,
+                "voice_glyphs": len(glyphs.collect(text)),
+                "voice_sample": _head(text, 400),
+            }
+        )
+        worked = (
+            (step.waiting is not None and hands.get("reminders_stored", 0) >= 1)
+            or "remind" in [name for name in step.did]
+        )
+        hands["ok"] = bool(
+            layer.tools
+            and worked
+            and int(hands["voice_chars"]) >= 400
+            and hands["voice_glyphs"] >= 1
+            and hands["voice_laid_out"]
+        )
+        await db.close()
+    except Exception as exc:  # noqa: BLE001 - a broken hand is a finding
+        hands = {"ok": False, "failure": _head(f"{type(exc).__name__}: {exc}", 240)}
+    record["hands"] = hands
+
     # -- 5a. does .translate actually translate? ---------------------------
     # The command used to answer "you have no API" on a bot with five keys; the
     # fix is that it asks the model she already talks with. This runs the real
@@ -404,7 +511,17 @@ async def run() -> dict[str, object]:
 
     record["ok"] = all(
         bool(part.get("ok"))
-        for part in (formatting, marks, vision, room, echo, translation, speech, voice)  # type: ignore[union-attr]
+        for part in (
+            formatting,
+            marks,
+            vision,
+            room,
+            echo,
+            translation,
+            hands,
+            speech,
+            voice,
+        )  # type: ignore[union-attr]
     )
     return record
 
@@ -412,7 +529,17 @@ async def run() -> dict[str, object]:
 def main() -> int:
     record = asyncio.run(run())
     print(f"provider: {record['provider']} · keys: {record['keys']}")
-    for name in ("formatting", "marks", "vision", "room", "echo", "translate", "speech", "voice"):
+    for name in (
+        "formatting",
+        "marks",
+        "vision",
+        "room",
+        "echo",
+        "translate",
+        "hands",
+        "speech",
+        "voice",
+    ):
         part = record.get(name, {})  # type: ignore[assignment]
         print(f"{name}: {'OK' if part.get('ok') else 'FAILED'}")
         if part.get("raw"):
@@ -421,6 +548,14 @@ def main() -> int:
             print(f"  telegram shows: {part['html']}")
         if part.get("answer"):
             print(f"  it saw:         {part['answer']}")
+        if part.get("tools"):
+            print(f"  tools:          {', '.join(part['tools'])}")
+        if part.get("asked_first") is not None:
+            print(f"  asked first?    {part['asked_first']} · {part.get('after_yes')}")
+            print(f"  reminders:      {part.get('reminders_stored')} · audit: {part.get('audit_rows')}")
+            print(f"  she said:       {part.get('said')}")
+        if part.get("voice_chars"):
+            print(f"  voice with hands: {part['voice_chars']} chars · glyphs {part['voice_glyphs']}")
         if part.get("model"):
             print(f"  engine:         {part.get('provider')} · {part['model']}")
         for step in part.get("runs") or []:

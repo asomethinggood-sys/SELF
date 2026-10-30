@@ -33,6 +33,8 @@ from .. import persona
 from ..utils import glyphs
 from ..utils.security import injection_notice, looks_like_injection
 from ..utils.time import to_local, utc_now
+from .actions import ActionLayer, Turn
+from .agent import Agent
 from .ai_provider import AIError, AIMessage, AIProvider
 
 #: Extensions a generated file may have. All text: nothing can be executed by
@@ -79,6 +81,9 @@ _UNSAFE_NAME = re.compile(r"[^0-9A-Za-z._\u0600-\u06ff-]+")
 #: Where the last picture she looked at is kept, per chat. A description is
 #: remembered because "make it funnier" a day later still points at *this* photo.
 PICTURE_SETTING = "yura.last_picture"
+#: Whether she may reach for a tool at all. On by default, because the upgrade is
+#: the point; one setting turns it back into a pure conversation without a deploy.
+AGENT_SETTING = "yura.agent"
 
 
 def _audience_block(audience: Any, language: str) -> str:
@@ -145,6 +150,10 @@ class YuraChat:
         self.quota_until: datetime | None = None
         #: The rules the last answer walked over, for a caller that wants to say so.
         self.broken: tuple[str, ...] = ()
+        #: Tools this turn actually used, for the receipt line under the answer.
+        self._receipts: list[str] = []
+        #: The last tool turn, so ``.yura actions`` can point at it.
+        self.last_turn: Turn | None = None
 
     @property
     def lessons(self) -> Any:
@@ -166,6 +175,24 @@ class YuraChat:
             return tuple(lesson.rule for lesson in hits)
         except Exception:  # noqa: BLE001 - counting must never cost an answer
             return ()
+
+    @property
+    def agent_layer(self) -> ActionLayer | None:
+        """Her hands, if this runtime has any (tests may not)."""
+        return getattr(self.runtime, "actions", None)
+
+    @property
+    def agent(self) -> Agent | None:
+        layer = self.agent_layer
+        if layer is None or not layer.tools:
+            return None
+        return Agent(layer, logger=self.logger)
+
+    async def agent_enabled(self) -> bool:
+        try:
+            return bool(await self.runtime.store.get_bool(AGENT_SETTING, True))
+        except Exception:  # noqa: BLE001 - no store means no hands, not a crash
+            return False
 
     @property
     def provider(self) -> AIProvider:
@@ -260,6 +287,7 @@ class YuraChat:
         # Who is on the other side decides what the fallback sounds like: the
         # offline bank is written for the owner, and calling a stranger
         # "daddaaa" would be both wrong and a leak.
+        self._receipts = []
         fallback = self._fallback(chat_id, language, tone=tone, is_owner=owner)
         if not prompt and picture is None:
             return Answer(fallback)
@@ -319,7 +347,16 @@ class YuraChat:
             block = f"{block}\n\n{taught}" if block else taught
         if repeated:
             block = f"{block}\n\n{repeated}" if block else repeated
+        # Her hands, described once and last-but-one: the typography brief below
+        # stays the closing instruction, because that is the one that decides how
+        # the answer *looks*, and a tool block after it would win.
+        hands = ""
+        layer = self.agent_layer
+        if layer is not None and layer.tools and await self.agent_enabled():
+            hands = layer.catalogue(language)
         ornaments = persona.ornament_prompt(language, used=worn, faces=worn_faces)
+        if hands:
+            block = f"{block}\n\n{hands}" if block else hands
         block = f"{block}\n\n{ornaments}" if block else ornaments
         if block:
             system = messages[0].content if messages else ""
@@ -352,11 +389,19 @@ class YuraChat:
         if self.enabled and self._quota_spent():
             self.logger.debug("yura: daily model allowance spent, answering offline")
         elif self.enabled:
+            budget = FILE_TOKENS if _wants_file(prompt) else CHAT_TOKENS
             try:
-                reply = await self.provider.converse(
-                    messages,
-                    max_tokens=FILE_TOKENS if _wants_file(prompt) else CHAT_TOKENS,
+                step = await self._with_hands(messages, budget=budget, chat_id=chat_id,
+                                              language=language, who=who, owner=owner,
+                                              person=person)
+                if step is not None and step.waiting is not None:
+                    # The only answer to a pending action is the question about it.
+                    return self._ask_permission(step, chat_id=chat_id, language=language)
+                reply = step.text if step is not None else await self.provider.converse(
+                    messages, max_tokens=budget
                 )
+                if step is not None and step.did:
+                    self._receipts = step.did
             except AIError as exc:
                 self.last_error = f"{exc.kind}: {exc}"
                 self.logger.warning("yura: provider failed (%s)", exc.kind)
@@ -398,6 +443,11 @@ class YuraChat:
             worn=worn if source == "model" else set(),
             worn_faces=worn_faces if source == "model" else set(),
         )
+        if answer.text and self._receipts:
+            # A receipt, not a status report: what she did, and when she was asked
+            # to do it. Only appears on a turn where something actually happened —
+            # an ordinary answer is byte-for-byte what it was before this feature.
+            answer.text = self._with_receipt(answer.text, language)
         if not answer.text and not answer.files:
             answer.text = fallback
         if answer.text:
@@ -413,6 +463,86 @@ class YuraChat:
             forgotten=answer.forgotten,
             source=source,
         )
+
+    def _receipt(self, language: str) -> str:
+        """One italic line: what ran, and the minute the request came in."""
+        if not self._receipts:
+            return ""
+        did = " · ".join(dict.fromkeys(self._receipts))
+        stamp = ""
+        try:
+            stamp = to_local(utc_now(), self.runtime.config.timezone).strftime("%H:%M")
+        except Exception:  # pragma: no cover - a bad zone must not eat a receipt
+            stamp = ""
+        try:
+            return str(self.runtime.t("actions.receipt", language, did=did, when=stamp)).strip()
+        except Exception:  # pragma: no cover - no locales in a stripped runtime
+            return f"⌁ {did} · {stamp}".strip()
+
+    def _with_receipt(self, text: str, language: str) -> str:
+        line = self._receipt(language)
+        return f"{text}\n\n{line}" if line else text
+
+    async def _with_hands(
+        self,
+        messages: list[AIMessage],
+        *,
+        budget: int,
+        chat_id: int,
+        language: str,
+        who: Any = None,
+        owner: bool = True,
+        person: Any = None,
+    ) -> Any:
+        """Run the tool loop, or return ``None`` when there is nothing to run.
+
+        ``None`` is the common case and it is deliberate: no tool catalogue means
+        the turn goes down the old path, untouched.
+        """
+        agent = self.agent
+        if agent is None or not await self.agent_enabled():
+            return None
+        actor = getattr(person, "user_id", None) or getattr(who, "user_id", None) or 0
+        turn = Turn(
+            chat_id=int(chat_id),
+            actor_id=int(actor or 0),
+            language=language,
+            is_owner=owner,
+        )
+        self.last_turn = turn
+        return await agent.run(self.provider, messages, turn=turn, max_tokens=budget)
+
+    def _ask_permission(self, step: Any, *, chat_id: int, language: str) -> Answer:
+        """The question that replaces an answer when a hand needs a yes."""
+        outcome = getattr(step, "waiting", None)
+        tool = outcome.tool if outcome is not None else ""
+        layer = self.agent_layer
+        detail = ""
+        if layer is not None:
+            record = None
+            try:
+                record = layer.get(tool)
+            except Exception:  # pragma: no cover
+                record = None
+            detail = record.signature() if record is not None else tool
+        prefix = ""
+        try:
+            prefix = self.runtime.prefix
+        except Exception:  # pragma: no cover
+            prefix = "."
+        try:
+            text = str(
+                self.runtime.t(
+                    "actions.confirm",
+                    language,
+                    what=detail or tool,
+                    prefix=prefix,
+                )
+            )
+        except Exception:  # pragma: no cover
+            text = f"may i? ({detail}) — {prefix}yura yes / {prefix}yura no"
+        self.turns += 1
+        return Answer(text=text, source="action")
 
     async def _apply(
         self,

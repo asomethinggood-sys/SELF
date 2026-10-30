@@ -249,6 +249,48 @@ class AIProvider:
         real conversation needs: without them the model forgets what it just
         said and repeats itself.
         """
+        message = await self._completion(
+            messages, max_tokens=max_tokens, temperature=temperature
+        )
+        return _content_of_message(message).strip()
+
+    async def converse_tools(
+        self,
+        messages: Sequence[AIMessage],
+        *,
+        tools: Sequence[dict[str, Any]],
+        max_tokens: int = 400,
+        temperature: float = 0.85,
+    ) -> tuple[str, list[Any]]:
+        """Ask with a tool catalogue; return ``(text, raw tool_calls)``.
+
+        A model that does not implement function calling simply ignores the
+        catalogue and answers in prose — which is why the caller still parses the
+        text for a fenced block. Both routes end in the same executor, so a
+        provider that lacks the feature is a slower path, not a broken one.
+        """
+        if not tools:
+            message = await self._completion(
+                messages, max_tokens=max_tokens, temperature=temperature
+            )
+            return _content_of_message(message).strip(), []
+        message = await self._completion(
+            messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            extra={"tools": list(tools), "tool_choice": "auto"},
+        )
+        return _content_of_message(message).strip(), list(message.get("tool_calls") or [])
+
+    async def _completion(
+        self,
+        messages: Sequence[AIMessage],
+        *,
+        max_tokens: int = 400,
+        temperature: float = 0.85,
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """One chat completion, with the fallback chain; returns the raw message."""
         if not self.enabled:
             raise AIError("AI provider is not configured", kind="disabled")
         thread = [
@@ -265,6 +307,7 @@ class AIProvider:
             await self.discover_models()
         last_error: AIError | None = None
         content = ""
+        message: dict[str, Any] = {}
         # Two passes: the budget the caller asked for, then a generous one. A
         # reasoning model that spends every token thinking returns content "",
         # and the same model answers once it is given room.
@@ -277,6 +320,8 @@ class AIProvider:
                     "max_tokens": budget,
                     "temperature": temperature,
                 }
+                if extra:
+                    payload.update(extra)
                 try:
                     data = await post_json(
                         f"{self.base_url}/chat/completions",
@@ -292,8 +337,12 @@ class AIProvider:
                 # A free catalogue contains models that answer 200 with no
                 # content. That is a bad candidate, not a dead provider, so the
                 # next one gets a turn instead of the owner getting nothing.
-                content = _content_of(data)
-                if not content:
+                message = _message_of(data)
+                content = _content_of_message(message)
+                # A tool call *is* content: the model may answer with nothing but
+                # "run this", and treating that as an empty response would make
+                # every tools-capable model look broken.
+                if not content and not message.get("tool_calls"):
                     last_error = AIError("AI returned an empty response", kind="bad_response")
                     continue
                 self.active_model = candidate
@@ -302,17 +351,17 @@ class AIProvider:
                 break
             if last_error is not None and last_error.kind == "unauthorized":
                 break
-        if not content and not self._discovered:
+        if not content and not message.get("tool_calls") and not self._discovered:
             # Every configured slug is probably retired. Ask the gateway what
             # actually exists right now and retry once with its free models.
             if await self.discover_models():
-                return await self.converse(
-                    messages, max_tokens=max_tokens, temperature=temperature
+                return await self._completion(
+                    messages, max_tokens=max_tokens, temperature=temperature, extra=extra
                 )
-        if not content:
+        if not content and not message.get("tool_calls"):
             self.failures += 1
             raise last_error or AIError("AI provider is not configured", kind="disabled")
-        return content.strip()
+        return message
 
     async def chat(self, messages: Sequence[AIMessage], *, max_tokens: int = 400) -> str:
         if not self.enabled:
@@ -320,6 +369,25 @@ class AIProvider:
         prompt = "\n\n".join(message.content for message in messages if message.role == "user")
         system = "\n\n".join(message.content for message in messages if message.role == "system") or None
         return await self.complete(prompt, system=system, max_tokens=max_tokens)
+
+
+def _message_of(data: object) -> dict[str, Any]:
+    """The assistant message inside a completion, or an empty dict."""
+    try:
+        message = data["choices"][0]["message"]  # type: ignore[index]
+    except (KeyError, IndexError, TypeError):
+        return {}
+    return message if isinstance(message, dict) else {}
+
+
+def _content_of_message(message: object) -> str:
+    """The text of an assistant message (``content`` may be null with tools)."""
+    if not isinstance(message, dict):
+        return ""
+    content = message.get("content")
+    # A whitespace-only answer is an empty answer: a free model that returns
+    # "\n\n" must fall through to the next candidate, not reach the chat.
+    return content.strip() if isinstance(content, str) else ""
 
 
 def _content_of(data: object) -> str:

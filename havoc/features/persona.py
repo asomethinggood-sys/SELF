@@ -29,10 +29,11 @@ from ..command_registry import Command, CommandContext, CommandError
 from ..event_engine import EventType, NormalizedEvent, normalize_message
 from ..services import lessons as lessons_service
 from ..services import people as people_service
+from ..services import yura_chat as yura_chat_module
 from ..services.context import build as build_context
 from ..services.vision import IMAGE_MEDIA_TYPES, Picture, looks_like_picture
 from ..services.vision import download as download_picture
-from ..utils.formatting import escape, strip_html
+from ..utils.formatting import bold, escape, strip_html
 from ..utils.markup import rich
 from ..utils.mood import mood_line
 from ..utils.security import redact_text
@@ -710,6 +711,18 @@ async def cmd_yura(ctx: CommandContext) -> None:
     if action in {"person", "them", "whois"}:
         await _person_command(ctx, list(words))
         return
+    if action in {"agent", "hands", "tools", "abilities"}:
+        await _agent_command(ctx, action, words)
+        return
+    if action in {"actions", "did", "audit"}:
+        await _actions_command(ctx, words)
+        return
+    if action in {"yes", "approve", "ok", "بله", "آره"}:
+        await _confirm_command(ctx, approve=True)
+        return
+    if action in {"no", "cancel", "deny", "نه", "لغو"}:
+        await _confirm_command(ctx, approve=False)
+        return
 
     # Everything else is something you said to her. `raw_args` is everything
     # after the command word, which is not the same as `args`: the parser takes
@@ -717,6 +730,87 @@ async def cmd_yura(ctx: CommandContext) -> None:
     # "what" and she would be asked "is the capital of France".
     text = (ctx.raw_args or " ".join(words)).strip()
     await _chat(ctx, text)
+
+
+async def _agent_command(ctx: CommandContext, action: str, words: list[str]) -> None:
+    """`.yura agent on|off` and the two lists that make it legible."""
+    layer = getattr(ctx.runtime, "actions", None)
+    if layer is None or not layer.tools:
+        await ctx.reply(ctx.t("actions.agent_off"))
+        return
+    if action in {"tools", "abilities"}:
+        rows = [
+            ctx.t(
+                "actions.tool_row",
+                name=tool.name,
+                args=", ".join(tool.properties) or "-",
+                summary=tool.summary,
+            )
+            for tool in layer.offered()
+        ]
+        await ctx.reply("\n".join([bold(ctx.t("actions.tools_header")), *map(escape, rows)]))
+        return
+    word = (words[0].lower() if words else "").strip()
+    if not word:
+        state = (
+            ctx.t("settings.state_on")
+            if await ctx.runtime.store.get_bool(yura_chat_module.AGENT_SETTING, True)
+            else ctx.t("settings.state_off")
+        )
+        await ctx.reply(ctx.t("actions.agent_state", state=escape(state)))
+        return
+    enabled = word in {"on", "enable", "yes", "1", "روشن", "بله"}
+    await ctx.runtime.store.set_setting(yura_chat_module.AGENT_SETTING, "1" if enabled else "0")
+    await ctx.reply(ctx.t("actions.agent_on" if enabled else "actions.agent_off"))
+
+
+async def _confirm_command(ctx: CommandContext, *, approve: bool) -> None:
+    """The typed yes/no. A user account cannot attach an inline keyboard."""
+    layer = getattr(ctx.runtime, "actions", None)
+    if layer is None:
+        await ctx.reply(ctx.t("actions.nothing_pending"))
+        return
+    if await layer.pending(ctx.chat_id) is None:
+        await ctx.reply(ctx.t("actions.nothing_pending"))
+        return
+    if not approve:
+        await layer.resolve(ctx.chat_id, approve=False)
+        await ctx.reply(ctx.t("actions.cancelled"))
+        return
+    outcome = await layer.resolve(ctx.chat_id, approve=True)
+    key = "actions.done" if outcome.ok else (
+        "actions.refused" if outcome.status == "refused" else "actions.failed"
+    )
+    if key == "actions.refused":
+        await ctx.reply(ctx.t("actions.refused"))
+        return
+    await ctx.reply(
+        ctx.t(key, what=escape(outcome.note or outcome.tool or ctx.t("actions.empty")))
+    )
+
+
+async def _actions_command(ctx: CommandContext, words: list[str]) -> None:
+    """`.yura actions` — the audit trail, in her handwriting instead of a log."""
+    layer = getattr(ctx.runtime, "actions", None)
+    rows = await layer.recent(ctx.chat_id, limit=10) if layer is not None else []
+    if not rows:
+        await ctx.reply(ctx.t("actions.empty"))
+        return
+    lines = [bold(ctx.t("actions.header"))]
+    for row in rows:
+        when = str(row.get("created_at", ""))[11:16]
+        lines.append(
+            escape(
+                ctx.t(
+                    "actions.row",
+                    id=row.get("id", "—"),
+                    tool=row.get("tool", "?"),
+                    status=row.get("status", "?"),
+                    when=when,
+                )
+            )
+        )
+    await ctx.reply("\n".join(lines))
 
 
 #: Her sent message ids, per chat, persisted so a restart does not erase the fact

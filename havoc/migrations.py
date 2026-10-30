@@ -410,6 +410,38 @@ MIGRATION_6_LESSONS = Migration(
     ),
 )
 
+MIGRATION_7_ACTIONS = Migration(
+    version=7,
+    name="yura_actions",
+    statements=(
+        # Every hand she uses leaves a mark. One row per attempt, written *before*
+        # the tool runs so a crash mid-action is still visible, and closed after it
+        # with what came back. ``args_hash`` is what the budget and the loop-breaker
+        # count; ``args_preview`` is for the owner's eyes, redacted by the caller.
+        """
+        CREATE TABLE IF NOT EXISTS yura_actions (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            chat_id      INTEGER NOT NULL DEFAULT 0,
+            actor_id     INTEGER NOT NULL DEFAULT 0,
+            tool         TEXT NOT NULL,
+            scope        TEXT NOT NULL DEFAULT 'read',
+            risk         TEXT NOT NULL DEFAULT 'low',
+            args_hash    TEXT NOT NULL DEFAULT '',
+            args_preview TEXT NOT NULL DEFAULT '',
+            decision     TEXT NOT NULL DEFAULT 'allowed',
+            status       TEXT NOT NULL DEFAULT 'running',
+            result       TEXT NOT NULL DEFAULT '',
+            error        TEXT NOT NULL DEFAULT '',
+            created_at   TEXT NOT NULL,
+            finished_at  TEXT
+        )
+        """,
+        # The hour budget reads this; the card reads the newest rows.
+        "CREATE INDEX IF NOT EXISTS idx_yura_actions_created ON yura_actions(created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_yura_actions_chat ON yura_actions(chat_id, id)",
+    ),
+)
+
 MIGRATIONS: tuple[Migration, ...] = (
     MIGRATION_1_FOUNDATION,
     MIGRATION_2_TIMESTAMPS,
@@ -417,6 +449,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     MIGRATION_4_PEOPLE,
     MIGRATION_5_PEOPLE_DM,
     MIGRATION_6_LESSONS,
+    MIGRATION_7_ACTIONS,
 )
 
 LATEST_VERSION = max(m.version for m in MIGRATIONS)

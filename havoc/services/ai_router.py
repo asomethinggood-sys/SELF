@@ -31,6 +31,7 @@ import base64
 import hashlib
 import json
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -433,6 +434,63 @@ class AIRouter:
             if len(attempts) > 1:
                 self.logger.info("ai: answered by %s after %d attempt(s)", credential.label, len(attempts))
             return reply
+        self.failures += 1
+        self.last_attempts = attempts
+        self.last_error = f"{last.kind}: {last}" if last else "no usable credential"
+        raise last or AIError("every credential is spent or disabled", kind="rate_limited")
+
+    async def converse_tools(
+        self,
+        messages: Any,
+        *,
+        tools: Sequence[dict[str, Any]],
+        max_tokens: int = 400,
+        temperature: float = 0.85,
+        only: str | None = None,
+    ) -> tuple[str, list[Any]]:
+        """``converse`` with a tool catalogue, returning ``(text, raw calls)``.
+
+        Same rotation, same budgets, same refusal to raise anything but the last
+        ``AIError``. A credential whose model cannot do function calling answers in
+        prose instead, and the caller's text parser picks it up.
+        """
+        if not self.credentials:
+            raise AIError("AI provider is not configured", kind="disabled")
+        self.requests += 1
+        attempts: list[Attempt] = []
+        last: AIError | None = None
+        for credential, spec in self.plan(vision=False, only=only):
+            if len(attempts) >= MAX_ATTEMPTS:
+                break
+            health = self.health_of(credential)
+            if health.disabled or health.cooling(utc_now()) or self.remaining(credential, spec) <= 0:
+                continue
+            client = self._client(credential, spec)
+            try:
+                text, calls = await client.converse_tools(
+                    messages, tools=tools, max_tokens=max_tokens, temperature=temperature
+                )
+            except AIError as exc:
+                last = exc
+                attempts.append(Attempt(credential.label, spec.api_id, False, f"{exc.kind}: {exc}"))
+                await self._record_failure(credential, spec, exc)
+                continue
+            except Exception as exc:  # noqa: BLE001 - rotation survives anything
+                last = AIError(f"{type(exc).__name__}: {exc}", kind="network")
+                attempts.append(Attempt(credential.label, spec.api_id, False, str(last)))
+                await self._record_failure(credential, spec, last)
+                continue
+            self.active_model = client.active_model or spec.api_id
+            self.active_label = credential.label
+            self.last_error = ""
+            attempts.append(Attempt(credential.label, self.active_model, True))
+            self.last_attempts = attempts
+            health = self.health.setdefault(credential.id, KeyHealth())
+            health.successes += 1
+            health.error = ""
+            await self._count(credential, spec)
+            await self._save_health()
+            return text, calls
         self.failures += 1
         self.last_attempts = attempts
         self.last_error = f"{last.kind}: {last}" if last else "no usable credential"

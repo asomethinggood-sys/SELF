@@ -956,5 +956,21 @@
   "yura.voice_key_usage": "استفاده: {prefix}yura voice key <کلید>",
   "yura.voice_languages": "صداها: **{languages}** — هر کدام را بگویی، با همان دهن خوانده می‌شود.",
   "yura.voice_spoken": "ویس فرستاده‌شده: {count}",
-  "yura.voice_title": "صدایش"
+  "yura.voice_title": "صدایش",
+  "actions.confirm": "⌁ این کار را می‌توانم بکنم: {what}\n\nتا دو دقیقهٔ دیگر بنویس `{prefix}yura yes`، یا `{prefix}yura no` که بی‌خیالش شوم.",
+  "actions.receipt": "_{did} · {when}_",
+  "actions.nothing_pending": "⌁ چیزی منتظر جواب تو نیست.",
+  "actions.cancelled": "⌁ بی‌خیال شدم.",
+  "actions.done": "⌁ {what}",
+  "actions.failed": "⌁ نشد: {what}",
+  "actions.refused": "⌁ نه. پول و هویت مال من نیست که دست بزنم، و اصرار هم عوضش نمی‌کند.",
+  "actions.limited": "⌁ برای حالا دست‌بازی بس است — بعداً دوباره بپرس.",
+  "actions.empty": "⌁ هنوز کاری نکرده‌ام.",
+  "actions.header": "⟡ کارهای اخیرم",
+  "actions.row": "{id}. {tool} · {status} · {when}",
+  "actions.tools_header": "⟡ کارهایی که واقعاً می‌توانم بکنم",
+  "actions.tool_row": "{name}({args}) — {summary}",
+  "actions.agent_on": "⌁ دست‌ها باز شد. حالا خودم می‌توانم بگردم، یادم بماند، ترجمه کنم و یادآور بگذارم.",
+  "actions.agent_off": "⌁ دست‌ها بسته شد. برگشتم به همان حرف زدن.",
+  "actions.agent_state": "⌁ دست‌ها {state} هستند."
 }

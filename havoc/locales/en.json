@@ -956,5 +956,21 @@
   "yura.voice_key_usage": "Usage: {prefix}yura voice key <key>",
   "yura.voice_languages": "voices: **{languages}** — say anything in one of them and it comes out in that mouth.",
   "yura.voice_spoken": "Voice notes sent: {count}",
-  "yura.voice_title": "her voice"
+  "yura.voice_title": "her voice",
+  "actions.confirm": "⌁ i can do this: {what}\n\nsay `{prefix}yura yes` in the next two minutes, or `{prefix}yura no`.",
+  "actions.receipt": "_{did} · {when}_",
+  "actions.nothing_pending": "⌁ nothing is waiting on you.",
+  "actions.cancelled": "⌁ dropped it.",
+  "actions.done": "⌁ {what}",
+  "actions.failed": "⌁ that did not work: {what}",
+  "actions.refused": "⌁ no. money and identity aren't mine to touch, and asking again won't change that.",
+  "actions.limited": "⌁ that's enough hands for now — ask me again in a while.",
+  "actions.empty": "⌁ i haven't done anything yet.",
+  "actions.header": "⟡ what i've done lately",
+  "actions.row": "{id}. {tool} · {status} · {when}",
+  "actions.tools_header": "⟡ what i can actually do",
+  "actions.tool_row": "{name}({args}) — {summary}",
+  "actions.agent_on": "⌁ hands on. i can look things up, remember, translate and set reminders myself now.",
+  "actions.agent_off": "⌁ hands off. back to talking only.",
+  "actions.agent_state": "⌁ hands are {state}."
 }

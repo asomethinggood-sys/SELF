@@ -195,6 +195,12 @@ class Runtime:
         except Exception:  # noqa: BLE001 - a housekeeping miss must not stop a boot
             pass
         runtime.lessons = LessonBook(db)
+        # Her hands: every tool goes through one layer that records, budgets and
+        # refuses. Built before the chat engine because the engine asks for it.
+        from .services.actions import ActionLayer
+        from .services.tools import build_tools
+
+        runtime.actions = ActionLayer(runtime, build_tools(runtime))
         runtime.yura_chat = YuraChat(runtime)
         runtime.fight_loop = FightLoop(runtime)
         from .handlers import Router
