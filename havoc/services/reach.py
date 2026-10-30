@@ -22,6 +22,7 @@ Rules this module holds itself to, all of them his:
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -103,6 +104,27 @@ _UNIT_SECONDS = {
     "h": 3600.0, "hour": 3600.0, "hours": 3600.0,
     "d": 86400.0, "day": 86400.0, "days": 86400.0,
 }
+
+
+def job_payload(row: Any) -> dict[str, Any]:
+    """A scheduler row (or a plain dict) as the payload it carries.
+
+    The scheduler hands handlers the raw ``sqlite3.Row`` — it predates the job
+    kinds here — and a row has no ``.get``. One helper, so every job in this
+    module reads its payload the same way.
+    """
+    if isinstance(row, dict):
+        return row
+    raw = row["payload"] if "payload" in getattr(row, "keys", lambda: [])() else None
+    if isinstance(raw, (bytes, bytearray)):
+        raw = raw.decode("utf-8", "replace")
+    if isinstance(raw, str):
+        try:
+            decoded = json.loads(raw or "{}")
+        except ValueError:
+            return {}
+        return decoded if isinstance(decoded, dict) else {}
+    return dict(raw or {}) if raw else {}
 
 
 def parse_duration(raw: str) -> float | None:
@@ -412,12 +434,15 @@ class Reach:
             return {"ok": False, "error": str(getattr(result, "error", "") or "the send failed")}
         return {"ok": True, "message_id": message_id, "dry_run": simulated, "outbox_id": outbox_id}
 
-    async def send_later(self, payload: dict[str, Any]) -> None:
-        """The scheduler's job: a send that was asked for earlier."""
-        target = Target(
-            id=int(payload.get("chat_id") or 0),
-            kind="saved" if not payload.get("chat_id") else "unknown",
-        )
+    async def send_later(self, row: Any) -> None:
+        """The scheduler's job: a send that was asked for earlier.
+
+        The payload carries an id, not a Target, because a job outlives the object
+        that queued it. Resolve it again so the record and the error keep a name.
+        """
+        payload = job_payload(row)
+        chat_id = int(payload.get("chat_id") or 0)
+        target = await self.resolve(str(chat_id)) or Target(id=chat_id, kind="user")
         report = await self.deliver(
             target,
             str(payload.get("text") or ""),
@@ -429,8 +454,9 @@ class Reach:
         if not report.ok:
             self.runtime.logger.warning("scheduled send failed: %s", report.error)
 
-    async def unsend(self, payload: dict[str, Any]) -> None:
+    async def unsend(self, row: Any) -> None:
         """The scheduler's job: delete a message that was told to self-destruct."""
+        payload = job_payload(row)
         chat_id = int(payload.get("chat_id") or 0)
         message_id = payload.get("message_id")
         if not message_id:

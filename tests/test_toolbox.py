@@ -258,3 +258,42 @@ def test_his_ordinary_chatter_is_untouched() -> None:
             intent_module.detect(sentence, features={"clock"}, commands={"clock"}).label == "clock"
             and "question" in sentence
         )
+
+
+# ---------------------------------------------------------------------------
+# The clock: jobs must actually fire
+# ---------------------------------------------------------------------------
+async def test_a_queued_send_fires_when_its_moment_comes(runtime) -> None:
+    await runtime.scheduler.enqueue(
+        "reach_send", utc_now() - timedelta(seconds=1), {"chat_id": 999, "text": "late hello"}
+    )
+    fired = await runtime.scheduler.tick()
+    assert fired["jobs"] >= 1
+    assert [row for row in runtime.client.sent if "late hello" in row.text], "the job never sent"
+
+
+async def test_a_self_destruct_really_deletes(runtime) -> None:
+    await runtime.scheduler.enqueue(
+        "reach_unsend", utc_now() - timedelta(seconds=1), {"chat_id": 999, "message_id": 1001}
+    )
+    await runtime.scheduler.tick()
+    assert runtime.client.deleted, "nothing was deleted"
+
+
+async def test_a_plan_step_runs_a_real_console_line(runtime) -> None:
+    await runtime.store.set_setting("clock.enabled", True)
+    plan = build_plan("clock off for 10 minutes", intent=intent_module)
+    created = await runtime.plans.create(plan, said="clock off for 10 minutes", owner_id=OWNER)
+    step = (await runtime.store.plan_steps(created["id"]))[0]
+    # The scheduler hands the handler its own row; the payload is inside it.
+    await runtime.db.execute("DELETE FROM jobs")
+    await runtime.scheduler.enqueue(
+        "plan_step",
+        utc_now() - timedelta(seconds=1),
+        {"plan_id": created["id"], "step_id": step["id"], "index": 0},
+    )
+    fired = await runtime.scheduler.tick()
+    assert fired["jobs"] == 1, fired
+    assert await runtime.store.get_setting("clock.enabled", "unset") is False
+    steps = await runtime.store.plan_steps(created["id"])
+    assert steps[0]["status"] == "done"
