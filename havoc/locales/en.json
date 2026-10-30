@@ -879,6 +879,8 @@
   "yura.card_hint": "Just say {prefix}yura and she answers. {prefix}yura on lets her reply to everything you write here.",
   "yura.card_title": "{name}",
   "yura.diary_caption": "Diary · {count} lines · your day, written down.",
+  "yura.dm_off": "Ignoring {name}'s private messages again.",
+  "yura.dm_on": "I'll answer {name}'s private messages now. Slowly, and only them.",
   "yura.enabled_hint": "She now answers anything you type here that is not a command. {prefix}yura off makes her quiet, {prefix}yura memory shows what she remembers.",
   "yura.faces_hint": "{prefix}yura faces <mood> picks one.",
   "yura.faces_title": "her faces",

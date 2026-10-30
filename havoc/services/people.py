@@ -116,6 +116,9 @@ class Person:
     relation: str = ""
     tone: str = DEFAULT_TONE
     facts: tuple[str, ...] = field(default_factory=tuple)
+    #: True when she may answer this person's private messages. Off by default:
+    #: a stranger must not be able to start talking to his account.
+    dm: bool = False
     created_at: str = ""
     updated_at: str = ""
 
@@ -134,6 +137,8 @@ class Person:
         if self.relation:
             bits.append(self.relation)
         bits.append(self.tone)
+        if self.dm:
+            bits.append("dm ✓")
         if self.facts:
             bits.append(f"{len(self.facts)} facts")
         return " · ".join(bits)
@@ -194,6 +199,7 @@ def _row(row: Any) -> Person | None:
         relation=str(row["relation"] or ""),
         tone=tone if tone in TONES else DEFAULT_TONE,
         facts=tuple(str(fact) for fact in facts if str(fact).strip()),
+        dm=bool(int(row["dm"] or 0)) if "dm" in row.keys() else False,
         created_at=str(row["created_at"] or ""),
         updated_at=str(row["updated_at"] or ""),
     )
@@ -288,6 +294,17 @@ class PersonBook:
         await self.db.execute(
             "UPDATE yura_people SET tone = ?, updated_at = ? WHERE user_id = ?",
             (tone, iso(utc_now()), int(user_id)),
+        )
+        return True
+
+    async def set_dm(self, user_id: int | None, enabled: bool) -> bool:
+        """Allow (or stop) her answering this person's private messages."""
+        if user_id is None:
+            return False
+        await self.touch(user_id)
+        await self.db.execute(
+            "UPDATE yura_people SET dm = ?, updated_at = ? WHERE user_id = ?",
+            (1 if enabled else 0, iso(utc_now()), int(user_id)),
         )
         return True
 

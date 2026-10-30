@@ -322,3 +322,53 @@ async def test_people_says_so_when_the_book_is_empty(runtime) -> None:
 
 def test_the_book_starts_empty() -> None:
     assert PersonBook is not None
+
+
+# ---------------------------------------------------------------------------
+# Someone else's private chat: opt-in, per person
+# ---------------------------------------------------------------------------
+def _dm(runtime, text: str = "hey yura", *, sender_id: int = FRIEND, mid: int = 950):
+    message = FakeMessage(
+        id=mid, chat_id=sender_id, sender_id=sender_id, text=text, out=False,
+        is_private=True, is_group=False,
+    )
+    message.sender = FRIEND_USER
+    return normalize_message(message, self_id=OWNER, prefix=".", event_type=EventType.MESSAGE)
+
+
+async def test_a_stranger_cannot_start_a_private_conversation(runtime) -> None:
+    await _enable(runtime)
+    await runtime.people.touch(FRIEND, "Ali")  # known, but not allowed to DM
+    await runtime.persona_replies.on_private_message(_dm(runtime))
+    assert runtime.ai.calls == []
+    assert runtime.persona_replies.last_skip == "dm_not_allowed"
+
+
+async def test_an_introduced_person_gets_answered_privately(runtime) -> None:
+    await _enable(runtime, reply="fine. what do you want.")
+    await runtime.people.touch(FRIEND, "Ali")
+    await runtime.people.set_dm(FRIEND, True)
+    await runtime.persona_replies.on_private_message(_dm(runtime))
+    assert runtime.ai.calls, "she ignored a person he introduced"
+    assert "be rude with them" in _prompt(runtime)
+    assert "daddaaa" not in runtime.client.sent[-1].text.lower()
+
+
+async def test_a_private_chat_has_its_own_slow_budget(runtime) -> None:
+    await _enable(runtime)
+    await runtime.people.touch(FRIEND, "Ali")
+    await runtime.people.set_dm(FRIEND, True)
+    await runtime.persona_replies.on_private_message(_dm(runtime, mid=951))
+    await runtime.persona_replies.on_private_message(_dm(runtime, "again", mid=952))
+    assert runtime.persona_replies.last_skip == "dm_cooldown"
+
+
+async def test_the_owner_can_turn_it_on_and_off(runtime) -> None:
+    await _enable(runtime)
+    await runtime.people.touch(FRIEND, "Ali")
+    await invoke(runtime, ".yura dm on Ali", chat_id=GROUP, is_private=False)
+    person = await runtime.people.get(FRIEND)
+    assert person is not None and person.dm is True
+    await invoke(runtime, ".yura dm off Ali", chat_id=GROUP, is_private=False)
+    person = await runtime.people.get(FRIEND)
+    assert person is not None and person.dm is False

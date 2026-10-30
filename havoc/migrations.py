@@ -373,11 +373,23 @@ MIGRATION_4_PEOPLE = Migration(
     ),
 )
 
+MIGRATION_5_PEOPLE_DM = Migration(
+    version=5,
+    name="yura_people_dm",
+    statements=(
+        # Private replies are opt-in per person. She answers a private chat only
+        # when the owner has introduced that person to her, so a stranger cannot
+        # start a conversation with his account and get an answer.
+        "ALTER TABLE yura_people ADD COLUMN dm INTEGER NOT NULL DEFAULT 0",
+    ),
+)
+
 MIGRATIONS: tuple[Migration, ...] = (
     MIGRATION_1_FOUNDATION,
     MIGRATION_2_TIMESTAMPS,
     MIGRATION_3_YURA_MEMORY,
     MIGRATION_4_PEOPLE,
+    MIGRATION_5_PEOPLE_DM,
 )
 
 LATEST_VERSION = max(m.version for m in MIGRATIONS)

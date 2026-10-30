@@ -308,6 +308,23 @@ async def _note_command(ctx: CommandContext, words: list[str]) -> None:
     await ctx.reply_ok(ctx.t(key, name=who, fact=escape(truncate(fact, 120))))
 
 
+async def _dm_command(ctx: CommandContext, words: list[str]) -> None:
+    """``.yura dm on|off`` — may she answer this person's private messages?"""
+    mode = (words[0].lower() if words else "")
+    user_id, name = await _who(ctx, words[1:] if mode in {"on", "off", "yes", "no"} else words)
+    if user_id is None or ctx.runtime.permissions.is_owner(user_id):
+        raise CommandError("yura.tone_needs_target", prefix=ctx.runtime.prefix)
+    person = await ctx.runtime.people.get(user_id)
+    enabled = mode in {"on", "yes", "true", "1"} or (
+        mode not in {"off", "no", "false", "0"} and not (person and person.dm)
+    )
+    await ctx.runtime.people.set_dm(user_id, enabled)
+    person = await ctx.runtime.people.get(user_id)
+    who = escape((person.name if person and person.name else name) or str(user_id))
+    key = "yura.dm_on" if enabled else "yura.dm_off"
+    await ctx.reply_ok(ctx.t(key, name=who))
+
+
 async def _people_command(ctx: CommandContext) -> None:
     people = await ctx.runtime.people.all(20)
     if not people:
@@ -573,6 +590,9 @@ async def cmd_yura(ctx: CommandContext) -> None:
     if action in {"note", "about", "facts"}:
         await _note_command(ctx, list(words))
         return
+    if action in {"dm", "privates", "dms"}:
+        await _dm_command(ctx, list(words))
+        return
     if action in {"people", "humans", "known"}:
         await _people_command(ctx)
         return
@@ -628,6 +648,10 @@ class PersonaReplies:
     #: Groups get a slower valve than the owner's own chat.
     MIN_GROUP_INTERVAL = 6.0
     MAX_GROUP_PER_HOUR = 40
+    #: A private chat with someone who is not the owner: slow, and capped hard.
+    #: She is a companion, not a customer-support line.
+    MIN_DM_INTERVAL = 20.0
+    MAX_DM_PER_HOUR = 12
     #: Every so many answers she puts her attention bar under the message.
     MOOD_EVERY = 3
 
@@ -640,6 +664,8 @@ class PersonaReplies:
         self._window: list[float] = []
         self._group_window: dict[int, list[float]] = {}
         self._group_last: dict[int, float] = {}
+        self._dm_window: dict[int, list[float]] = {}
+        self._dm_last: dict[int, float] = {}
         self.answered = 0
         self.group_answered = 0
         self.skipped = 0
@@ -786,7 +812,10 @@ class PersonaReplies:
         checked before the picture is fetched, so a group photo nobody asked
         about is never downloaded.
         """
-        if not event.is_group or event.message_id is None:
+        if not event.is_group:
+            await self.on_private_message(event)
+            return
+        if event.message_id is None:
             self._skip("not_group")
             return
         # In a group this account writes two kinds of message: the owner's and
@@ -849,6 +878,57 @@ class PersonaReplies:
         )
         self._group_last[event.chat_id] = now
         self._group_window.setdefault(event.chat_id, []).append(now)
+        self.group_answered += 1
+
+    # -- someone else's private chat ---------------------------------------
+    async def on_private_message(self, event: NormalizedEvent) -> None:
+        """Answer a private message — but only from someone he introduced.
+
+        A stranger messaging the account gets nothing: replying to unknown people
+        is how a userbot starts spamming on its owner's behalf. The gate is one
+        row in her book with ``dm`` switched on, which only the owner can set
+        (``.yura dm on`` while replying to them).
+        """
+        if event.is_outgoing or event.is_group or event.message_id is None:
+            self._skip("not_dm", event)
+            return
+        if await self._is_own(event.chat_id, event.message_id, event.text):
+            self._skip("own_message", event)
+            return
+        speaker = event.sender_id
+        if speaker is None or self.runtime.permissions.is_owner(speaker):
+            self._skip("owner_chat", event)
+            return
+        person = await self._person(speaker)
+        if person is None or not getattr(person, "dm", False):
+            self._skip("dm_not_allowed", event)
+            return
+        picture = await self._picture(event)
+        if picture is None and not event.text.strip():
+            self._skip("empty", event)
+            return
+        decision = await self.runtime.permissions.can_act(event.chat_id, "persona", is_private=True)
+        if not decision.allowed:
+            self._skip(f"permission:{decision.code}", event)
+            return
+        now = time.monotonic()
+        last = self._dm_last.get(event.chat_id)
+        cutoff = now - 3600
+        window = [stamp for stamp in self._dm_window.get(event.chat_id, []) if stamp >= cutoff]
+        self._dm_window[event.chat_id] = window
+        if (last is not None and now - last < self.MIN_DM_INTERVAL) or len(window) >= self.MAX_DM_PER_HOUR:
+            self._skip("dm_cooldown", event)
+            return
+        quote = await self._quote(event)
+        await self._answer(
+            event,
+            chat_id=event.chat_id,
+            picture=picture,
+            quoted=quote.text,
+            is_private=False,
+        )
+        self._dm_last[event.chat_id] = now
+        window.append(now)
         self.group_answered += 1
 
     # -- one turn ---------------------------------------------------------
@@ -1080,7 +1160,7 @@ def register(runtime: Any) -> None:
             cmd_yura,
             category="persona",
             aliases=("person", "self"),
-            usage="[on|off|status|memory|log|clear|recap|diary|faces|speak|voice|poster|caption|react|nice|rude|neutral|note|people|person|<anything>]",
+            usage="[on|off|status|memory|log|clear|recap|diary|faces|speak|voice|poster|caption|react|nice|rude|neutral|note|dm|people|person|<anything>]",
             changes_state=True,
             subcommands=(
                 "on", "off", "enable", "disable", "status", "card", "who", "state",
@@ -1089,7 +1169,7 @@ def register(runtime: Any) -> None:
                 "face", "kaomoji", "speak", "voice", "tts", "poster", "caption",
                 "react", "reaction", "nice", "kind", "polite", "rude", "mean", "savage",
                 "neutral", "normal", "tone", "note", "about", "facts", "people", "humans",
-                "known", "person", "them", "whois",
+                "known", "person", "them", "whois", "dm", "privates", "dms",
             ),
         )
     )

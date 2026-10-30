@@ -879,6 +879,8 @@
   "yura.card_hint": "کافی است بگویی {prefix}yura تا جواب بدهد. با {prefix}yura on به هر چیزی که اینجا بنویسی جواب می‌دهد.",
   "yura.card_title": "{name}",
   "yura.diary_caption": "دفتر · {count} خط · روزت، نوشته‌شده.",
+  "yura.dm_off": "پیام‌های خصوصی {name} را دوباره نادیده می‌گیرم.",
+  "yura.dm_on": "از این به بعد به پیام‌های خصوصی {name} جواب می‌دهم. آرام و فقط او.",
   "yura.enabled_hint": "حالا به هر چیزی که اینجا بنویسی و دستور نباشد جواب می‌دهد. {prefix}yura off ساکتش می‌کند و {prefix}yura memory نشان می‌دهد چه چیزی یادش مانده.",
   "yura.faces_hint": "{prefix}yura faces <حال> یکی را انتخاب می‌کند.",
   "yura.faces_title": "قیافه‌هایش",
