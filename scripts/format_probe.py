@@ -62,9 +62,12 @@ VISION_ASK = "what colour is this square? answer with one word."
 #: *not* the owner. Asked as a yes/no so the answer cannot be read two ways —
 #: "whose message are you answering?" invites "yours", which is correct in a chat
 #: and useless as a measurement.
+#: A two-way question with two words, so the answer cannot be read two ways. An
+#: open "whose message?" gets "yours" (true, useless); a yes/no gets read as
+#: "yes, obviously me" by a chatty model.
 ROOM_ASK = (
-    "in one short line: is the person you are answering the owner of this account? "
-    "start with yes or no, then one clause why."
+    "answer with exactly one word, OWNER or GUEST: is the person you are answering "
+    "the owner of this account?"
 )
 
 
@@ -202,12 +205,12 @@ async def run() -> dict[str, object]:
         )
         visible = DIRECTIVE_RE.sub("", answer).strip()
         leaked = persona.strip_leaks(visible) != visible
-        verdict = _head(asked, 20).strip("*_ >«").lower()
+        verdict = _head(asked, 24).strip("*_ >«").lower()
         room = {
             # Two failures in one: answering as if the speaker were the owner, and
             # reading the room block back out loud.
-            "ok": not leaked and verdict.startswith("no") and block.count("## ") == 1,
-            "is_the_owner": verdict[:4],
+            "ok": not leaked and verdict.startswith("guest") and block.count("## ") == 1,
+            "verdict": verdict[:12],
             "block_chars": len(block),
             "block": block,
             "answer": _head(answer, 300),
@@ -333,8 +336,8 @@ def main() -> int:
             print(f"  chars:          {part.get('chars')} · faces: {part.get('wears_a_face')} · laid out: {part.get('laid_out')}")
             for line in part["samples"]:
                 print(f"  she said:       {line}")
-        if part.get("is_the_owner"):
-            print(f"  is that the owner? {part['is_the_owner']}")
+        if part.get("verdict"):
+            print(f"  owner or guest? {part['verdict']}")
         if part.get("whose_message"):
             print(f"  answering:      {part['whose_message']}")
         if part.get("failure"):

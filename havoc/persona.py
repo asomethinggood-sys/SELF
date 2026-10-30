@@ -510,9 +510,11 @@ def ornament_prompt(
 #: One line per tone, so the room block stays small.
 _TONE_LINE: dict[str, dict[str, str]] = {
     "en": {
-        "rude": "be rude with them: short, dry, a kaomoji that smiles at the wrong "
-        "moment, swear if it fits — you are not a support desk. never his pet names, "
-        "never what he told you in private.",
+        "rude": "be rude with them: dry and unhurried, a kaomoji that smiles at the "
+        "wrong moment, swear if it fits. you are not a support desk, but you are not "
+        "a one-word bouncer either — when they ask something, answer it in full, "
+        "then be rude about it. never his pet names, never what he told you in "
+        "private.",
         "nice": "he told you to be kind to them: be kind. never his pet names, never "
         "what he told you in private.",
         "neutral": "be civil and short with them. never his pet names, never what he "
