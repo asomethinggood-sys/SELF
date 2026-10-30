@@ -280,7 +280,6 @@ async def run() -> dict[str, object]:
 
         from havoc.database import Database
         from havoc.migrations import apply_migrations
-        from havoc.services import persona as persona_module
 
         db = Database(":memory:")
         await db.connect()
@@ -298,7 +297,7 @@ async def run() -> dict[str, object]:
         layer = ActionLayer(scratch, build_tools(scratch))
         agent = Agent(layer, logger=scratch.logger)
         turn = Turn(chat_id=1, actor_id=1, language="en", is_owner=True)
-        brief = persona_module.ornament_prompt("en")
+        brief = persona.ornament_prompt("en")
         system = f"{system_prompt('en')}\n\n{layer.catalogue('en')}\n\n{brief}"
         ask = "remind me to call mom in 30 minutes, and tell me you did it."
         step = await agent.run(
