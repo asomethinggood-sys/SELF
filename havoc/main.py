@@ -433,15 +433,24 @@ async def command_ai(args: argparse.Namespace) -> int:
     is still listed. This makes a real request, prints the reply, and exits
     non-zero when the provider fails, so a workflow step can gate on it.
     """
+    from .ai_models import auto_plan
     from .persona import system_prompt
     from .services.ai_provider import AIError, AIMessage, AIProvider
+    from .services.ai_router import AIRouter
 
     config, _issues = load_config(dotenv_path=project_env_file())
-    provider = AIProvider.from_config(config)
+    # The router first: it is what the bot actually speaks through, and a probe
+    # that tests a different code path than production is a probe that lies.
+    router = await AIRouter.load(config, None)
+    provider = router if router.available else AIProvider.from_config(config)
     if not provider.available:
         print("AI: not configured (set AI_PROVIDER=openai_compatible and AI_API_KEY)")
         return EXIT_CONFIG
-    print(f"AI: {provider.base_url} · models: {', '.join(provider.models)}")
+    if router.available:
+        plan = ", ".join(spec.api_id for spec in auto_plan()[:4])
+        print(f"AI: rotating over {len(router.credentials)} key(s) · first models: {plan} …")
+    else:
+        print(f"AI: {provider.base_url} · models: {', '.join(provider.models)}")
     print(f"Prompt: {args.prompt}")
     try:
         reply = await provider.converse(
