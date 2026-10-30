@@ -162,3 +162,40 @@ async def test_tasks_command_shows_pending_work(runtime) -> None:
     await runtime.store.add_reminder(308, "visible task", utc_now() + timedelta(minutes=5))
     await invoke(runtime, ".tasks")
     assert "visible task" in "\n".join(m.text for m in runtime.client.sent)
+
+
+async def test_recover_run_once_leaves_missed_work_for_the_next_tick(runtime) -> None:
+    """The default: a missed reminder is late, not lost."""
+    runtime.scheduler.missed_policy = "run_once"
+    reminder_id = await runtime.store.add_reminder(300, "late", utc_now() - timedelta(hours=1))
+    await runtime.scheduler.enqueue("noop", utc_now() - timedelta(hours=1))
+    summary = await runtime.scheduler.recover()
+    assert summary["reminders_missed"] == 1
+    assert summary["jobs_missed"] == 1
+    assert (await runtime.store.get_reminder(reminder_id))["status"] == "pending"
+    pending = await runtime.store.db.fetch_all("SELECT status FROM jobs")
+    assert [row["status"] for row in pending] == ["pending"]
+
+
+async def test_recover_skip_drops_missed_work_instead_of_firing_it(runtime) -> None:
+    runtime.scheduler.missed_policy = "skip"
+    reminder_id = await runtime.store.add_reminder(300, "late", utc_now() - timedelta(hours=1))
+    await runtime.scheduler.enqueue("noop", utc_now() - timedelta(hours=1))
+    summary = await runtime.scheduler.recover()
+    assert summary["reminders_missed"] == 1
+    assert (await runtime.store.get_reminder(reminder_id))["status"] == "missed"
+    assert [row["status"] for row in await runtime.store.db.fetch_all("SELECT status FROM jobs")] == ["skipped"]
+    # Nothing was delivered: skip means skip.
+    assert not [m for m in runtime.client.sent if "late" in m.text]
+
+
+async def test_recover_ask_holds_a_reminder_and_reports_a_job(runtime) -> None:
+    runtime.scheduler.missed_policy = "ask"
+    reminder_id = await runtime.store.add_reminder(300, "late", utc_now() - timedelta(hours=1))
+    await runtime.scheduler.enqueue("noop", utc_now() - timedelta(hours=1))
+    summary = await runtime.scheduler.recover()
+    assert summary["held"] == 1
+    assert (await runtime.store.get_reminder(reminder_id))["status"] == "held"
+    assert [row["status"] for row in await runtime.store.db.fetch_all("SELECT status FROM jobs")] == ["skipped"]
+    # "ask" does not silently discard a job: it says so.
+    assert runtime.client.sent, "the owner was never told about the dropped job"
