@@ -385,3 +385,63 @@ class TelegramExtras:
             await deleter(peer)
         except Exception as exc:  # noqa: BLE001
             raise ExtrasError(redact_text(str(exc))[:200], kind="refused") from exc
+
+    # ------------------------------------------------------------------
+    # Things that are not a sentence: a poll, a place
+    # ------------------------------------------------------------------
+    @staticmethod
+    def poll_media(question: str, options: list[str]) -> Any:
+        """A poll Telegram will actually accept, serialised once to prove it.
+
+        Telethon 1.4x wants ``TextWithEntities`` and a ``hash``; a plain string
+        builds and then explodes inside the request. ``_bytes()`` is the same
+        call the client makes, so a bad poll is caught here, before it is queued.
+        """
+        from telethon.tl.types import InputMediaPoll, Poll, PollAnswer, TextWithEntities
+
+        if len(options) < 2:
+            raise ExtrasError("a poll needs at least two options", kind="bad_args")
+        poll = Poll(
+            id=0,
+            question=TextWithEntities(text=str(question)[:255], entities=[]),
+            answers=[
+                PollAnswer(
+                    text=TextWithEntities(text=str(option)[:100], entities=[]),
+                    option=bytes([index]),
+                )
+                for index, option in enumerate(options[:10])
+            ],
+            hash=0,
+            quiz=False,
+            public_voters=False,
+            multiple_choice=False,
+        )
+        media = InputMediaPoll(poll=poll)
+        media._bytes()
+        return media
+
+    @staticmethod
+    def location_media(lat: float, lon: float) -> Any:
+        from telethon.tl.types import InputGeoPoint, InputMediaGeoPoint
+
+        if not (-90 <= float(lat) <= 90 and -180 <= float(lon) <= 180):
+            raise ExtrasError("that is not a point on Earth", kind="bad_args")
+        media = InputMediaGeoPoint(geo_point=InputGeoPoint(lat=float(lat), long=float(lon)))
+        media._bytes()
+        return media
+
+    async def _send_media(self, chat_id: Any, media: Any, caption: str = "") -> Any:
+        client = self.client
+        sender = getattr(client, "send_file", None)
+        if sender is None:
+            raise ExtrasError("this build cannot send that", kind="offline")
+        try:
+            return await sender(chat_id, media, caption=caption or None)
+        except Exception as exc:  # noqa: BLE001
+            raise ExtrasError(redact_text(str(exc))[:300], kind="refused") from exc
+
+    async def send_poll(self, chat_id: Any, question: str, options: list[str]) -> Any:
+        return await self._send_media(chat_id, self.poll_media(question, options))
+
+    async def send_location(self, chat_id: Any, lat: float, lon: float) -> Any:
+        return await self._send_media(chat_id, self.location_media(lat, lon))

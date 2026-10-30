@@ -1401,5 +1401,9 @@
   "cmd.demote.description": "اختیارهای ادمینی را بگیر.",
   "cmd.demote.usage": "<شخص>",
   "cmd.leave.description": "از یک گروه بیرون بیا، همین یا آن که می‌گویی.",
-  "cmd.leave.usage": "[گفتگو]"
+  "cmd.leave.usage": "[گفتگو]",
+  "actions.card_poll": "نظرسنجی گذاشته شد: {question}",
+  "actions.card_location": "موقعیت فرستاده شد",
+  "actions.card_contacts": "مخاطبین — {what}",
+  "actions.card_no_contact": "هیچ مخاطبی جور نشد"
 }

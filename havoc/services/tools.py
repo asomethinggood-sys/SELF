@@ -492,4 +492,114 @@ def build_tools(runtime: Any) -> list[Tool]:
         )
     )
 
+    async def send_poll(turn: Turn, args: dict[str, str]) -> ActionResult:
+        """A real poll, built and serialised by the service before it is sent."""
+        question = (args.get("question") or "").strip()
+        raw = (args.get("options") or "").strip()
+        options = [part.strip() for part in re.split(r"[|;]", raw) if part.strip()]
+        if not question or len(options) < 2:
+            return ActionResult(False, detail="a poll needs a question and two options", kind="bad_args")
+        extras = getattr(runtime, "tg", None)
+        if extras is None:
+            return ActionResult(False, detail="no Telegram connection", kind="offline")
+        try:
+            await extras.send_poll(turn.chat_id, question, options[:10])
+        except Exception as exc:  # noqa: BLE001 - the refusal is the answer
+            return ActionResult(False, detail=str(exc)[:200], kind="send")
+        return ActionResult(
+            True,
+            note=f"poll posted: {question} ({len(options[:10])} options)",
+            title=_t(runtime, turn, "actions.card_poll", question=question[:80]),
+            lines=tuple(options[:10]),
+        )
+
+    tools.append(
+        Tool(
+            name="send_poll",
+            summary="post a real poll with a question and options people can tap",
+            properties={
+                "question": "the question",
+                "options": "the choices, separated by | or ;",
+            },
+            required=("question", "options"),
+            run=send_poll,
+            scope="write",
+        )
+    )
+
+    async def send_location(turn: Turn, args: dict[str, str]) -> ActionResult:
+        extras = getattr(runtime, "tg", None)
+        if extras is None:
+            return ActionResult(False, detail="no Telegram connection", kind="offline")
+        try:
+            lat = float((args.get("lat") or "").strip())
+            lon = float((args.get("lon") or "").strip())
+        except ValueError:
+            return ActionResult(False, detail="lat and lon must be numbers", kind="bad_args")
+        try:
+            await extras.send_location(turn.chat_id, lat, lon)
+        except Exception as exc:  # noqa: BLE001
+            return ActionResult(False, detail=str(exc)[:200], kind="send")
+        return ActionResult(
+            True,
+            note=f"location sent: {lat:.5f}, {lon:.5f}",
+            title=_t(runtime, turn, "actions.card_location"),
+            lines=(f"{lat:.5f}, {lon:.5f}",),
+        )
+
+    tools.append(
+        Tool(
+            name="send_location",
+            summary="send a map point here",
+            properties={"lat": "latitude", "lon": "longitude"},
+            required=("lat", "lon"),
+            run=send_location,
+            scope="write",
+        )
+    )
+
+    async def contacts(turn: Turn, args: dict[str, str]) -> ActionResult:
+        extras = getattr(runtime, "tg", None)
+        if extras is None:
+            return ActionResult(False, detail="no Telegram connection", kind="offline")
+        query = (args.get("about") or "").strip().lower()
+        try:
+            rows = await extras.contacts(limit=500)
+        except Exception as exc:  # noqa: BLE001
+            return ActionResult(False, detail=str(exc)[:200], kind="read")
+        if query:
+            rows = [
+                row
+                for row in rows
+                if query in str(row.get("name", "")).lower()
+                or query in str(row.get("username", "")).lower()
+            ]
+        if not rows:
+            return ActionResult(
+                True,
+                note="no contact matched",
+                title=_t(runtime, turn, "actions.card_contacts", what=query or "all"),
+                lines=(_t(runtime, turn, "actions.card_no_contact"),),
+            )
+        lines = [
+            f"{row.get('name') or '—'} — {('@' + row['username']) if row.get('username') else row.get('id')}"
+            for row in rows[:12]
+        ]
+        return ActionResult(
+            True,
+            note=" | ".join(lines[:12]),
+            title=_t(runtime, turn, "actions.card_contacts", what=query or "all"),
+            lines=tuple(lines[:4]),
+        )
+
+    tools.append(
+        Tool(
+            name="contacts",
+            summary="look through his address book, optionally by name",
+            properties={"about": "a name or handle to filter by (optional)"},
+            run=contacts,
+            scope="read",
+        )
+    )
+
     return tools

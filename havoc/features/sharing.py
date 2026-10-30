@@ -19,46 +19,13 @@ import re
 from typing import Any
 
 from ..command_registry import Command, CommandContext, CommandError
+from ..services.tg_extra import ExtrasError
 from ..utils.formatting import bold, code, escape
 from ..utils.text import truncate
 
 __all__ = ["register"]
 
 _POINT = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$")
-
-
-def _poll_media(question: str, options: list[str], failed_key: str) -> Any:
-    """Build a poll Telegram will actually accept — and prove it can be serialised.
-
-    Telethon 1.4x serialises ``question``/``text`` as ``TextWithEntities`` and
-    requires ``hash``; a plain string builds fine and then explodes inside the
-    request, which would look like "Telegram refused" when it was our own bug.
-    ``_bytes()`` here is the same call the client makes, so a bad poll is caught
-    before anything is queued.
-    """
-    from telethon.tl.types import InputMediaPoll, Poll, PollAnswer, TextWithEntities
-
-    try:
-        poll = Poll(
-            id=0,
-            question=TextWithEntities(text=question[:255], entities=[]),
-            answers=[
-                PollAnswer(
-                    text=TextWithEntities(text=option[:100], entities=[]),
-                    option=bytes([index]),
-                )
-                for index, option in enumerate(options)
-            ],
-            hash=0,
-            quiz=False,
-            public_voters=False,
-            multiple_choice=False,
-        )
-        media = InputMediaPoll(poll=poll)
-        media._bytes()
-    except Exception as exc:  # noqa: BLE001 - report the real reason, do not guess
-        raise CommandError(failed_key, detail=escape(str(exc)[:180])) from exc
-    return media
 
 
 async def cmd_poll(ctx: CommandContext) -> None:
@@ -73,13 +40,14 @@ async def cmd_poll(ctx: CommandContext) -> None:
     if len(options) > 10:
         options = options[:10]
 
-    sender = getattr(ctx.runtime.client, "send_file", None)
-    if sender is None:
+    extras = getattr(ctx.runtime, "tg", None)
+    if extras is None:
         raise CommandError("share.failed", detail="this build cannot send a poll")
-    media = _poll_media(question, options, ctx.t("share.failed"))
     try:
-        await sender(ctx.chat_id, media)
-    except Exception as exc:  # noqa: BLE001
+        # The poll is built and serialised by the service, so a bad one is caught
+        # before anything is queued.
+        await extras.send_poll(ctx.chat_id, question, options)
+    except ExtrasError as exc:
         raise CommandError("share.failed", detail=escape(str(exc)[:180])) from exc
     await ctx.store.add_outbox(
         ctx.chat_id, text=question[:200], kind="poll", status="sent"
@@ -103,17 +71,12 @@ async def cmd_geo(ctx: CommandContext) -> None:
     if not (-90 <= lat <= 90 and -180 <= lon <= 180):
         raise CommandError("share.geo_range")
 
-    from telethon.tl.types import InputGeoPoint, InputMediaGeoPoint
-
-    sender = getattr(ctx.runtime.client, "send_file", None)
-    if sender is None:
+    extras = getattr(ctx.runtime, "tg", None)
+    if extras is None:
         raise CommandError("share.failed", detail="this build cannot send a location")
     try:
-        await sender(
-            ctx.chat_id,
-            InputMediaGeoPoint(geo_point=InputGeoPoint(lat=lat, long=lon)),
-        )
-    except Exception as exc:  # noqa: BLE001
+        await extras.send_location(ctx.chat_id, lat, lon)
+    except ExtrasError as exc:
         raise CommandError("share.failed", detail=escape(str(exc)[:180])) from exc
     await ctx.store.add_outbox(
         ctx.chat_id, text=f"{lat:.5f},{lon:.5f}", kind="location", status="sent"

@@ -1042,6 +1042,12 @@ yura      .yura .ai
 Every one of these also has plain-language routes in `havoc/services/intent.py`
 ("remember that…", "who did i block", "rename this group to…", "slow mode 5m").
 
+**Tools she can reach without a dot** (14, `scripts/audit_live.py`): `recall`,
+`search`, `translate`, `remember`, `forget`, `remind`, `command`, `send_message`,
+`read_chat`, `plan`, `react`, and — new here — `send_poll`, `send_location`,
+`contacts`. Polls and places are built and serialised in
+`havoc/services/tg_extra.py` once, so the dot command and the tool cannot drift.
+
 ---
 
 ## 15. Appendix B — file map

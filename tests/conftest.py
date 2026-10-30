@@ -176,7 +176,10 @@ class FakeClient:
         self._next_id += 1
         self.sent.append(
             SentMessage(
-                chat_id, kwargs.get("caption", ""), {**kwargs, "file": file}, message_id=self._next_id
+                chat_id,
+                kwargs.get("caption") or "",
+                {**kwargs, "file": file},
+                message_id=self._next_id,
             )
         )
         return FakeMessage(id=self._next_id, text=kwargs.get("caption", ""), out=True)

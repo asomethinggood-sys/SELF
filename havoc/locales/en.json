@@ -1401,5 +1401,9 @@
   "cmd.demote.description": "Take admin rights away.",
   "cmd.demote.usage": "<person>",
   "cmd.leave.description": "Leave a group, this one or the one you name.",
-  "cmd.leave.usage": "[chat]"
+  "cmd.leave.usage": "[chat]",
+  "actions.card_poll": "Poll posted: {question}",
+  "actions.card_location": "Location sent",
+  "actions.card_contacts": "Contacts — {what}",
+  "actions.card_no_contact": "No contact matched"
 }
