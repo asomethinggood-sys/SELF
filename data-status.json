@@ -7,9 +7,9 @@
     "bookmarks": 1,
     "chat_settings": 1,
     "features": 17,
-    "jobs": 905,
+    "jobs": 917,
     "language_prefs": 1,
-    "profile_history": 904,
+    "profile_history": 916,
     "profile_snapshots": 3,
     "reminders": 3,
     "schema_migrations": 7,
@@ -32,11 +32,11 @@
     "diagnostics": 0,
     "features": 17,
     "interactive_sessions": 0,
-    "jobs": 905,
+    "jobs": 917,
     "language_prefs": 1,
     "notes": 0,
     "plugins": 0,
-    "profile_history": 904,
+    "profile_history": 916,
     "profile_presets": 0,
     "profile_snapshots": 3,
     "reaction_rules": 0,
@@ -57,13 +57,13 @@
   },
   "restored_from": {
     "cache_hit": "false",
-    "run_id": "41087676338"
+    "run_id": "41089353684"
   },
-  "boot_log_lines": 40,
+  "boot_log_lines": 41,
   "boot_log_tail": [
-    "2026-10-30T16:00:47+00:00 run=41085739741 boots=38 db=655360B",
     "2026-10-30T16:06:34+00:00 run=41086701699 boots=39 db=659456B",
-    "2026-10-30T16:12:29+00:00 run=41087676338 boots=40 db=659456B"
+    "2026-10-30T16:12:29+00:00 run=41087676338 boots=40 db=659456B",
+    "2026-10-30T16:24:19+00:00 run=41089353684 boots=41 db=663552B"
   ],
-  "boots": 40
+  "boots": 41
 }
