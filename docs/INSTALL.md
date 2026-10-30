@@ -305,5 +305,6 @@ divination table ship inside the package, so there is nothing else to install.
   (the message is deleted straight away, the key is stored base64), then
   `.yura voice groq`. `.yura voice off` goes back to the keyless voice.
 
-If neither is available, `.yura say` stays a conversation instead of failing:
-a word silently changing meaning is worse than a feature being absent.
+If neither is available, `.yura speak` says what is missing instead of half-working.
+`.yura say <text>` is always a conversation: a word does not change meaning depending
+on which package happens to be installed.

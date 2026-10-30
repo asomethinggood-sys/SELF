@@ -152,8 +152,7 @@ orders instead of obeying it.
 all** through `edge-tts` (the `[voice]` extra), and with a **free Groq key** —
 `console.groq.com/keys`, no card — through the OpenAI-compatible `/audio/speech`
 endpoint: `.yura voice key <key>`, then `.yura voice groq`. The key is stored
-base64 and the message that carried it is deleted. `.yura say <text>` is a voice
-note when an engine is present and stays a conversation when it is not.
+base64 and the message that carried it is deleted. `.yura say <text>` stays a conversation — two words, two meanings, at every install.
 
 **Smaller things you can ask her for.** `.yura recap` (the last day, with times) ·
 `.yura diary` (the same, as a `.md` file) · `.yura faces [mood]` (her kaomoji by

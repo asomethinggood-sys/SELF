@@ -93,22 +93,22 @@ async def test_an_unknown_mood_names_the_real_ones(runtime) -> None:
 # ---------------------------------------------------------------------------
 # say / voice
 # ---------------------------------------------------------------------------
-async def test_say_sends_a_voice_note(runtime) -> None:
+async def test_speak_sends_a_voice_note(runtime) -> None:
     edge = _edge_engine(runtime)
-    await invoke(runtime, ".yura say good night")
+    await invoke(runtime, ".yura speak good night")
     sent = [entry for entry in runtime.client.sent if entry.kwargs.get("voice_note")]
     assert sent, "no voice note was sent"
     assert edge.calls[0][0] == "good night"
     assert sent[-1].kwargs["file"].endswith(".mp3")
 
 
-async def test_say_without_an_engine_stays_a_conversation(runtime) -> None:
-    """A word must not silently change meaning when TTS is not installed."""
-    runtime.ai = type("P", (), {"available": True, "model": "m", "converse": None})()
+async def test_say_is_always_a_conversation_and_never_a_voice_note(runtime) -> None:
+    """Two words, two meanings, at every install — not depending on a package."""
+    _edge_engine(runtime)
+    runtime.ai = _Stub(["mrrp"])
     await invoke(runtime, ".yura say something kind")
-    # No provider is reachable here, so she answers from the bank — the point is
-    # that the text reached the conversation path at all.
-    assert last_text(runtime)
+    assert not any(entry.kwargs.get("voice_note") for entry in runtime.client.sent)
+    assert "something kind" in runtime.ai.calls[-1][-1].content
 
 
 async def test_a_failed_voice_names_what_is_wrong(runtime) -> None:
@@ -277,8 +277,10 @@ class _Stub:
 
     def __init__(self, replies=("ok",)) -> None:
         self.replies = list(replies)
+        self.calls: list[list[object]] = []
 
     async def converse(self, messages, *, max_tokens: int = 400, temperature: float = 0.85) -> str:
+        self.calls.append(list(messages))
         return self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
 
 

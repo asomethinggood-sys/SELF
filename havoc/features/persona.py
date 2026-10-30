@@ -361,17 +361,9 @@ async def cmd_yura(ctx: CommandContext) -> None:
     if action in {"faces", "face", "kaomoji"}:
         await yura_extras.faces(ctx, list(words))
         return
-    if action in {"say", "speak", "voice-note"}:
+    if action in {"speak", "voice-note", "say-aloud"}:
         # `rest_raw`, not `raw_args`: the subcommand itself is not something to say.
-        spoken = (ctx.rest_raw or "").strip()
-        engine = yura_extras.tts_for(ctx.runtime)
-        # With an engine configured, ".yura say" is a voice note. Without one it
-        # stays what it always was — something you said to her — because a word
-        # silently changing meaning is worse than a feature being absent.
-        if spoken and await engine.has_engine():
-            await yura_extras.say(ctx, spoken)
-        else:
-            await _chat(ctx, spoken)
+        await yura_extras.say(ctx, (ctx.rest_raw or "").strip())
         return
     if action in {"voice", "tts"}:
         await yura_extras.voice(ctx, [word for word in words if word.strip()])
@@ -704,7 +696,7 @@ def register(runtime: Any) -> None:
                 "on", "off", "enable", "disable", "status", "card", "who", "state",
                 "memory", "memories", "remember", "learn", "forget", "log", "history", "clear",
                 "key", "apikey", "token", "recap", "today", "diary", "journal", "faces",
-                "face", "kaomoji", "say", "speak", "voice", "tts", "poster", "caption",
+                "face", "kaomoji", "speak", "voice", "tts", "poster", "caption",
                 "react", "reaction",
             ),
         )
