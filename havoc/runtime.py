@@ -70,6 +70,7 @@ class Runtime:
     client: Any = None
     memory: MemoryStore = None  # type: ignore[assignment] - set in create()
     people: PersonBook = None  # type: ignore[assignment] - set in create()
+    sent_ledger: Any = None
     lessons: LessonBook = None  # type: ignore[assignment] - set in create()
     yura_chat: YuraChat = None  # type: ignore[assignment] - set in create()
     fight_loop: FightLoop = None  # type: ignore[assignment] - set in create()
@@ -175,6 +176,12 @@ class Runtime:
         )
         runtime.dispatcher = Dispatcher(runtime)
         runtime.memory = MemoryStore(db)
+        # What this account sent as the bot, so a reply to her answer can be told
+        # apart from a reply to the owner's own message.
+        from .services.sent_ledger import SentLedger
+
+        runtime.sent_ledger = SentLedger(store)
+        sender.ledger = runtime.sent_ledger
         runtime.people = PersonBook(db)
         # The book is for people she knows, not people who knocked. Rows that
         # hold nothing (an old build created them on sight) are swept at boot.

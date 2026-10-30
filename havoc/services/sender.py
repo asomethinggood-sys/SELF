@@ -60,6 +60,10 @@ class Sender:
         self.max_flood_wait = max_flood_wait
         self.sent_count = 0
         self.blocked_count = 0
+        #: Filled in by the runtime: every message this process sends is recorded
+        #: here, so a reply to one of them can be told apart from a reply to the
+        #: owner's own message. Optional — tests and dry runs may not have one.
+        self.ledger: Any | None = None
 
     # ------------------------------------------------------------------
     # Core send
@@ -141,6 +145,12 @@ class Sender:
                 self.blocked_count += 1
                 raise SendError(_describe(exc), kind=_kind(exc)) from exc
 
+        if self.ledger is not None:
+            # Recorded here rather than by each caller: every path that sends —
+            # the ambient answer, a command, a file, a voice note — is remembered,
+            # and none of them can forget.
+            for message in results:
+                await self.ledger.note(chat_id, getattr(message, "id", None))
         return SendResult(ok=True, message=results[0] if results else None, messages=results, text="\n".join(chunks))
 
     async def _with_flood_retry(self, operation) -> Any:

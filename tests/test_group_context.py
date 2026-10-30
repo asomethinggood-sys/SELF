@@ -489,3 +489,42 @@ async def test_a_member_quoting_her_line_is_not_her(runtime) -> None:
     await replies.on_group_message(_event("hm", reply=theirs))
 
     assert client.sent == []
+
+
+# ---------------------------------------------------------------------------
+# The real shape of the failure: she answers a call by name, and the reply to
+# that answer is ignored because that send path never recorded its own id.
+# ---------------------------------------------------------------------------
+async def test_a_reply_to_an_answer_sent_by_the_by_name_path(runtime) -> None:
+    await _enable(runtime)
+    runtime.ai = StubProvider("noted, kitten")
+    client = RecordingClient()
+    runtime.client = client
+    runtime.sender.client = client
+
+    await invoke_cmd(runtime, ".yura hi", chat_id=GROUP)
+
+    assert client.sent, "she did not answer the call by name"
+    answered_id = 5000 + len(client.sent)  # what the recording client assigned
+    assert await runtime.sent_ledger.has(GROUP, answered_id), "the send was not recorded"
+    # nothing in the persona's own bucket: the ledger alone has to save this
+    runtime.persona_replies._own_ids.clear()
+    await runtime.store.set_setting("yura.own_ids." + str(GROUP), [])
+    hers = FakeMessage(
+        id=answered_id, chat_id=GROUP, sender_id=OWNER, text=client.sent[-1][1], out=True
+    )
+    event = _event("what do you mean", out=True, sender_id=OWNER, reply=hers, message_id=999)
+    await runtime.persona_replies.on_group_message(event)
+
+    assert len(client.sent) > 1, "a reply to her own answer was ignored"
+
+
+async def invoke_cmd(runtime, text: str, *, chat_id: int) -> None:
+    """Run a command the way the router does (imported late to avoid a cycle)."""
+    from conftest import FakeEvent, parse_command
+    from conftest import FakeMessage as FM
+
+    message = FM(id=800, chat_id=chat_id, sender_id=OWNER, text=text, out=True, is_group=True)
+    event = FakeEvent(message, chat_id=chat_id, out=True)
+    parsed = parse_command(text, runtime.prefix)
+    await runtime.dispatcher.handle(event, message, parsed, "en")

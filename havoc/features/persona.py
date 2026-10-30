@@ -32,7 +32,7 @@ from ..services import people as people_service
 from ..services.context import build as build_context
 from ..services.vision import IMAGE_MEDIA_TYPES, Picture, looks_like_picture
 from ..services.vision import download as download_picture
-from ..utils.formatting import escape
+from ..utils.formatting import escape, strip_html
 from ..utils.markup import rich
 from ..utils.mood import mood_line
 from ..utils.security import redact_text
@@ -601,7 +601,9 @@ async def _chat(ctx: CommandContext, text: str, *, greeting: bool = False) -> No
         # Remember that these words are hers: a reply to this message must be
         # recognised as a reply to *her* even after a restart.
         try:
-            await ctx.runtime.persona_replies._note_said(ctx.chat_id, answer.text)
+            await ctx.runtime.persona_replies._note_said(
+                ctx.chat_id, strip_html(_visible(answer))
+            )
         except Exception:  # noqa: BLE001 - bookkeeping must never lose an answer
             pass
     for path in answer.files:
@@ -869,6 +871,9 @@ class PersonaReplies:
     async def _note_own(self, chat_id: int, message_id: Any) -> None:
         if message_id is None:
             return
+        ledger = getattr(self.runtime, "sent_ledger", None)
+        if ledger is not None:
+            await ledger.note(chat_id, message_id)
         bucket = await self._own_bucket(chat_id)
         bucket.append(int(message_id))
         try:
@@ -944,16 +949,34 @@ class PersonaReplies:
         tell the two apart — the id can. Nothing here looks at the text: a friend
         who quotes one of her lines is not her, and a reply pointed at his
         message must never be mistaken for a reply pointed at hers.
+
+        The ids come from the shared ledger, which the sender fills on **every**
+        send. The persona's own bucket is still consulted so an old build's
+        settings rows keep working.
         """
         if message_id is None:
             return False
-        return int(message_id) in await self._own_bucket(chat_id)
+        ledger = getattr(self.runtime, "sent_ledger", None)
+        if ledger is not None and await ledger.has(chat_id, message_id):
+            return True
+        try:
+            return int(message_id) in await self._own_bucket(chat_id)
+        except (TypeError, ValueError):
+            return False
 
     async def _is_own(self, chat_id: int, message_id: Any, text: str) -> bool:
-        """True when this message is one she wrote, not one the owner wrote."""
+        """True when the message *arriving now* is one she wrote.
+
+        Deliberately narrower than :meth:`_is_own_text`: being wrong here means
+        staying silent, so only her id and the shapes of her own bank count. A
+        short phrase she happens to have said once ("باشه") is not proof, and
+        treating it as proof is how a real reply from him would vanish.
+        """
         if await self._is_own_id(chat_id, message_id):
             return True
-        return await self._is_own_text(chat_id, text)
+        if not text:
+            return False
+        return persona.is_own_line(text) or self.runtime.yura_chat.was_sent(chat_id, text)
 
     def _named(self, text: str) -> bool:
         """True when the message says her name, in either spelling or alphabet."""
@@ -1213,7 +1236,10 @@ class PersonaReplies:
         the actual complaint, and ``strip_echo`` handles it.
         """
         sender = self.runtime.sender
-        await self._note_said(chat_id, text)
+        # The words Telegram will hand back when someone replies are the *rendered*
+        # text, not the markdown she wrote. Storing the markdown made the fallback
+        # match only answers that happened to have no formatting at all.
+        await self._note_said(chat_id, strip_html(html))
         if source != "model":
             result = await sender.send(chat_id, html, reply_to=reply_to)
             await self._note_own(chat_id, getattr(getattr(result, "message", None), "id", None))

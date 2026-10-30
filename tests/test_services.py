@@ -215,3 +215,38 @@ async def test_a_media_send_is_dry_run_aware(runtime) -> None:
     result = await runtime.sender.send_media(100, "photo.jpg")
     assert result.dry_run is True
     assert runtime.client.sent == []
+
+
+# ---------------------------------------------------------------------------
+# Every send is remembered, because a reply to it has to be recognised
+# ---------------------------------------------------------------------------
+async def test_the_sender_records_what_it_sends(runtime) -> None:
+    from havoc.services.sent_ledger import SentLedger
+
+    ledger = SentLedger(runtime.store)
+    runtime.sender.ledger = ledger
+    result = await runtime.sender.send(4242, "hello there")
+    assert result.ok
+    assert await ledger.has(4242, result.message.id)
+
+
+async def test_the_ledger_survives_a_new_process(runtime) -> None:
+    from havoc.services.sent_ledger import SentLedger
+
+    first = SentLedger(runtime.store)
+    await first.note(77, 1234)
+    await first.note(77, 1235)
+
+    second = SentLedger(runtime.store)  # a fresh object, as after a restart
+    assert await second.has(77, 1235)
+    assert not await second.has(77, 9999)
+
+
+async def test_a_voice_note_and_a_file_are_recorded_too(runtime) -> None:
+    from havoc.services.sent_ledger import SentLedger
+
+    ledger = SentLedger(runtime.store)
+    runtime.sender.ledger = ledger
+    voice = await runtime.sender.send_media(55, "/tmp/x.ogg", caption="listen", voice_note=True)
+    assert voice.ok
+    assert await ledger.has(55, voice.message.id)
