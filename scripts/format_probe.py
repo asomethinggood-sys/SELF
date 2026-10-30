@@ -280,6 +280,12 @@ async def run() -> dict[str, object]:
         # measure nothing. `dry_run` keeps it off Telegram.
         scratch = await Runtime.create(config, logging.getLogger("probe"))
         scratch.sender.dry_run = True
+        # Commands are registered by the features, not by Runtime.create: without
+        # this the registry is empty and the console has nothing to pull.
+        scratch.load_features()
+        # The account is the owner of itself, exactly as after a login; the
+        # console dispatches as id 1.
+        scratch.permissions.set_self_id(1)
         layer = scratch.actions
         agent = Agent(layer, logger=scratch.logger)
         turn = Turn(chat_id=1, actor_id=1, language="en", is_owner=True)
