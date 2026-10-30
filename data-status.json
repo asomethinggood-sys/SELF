@@ -1,7 +1,7 @@
 {
   "path": "/home/runner/work/SELF/SELF/.runtime/data/havoc.db",
   "exists": true,
-  "schema_version": 7,
+  "schema_version": 8,
   "integrity": "ok",
   "populated": {
     "bookmarks": 1,
@@ -12,14 +12,14 @@
     "profile_history": 1029,
     "profile_snapshots": 3,
     "reminders": 7,
-    "schema_migrations": 7,
+    "schema_migrations": 8,
     "settings": 36,
     "sqlite_sequence": 8,
     "usage_stats": 29,
     "yura_actions": 22,
     "yura_history": 98,
     "yura_memory": 54,
-    "yura_people": 10
+    "yura_people": 1
   },
   "tables": {
     "aliases": 0,
@@ -42,7 +42,7 @@
     "reaction_rules": 0,
     "reminders": 7,
     "schedules": 0,
-    "schema_migrations": 7,
+    "schema_migrations": 8,
     "settings": 36,
     "sqlite_sequence": 8,
     "templates": 0,
@@ -53,17 +53,17 @@
     "yura_history": 98,
     "yura_lessons": 0,
     "yura_memory": 54,
-    "yura_people": 10
+    "yura_people": 1
   },
   "restored_from": {
     "cache_hit": "false",
-    "run_id": "41108798384"
+    "run_id": "41109903808"
   },
-  "boot_log_lines": 46,
+  "boot_log_lines": 47,
   "boot_log_tail": [
-    "2026-10-30T17:44:32+00:00 run=41100654692 boots=44 db=700416B",
     "2026-10-30T17:55:56+00:00 run=41102467671 boots=45 db=700416B",
-    "2026-10-30T18:41:02+00:00 run=41108798384 boots=46 db=782336B"
+    "2026-10-30T18:41:02+00:00 run=41108798384 boots=46 db=782336B",
+    "2026-10-30T18:47:49+00:00 run=41109903808 boots=47 db=782336B"
   ],
-  "boots": 46
+  "boots": 47
 }
