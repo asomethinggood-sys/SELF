@@ -1575,7 +1575,7 @@ def register(runtime: Any) -> None:
             cmd_yura,
             category="persona",
             aliases=("person", "self"),
-            usage="[on|off|status|memory|log|clear|recap|diary|faces|speak|voice|poster|caption|react|nice|rude|neutral|note|dm|reply|teach|rules|people|person|<anything>]",
+            usage="[on|off|status|memory|log|clear|recap|diary|faces|speak|voice|poster|caption|react|nice|rude|neutral|note|dm|reply|teach|rules|people|person|tools|agent|actions|yes|no|<anything>]",
             changes_state=True,
             subcommands=(
                 "on", "off", "enable", "disable", "status", "card", "who", "state",
@@ -1587,6 +1587,8 @@ def register(runtime: Any) -> None:
                 "known", "person", "them", "whois", "dm", "privates", "dms", "teach",
                 "learn-this", "lesson", "rules", "lessons", "unteach",
                 "reply", "thread", "plain", "quote", "bubble", "bubbles",
+                "tools", "abilities", "agent", "hands", "actions", "did", "audit",
+                "yes", "approve", "no", "cancel", "deny",
             ),
         )
     )
