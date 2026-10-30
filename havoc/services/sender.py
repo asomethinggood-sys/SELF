@@ -339,6 +339,70 @@ class Sender:
             raise SendError(_describe(exc), kind=_kind(exc)) from exc
 
 
+    async def forward(
+        self,
+        entity: Any,
+        message: Any,
+        from_chat: Any,
+        *,
+        dry_run: bool | None = None,
+    ) -> SendResult:
+        """Forward a real message, id and all — the header is the point."""
+        simulate = self.dry_run if dry_run is None else dry_run
+        if simulate:
+            self.logger.info("DRY-RUN forward -> %s", entity)
+            return SendResult(ok=True, dry_run=True)
+        try:
+            await self.limiter.acquire_outbound()
+            sent = await self.client.forward_messages(entity, message, from_chat)
+            return SendResult(ok=True, message=sent)
+        except Exception as exc:  # noqa: BLE001
+            if self.flood.handle(exc) is not None:
+                raise SendError("Telegram asked us to slow down", kind="floodwait") from exc
+            raise SendError(_describe(exc), kind=_kind(exc)) from exc
+
+    async def pin(
+        self,
+        entity: Any,
+        message: Any,
+        *,
+        notify: bool = False,
+        dry_run: bool | None = None,
+    ) -> SendResult:
+        """Pin in place. A pin is a side effect, so dry run holds it like a send."""
+        simulate = self.dry_run if dry_run is None else dry_run
+        if simulate:
+            self.logger.info("DRY-RUN pin -> %s %s", entity, message)
+            return SendResult(ok=True, dry_run=True)
+        try:
+            await self.limiter.acquire_outbound()
+            await self.client.pin_message(entity, message, notify=notify)
+            return SendResult(ok=True)
+        except Exception as exc:  # noqa: BLE001
+            if self.flood.handle(exc) is not None:
+                raise SendError("Telegram asked us to slow down", kind="floodwait") from exc
+            raise SendError(_describe(exc), kind=_kind(exc)) from exc
+
+    async def unpin(
+        self,
+        entity: Any,
+        message: Any | None = None,
+        *,
+        dry_run: bool | None = None,
+    ) -> SendResult:
+        simulate = self.dry_run if dry_run is None else dry_run
+        if simulate:
+            self.logger.info("DRY-RUN unpin -> %s", entity)
+            return SendResult(ok=True, dry_run=True)
+        try:
+            await self.limiter.acquire_outbound()
+            await self.client.unpin_message(entity, message)
+            return SendResult(ok=True)
+        except Exception as exc:  # noqa: BLE001
+            if self.flood.handle(exc) is not None:
+                raise SendError("Telegram asked us to slow down", kind="floodwait") from exc
+            raise SendError(_describe(exc), kind=_kind(exc)) from exc
+
 
 def _describe(exc: BaseException) -> str:
     text = str(exc) or type(exc).__name__

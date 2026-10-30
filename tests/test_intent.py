@@ -270,7 +270,7 @@ async def test_the_model_running_the_tool_is_not_run_twice(runtime) -> None:
         ("back up the database", "backup export"),
         ("run a selfcheck", "selfcheck"),
         ("check yourself", "selfcheck"),
-        ("are you ok", "selfcheck"),
+        # 1.8: the richer card — connection, scheduler, model, queue, last error.\n        ("are you ok", "diagnose"),
         ("ping", "ping"),
         ("how fast are you", "ping"),
         ("what language is this", "detect"),
@@ -284,7 +284,7 @@ async def test_the_model_running_the_tool_is_not_run_twice(runtime) -> None:
         ("summarize this", "summarize"),
         ("summarize the last 20 messages", "summarize 20"),
         ("tldr", "summarize"),
-        ("what version are you", "about"),
+        ("what version are you", "version"),
         ("ورژن چیه", "about"),
     ],
 )

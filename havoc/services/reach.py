@@ -490,6 +490,58 @@ class Reach:
             return False
         return bool(getattr(result, "ok", False))
 
+    async def forward(
+        self, target: Target, message_id: int, from_chat: int, *, plan_id: int | None = None
+    ) -> SendReport:
+        """Forward a message id from one chat to ``target``, and record it.
+
+        A forward is a send with someone else's words in it, so it belongs in the
+        outbox for the same reason: he should be able to see what left the account
+        and unsend it from a number.
+        """
+        report = SendReport(target=target)
+        try:
+            result = await self.sender.forward(target.id, int(message_id), int(from_chat))
+        except Exception as exc:  # noqa: BLE001 - the report is the error surface
+            report.ok = False
+            report.error = redact_text(str(exc))[:300]
+            return report
+        sent = getattr(result, "message", None)
+        report.message_ids = [getattr(sent, "id", 0) or 0]
+        report.dry_run = bool(getattr(result, "dry_run", False))
+        if not getattr(result, "ok", False):
+            report.ok = False
+            report.error = "telegram refused the forward"
+            return report
+        report.sent = 0 if report.dry_run else 1
+        report.text = f"↪ forwarded {message_id} from {from_chat}"
+        await self.store.add_outbox(
+            int(target.id),
+            message_id=report.message_ids[0],
+            kind="forward",
+            text=report.text,
+            status="dry" if report.dry_run else "sent",
+            note=f"from {from_chat}",
+            plan_id=plan_id,
+        )
+        return report
+
+    async def pin(self, chat_id: int, message_id: int, *, notify: bool = False) -> bool:
+        try:
+            result = await self.sender.pin(chat_id, int(message_id), notify=notify)
+        except Exception as exc:  # noqa: BLE001
+            self.runtime.logger.warning("pin failed: %s", redact_text(str(exc)))
+            return False
+        return bool(getattr(result, "ok", False))
+
+    async def unpin(self, chat_id: int, message_id: int | None = None) -> bool:
+        try:
+            result = await self.sender.unpin(chat_id, int(message_id) if message_id else None)
+        except Exception as exc:  # noqa: BLE001
+            self.runtime.logger.warning("unpin failed: %s", redact_text(str(exc)))
+            return False
+        return bool(getattr(result, "ok", False))
+
     # ------------------------------------------------------------------
     # Reading back
     # ------------------------------------------------------------------

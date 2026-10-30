@@ -302,6 +302,17 @@ class Store:
     async def outbox_row(self, row_id: int) -> Any:
         return await self.db.fetch_one("SELECT * FROM outbox WHERE id = ?", (int(row_id),))
 
+    async def outbox_for_message(self, chat_id: int, message_id: int) -> Any:
+        """The outbox row for a message, if this account is the one that sent it.
+
+        Used by ``.delete``: a message it never sent has no row, and that is the
+        difference between "recorded as deleted" and "deleted something else".
+        """
+        return await self.db.fetch_one(
+            "SELECT * FROM outbox WHERE chat_id = ? AND message_id = ? ORDER BY id DESC LIMIT 1",
+            (int(chat_id), int(message_id)),
+        )
+
     async def mark_deleted(self, row_id: int, *, note: str = "") -> bool:
         changed = await self.db.execute(
             "UPDATE outbox SET status = 'deleted', deleted_at = ?, note = COALESCE(NULLIF(?, ''), note) WHERE id = ?",

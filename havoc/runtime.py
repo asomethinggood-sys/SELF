@@ -216,6 +216,9 @@ class Runtime:
 
         runtime.reach = Reach(runtime)
         runtime.plans = PlanRunner(runtime)
+        from .services.tg_extra import TelegramExtras
+
+        runtime.tg = TelegramExtras(runtime)
         runtime.fight_loop = FightLoop(runtime)
         from .handlers import Router
 

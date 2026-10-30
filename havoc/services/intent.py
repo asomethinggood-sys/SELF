@@ -686,6 +686,137 @@ def _actions(text: str) -> Intent | None:
 
 
 # ---------------------------------------------------------------------------
+# The rest of the surface: verbs on a message, the inbox, groups, herself
+# ---------------------------------------------------------------------------
+# Every pattern here is anchored and short. "why didn't you answer" is a question
+# about *her*, so it becomes `.why`; "why didn't you answer that email from the
+# bank" is not, and the `\s*$` at the end is what keeps it out.
+_FORWARD = re.compile(
+    r"^(?:please\s+)?(?:forward|send on|pass on)\s+(?:this|that|it)\s+to\s+(?P<who>.+)$",
+    re.I,
+)
+_COPY = re.compile(
+    r"^(?:please\s+)?copy\s+(?:this|that|it)\s+to\s+(?P<who>.+)$", re.I
+)
+_REPLY_TO = re.compile(
+    r"^(?:please\s+)?(?:reply|answer|respond)\s+(?:to\s+)?(?:this|that|it|him|her|them)"
+    r"\s*(?:and\s+)?(?:say|saying|with)?\s*(?P<body>.+)$",
+    re.I,
+)
+_EDIT_TO = re.compile(
+    r"^(?:please\s+)?(?:change|edit|fix)\s+(?:that|this|it)\s+(?:message\s+)?"
+    r"(?:to\s+say|and\s+say|to)\s+(?P<body>.+)$",
+    re.I,
+)
+_DELETE_THAT = re.compile(
+    r"^(?:please\s+)?(?:delete|remove|unsend|take back)\s+(?:that|this|it)$", re.I
+)
+_PIN_THAT = re.compile(r"^(?:please\s+)?pin\s+(?:that|this|it)$", re.I)
+_INBOX_ASK = re.compile(
+    r"^(?:who'?s|who is|what'?s)\s+(?:in|on)\s+my\s+(?:messages|inbox|dms|chats)$"
+    r"|^(?:my\s+)?(?:inbox|dms)$"
+    r"|^who\s+am\s+i\s+(?:talking|messaging)\s+to$",
+    re.I,
+)
+_UNREAD_ASK = re.compile(
+    r"^(?:what'?s|anything)\s+(?:unread|unanswered|waiting)$"
+    r"|^(?:unread|unanswered)$"
+    r"|^who\s+is\s+waiting(?:\s+for\s+an?\s+answer)?$",
+    re.I,
+)
+_READ_ASK = re.compile(
+    r"^(?:what\s+did|what\s+has)\s+(?P<who>.+?)\s+(?:say|said|write|written|tell\s+you)"
+    r"(?:\s+(?:to\s+you|you))?$",
+    re.I,
+)
+_WHOIS_ASK = re.compile(r"^(?:who\s+is|who'?s)\s+(?P<who>@?[\w .-]{2,40})$", re.I)
+_GROUPS_ASK = re.compile(r"^(?:my\s+groups|list\s+(?:my\s+)?groups|what\s+groups)$", re.I)
+_DOCTOR_ASK = re.compile(
+    r"^(?:are\s+you\s+(?:ok|okay|alright|fine|healthy|alive)|you\s+(?:ok|okay))\s*[?!.]*$",
+    re.I,
+)
+_REPAIR_ASK = re.compile(r"^(?:fix|repair|heal)\s+yourself\s*[.!]*$", re.I)
+_WHY_ASK = re.compile(
+    r"^why\s+(?:didn'?t|don'?t|won'?t|are\s+you\s+not)\s+(?:you\s+)?"
+    r"(?:answer|reply|respond|talk)(?:\s+(?:me|to\s+me))?\s*[?!.]*$",
+    re.I,
+)
+_NEWS_ASK = re.compile(r"^(?:what'?s\s+new|whats\s+new|changelog|what\s+changed)\s*[?!.]*$", re.I)
+_VERSION_ASK = re.compile(
+    r"^(?:what|which)\s+version\s+are\s+you(?:\s+running)?\s*[?!.]*$", re.I
+)
+
+
+def _surface(text: str) -> Intent | None:
+    """Message verbs, the inbox, groups, and questions about herself."""
+    original = _tidy(_lead(_tidy(text)))
+    folded = original.lower()
+    if not folded or len(folded) > 70:
+        return None
+
+    match = _FORWARD.match(original)
+    if match:
+        who = _who(match.group("who"))
+        if who:
+            return Intent(lines=(f"forward {who}",), label="msg", detail=f"forward · {who}")
+
+    match = _COPY.match(original)
+    if match:
+        who = _who(match.group("who"))
+        if who:
+            return Intent(lines=(f"copy {who}",), label="msg", detail=f"copy · {who}")
+
+    match = _REPLY_TO.match(original)
+    if match:
+        body = match.group("body").strip(' .,!؟"\'')
+        if body and len(body) > 1:
+            return Intent(lines=(f"reply {body}",), label="msg", detail="reply")
+
+    match = _EDIT_TO.match(original)
+    if match:
+        body = match.group("body").strip(' .,!؟"\'')
+        if body and len(body) > 1:
+            return Intent(lines=(f"edit {body}",), label="msg", detail="edit")
+
+    if _DELETE_THAT.match(folded):
+        return Intent(lines=("delete",), label="msg", detail="delete")
+    if _PIN_THAT.match(folded):
+        return Intent(lines=("pin",), label="msg", detail="pin")
+
+    if _INBOX_ASK.match(folded):
+        return Intent(lines=("inbox",), label="inbox", detail="inbox")
+    if _UNREAD_ASK.match(folded):
+        return Intent(lines=("unread",), label="inbox", detail="unread")
+
+    match = _READ_ASK.match(original)
+    if match:
+        who = _who(match.group("who"))
+        if who:
+            return Intent(lines=(f"read {who}",), label="inbox", detail=f"read · {who}")
+
+    match = _WHOIS_ASK.match(original)
+    if match:
+        who = match.group("who").strip(" .,!?")
+        if who and who.lower() not in _NOISE:
+            return Intent(lines=(f"whois {who}",), label="inbox", detail=f"whois · {who}")
+
+    if _GROUPS_ASK.match(folded):
+        return Intent(lines=("groups",), label="chats", detail="groups")
+
+    if _DOCTOR_ASK.match(folded):
+        return Intent(lines=("diagnose",), label="self", detail="diagnose")
+    if _REPAIR_ASK.match(folded):
+        return Intent(lines=("repair",), label="self", detail="repair")
+    if _WHY_ASK.match(folded):
+        return Intent(lines=("why",), label="self", detail="why")
+    if _NEWS_ASK.match(folded):
+        return Intent(lines=("news",), label="self", detail="news")
+    if _VERSION_ASK.match(folded):
+        return Intent(lines=("version",), label="self", detail="version")
+    return None
+
+
+# ---------------------------------------------------------------------------
 # The toolbox: sending, reacting, ignoring, timelines
 # ---------------------------------------------------------------------------
 # These are the sentences he actually types at his phone, and they are the ones a
@@ -719,7 +850,10 @@ _SEND_FIRST = re.compile(
 )
 _SEND_TO = re.compile(
     r"^(?:please\s+)?(?:can you\s+|could you\s+)?"
-    r"(?:send|forward|pass|deliver)\s+(?P<body>.+?)\s+(?:to|for)\s+(?P<who>.+)$",
+    r"(?:send|forward|pass|deliver)\s+"
+    # "forward this to Sara" is a *forward* of a real message, not a send of the
+    # word "this": the demonstrative hands it to `_surface`.
+    r"(?!(?:this|that|it)\s+(?:to|for)\b)(?P<body>.+?)\s+(?:to|for)\s+(?P<who>.+)$",
     re.I,
 )
 _SAY_IN = re.compile(
@@ -1090,6 +1224,10 @@ def detect(
     reached = _reach(text, allow_plan=allow_plan)
     if reached is not None:
         return reached
+
+    surface = _surface(text)
+    if surface is not None:
+        return surface
 
     # Clock is the one the owner says most, and it has its own subcommands. It is
     # also the one that must not misfire: "do you like the clock on my profile?"

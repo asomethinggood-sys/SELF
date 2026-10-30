@@ -9,8 +9,15 @@ account other than the logged-in user.
 `.` in the usage column stands for the active prefix (default `.`).
 
 
-Total: **82 commands**.
+Total: **108 commands**.
 
+
+## Account
+
+| Command | Description | Usage | Aliases |
+| --- | --- | --- | --- |
+| `.endsession` | Sign one of those devices out _(owner only; changes state; asks for confirmation)._ | `.endsession <number from .sessions>` | — |
+| `.sessions` | Every device signed into this account _(owner only)._ | `.sessions` | `.devices` |
 
 ## Ai
 
@@ -18,12 +25,25 @@ Total: **82 commands**.
 | --- | --- | --- | --- |
 | `.ai` | Every AI model and key, with today's budgets _(owner only)._ | `.ai [model <n|name|auto>|key [add <key>|rm <label>]|test|reset]` | `.models`, `.model`, `.keys` |
 
+## Chats
+
+| Command | Description | Usage | Aliases |
+| --- | --- | --- | --- |
+| `.folder` | Your Telegram folders _(owner only)._ | `.folder [list]` | `.folders` |
+| `.groups` | Your groups, with member counts _(owner only)._ | `.groups [count]` | `.guilds` |
+| `.invite` | An invite link for a chat, revocable from Telegram _(owner only; changes state)._ | `.invite <chat>` | — |
+| `.join` | Join a chat by the link you were given _(owner only; changes state)._ | `.join <t.me link>` | — |
+| `.members` | Who is in a group, admins first _(owner only)._ | `.members <chat>` | — |
+| `.mute` | Silence a chat for a while, or forever _(owner only; changes state)._ | `.mute <chat> [1h|2d|forever]` | — |
+| `.unmute` | Let a chat be loud again _(owner only; changes state)._ | `.unmute <chat>` | — |
+
 ## Core
 
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
 | `.about` | Show version and capability summary _(owner only)._ | `.about` | `.درباره` |
 | `.commands` | List every available command _(owner only)._ | `.commands [page]` | `.فرمان‌ها`, `.دستورها` |
+| `.diagnose` | Connection, scheduler, model, database, queue, last error _(owner only)._ | `.diagnose` | `.doctor`, `.health` |
 | `.diagnostics` | Detailed runtime diagnostics _(owner only)._ | `.diagnostics` | `.diag`, `.عیب‌یابی` |
 | `.dryrun` | Turn preview-only mode on or off _(owner only; changes state)._ | `.dryrun [on|off|status]` | `.آزمایشی` |
 | `.feature` | Enable or disable a feature _(owner only; changes state)._ | `.feature <name> <on|off>` | `.قابلیت` |
@@ -31,10 +51,14 @@ Total: **82 commands**.
 | `.help` | Show help for all commands or one command _(owner only)._ | `.help [command]` | `.?`, `.کمک`, `.راهنما` |
 | `.id` | Show ids for this chat, message and sender _(owner only)._ | `.id` | `.ids`, `.شناسه` |
 | `.lang` | Change the interface language _(owner only; changes state)._ | `.lang [en|fa|auto|status] or [chat|user] <lang>` | `.language`, `.زبان` |
+| `.news` | The version, and what the last runs actually did _(owner only)._ | `.news` | `.changelog`, `.whatsnew` |
 | `.ping` | Measure database and reply latency _(owner only)._ | `.ping` | `.پینگ` |
+| `.repair` | Clear stuck jobs, abandoned flows, expired dedupe and wedged cooldowns _(owner only; changes state)._ | `.repair` | `.fix`, `.heal` |
 | `.settings` | Open the menu: language, prefix, dry run, quiet hours, features _(owner only)._ | `.settings` | `.menu`, `.prefs`, `.تنظیمات` |
 | `.status` | Short status dashboard _(owner only)._ | `.status` | `.وضعیت` |
 | `.stop` | Emergency stop for all automation _(owner only; changes state)._ | `.stop [on|resume|status]` | `.توقف` |
+| `.version` | Version, Python, schema and command count _(owner only)._ | `.version` | `.ver` |
+| `.why` | Why she did not answer: the last gate, the counters, the last error _(owner only)._ | `.why` | — |
 
 ## Detection & automation
 
@@ -58,6 +82,16 @@ Total: **82 commands**.
 | `.quote` | Show a random short quote _(owner only)._ | `.quote` | `.جمله` |
 | `.random` | Random number or UUID _(owner only)._ | `.random [low] [high] | uuid` | `.تصادفی` |
 | `.roast` | Roast the message you replied to _(owner only; feature `roasts`)._ | `.roast [mild|medium|spicy] [text] [--ai]` | `.burn`, `.ریست`, `.خاک‌برسر` |
+
+## Inbox
+
+| Command | Description | Usage | Aliases |
+| --- | --- | --- | --- |
+| `.inbox` | The last private chats: who, when, how many unread — never the words _(owner only)._ | `.inbox [count]` | `.dms`, `.messages` |
+| `.people` | Everyone in her book: name, tone, whether she answers their DMs _(owner only)._ | `.people` | — |
+| `.read` | What was said in one conversation, summarised; --raw for the lines _(owner only)._ | `.read <who> [--limit n] [--raw]` | `.convo`, `.transcript` |
+| `.unread` | Every private chat with something waiting in it _(owner only)._ | `.unread` | `.unanswered` |
+| `.whois` | Everything she knows about one person _(owner only)._ | `.whois <who>` | `.who` |
 
 ## Information
 
@@ -104,6 +138,18 @@ Total: **82 commands**.
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
 | `.pic` | Send a picture or file (path or URL); several files become an album _(owner only; changes state)._ | `.pic <path|url> [...] [--caption text] [--to chat] [--silent]` | `.image`, `.photo`, `.file`, `.sendfile`, `.عکس`, `.تصویر` |
+
+## Messages
+
+| Command | Description | Usage | Aliases |
+| --- | --- | --- | --- |
+| `.copy` | Send the same words somewhere else, with no forward header _(owner only; changes state; reply required)._ | `.copy <to>` | — |
+| `.delete` | Delete the message you replied to _(owner only; changes state; asks for confirmation; reply required)._ | `.delete [--yes]` | `.del`, `.rm` |
+| `.edit` | Change a message she sent _(owner only; changes state; reply required)._ | `.edit <new text>` | — |
+| `.forward` | Forward the message you replied to, header and all _(owner only; changes state; reply required)._ | `.forward <to>` | `.fwd` |
+| `.pin` | Pin the message you replied to _(owner only; changes state; reply required)._ | `.pin [--silent]` | — |
+| `.reply` | Answer the message you replied to, in this chat _(owner only; changes state; reply required)._ | `.reply <text>` | `.ans` |
+| `.unpin` | Unpin the message you replied to, or the chat's pin _(owner only; changes state)._ | `.unpin [--all]` | — |
 
 ## Messaging
 

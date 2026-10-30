@@ -419,6 +419,57 @@ def build_tools(runtime: Any) -> list[Tool]:
             risk="medium",
         )
     )
+    async def read_chat(turn: Turn, args: dict[str, str]) -> ActionResult:
+        """The last few lines of one conversation, for answering "what did she say"."""
+        who = (args.get("who") or "").strip()
+        if not who:
+            return ActionResult(False, detail="a chat is needed", kind="bad_args")
+        target = await runtime.reach.resolve(who)
+        if target is None:
+            return ActionResult(False, detail=f"no chat called {who!r}", kind="unknown_target")
+        try:
+            limit = max(1, min(int(args.get("limit") or 12), 50))
+        except ValueError:
+            limit = 12
+        getter = getattr(runtime.client, "get_messages", None)
+        if getter is None:
+            return ActionResult(False, detail="no Telegram connection", kind="offline")
+        try:
+            rows = list(await getter(target.id, limit=limit) or [])
+        except Exception as exc:  # noqa: BLE001 - the note carries it
+            return ActionResult(False, detail=str(exc)[:200], kind="failed")
+        if not rows:
+            return ActionResult(True, note=f"nothing in {target.label} yet")
+        lines = []
+        for message in reversed(rows):
+            text = (
+                getattr(message, "raw_text", None)
+                or getattr(message, "text", None)
+                or f"[{getattr(message, 'media', None) and 'media' or 'empty'}]"
+            )
+            who_said = "them" if not getattr(message, "out", False) else "him"
+            lines.append(f"{who_said}: {str(text)[:200]}")
+        return ActionResult(
+            True,
+            note=f"{target.label}: " + " | ".join(lines[-12:]),
+            title=_t(runtime, turn, "inbox.read_header", name=target.label, count=len(lines)),
+            lines=tuple(line[:200] for line in lines[-3:]),
+        )
+
+    tools.append(
+        Tool(
+            name="read_chat",
+            summary="read the last few messages of one conversation (for 'what did Sara say')",
+            properties={
+                "who": "@handle, a name from his chats, saved, or an id",
+                "limit": "how many messages (default 12, max 50)",
+            },
+            required=("who",),
+            run=read_chat,
+            scope="read",
+        )
+    )
+
     tools.append(
         Tool(
             name="plan",

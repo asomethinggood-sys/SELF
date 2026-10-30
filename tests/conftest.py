@@ -147,6 +147,8 @@ class FakeClient:
         self.edits: list[tuple[Any, Any, str]] = []
         self.deleted: list[tuple[Any, Any]] = []
         self.forwarded: list[Any] = []
+        self.pinned: list[tuple[Any, Any, bool]] = []
+        self.unpinned: list[tuple[Any, Any]] = []
         self.raw_requests: list[Any] = []
         self.dialogs: list[Any] = []
         self.history: list[FakeMessage] = []
@@ -190,6 +192,12 @@ class FakeClient:
     async def forward_messages(self, to_chat: Any, message: Any, from_chat: Any) -> Any:
         self.forwarded.append((to_chat, message, from_chat))
         return message
+
+    async def pin_message(self, entity: Any, message: Any, notify: bool = False) -> None:
+        self.pinned.append((entity, message, notify))
+
+    async def unpin_message(self, entity: Any, message: Any = None) -> None:
+        self.unpinned.append((entity, message))
 
     async def get_messages(self, entity: Any = None, **kwargs: Any) -> list[FakeMessage]:
         if kwargs.get("ids") is not None:
