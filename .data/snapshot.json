@@ -1,6 +1,6 @@
 {
   "app": "havoc",
-  "created_at": "2026-10-30T09:23:05+00:00",
+  "created_at": "2026-10-30T09:33:06+00:00",
   "tables": {
     "aliases": [],
     "autoreplies": [],
@@ -156,13 +156,13 @@
       },
       {
         "key": "ai.usage",
-        "updated_at": "2026-10-30T09:20:55+00:00",
-        "value": "{\"2b9beacf67a2|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-30\",\"count\":31},\"e8bfd373256a|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-30\",\"count\":30}}"
+        "updated_at": "2026-10-30T09:31:12+00:00",
+        "value": "{\"2b9beacf67a2|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-30\",\"count\":34},\"e8bfd373256a|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-30\",\"count\":34}}"
       },
       {
         "key": "ai.health",
-        "updated_at": "2026-10-30T09:20:55+00:00",
-        "value": "{\"2b9beacf67a2\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":45,\"failures\":0},\"e8bfd373256a\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":43,\"failures\":0},\"90d9d7b7c27e\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"rate_limited: HTTP 429: {\\\"error\\\":{\\\"message\\\":\\\"Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day\\\",\\\"code\\\":429,\\\"metadata\\\":{\\\"headers\\\":{\\\"X-RateLimit-Limit\\\":\\\"50\\\",\\\"X-RateLimit-Remaining\\\":\\\"0\\\",\\\"X-RateLimit-Reset\\\":\\\"1793318400000\\\"},\\\"limit_source\\\":\\\"openrouter_fre\",\"successes\":0,\"failures\":1},\"bcf26c2f3c33\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":1,\"failures\":0}}"
+        "updated_at": "2026-10-30T09:31:12+00:00",
+        "value": "{\"2b9beacf67a2\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":48,\"failures\":0},\"e8bfd373256a\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":47,\"failures\":0},\"90d9d7b7c27e\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"rate_limited: HTTP 429: {\\\"error\\\":{\\\"message\\\":\\\"Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day\\\",\\\"code\\\":429,\\\"metadata\\\":{\\\"headers\\\":{\\\"X-RateLimit-Limit\\\":\\\"50\\\",\\\"X-RateLimit-Remaining\\\":\\\"0\\\",\\\"X-RateLimit-Reset\\\":\\\"1793318400000\\\"},\\\"limit_source\\\":\\\"openrouter_fre\",\"successes\":0,\"failures\":1},\"bcf26c2f3c33\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":1,\"failures\":0}}"
       },
       {
         "key": "clock.timezone",
@@ -191,8 +191,8 @@
       },
       {
         "key": "yura.own_ids.-1002274583096",
-        "updated_at": "2026-10-30T09:20:56+00:00",
-        "value": "[68812,68820,68844,68851,68855,68858,68860,68865,68870,68876,68880,68884,68892,68896,68898,68901,68909,68912,68918,68919,68922,68930,68934,68938,68941,68945,68953,68957,68965]"
+        "updated_at": "2026-10-30T09:31:12+00:00",
+        "value": "[68812,68820,68844,68851,68855,68858,68860,68865,68870,68876,68880,68884,68892,68896,68898,68901,68909,68912,68918,68919,68922,68930,68934,68938,68941,68945,68953,68957,68965,68993,68996,68998,69002,69004,69007]"
       }
     ],
     "templates": [],
