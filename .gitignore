@@ -55,3 +55,6 @@ Thumbs.db
 
 # --- Local notes (not part of the project) ---
 .runtime/
+
+# --- Pictures the owner drops in for the agent to read (not shipped) ---
+google_drive/

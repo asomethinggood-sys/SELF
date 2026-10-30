@@ -207,9 +207,9 @@ async def test_a_stranger_gets_a_rude_prompt_and_the_owner_does_not(runtime) -> 
     await _enable(runtime)
     await runtime.persona_replies.on_group_message(_event("yura what's up"))
     prompt = _prompt(runtime)
-    assert "not the owner" in prompt
+    assert "not him" in prompt
     assert "be rude with them" in prompt
-    assert "never call them the pet names" in prompt
+    assert "never his pet names" in prompt
 
 
 async def test_the_owners_own_chat_gets_the_soft_rule(runtime) -> None:
@@ -229,7 +229,7 @@ async def test_switching_a_person_to_nice_changes_the_prompt(runtime) -> None:
     await runtime.people.set_tone(FRIEND, "nice")
     await runtime.persona_replies.on_group_message(_event("yura hello"))
     prompt = _prompt(runtime)
-    assert "be kind with them" in prompt
+    assert "be kind to them" in prompt
     assert "be rude with them" not in prompt
 
 

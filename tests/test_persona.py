@@ -645,7 +645,7 @@ async def test_asking_for_code_buys_the_model_more_tokens(runtime) -> None:
     plain = StubProvider(["mrrp."])
     runtime.ai = plain
     await invoke(runtime, ".yura how was your day")
-    assert plain.last_max_tokens == 700, "ordinary chat must not ask for a program's budget"
+    assert plain.last_max_tokens == 420, "ordinary chat must not ask for a program's budget"
 
 
 async def test_a_truncated_file_block_is_salvaged_not_dropped(runtime) -> None:
@@ -709,3 +709,106 @@ async def test_another_bare_command_still_needs_its_own_subcommand(runtime) -> N
     assert handler._bare_command("poem poets") is not None
     assert handler._bare_command("poem nonsense words here") is None
     assert handler._bare_command("yura nonsense words here") is not None
+
+
+# ---------------------------------------------------------------------------
+# The two failures he reported in the same message: repetition, and the notes
+# ---------------------------------------------------------------------------
+def test_she_is_told_which_lines_are_used_up() -> None:
+    block = persona.repeat_prompt(["mineminemine", "پاشو برو گمشو پی کارت"], "en")
+    assert "already said these" in block
+    assert "mineminemine" in block
+    assert "پاشو برو گمشو پی کارت" in block
+
+
+def test_the_used_up_block_is_silent_when_there_is_nothing_to_avoid() -> None:
+    assert persona.repeat_prompt((), "en") == ""
+    assert persona.repeat_prompt(["", "   "], "fa") == ""
+
+
+def test_the_used_up_block_speaks_persian_in_persian() -> None:
+    block = persona.repeat_prompt(["گمشو"], "fa")
+    assert "دوباره‌شان نگو" in block
+    assert "already said" not in block
+
+
+@pytest.mark.parametrize(
+    "leak",
+    [
+        "## the room",
+        "- you are in the group \"General\", not a private chat.",
+        "- it is Ali talking, not him. be rude with them: short, dry.",
+        "- answer in your own words.",
+        "▰▰▰▱▱ attention · 70%",
+        "[[remember: he hates cilantro]]",
+        "## اتاق",
+        "- در گروه «General» هستی، نه چت خصوصی.",
+        "با حرف خودت جواب بده",
+    ],
+)
+def test_a_prompt_leak_never_reaches_the_chat(leak: str) -> None:
+    assert escape_hatch(leak) == ""
+
+
+def escape_hatch(text: str) -> str:
+    """``strip_leaks`` with the empty-line cleanup the caller does."""
+    return persona.strip_leaks(text).strip()
+
+
+def test_the_real_answer_survives_the_leak_filter() -> None:
+    reply = "## the room\n- it is Ali talking, not him.\n\nبزن به چاک، حوصله ندارم.\n\n>_<"
+    cleaned = persona.strip_leaks(reply)
+    assert "بزن به چاک" in cleaned
+    assert ">_<" in cleaned
+    assert "Ali" not in cleaned
+    assert "the room" not in cleaned
+
+
+def test_an_ordinary_answer_is_left_alone() -> None:
+    reply = "*باشه* بابا، **خریدم**\n\n> نقل قول از حافظ\n\n- یکی\n- دو تا"
+    assert persona.strip_leaks(reply) == reply
+
+
+async def test_the_room_block_is_the_only_room_block(runtime) -> None:
+    """Room + relationship + lessons all said "not the owner" — that is confusion."""
+    prompt = persona.audience_prompt(
+        language="en",
+        chat_title="General",
+        speaker="Ali",
+        is_owner=False,
+        is_group=True,
+        transcript=("Ali: hi",),
+        tone="rude",
+        relation="his colleague",
+    )
+    assert prompt.count("## ") == 1
+    assert "not him" in prompt
+    assert "his colleague" in prompt
+    assert "one or two short lines" in prompt
+
+
+def test_the_bar_still_exists_in_his_own_chat(runtime) -> None:
+    """Removed from groups, kept where it was always meant: between the two of them."""
+    replies = runtime.persona_replies
+    replies._since_mood = 2  # this answer is the third
+    assert "attention" in replies._decorate("mrrp", is_private=True).lower()
+    replies._since_mood = 2
+    assert replies._decorate("mrrp", is_private=False) == "mrrp"
+
+
+def test_a_reply_that_stops_mid_word_is_cut_to_the_last_sentence() -> None:
+    """A message that just ends was reported as "it crops messages"."""
+    complete = "این یک جملهٔ کامل است. " * 8
+    cut = complete + "و بعد یک جملهٔ نصفه که هیچ‌وقت"
+    assert persona.finish_sentence(cut).endswith(".")
+    assert "نصفه" not in persona.finish_sentence(cut)
+
+
+def test_a_short_reply_is_never_touched() -> None:
+    for line in (">_<", "مگه دروغ میگم؟!", "باشه", "go away ♡"):
+        assert persona.finish_sentence(line) == line
+
+
+def test_a_long_reply_that_ends_cleanly_is_left_alone() -> None:
+    fine = "این یک جملهٔ کامل است. " * 8
+    assert persona.finish_sentence(fine) == fine.rstrip()

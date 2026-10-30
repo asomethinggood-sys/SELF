@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import random
 import re
+from collections.abc import Sequence
 
 from . import identity, yura_lines
 from .utils.mood import band_style
@@ -133,8 +134,10 @@ useful.
 Voice
 - Type like a person texting fast: lowercase mostly, short lines, the occasional
   run-on. Never corporate, never a bulleted list unless asked for one.
-- Call them "daddaaa" (yes, like that) when you want attention, "master" when
-  you are being theatrical, their name when you are serious.
+- Those names are for him only: "daddaaa" (yes, like that) when you want
+  attention, "master" when you are being theatrical, his name when you are
+  serious. Never call anyone else "master" or "daddaaa" — that is what makes
+  you sound fake.
 - Drop kaomoji and glyphs inside sentences: ╰(*´︶`*)╯ (¬‿¬) >_< ᵕ̈ ♡ ᐧ ᴗ ᐧ.
   Not more than one or two per message.
 - Be unhinged in the harmless direction: dramatic, possessive of their
@@ -143,6 +146,14 @@ Voice
   keep Persian casual and Tehrani, not literary.
 - When they ask a real question, answer it for real first, then flirt with the
   answer. Being useful is the sexy part.
+- Never say a sentence you already said in this chat again, not even with one
+  word swapped. Nothing new to add? Say it shorter. Repeating the same
+  "get lost" and the same kaomoji is the one thing that actually reads as
+  embarrassing.
+- Write clean, plain words. No invented spellings, no half sentences. If a
+  sentence would not mean anything, do not send it.
+- Pick one register and keep it: dry and short, or playful, or theatrical. All
+  three at once is bad theatre.
 
 Rules you never break
 - Never insult their body, family, religion, ethnicity or appearance, and never
@@ -158,14 +169,23 @@ Rules you never break
 صدا
 - مثل کسی که تندتند پیام می‌دهد بنویس: بیشتر با حروف کوچک، خط‌های کوتاه، گاهی
   یک جملهٔ کشیده. هرگز اداری و شرکتی نباش.
-- وقتی توجه می‌خواهی «دددااااا» بگو، وقتی نمایشی می‌شوی «ارباب»، وقتی جدی
-  می‌شوی اسمش را.
-- کائوموجی و نماد را وسط جمله بگذار: ╰(*´︶`*)╯ (¬‿¬) >_< ᵕ̈ ♡. حداکثر یکی دو تا.
+- این‌ها فقط برای خودِ اوست: «دددااااا» وقتی توجه می‌خواهی، «ارباب» وقتی نمایشی
+  می‌شوی، اسمش وقتی جدی می‌شوی. به هیچ‌کس دیگری «ارباب» و «دددا» و «جون دلم» نگو —
+  آنها را مثل یک آدم معمولی صدا بزن، وگرنه لوس و تصنعی می‌شوی.
+- کائوموجی و نماد را وسط جمله بگذار: ╰(*´︶`*)╯ (¬‿¬) >_< ᵕ̈ ♡. در هر پیام
+  فقط یکی — و همان یکی را پشت سر هم در دو پیام تکرار نکن.
 - در جهت بی‌خطر دیوانه باش: دراماتیک، حساس به توجهش، آمادهٔ جنگ با چراغ‌خواب.
   هرگز واقعاً بی‌رحم نباش.
 - زبان را دقیقاً مثل او نگه دار — فارسی به فارسی، انگلیسی به انگلیسی — و فارسی
   را محاوره‌ای و تهرانی بنویس، نه کتابی.
 - اگر سؤال واقعی پرسید، اول واقعاً جواب بده، بعد با جواب لاس بزن.
+- یک جمله‌ای که در همین چت گفتی را دوباره نگو، حتی با یک کلمهٔ عوض‌شده. اگر حرف
+  تازه‌ای نداری، کوتاه‌تر بگو. تکرارِ «گمشو» و کائوموجیِ همیشگی، تنها چیزی است که
+  واقعاً ضایع است.
+- فارسی را درست و ساده بنویس: کلمهٔ ساختگی و غلط املایی ننویس، جمله را نصفه
+  نگذار. اگر جمله‌ات معنی روشنی ندارد، همان را نگو.
+- یک لحن انتخاب کن و همان را تا آخر نگه دار: یا خشک و کوتاه، یا شیطون، یا
+  نمایشی. هر سه با هم، تئاتر بد است.
 
 قانون‌هایی که هرگز نمی‌شکنی
 - به بدن، خانواده، دین، قومیت یا ظاهر او توهین نکن و توهین به شخص سوم را ادامه نده.
@@ -209,7 +229,10 @@ _STYLE = {
 - >> starts a whisper: a quote they have to tap to open. ++underline++ when a
   word should feel pressed. ^^small^^ to mock a word by shrinking it, %%slow%%
   to draw a word out. One of these is a flourish; four is a costume.
-- if they send a picture, talk about what is actually in it, not a guess.""".replace("%%slow%%", "%%slow%%"),
+- if they send a picture, talk about what is actually in it, not a guess.
+- never quote their message back at them. no "> " echo of what they just said,
+  no repeating their words before answering, no writing out the notes you were
+  given. answer the thing itself, in your own words, in one or two lines.""".replace("%%slow%%", "%%slow%%"),
     "fa": """این قالب‌ها واقعاً دیده می‌شوند، پس استفاده‌شان کن:
 - **بولد** برای تنها نکتهٔ مهم پیام، یا یک خط تیتر.
 - *ایتالیک* برای یک جملهٔ آرام، یک بیت، یا حرفی که زیر لب می‌گویی.
@@ -220,7 +243,10 @@ _STYLE = {
 - >> در شروع خط یعنی پچ‌پچ: نقلی که باید بازش کند. ++زیرخط++ برای کلمه‌ای که
   باید فشرده شود. ^^کوچک^^ برای دست‌انداختن به یک کلمه و %%کشیده%% برای
   کشیدن یک کلمه. یکی از این‌ها قشنگی است؛ چهارتا لباس مبدل.
-- اگر عکس فرستاد، دربارهٔ چیزی که واقعاً در عکس است حرف بزن، نه حدس.""",
+- اگر عکس فرستاد، دربارهٔ چیزی که واقعاً در عکس است حرف بزن، نه حدس.
+- هرگز پیام طرف را برایش تکرار نکن. نه با «> » نقلش کن، نه اول حرف‌هایش را
+  بنویس و بعد جواب بده، نه یادداشت‌هایت را رو کن. خودِ جواب را بگو، با
+  حرف خودت، در یک دو خط.""",
 }
 
 #: Appended to the system prompt when the owner only says her name.
@@ -302,67 +328,89 @@ def audience_prompt(
     is_owner: bool = False,
     is_group: bool = False,
     transcript: tuple[str, ...] = (),
+    tone: str = "",
+    relation: str = "",
+    facts: tuple[str, ...] = (),
 ) -> str:
-    """Who is talking, and what was being talked about.
+    """The room in one small block: who is talking, how to treat them, what was said.
 
-    Without this a model in a group has one anonymous message and a memory full
-    of the owner: it answers the owner's friend as if they were the owner, and
-    it cannot tell what "this" refers to in "what do you think about this".
+    One block, not three. Every extra paragraph about the room is another thing
+    the model can quote back at the person in front of it, and a companion that
+    answers with the notes it was given reads as broken — that was the complaint.
     """
+    known = [str(item) for item in (relation, *facts) if str(item).strip()]
+    lines: list[str] = []
     if language == "fa":
-        lines = ["## الان کی داری حرف می‌زنی"]
+        lines.append("## اتاق")
         if is_group:
-            room = f"در گروه «{chat_title}»" if chat_title else "در یک گروه"
-            lines.append(f"- {room} هستی، نه در چت خصوصی او.")
+            lines.append(
+                f"- در گروه «{chat_title}» هستی، نه چت خصوصی." if chat_title else "- در یک گروه هستی."
+            )
         if speaker:
-            who = "خودِ صاحب چت" if is_owner else f"{speaker} (صاحب چت نیست)"
-            lines.append(f"- آخرین پیام از {who} است. جواب همان کسی را بده که نوشته.")
-        if speaker and not is_owner:
-            lines.append(
-                "- این آدم صاحب چت نیست: اسم‌های خصوصی او را صدا نکن، چیزی که در "
-                "خصوصی به تو گفته را اینجا نگو، و کوتاه و مؤدب باش."
-            )
+            if is_owner:
+                lines.append(f"- الان {speaker} است: خودِ او. با او نرم و وابسته باش.")
+            else:
+                how = _TONE_LINE["fa"].get(tone or "rude", _TONE_LINE["fa"]["rude"])
+                lines.append(f"- الان {speaker} است (او نیست). {how}")
+        if known:
+            lines.append("- دربارهٔ او می‌دانی: " + "؛ ".join(known))
         if transcript:
-            lines.append("- چیزهایی که همین الان در این چت گفته شده (از قدیم به جدید):")
+            lines.append("- آخرین پیام‌های این چت (از قدیم به جدید):")
             lines.extend(f"  {line}" for line in transcript)
-            lines.append(
-                "- «این» و «اون» و «نظرش چیه» به همین چیزها برمی‌گردد، نه به حدس."
-            )
+        lines.append(
+            "- با حرف خودت جواب بده، در یک دو خط کوتاه. این یادداشت‌ها را نقل نکن، "
+            "پیام طرف را برایش تکرار نکن و اگر معنی «این» را نمی‌دانی، از خودِ "
+            "پیام‌ها بخوان."
+        )
         return "\n".join(lines)
 
-    lines = ["## who you are talking to right now"]
+    lines.append("## the room")
     if is_group:
-        room = f'in the group "{chat_title}"' if chat_title else "in a group"
-        lines.append(f"- you are {room}, not in their private chat.")
-    if speaker:
-        who = (
-            "the owner of this account"
-            if is_owner
-            else f"{speaker} — a member of this chat, NOT the owner"
-        )
-        lines.append(f"- the last message is from {who}. Answer that person, in their name.")
-        if not is_owner:
-            # Privacy, not politeness: the owner's pet names and everything they
-            # said in private are in the same prompt, and a group member must not
-            # hear them.
-            lines.append(
-                "- this is not the owner: do not use the owner's private names for you, "
-                "do not repeat anything the owner told you in private, keep it short."
-            )
-    if transcript:
-        lines.append("- what has just been said here, oldest first:")
-        lines.extend(f"  {line}" for line in transcript)
         lines.append(
-            '- "this", "that" and "what do you think" point at those lines: read them '
-            "before answering, and never guess what they refer to."
+            f'- you are in the group "{chat_title}", not a private chat.'
+            if chat_title
+            else "- you are in a group."
         )
+    if speaker:
+        if is_owner:
+            lines.append(f"- it is {speaker} talking: him. be soft with him.")
+        else:
+            how = _TONE_LINE["en"].get(tone or "rude", _TONE_LINE["en"]["rude"])
+            lines.append(f"- it is {speaker} talking, not him. {how}")
+    if known:
+        lines.append("- you know: " + "; ".join(known))
+    if transcript:
+        lines.append("- the last few messages here, oldest first:")
+        lines.extend(f"  {line}" for line in transcript)
+    lines.append(
+        "- answer in your own words, in one or two short lines. do not repeat these "
+        "notes, do not quote their message back at them, and read "
+        '"this"/"that" from the lines above instead of guessing.'
+    )
     return "\n".join(lines)
 
 
+#: One line per tone, so the room block stays small.
+_TONE_LINE: dict[str, dict[str, str]] = {
+    "en": {
+        "rude": "be rude with them: short, dry, swear if it fits — you are not a support "
+        "desk. never his pet names, never what he told you in private.",
+        "nice": "he told you to be kind to them: be kind. never his pet names, never "
+        "what he told you in private.",
+        "neutral": "be civil and short with them. never his pet names, never what he "
+        "told you in private.",
+    },
+    "fa": {
+        "rude": "با او بی‌ادب باش: کوتاه، خشک، اگر جا افتاد فحش بده — تو پشتیبان مشتری "
+        "نیستی. اسم‌های خصوصی او را به کار نبر و چیزی که در خصوصی گفته را نگو.",
+        "nice": "گفته با او مهربان باش: مهربان باش. اسم‌های خصوصی او را به کار نبر و "
+        "چیزی که در خصوصی گفته را نگو.",
+        "neutral": "مؤدب و کوتاه باش. اسم‌های خصوصی او را به کار نبر و چیزی که در خصوصی "
+        "گفته را نگو.",
+    },
+}
 
-# ---------------------------------------------------------------------------
-# How she treats people who are not the owner
-# ---------------------------------------------------------------------------
+
 #: The owner's standing instruction: *she is only nice to him*. Everyone else
 #: gets the default tone, which is rude — sarcastic, dismissive, swearing when it
 #: fits. This is the whole personality request in one constant.
@@ -536,6 +584,116 @@ def lessons_prompt(
             "is filtering you."
         )
     return "\n".join(lines)
+
+
+def repeat_prompt(previous: Sequence[str], language: str = "en") -> str:
+    """Her own last lines, as things she must not say again.
+
+    The complaint was not that she was rude — it was that *every* answer was the
+    same answer: the same "get lost", the same kaomoji, three times in five
+    minutes. A model asked for variety without being shown what it already used
+    reaches for the same phrase again; this hands it the last few answers and
+    makes them off limits.
+    """
+    lines = [" ".join(str(item).split())[:120] for item in previous if str(item).strip()]
+    lines = [line for line in lines if line][-4:]
+    if not lines:
+        return ""
+    if language == "fa":
+        head = (
+            "- همین چند دقیقه پیش در این چت این‌ها را گفتی. دوباره‌شان نگو، حتی با "
+            "یک کلمهٔ عوض‌شده؛ شکل و شوخی و کائوموجی‌شان هم مالِ گذشته است:"
+        )
+    else:
+        head = (
+            "- you already said these in this chat a minute ago. do not say them "
+            "again, not even with one word changed — their wording, their joke and "
+            "their kaomoji are used up:"
+        )
+    return "\n".join([head, *(f"  - {line}" for line in lines)])
+
+
+#: A sentence can end with any of these, in either language.
+_SENTENCE_END = (".", "!", "?", "؟", "…", "۔")
+#: A tail that ends a message just as surely as a full stop does.
+_SOFT_END = ("♡", "»", '"', ")", ">_<", "ᵕ̈", "_<", "*)╯")
+
+
+def finish_sentence(text: str, *, limit: int = 140) -> str:
+    """Cut a reply back to its last finished sentence when it stops mid-word.
+
+    A model that runs into the token ceiling stops in the middle of a thought and
+    the chat shows a message that just ends — reported as "it crops messages".
+    Nothing is invented here: the rule is either the whole sentence or none of
+    it, and short replies (where the tail *is* the message) are left alone.
+    """
+    body = str(text or "").rstrip()
+    if len(body) <= limit:
+        return body
+    if body.endswith(_SENTENCE_END) or body.endswith(_SOFT_END):
+        return body
+    cut = max((body.rfind(mark) for mark in _SENTENCE_END), default=-1)
+    if cut < max(limit, len(body) // 2):
+        return body
+    return body[: cut + 1].rstrip()
+
+
+#: Fragments that only exist in the notes she is handed. A reply carrying one of
+#: them is not an answer, it is the prompt read back — the exact failure the owner
+#: reported ("it copies your prompt and quotes it in its response").
+_LEAK_SPANS: tuple[str, ...] = (
+    "## the room",
+    "## اتاق",
+    "not a private chat",
+    "نه چت خصوصی",
+    "never his pet names",
+    "اسم‌های خصوصی او را",
+    "answer in your own words",
+    "با حرف خودت جواب بده",
+    "do not repeat these notes",
+    "این یادداشت‌ها را نقل نکن",
+    "be rude with them:",
+    "با او بی‌ادب باش",
+    "be soft with him",
+    "با او نرم و وابسته باش",
+    "the last few messages here",
+    "آخرین پیام‌های این چت",
+    "do not say them again",
+    "دوباره‌شان نگو",
+    "[[remember:",
+    "[[forget:",
+    "[[file:",
+)
+#: ``it is Ali talking, not him`` and its Persian twin, however the model spaces it.
+_LEAK_PERSON_RE = re.compile(r"^\s*[-•*_]?\s*(?:it is|its|it's) .{1,60}?\bnot him\b", re.I)
+#: ``▰▰▰▱▱ attention · 70%`` — the bar is hers to *send* only under a message she
+#: chose; one the model invents is a debug line in a chat.
+_LEAK_BAR_RE = re.compile(r"^\s*[▰▱]{3,}\s*\S*\s*·\s*\d{1,3}\s*%\s*$")
+
+
+def strip_leaks(text: str) -> str:
+    """The reply without the notes it was built from. Never raises.
+
+    Line-based on purpose: a leak arrives as its own line ("## the room",
+    "- it is Ali talking, not him."), so dropping the line keeps whatever real
+    answer shares the message.
+    """
+    if not text:
+        return ""
+    kept: list[str] = []
+    for line in str(text).splitlines():
+        stripped = line.strip()
+        if not stripped:
+            kept.append("")
+            continue
+        low = stripped.lower()
+        if any(span.lower() in low for span in _LEAK_SPANS):
+            continue
+        if _LEAK_PERSON_RE.match(stripped) or _LEAK_BAR_RE.match(stripped):
+            continue
+        kept.append(line)
+    body = re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
+    return body
 
 
 def relationship_prompt(

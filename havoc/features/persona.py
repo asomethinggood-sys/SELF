@@ -897,12 +897,11 @@ class PersonaReplies:
         if event.is_outgoing and self._is_command(event.text):
             self._skip("command", event)
             return
-        addressed = (
-            quote.hers
-            or quote.from_account
-            or self._named(event.text)
-            or event.mentions_me
-        )
+        # Addressed means aimed at *her*: a reply to one of her messages, her name,
+        # or a mention. A reply to the owner's message used to count too, which
+        # made her answer every conversation he was having — a lot of model spend
+        # for something nobody asked her.
+        addressed = quote.hers or self._named(event.text) or event.mentions_me
         # "remember this" is itself aimed at her, even when the message is a reply
         # to someone else: she should confirm it, not silently file it. A
         # correction counts the same way — if he bothered to teach her, she
@@ -1014,7 +1013,10 @@ class PersonaReplies:
         language = await self._language(event)
         audience = await self._audience(event) if not is_private else None
         speaker = event.sender_id or (self.self_id if is_private else None)
-        owner = self.runtime.permissions.is_owner(speaker)
+        # Outgoing and not hers means it came from his account: the id can be
+        # missing on some updates, and being rude to the owner because of a
+        # missing field is the worst possible failure.
+        owner = bool(event.is_outgoing) or self.runtime.permissions.is_owner(speaker)
         person = None if owner else await self._person(speaker, audience)
         rules, reminder = await self._lessons_for(speaker)
         answer = await self.runtime.yura_chat.answer(
@@ -1038,7 +1040,10 @@ class PersonaReplies:
         )
         if answer.text:
             await self._deliver(
-                chat_id, self._decorate(_visible(answer)), event.message_id, answer.source
+                chat_id,
+                self._decorate(_visible(answer), is_private=is_private),
+                event.message_id,
+                answer.source,
             )
         for path in answer.files:
             await self.runtime.sender.send_media(
@@ -1078,8 +1083,15 @@ class PersonaReplies:
                 pass
             await sender.send(chat_id, html, reply_to=reply_to)
 
-    def _decorate(self, html: str) -> str:
-        """Sometimes a bar under the message: the body clock, made visible."""
+    def _decorate(self, html: str, *, is_private: bool = True) -> str:
+        """Sometimes a bar under the message: the body clock, made visible.
+
+        Only in his own chat. In a group the same line reads as debug output
+        leaking out of a bot — someone watching a stranger's reply has no idea
+        what "attention · 70%" is, and it was reported as exactly that.
+        """
+        if not is_private:
+            return html
         self._since_mood += 1
         if self._since_mood % self.MOOD_EVERY:
             return html

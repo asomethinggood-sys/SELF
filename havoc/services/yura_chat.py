@@ -75,7 +75,7 @@ PICTURE_SETTING = "yura.last_picture"
 
 
 def _audience_block(audience: Any, language: str) -> str:
-    """The per-turn room block, or an empty string when there is nothing to say."""
+    """The room, in one block — speaker, tone, what she knows, what was said."""
     if audience is None or not getattr(audience, "usable", False):
         return ""
     return persona.audience_prompt(
@@ -85,6 +85,9 @@ def _audience_block(audience: Any, language: str) -> str:
         is_owner=bool(getattr(audience, "is_owner", False)),
         is_group=bool(getattr(audience, "is_group", False)),
         transcript=tuple(getattr(audience, "transcript", ()) or ()),
+        tone=str(getattr(audience, "tone", "") or ""),
+        relation=str(getattr(audience, "relation", "") or ""),
+        facts=tuple(getattr(audience, "known", ()) or ()),
     )
 
 
@@ -285,10 +288,21 @@ class YuraChat:
             chat_title=chat_title,
         )
         taught = persona.lessons_prompt(language=language, rules=lessons, reminder=reminder)
-        if relationship:
-            block = f"{block}\n\n{relationship}" if block else relationship
+        # Her own last lines in this chat: not context to build on, a list of
+        # things she may not reach for again. Repetition is what made her sound
+        # like a broken record rather than a personality.
+        said = tuple(content for role, content in history if role == "assistant" and content)
+        repeated = persona.repeat_prompt(said, language)
+        if relationship and not block:
+            # A private chat has no room to describe, so the relationship block is
+            # the whole thing there. In a group the room block already says who
+            # this is and how to treat them — saying it twice is what made her
+            # sound confused.
+            block = relationship
         if taught:
             block = f"{block}\n\n{taught}" if block else taught
+        if repeated:
+            block = f"{block}\n\n{repeated}" if block else repeated
         if block:
             system = messages[0].content if messages else ""
             messages[0] = AIMessage("system", f"{system}\n\n{block}")
@@ -307,7 +321,13 @@ class YuraChat:
             )
         else:
             messages.append(AIMessage("user", prompt))
-        await self.memory.append(chat_id, "user", prompt)
+        # What goes into history is what *they* said, not the prompt built around
+        # it. Storing the wrapper ("(you replied to this message: …)") taught her
+        # to answer in the wrapper's shape — quoting prompt scaffolding back at
+        # people. The decorated prompt is for this request only.
+        await self.memory.append(
+            chat_id, "user", spoken or persona.picture_prompt(language)
+        )
 
         reply: str | None = None
         source = "model"
@@ -317,7 +337,7 @@ class YuraChat:
             try:
                 reply = await self.provider.converse(
                     messages,
-                    max_tokens=FILE_TOKENS if _wants_file(prompt) else 700,
+                    max_tokens=FILE_TOKENS if _wants_file(prompt) else 420,
                 )
             except AIError as exc:
                 self.last_error = f"{exc.kind}: {exc}"
@@ -397,7 +417,8 @@ class YuraChat:
                     cleaned = cleaned[: opened.start()]
                     self.logger.warning("yura: salvaged a truncated file block (%s)", salvaged.name)
 
-        visible = cleaned
+        visible = persona.strip_leaks(cleaned)
+        visible = persona.finish_sentence(visible)
         visible = re.sub(r"\n{3,}", "\n\n", visible).strip()
         if len(visible) > MAX_REPLY_CHARS:
             visible = visible[:MAX_REPLY_CHARS].rstrip() + " …"

@@ -115,10 +115,24 @@ async def test_her_ids_are_persisted_when_she_sends(runtime) -> None:
 # ---------------------------------------------------------------------------
 # Addressing: a reply to the owner's own message counts
 # ---------------------------------------------------------------------------
-async def test_a_reply_to_the_owners_message_in_a_group_is_answered(runtime) -> None:
+async def test_a_reply_to_his_own_message_is_not_answered(runtime) -> None:
+    """Replying to *him* is his conversation, not something aimed at her.
+
+    This gate used to accept it, and she answered every thread he was in — a lot
+    of model spend for a message nobody sent her.
+    """
     replies, client = await _runtime_with(runtime)
     his = FakeMessage(id=650, chat_id=GROUP, sender_id=OWNER, text="look at this", out=True)
     await replies.on_group_message(_event("hey", out=True, sender_id=OWNER, reply=his))
+    assert client.sent == []
+    assert replies.last_skip == "not_addressed"
+
+
+async def test_a_reply_to_her_is_answered(runtime) -> None:
+    replies, client = await _runtime_with(runtime)
+    await replies._note_own(GROUP, 600)
+    hers = FakeMessage(id=600, chat_id=GROUP, sender_id=OWNER, text="mrrp", out=True)
+    await replies.on_group_message(_event("what do you think", out=True, sender_id=OWNER, reply=hers))
     assert client.sent
 
 
@@ -138,7 +152,7 @@ async def test_a_friend_is_named_and_not_confused_with_the_owner(runtime) -> Non
     await replies.on_group_message(_event("yura what do you think"))
     prompt = _all_text(runtime.ai.calls[-1])
     assert "Ali" in prompt
-    assert "NOT the owner" in prompt
+    assert "not him" in prompt
 
 
 async def test_the_owner_is_named_as_the_owner(runtime) -> None:
@@ -147,8 +161,8 @@ async def test_the_owner_is_named_as_the_owner(runtime) -> None:
     hers = FakeMessage(id=600, chat_id=GROUP, sender_id=OWNER, text="mrrp", out=True)
     await replies.on_group_message(_event("what was that", out=True, sender_id=OWNER, reply=hers))
     prompt = _all_text(runtime.ai.calls[-1])
-    assert "the owner of this account" in prompt
-    assert "NOT the owner" not in prompt
+    assert "be soft with him" in prompt
+    assert "not him" not in prompt
 
 
 # ---------------------------------------------------------------------------
@@ -204,8 +218,8 @@ async def test_a_stranger_does_not_hear_the_owners_private_names(runtime) -> Non
     replies, client = await _runtime_with(runtime)
     await replies.on_group_message(_event("yura are you around"))
     prompt = _all_text(runtime.ai.calls[-1])
-    assert "do not use the owner's private names" in prompt
-    assert "do not repeat anything the owner told you in private" in prompt
+    assert "never his pet names" in prompt
+    assert "never what he told you in private" in prompt
 
 
 async def test_the_privacy_rule_is_not_applied_to_the_owner(runtime) -> None:
@@ -265,3 +279,104 @@ async def test_the_reason_she_stayed_quiet_is_recorded(runtime) -> None:
     await replies.on_group_message(_event("does anyone have the notes"))
     assert replies.last_skip == "not_addressed"
     assert replies.skips["not_addressed"] >= 1
+
+
+# ---------------------------------------------------------------------------
+# What goes into her memory is what they said — not the prompt around it
+# ---------------------------------------------------------------------------
+async def test_the_wrapper_is_not_stored_in_the_chat_log(runtime) -> None:
+    """She used to be trained by her own history to quote the prompt scaffolding."""
+    replies, client = await _runtime_with(runtime)
+    await replies._note_own(GROUP, 600)
+    hers = FakeMessage(id=600, chat_id=GROUP, sender_id=OWNER, text="do you like the tea", out=True)
+    await replies.on_group_message(_event("what about it", out=True, sender_id=OWNER, reply=hers))
+
+    history = await runtime.memory.history(GROUP)
+    spoken = [content for role, content in history if role == "user"]
+    assert spoken, "nothing was written to the log"
+    assert spoken[-1] == "what about it"
+    for content in spoken:
+        assert "you replied to" not in content.lower()
+        assert "«" not in content
+
+
+async def test_being_named_is_enough(runtime) -> None:
+    replies, client = await _runtime_with(runtime)
+    await replies.on_group_message(_event("yura, you there?"))
+    assert client.sent
+
+
+# ---------------------------------------------------------------------------
+# Not a broken record, and not the notes read back
+# ---------------------------------------------------------------------------
+async def test_she_is_told_what_she_already_said_here(runtime) -> None:
+    """The complaint was repetition: the same "get lost" three times in a row."""
+    replies, client = await _runtime_with(runtime)
+    await runtime.memory.append(GROUP, "assistant", "پاشو برو گمشو پی کارت")
+    await runtime.memory.append(GROUP, "assistant", "حوصلت رو ندارم")
+
+    await replies.on_group_message(_event("yura, say something"))
+
+    prompt = _all_text(runtime.ai.calls[-1])
+    assert "already said these" in prompt
+    assert "پاشو برو گمشو پی کارت" in prompt
+
+
+async def test_a_reply_that_is_the_notes_is_not_sent(runtime) -> None:
+    """A model that answers with the room block must not be believed."""
+    replies, client = await _runtime_with(runtime)
+    runtime.ai = StubProvider(
+        "## the room\n"
+        "- you are in the group \"General\", not a private chat.\n"
+        "- it is Ali talking, not him. be rude with them: short, dry.\n"
+        "- answer in your own words."
+    )
+
+    await replies.on_group_message(_event("yura, you there?"))
+
+    assert client.sent, "nothing was sent at all"
+    sent = client.sent[-1][1]
+    assert "the room" not in sent.lower()
+    assert "not him" not in sent
+    assert "own words" not in sent.lower()
+
+
+async def test_the_notes_are_never_sent_but_the_real_line_survives(runtime) -> None:
+    replies, client = await _runtime_with(runtime)
+    runtime.ai = StubProvider(
+        "## the room\n- it is Ali talking, not him.\n\nبزن به چاک، حوصله ندارم."
+    )
+
+    await replies.on_group_message(_event("yura, you there?"))
+
+    sent = client.sent[-1][1]
+    assert "بزن به چاک" in sent
+    assert "Ali" not in sent
+
+
+async def test_no_mood_bar_in_a_group(runtime) -> None:
+    """``▰▰▰▱▱ attention · 70%`` under a stranger's answer was read as debug output."""
+    replies, client = await _runtime_with(runtime)
+    for index in range(6):
+        replies._group_last.clear()
+        replies._group_window.clear()
+        await replies.on_group_message(_event(f"yura, you there? {index}"))
+
+    assert client.sent, "nothing was sent, so the bar was never tested"
+    for _, text, _ in client.sent:
+        assert "attention" not in text.lower()
+        assert "%" not in text
+
+
+async def test_a_cut_reply_never_leaves_half_a_sentence(runtime) -> None:
+    """A model that hits the ceiling mid-thought used to send the fragment."""
+    replies, client = await _runtime_with(runtime)
+    runtime.ai = StubProvider(
+        "باشه بابا، حرف تو درسته. " * 8 + "ولی این یکی رو دیگه نمی‌تونم قبول کنم چون"
+    )
+
+    await replies.on_group_message(_event("yura, you there?"))
+
+    sent = client.sent[-1][1]
+    assert "قبول کنم چون" not in sent
+    assert "حرف تو درسته" in sent

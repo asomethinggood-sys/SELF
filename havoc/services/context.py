@@ -101,7 +101,12 @@ async def build(
     # -- who is speaking --------------------------------------------------
     sender_id = getattr(event, "sender_id", None) or getattr(message, "sender_id", None)
     context.speaker_id = int(sender_id) if sender_id else None
-    context.is_owner = bool(owner_id and sender_id == owner_id)
+    # This account only writes as the owner or as her, and hers is filtered before
+    # the room is built — so an outgoing message is his even when the id is
+    # missing from the update.
+    context.is_owner = bool(getattr(event, "is_outgoing", False)) or bool(
+        owner_id and sender_id == owner_id
+    )
     if message is not None:
         getter = getattr(message, "get_sender", None)
         if getter is not None:
