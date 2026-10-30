@@ -171,7 +171,7 @@ def test_the_prompt_tells_her_that_the_formatting_is_real() -> None:
     prompt = persona.system_prompt("en")
     assert "**bold**" in prompt
     assert "*italic*" in prompt
-    assert "> when quoting" in prompt
+    assert "saying under your breath" in prompt
     farsi = persona.system_prompt("fa")
     assert "**بولد**" in farsi and "*ایتالیک*" in farsi
 
@@ -875,3 +875,26 @@ def test_a_group_is_not_an_excuse_to_go_short() -> None:
     )
     assert "answer all of it" in block
     assert "two or three lines" not in block
+
+
+def test_a_copy_of_their_message_is_removed_wherever_it_sits() -> None:
+    """She put the quote in the middle of the answer, and it reached the chat."""
+    incoming = "یورا این کیه"
+    middle = "چیزایی گفتم.\n\n> یورا این کیه\n\nطرف تازه اومده"
+    assert incoming not in persona.strip_echo(middle, incoming)
+
+    inline = "خیلی خوب. > یورا این کیه طرف تازه اومده."
+    assert incoming not in persona.strip_echo(inline, incoming)
+
+    wrapped = "«یورا این کیه» نمی‌دونم."
+    assert incoming not in persona.strip_echo(wrapped, incoming)
+
+
+def test_a_short_message_is_not_shredded_out_of_her_answer() -> None:
+    """Stripping every "hi" would be worse than the echo."""
+    assert persona.strip_echo("hi, and hello to you too", "hi") == "hi, and hello to you too"
+
+
+def test_her_own_quote_is_still_allowed() -> None:
+    text = "> بیتی از حافظ\n\nخوش است"
+    assert persona.strip_echo(text, "یورا این کیه") == text

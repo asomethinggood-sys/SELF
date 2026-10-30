@@ -212,9 +212,18 @@ def collect_faces(text: str) -> set[str]:
     return {face for face in FACES if face in body}
 
 
+def _overlaps(face: str, taken: set[str]) -> bool:
+    """True when ``face`` shares an ornament with something already used.
+
+    ``ᵕ̈♡`` and ``ᵕ̈`` are the same face with a heart attached: swapping one for the
+    other still reads as the same stamp, so both are excluded together.
+    """
+    return any(other in face or face in other for other in taken)
+
+
 def fresh_faces(*, avoid: set[str] | None = None, count: int = 3) -> list[str]:
     taken = set(avoid or ())
-    pool = [face for face in FACES if face not in taken] or list(FACES)
+    pool = [face for face in FACES if not _overlaps(face, taken)] or list(FACES)
     return random.sample(pool, k=min(count, len(pool)))
 
 
@@ -234,8 +243,9 @@ def restyle_faces(text: str, used: set[str] | None = None) -> str:
             continue
         replacement = fresh_faces(avoid=taken, count=1)[0]
         body = body.replace(face, replacement)
+        # Both stay in ``taken``: a face used twice in one answer must not be
+        # swapped for a second copy of the same replacement.
         taken.add(replacement)
-        taken.discard(face)
     return body
 
 

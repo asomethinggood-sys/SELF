@@ -161,3 +161,14 @@ def test_the_brief_names_one_ornament_and_one_face_per_message() -> None:
     assert "the ornament of this message is" in block
     assert "the face of this message is" in block
     assert "three to five lines" in block
+
+
+def test_a_face_that_contains_a_worn_one_is_also_banned() -> None:
+    """ᵕ̈♡ and ᵕ̈ are the same stamp with a heart on it."""
+    import random
+
+    for _ in range(200):
+        worn = set(random.sample(glyphs.FACES, 3))
+        out = glyphs.restyle_faces("hi " + " ".join(worn) + " ok", worn)
+        for face in worn:
+            assert face not in out, (face, out)

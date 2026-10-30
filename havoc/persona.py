@@ -231,7 +231,8 @@ _STYLE = {
     "en": """Formatting is real — these marks arrive as formatting, so use them:
 - **bold** for the one thing that matters, or a headline line.
 - *italic* for an aside, a soft word, a verse.
-- start a line with > when quoting them or a poem.
+- > is for a line you are saying under your breath, or a poem. never for
+  repeating what they sent you.
 - - for a list, ``` for code or a file you are about to send.
 - one or two a message, not every line: decoration that repeats stops reading
   as emphasis. No colour emoji — text ornaments are yours.
@@ -245,7 +246,7 @@ _STYLE = {
     "fa": """این قالب‌ها واقعاً دیده می‌شوند، پس استفاده‌شان کن:
 - **بولد** برای تنها نکتهٔ مهم پیام، یا یک خط تیتر.
 - *ایتالیک* برای یک جملهٔ آرام، یک بیت، یا حرفی که زیر لب می‌گویی.
-- خطی را با > شروع کن وقتی از حرف او یا یک شعر نقل قول می‌کنی.
+- > برای خطی است که زیر لب می‌گویی یا یک شعر — نه برای تکرار حرفی که او فرستاد.
 - - برای فهرست، و ``` برای کد یا فایلی که می‌فرستی.
 - در هر پیام یکی دو تا، نه هر خط: تزئینی که تکرار شود دیگر تأکید نیست.
   ایموجی رنگی نگذار؛ نمادهای متنی مال خودت هستند.
@@ -453,7 +454,8 @@ def ornament_prompt(
             )
         lines.append(
             "- چیزهایی که می‌شود برای ساختار به کار برد (دو سه تا، نه همه): > برای "
-            "یک حرفِ زیرلبی، - برای فهرست، ++تأکید++، ^^کوچک کردن^^، >> پچ‌پچ."
+            "حرفِ خودت زیر لب (هرگز برای تکرار حرف طرف)، - برای فهرست، ++تأکید++، "
+            "^^کوچک کردن^^، >> پچ‌پچ."
         )
         lines.append(
             "- پیشنهاد برای همین پیام: بازکننده "
@@ -489,8 +491,8 @@ def ornament_prompt(
         )
     lines.append(
         "- shapes you may use for structure, two or three of them and not all: "
-        "> for a thing said under your breath, - for a list, ++pressed++, "
-        "^^small^^, >> a whisper they tap to open."
+        "> for a thing *you* say under your breath (never to repeat theirs), - for "
+        "a list, ++pressed++, ^^small^^, >> a whisper they tap to open."
     )
     lines.append(
         "- to choose from for this message: open "
@@ -752,13 +754,37 @@ def _is_echo(quoted: str, incoming: str) -> bool:
     return len(flat_quoted) > 12 and flat_quoted in flat_incoming
 
 
-def strip_echo(text: str, incoming: str) -> str:
-    """Drop the copy of their message she put at the top of her answer.
+def _echo_regex(incoming: str) -> re.Pattern[str] | None:
+    """Their sentence, matched with any spacing — the copy is often re-wrapped."""
+    words = [word for word in str(incoming or "").split() if word]
+    if not words:
+        return None
+    return re.compile(r"\s+".join(re.escape(word) for word in words), re.IGNORECASE)
 
-    Telegram shows a reply bubble on its own; a *second* copy written into the
+
+def _strip_inline_echo(body: str, incoming: str) -> str:
+    """Remove their words wherever she put quote marks around them."""
+    pattern = _echo_regex(incoming)
+    if pattern is None:
+        return body
+    if len(" ".join(str(incoming).split())) < 12:
+        # A short message ("hi", "why?") is not distinctive enough to strip
+        # everywhere: only the quoted form is, and that is handled by the lines.
+        return body
+    cleaned = re.sub(rf"[>«“\"']\s*{pattern.pattern}\s*[»”\"']?", "", body, flags=re.IGNORECASE)
+    # A line left holding nothing but the marker is a scar, not a sentence.
+    lines = [line for line in cleaned.split("\n") if line.strip() not in {">", "»", '"', "«"}]
+    return "\n".join(lines)
+
+
+def strip_echo(text: str, incoming: str) -> str:
+    """Drop every copy of their message from her answer.
+
+    Telegram shows a reply bubble on its own, so a *second* copy written into the
     body is the thing the owner kept seeing — "I talk to an AI to get a response,
-    not to get my prompt back". Only a leading block made of their own words is
-    removed, so quoting a verse of her own is still allowed.
+    not to get my prompt back". Three shapes are removed: a leading block of
+    ``>`` lines, a ``>``/«» line anywhere in the message, and their sentence
+    quoted with markers inside a sentence. Quoting her own verse is untouched.
     """
     body = str(text or "")
     if not body.strip() or not str(incoming or "").strip():
@@ -776,7 +802,7 @@ def strip_echo(text: str, incoming: str) -> str:
         quoted.append(stripped.lstrip(">").strip())
         index += 1
     if quoted and _is_echo("\n".join(quoted), incoming):
-        return "\n".join(lines[index:]).lstrip("\n")
+        body = "\n".join(lines[index:]).lstrip("\n")
 
     # A leading paragraph wrapped in guillemets or quotes, with nothing else.
     stripped = lines[start].strip() if start < len(lines) else ""
@@ -788,8 +814,17 @@ def strip_echo(text: str, incoming: str) -> str:
             break
     # The bare echo: their sentence copied as the first line, no markers at all.
     if stripped and _is_echo(stripped, incoming) and len(lines) - start > 1:
-        return "\n".join(lines[start + 1 :]).lstrip("\n")
-    return body
+        body = "\n".join(lines[start + 1 :]).lstrip("\n")
+    lines = body.split("\n")
+    kept: list[str] = []
+    for line in lines:
+        bare = line.strip().lstrip(">").strip()
+        if bare and line.strip().startswith(">") and _is_echo(bare, incoming):
+            continue  # their own message, quoted back in the middle of an answer
+        kept.append(line)
+    body = "\n".join(kept)
+    body = re.sub(r"\n{3,}", "\n\n", body)
+    return _strip_inline_echo(body, incoming).strip()
 
 
 #: A sentence can end with any of these, in either language.

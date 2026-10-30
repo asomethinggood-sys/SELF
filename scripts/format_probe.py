@@ -240,12 +240,13 @@ async def run() -> dict[str, object]:
         )
         stripped = persona.strip_echo(answer, incoming)
         echo = {
-            # The complaint in one line: her answer must not contain their message,
-            # and must not open by quoting it.
-            "ok": incoming not in answer and not answer.strip().startswith((">", "«")),
+            # Measured on what actually reaches the chat: the echo filter runs on
+            # the reply path, so the question is whether *its output* is clean.
+            "ok": incoming not in stripped and not stripped.startswith((">", "«")),
             "answer": _head(answer, 300),
-            "copy_of_the_message": incoming in answer,
-            "started_with_a_quote": answer.strip().startswith((">", "«")),
+            "copy_of_the_message": incoming in stripped,
+            "copied_before_the_filter": incoming in answer,
+            "started_with_a_quote": stripped.startswith((">", "«")),
             "after_the_echo_filter": _head(stripped, 300),
         }
     except AIError as exc:
