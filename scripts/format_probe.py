@@ -40,6 +40,12 @@ FORMAT_ASK = (
     "Answer in two short lines, nothing else. Line one: the word NOTED in bold. "
     "Line two: the word hush in italics."
 )
+#: The project's own marks: does a model actually reach for them when told they
+#: are real? This is asked separately so a failure names which mark was missed.
+MARKS_ASK = (
+    "Write exactly two lines. Line one starts with >> and is a whispered secret. "
+    "Line two: the word pressed, underlined with ++."
+)
 
 
 def _png(width: int = 16, height: int = 16, rgb: tuple[int, int, int] = (220, 20, 20)) -> bytes:
@@ -141,7 +147,45 @@ async def run() -> dict[str, object]:
             vision.update({"ok": False, "failure": f"{exc.kind}: {_head(exc, 240)}"})
     record["vision"] = vision
 
-    record["ok"] = bool(formatting.get("ok")) and bool(vision.get("ok"))
+    # -- 3. the project's own marks ----------------------------------------
+    marks: dict[str, object] = {}
+    try:
+        raw = await provider.converse(  # type: ignore[attr-defined]
+            [AIMessage("system", system_prompt("en")), AIMessage("user", MARKS_ASK)],
+            max_tokens=200,
+        )
+        rendered = rich(raw)
+        marks.update(
+            {
+                "ok": "<blockquote expandable>" in rendered and "<u>" in rendered,
+                "raw": _head(raw, 400),
+                "html": _head(rendered, 400),
+                "has_whisper": "<blockquote expandable>" in rendered,
+                "has_underline": "<u>" in rendered,
+            }
+        )
+    except AIError as exc:
+        marks.update({"ok": False, "failure": f"{exc.kind}: {_head(exc, 240)}"})
+    record["marks"] = marks
+
+    # -- 4. her voice -------------------------------------------------------
+    voice: dict[str, object] = {}
+    try:
+        import edge_tts as _edge
+
+        buffer = bytearray()
+        communicate = _edge.Communicate("daddaaa. you called?", "en-US-AnaNeural")
+        async for chunk in communicate.stream():
+            if chunk.get("type") == "audio" and chunk.get("data"):
+                buffer.extend(chunk["data"])
+        voice.update({"ok": len(buffer) > 1000, "provider": "edge", "bytes": len(buffer)})
+    except Exception as exc:  # noqa: BLE001 - a missing voice is a fact, not a crash
+        voice.update({"ok": False, "provider": "edge", "failure": _head(exc, 200)})
+    record["voice"] = voice
+
+    record["ok"] = (
+        bool(formatting.get("ok")) and bool(vision.get("ok")) and bool(record["marks"].get("ok"))  # type: ignore[union-attr]
+    )
     return record
 
 
@@ -161,6 +205,16 @@ def main() -> int:
         print(f"  asked about a red square, model said: {vision['answer']}")
     if vision.get("failure"):
         print(f"  failure: {vision['failure']}")
+    marks = record["marks"]  # type: ignore[index]
+    print("marks:", "OK" if marks.get("ok") else "FAILED")
+    if marks.get("html"):
+        print(f"  telegram shows: {marks['html']}")
+    if marks.get("failure"):
+        print(f"  failure: {marks['failure']}")
+    voice = record["voice"]  # type: ignore[index]
+    print("voice:", "OK" if voice.get("ok") else "FAILED", f"({voice.get('bytes', 0)} bytes)")
+    if voice.get("failure"):
+        print(f"  failure: {voice['failure']}")
     RECORD.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"written to {RECORD}")
     return 0 if record["ok"] else 1

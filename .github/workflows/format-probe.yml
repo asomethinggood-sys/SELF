@@ -47,7 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install -e .
+          python -m pip install -e ".[voice]"
 
       - name: Ask the real model
         id: probe
