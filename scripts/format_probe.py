@@ -37,13 +37,10 @@ from havoc import persona, ui
 from havoc.config import load_config
 from havoc.persona import picture_prompt, system_prompt
 from havoc.services import self_console, translation_provider, tts
-from havoc.services.actions import ActionLayer, ToolCall, Turn
+from havoc.services.actions import ToolCall, Turn
 from havoc.services.agent import Agent
 from havoc.services.ai_provider import AIError, AIMessage, AIProvider
 from havoc.services.ai_router import AIRouter
-from havoc.services.memory import MemoryStore
-from havoc.services.storage import Store
-from havoc.services.tools import build_tools
 from havoc.services.vision import make_picture
 from havoc.utils import glyphs
 from havoc.utils.markup import rich
@@ -276,25 +273,14 @@ async def run() -> dict[str, object]:
     # section uses, run on an answer written with the tool catalogue in the prompt).
     hands: dict[str, object] = {}
     try:
-        from types import SimpleNamespace
+        from havoc.runtime import Runtime
 
-        from havoc.database import Database
-        from havoc.migrations import apply_migrations
-
-        db = Database(":memory:")
-        await db.connect()
-        await apply_migrations(db)
-        store = Store(db)
-        scratch = SimpleNamespace(
-            store=store,
-            memory=MemoryStore(db),
-            logger=logging.getLogger("probe"),
-            client=None,
-            metrics=None,
-            translator=None,
-            config=SimpleNamespace(timezone="UTC", data_dir="/tmp"),
-        )
-        layer = ActionLayer(scratch, build_tools(scratch))
+        # A real runtime, not a stand-in: the console section below dispatches
+        # *real* commands through the *real* dispatcher, so a fake registry would
+        # measure nothing. `dry_run` keeps it off Telegram.
+        scratch = await Runtime.create(config, logging.getLogger("probe"))
+        scratch.sender.dry_run = True
+        layer = scratch.actions
         agent = Agent(layer, logger=scratch.logger)
         turn = Turn(chat_id=1, actor_id=1, language="en", is_owner=True)
         brief = persona.ornament_prompt("en")
@@ -321,7 +307,7 @@ async def run() -> dict[str, object]:
         # is typed — but the *policy* is the same one a button would have used.
         if step.waiting is not None:
             resolved = await layer.resolve(turn.chat_id, approve=True)
-            reminders = await store.list_reminders(status="pending", limit=5)
+            reminders = await scratch.store.list_reminders(status="pending", limit=5)
             actions = await layer.recent(turn.chat_id, limit=5)
             hands.update(
                 {
@@ -335,8 +321,10 @@ async def run() -> dict[str, object]:
             )
 
         # The card: what a person actually sees under an answer that did something.
+        # Taken from the outcome that *ran* — the waiting one has no card yet.
         cards: list[dict[str, object]] = []
-        for outcome in step.outcomes:
+        ran = [resolved] if "resolved" in dir() and resolved.card[0] else []
+        for outcome in ran or step.outcomes:
             if outcome.status == "done" and outcome.card[0]:
                 drawn = ui.card(outcome.card[0], outcome.card[1])
                 cards.append(
@@ -420,7 +408,7 @@ async def run() -> dict[str, object]:
             and hands["voice_glyphs"] >= 1
             and hands["voice_laid_out"]
         )
-        await db.close()
+        await scratch.db.close()
     except Exception as exc:  # noqa: BLE001 - a broken hand is a finding
         hands = {"ok": False, "failure": _head(f"{type(exc).__name__}: {exc}", 240)}
     record["hands"] = hands
