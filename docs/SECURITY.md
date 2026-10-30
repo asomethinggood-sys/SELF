@@ -39,6 +39,32 @@ controls your Telegram account. Everything below follows from that.
     FloodWait awareness, so a runaway loop trips a limit instead of flooding a
     chat.
 
+## Her hands (the action layer)
+
+Yura can act on her own now: she may decide a message needs a lookup, a
+translation, a stored fact or a reminder. Everything she can do is a tool with a
+declared scope, and every attempt goes through one executor
+(`havoc/services/actions.py`) that checks the policy *before* the tool runs and
+writes the attempt to `yura_actions` before it either.
+
+| Scope | Policy |
+| --- | --- |
+| `read` | free — looking at something the account can already see |
+| `write`, `send` | confirmed **once per tool**, then remembered |
+| `delete` | confirmed **every time**, never remembered |
+| `money`, `identity` | **refused** — no confirm, no setting, no exception |
+
+Budgets are enforced from the audit table, so a restart is not a way around them:
+four tool calls per turn, twenty per hour, and the same tool with the same
+arguments twice in a turn stops the loop.
+
+The confirmation is typed (`.yura yes` / `.yura no`, two-minute window), not a
+button: a Telegram *user* account cannot attach an inline keyboard — `reply_markup`
+is a bot-only feature.
+
+There is no `send_message` tool. She already speaks, and a tool that can address
+an arbitrary chat is a spam cannon with a personality.
+
 ## Telegram-side hardening
 
 - Use a session file that lives outside any synced folder.

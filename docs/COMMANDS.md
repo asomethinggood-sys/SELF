@@ -118,6 +118,10 @@ Total: **72 commands**.
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
 | `.yura` | Yura herself: talk to her, or manage what she remembers _(owner only; changes state)._ | `.yura [on|off|status|memory|log|clear|<anything>]` | `.person`, `.self`, `.یورا` |
+| `.yura tools` | What she can actually do for herself (lookup, translate, remember, remind…). | `.yura tools` | |
+| `.yura agent` | Her hands on or off, and which they are right now. | `.yura agent [on|off|status]` | `.yura hands` |
+| `.yura actions` | The audit trail: what she did in this chat, and whether it ran. | `.yura actions` | `.yura did` |
+| `.yura yes` | Approve the action she just asked about (two-minute window). | `.yura yes` | `.yura no` |
 
 ## Profile
 

@@ -387,6 +387,14 @@ live account from this environment.
 
 ### Working with limits you should know about
 
+- **She has hands, not a free pass.** A message that needs a lookup, a
+  translation, a stored fact or a reminder is answered by her *doing* it: reads
+  run freely, writes ask once, deletes ask every time, and money or identity are
+  refused outright. Four actions a message, twenty an hour, every attempt in the
+  `yura_actions` audit table. `.yura agent off` turns the hands back into a
+  conversation, `.yura actions` shows what she did. Nothing about how she writes
+  changes — the same voice, paragraphs and typography, with a one-line receipt
+  only on the turns where something actually happened.
 - **`.translate` uses the model she already talks with** (Gemma 4 31B on the
   free keys), so it works on a clone with keys and nothing else configured;
   `TRANSLATE_PROVIDER=mymemory` or `libretranslate` overrides it. With no AI key
