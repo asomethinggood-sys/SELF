@@ -1,6 +1,6 @@
 {
   "app": "havoc",
-  "created_at": "2026-10-30T06:56:48+00:00",
+  "created_at": "2026-10-30T07:02:14+00:00",
   "tables": {
     "aliases": [],
     "autoreplies": [],
@@ -119,7 +119,7 @@
         "language": "en",
         "scope": "global",
         "scope_id": "",
-        "updated_at": "2026-10-29T21:59:08+00:00"
+        "updated_at": "2026-10-30T06:58:48+00:00"
       }
     ],
     "notes": [],
@@ -156,13 +156,13 @@
       },
       {
         "key": "ai.usage",
-        "updated_at": "2026-10-30T06:52:24+00:00",
-        "value": "{\"2b9beacf67a2|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-30\",\"count\":5},\"e8bfd373256a|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-30\",\"count\":5}}"
+        "updated_at": "2026-10-30T07:00:41+00:00",
+        "value": "{\"2b9beacf67a2|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-30\",\"count\":9},\"e8bfd373256a|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-30\",\"count\":8}}"
       },
       {
         "key": "ai.health",
-        "updated_at": "2026-10-30T06:52:24+00:00",
-        "value": "{\"2b9beacf67a2\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":19,\"failures\":0},\"e8bfd373256a\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":18,\"failures\":0},\"90d9d7b7c27e\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"rate_limited: HTTP 429: {\\\"error\\\":{\\\"message\\\":\\\"Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day\\\",\\\"code\\\":429,\\\"metadata\\\":{\\\"headers\\\":{\\\"X-RateLimit-Limit\\\":\\\"50\\\",\\\"X-RateLimit-Remaining\\\":\\\"0\\\",\\\"X-RateLimit-Reset\\\":\\\"1793318400000\\\"},\\\"limit_source\\\":\\\"openrouter_fre\",\"successes\":0,\"failures\":1},\"bcf26c2f3c33\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":1,\"failures\":0}}"
+        "updated_at": "2026-10-30T07:00:41+00:00",
+        "value": "{\"2b9beacf67a2\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":23,\"failures\":0},\"e8bfd373256a\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":21,\"failures\":0},\"90d9d7b7c27e\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"rate_limited: HTTP 429: {\\\"error\\\":{\\\"message\\\":\\\"Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day\\\",\\\"code\\\":429,\\\"metadata\\\":{\\\"headers\\\":{\\\"X-RateLimit-Limit\\\":\\\"50\\\",\\\"X-RateLimit-Remaining\\\":\\\"0\\\",\\\"X-RateLimit-Reset\\\":\\\"1793318400000\\\"},\\\"limit_source\\\":\\\"openrouter_fre\",\"successes\":0,\"failures\":1},\"bcf26c2f3c33\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":1,\"failures\":0}}"
       },
       {
         "key": "clock.timezone",
@@ -178,6 +178,16 @@
         "key": "ai.model",
         "updated_at": "2026-10-29T22:47:56+00:00",
         "value": "\"google:gemini-3.5-flash-lite\""
+      },
+      {
+        "key": "yura.last_picture.7542695649",
+        "updated_at": "2026-10-30T06:57:41+00:00",
+        "value": "{\"at\":\"2026-10-30T06:57:41.369529+00:00\",\"text\":\"**یک اسکرین‌شات از چت‌مون!** داریم به چت‌های قبلی‌مون نگاه می‌کنیم که من گفتم برج ایفل اسکرچ‌پوست نیست (¬‿¬) تازه اون بالا هم نوشته vpn روشنه و ساعت ۱۰:۲۲ئه *وای یعنی الان داری به حرفای قبلی‌مون میخندی؟* ♡\",\"source\":\"model\"}"
+      },
+      {
+        "key": "yura.last_picture.-1002274583096",
+        "updated_at": "2026-10-30T06:58:12+00:00",
+        "value": "{\"at\":\"2026-10-30T06:58:12.211375+00:00\",\"text\":\"وای ددداااا این چیه فرستادی! (¬‿¬) عجب عکسِ گنده‌ای از چت‌مون توی تلگرام... حتماً اونجا هم داری به این دخترِ فرفری‌ات می‌خندی، مگه نه؟ >_< *برج ایفلِ گنده همچنان بی‌گناهه، ولی خب تقصیر خودشه این‌قدر شبیه پایه‌ی اسکرچ‌کافه من ساختنش.* ╰(*´︶`*)╯ تازه ساعتِ بالای گوشیت هم که مشخصه، کله‌سحر بیدار موندی کار می‌کنی ارباب!\",\"source\":\"model\"}"
       }
     ],
     "templates": [],
