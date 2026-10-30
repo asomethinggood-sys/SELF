@@ -67,8 +67,6 @@ class TTLCache(Generic[T]):
         entry = self._data.pop(key, None)
         return default if entry is None else entry.value
 
-    def contains(self, key: str) -> bool:
-        return self.get(key, None) is not None
 
     def clear(self) -> None:
         self._data.clear()

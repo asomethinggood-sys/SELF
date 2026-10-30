@@ -83,12 +83,6 @@ def tz_for(ctx: CommandContext) -> str:
     return getattr(ctx.config, "timezone", "UTC") or "UTC"
 
 
-async def chat_language(ctx: CommandContext) -> str:
-    return await ctx.runtime.resolve_language(
-        ctx.event.text if hasattr(ctx.event, "text") else "",
-        chat_id=ctx.chat_id,
-        sender_id=getattr(ctx.event, "sender_id", None),
-    )
 
 
 async def resolve_target(ctx: CommandContext, raw: str) -> tuple[int | None, Any | None, str | None]:

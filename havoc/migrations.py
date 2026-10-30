@@ -442,6 +442,19 @@ MIGRATION_7_ACTIONS = Migration(
     ),
 )
 
+MIGRATION_8_AUTOREPLY_SCOPE = Migration(
+    version=8,
+    name="autoreply_scope",
+    statements=(
+        # "Reply to anyone who DMs me" is the request; before this column the only
+        # scopes were one chat or every chat, so a rule written for his inbox also
+        # answered in every group he is in. ``scope`` is who the rule may speak in:
+        # any | private | group.
+        "ALTER TABLE autoreplies ADD COLUMN scope TEXT NOT NULL DEFAULT 'any'",
+        "CREATE INDEX IF NOT EXISTS idx_autoreplies_scope ON autoreplies(scope, enabled)",
+    ),
+)
+
 MIGRATIONS: tuple[Migration, ...] = (
     MIGRATION_1_FOUNDATION,
     MIGRATION_2_TIMESTAMPS,
@@ -450,6 +463,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     MIGRATION_5_PEOPLE_DM,
     MIGRATION_6_LESSONS,
     MIGRATION_7_ACTIONS,
+    MIGRATION_8_AUTOREPLY_SCOPE,
 )
 
 LATEST_VERSION = max(m.version for m in MIGRATIONS)

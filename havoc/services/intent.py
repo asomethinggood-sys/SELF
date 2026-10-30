@@ -534,6 +534,156 @@ _VERSION = re.compile(
 )
 
 
+#: The auto-reply family, in the shapes people actually write it. Ordered: the
+#: "if anyone messages me …" form is the most specific, so it is read first.
+_AUTOREPLY_IF = re.compile(
+    r"^(?:(?:set|put|create|make|add)\s+(?:up\s+)?(?:an?\s+)?)?"
+    r"(?:auto[\s-]?reply|automatic\s+reply)?"
+    r".*?\b(?:if|when|whenever|any\s+time)\s+(?:anyone|anybody|someone|somebody|a\s+stranger|people)\s+"
+    r"(?:dms?|messages?|texts?|writes?|pings?)\s+(?:me|my)\b.*?"
+    r"(?:\s+(?:then\s+)?(?:say|says|tell\s+(?:them|him|her)|reply|answer|send(?:\s+back)?|respond|write)"
+    r"(?:\s+(?:with|that|:))?\s+)(?P<body>.+)$"
+)
+_AUTOREPLY = re.compile(
+    r"^(?:(?:set|put|create|make|add|start)\s+(?:up\s+)?(?:an?\s+)?)?"
+    r"(?P<kind>auto[\s-]?repl(?:y|ies)|automatic\s+repl(?:y|ies))"
+    r"(?:\s+(?:to|for|on|in)\s+(?:every|each|any|all)?\s*"
+    r"(?P<scope>private(?:\s+chats?)?|dms?|direct\s+messages?|everyone|all\s+chats?|groups?|groups?\s+only))?"
+    r"\s*(?:that|which)?\s*(?:[:,-]\s*)?"
+    r"(?:(?:saying|says|say|with|reads?)\s+)?"
+    r"(?P<body>.+)$"
+)
+_AUTOREPLY_OFF = re.compile(
+    r"^(?:stop|turn\s+off|switch\s+off|disable|kill|remove|delete|end)"
+    r"\s+(?:the\s+|my\s+|all\s+)?(?:auto[\s-]?repl(?:y|ies)|automatic\s+repl(?:y|ies)|away\s+message|away\s+mode)"
+    r"\s*(?:now|please)?\s*[.!]*$"
+)
+_REPLY_TO_ALL = re.compile(
+    r"^(?:reply|respond|answer)\s+to\s+(?:every|each|any|all)\s+"
+    r"(?:private\s+chats?|dms?|direct\s+messages?|messages?|chats?)\s*"
+    r"(?:with|saying|:)?\s+(?P<body>.+)$"
+)
+_AWAY_ON = re.compile(
+    r"^(?:tell\s+(?:everyone|them|people)\s+)?(?:that\s+)?"
+    r"(?:i(?:'m|\s+am)\s+(?:away|out|not\s+here|busy|gone)|set\s+(?:me\s+)?away)"
+    r"(?:\s+(?:for|until|till)\s+(?P<until>[^,;]+?))?\s*(?:[,;:]\s*(?P<body>.+))?$"
+)
+_AWAY_OFF = re.compile(
+    r"^(?:i(?:'m|\s+am)\s+(?:back|here|home)|turn\s+off\s+away|away\s+off|stop\s+away"
+    r"|stop\s+tell\w*\s+(?:them|people|everyone)\s+i(?:'m|\s+am)\s+(?:away|out))\s*[.!]*$"
+)
+_NAME_CHANGE = re.compile(
+    r"^(?:(?:can|could|would)\s+you\s+)?(?:change|set|make|put|update)\s+"
+    r"(?:my|the)\s+(?:profile\s+|telegram\s+)?(?:display\s+)?name(?:\s+(?:to|as))?\s+(?P<name>.+?)\s*[.!]*$"
+)
+_BIO_CHANGE = re.compile(
+    r"^(?:(?:can|could|would)\s+you\s+)?(?:change|set|put|update|write)\s+"
+    r"(?:my|the)\s+(?:profile\s+)?bio(?:\s+(?:to|as))?\s+(?P<bio>.+?)\s*[.!]*$"
+)
+_SCOPE_WORDS = {
+    "private": "private",
+    "private chat": "private",
+    "private chats": "private",
+    "dm": "private",
+    "dms": "private",
+    "direct message": "private",
+    "direct messages": "private",
+    "everyone": "any",
+    "all chats": "any",
+    "group": "group",
+    "groups": "group",
+    "groups only": "group",
+}
+
+
+def _lead(text: str) -> str:
+    """Drop the vocative: "yura, set …" is an instruction, not a sentence about her."""
+    return re.sub(r"^(?:hey\s+|ok\s+|okay\s+)?(?:yura|یورا|لیانا|leena)\b[ ,:؛-]*", "", text).strip()
+
+
+def _clean_body(raw: str) -> str:
+    """The message he dictated, without the quotes a person wraps it in."""
+    body = " ".join((raw or "").split()).strip()
+    body = re.sub(r"^(?:->|=>|>|:|=|-|\(|\)|\[|\])\s*", "", body)
+    body = body.strip(" .,!؟?؛;:=")
+    for quote in ('"', "'", "`", "“", "«", "»", "”"):
+        if len(body) > 1 and body.startswith(quote) and body.endswith(quote):
+            body = body[1:-1].strip()
+    return body
+
+
+def _actions(text: str) -> Intent | None:
+    """The requests that change how she behaves towards other people.
+
+    These are the ones he photographed: an auto reply for his inbox, a name, a
+    bio. Each becomes a console line — ``autoreply add --type any --private => …``
+    — so the rule that gets stored is the rule ``.autoreply`` would have stored.
+    """
+    folded = _lead(_clean(text))
+
+    if _AUTOREPLY_OFF.match(folded):
+        return Intent(lines=("autoreply off",), label="autoreply", detail="auto-replies off")
+
+    if _AWAY_OFF.match(folded):
+        return Intent(lines=("away off",), label="away", detail="away off")
+
+    match = _AUTOREPLY_IF.match(folded)
+    if match:
+        body = _clean_body(match.group("body"))
+        if body and len(body) > 1 and body not in _NOISE:
+            return Intent(
+                lines=(f"autoreply add --type any --private => {body}", "autoreply on"),
+                label="autoreply",
+                detail="auto-reply · DMs",
+            )
+        return None
+
+    match = _REPLY_TO_ALL.match(folded)
+    if match:
+        body = _clean_body(match.group("body"))
+        if body and len(body) > 1 and body not in _NOISE:
+            scope = "private" if "private" in folded or "dm" in folded else "any"
+            return Intent(
+                lines=(f"autoreply add --type any --{scope} => {body}", "autoreply on"),
+                label="autoreply",
+                detail=f"auto-reply · {scope}",
+            )
+        return None
+
+    match = _AUTOREPLY.match(folded)
+    if match:
+        body = _clean_body(match.group("body"))
+        scope = _SCOPE_WORDS.get(_clean(match.group("scope") or ""), "any")
+        if body and len(body) > 1 and body not in _NOISE:
+            return Intent(
+                lines=(f"autoreply add --type any --{scope} => {body}", "autoreply on"),
+                label="autoreply",
+                detail=f"auto-reply · {scope}",
+            )
+
+    match = _AWAY_ON.match(folded)
+    if match:
+        body = _clean_body(match.group("body") or "")
+        until = _clean_body(match.group("until") or "")
+        if body:
+            return Intent(lines=(f"away on {body}",), label="away", detail="away on")
+        message = f"I am away until {until}" if until else "I am away right now"
+        return Intent(lines=(f"away on {message}",), label="away", detail="away on")
+
+    match = _NAME_CHANGE.match(folded)
+    if match:
+        name = " ".join(match.group("name").split()).strip(" .,!?\"'")
+        if name and name not in _NOISE and len(name) <= 40:
+            return Intent(lines=(f"profile name {name}",), label="profile", detail=f"name → {name}")
+
+    match = _BIO_CHANGE.match(folded)
+    if match:
+        body = _clean_body(match.group("bio"))
+        if body and body not in _NOISE:
+            return Intent(lines=(f"bio set {body}",), label="profile", detail="bio")
+    return None
+
+
 def _utility(text: str) -> Intent | None:
     """The small, unambiguous asks: the time, a coin, a sum, a poem.
 
@@ -703,6 +853,10 @@ def detect(
             folded,
         ) or (folded.rstrip(" ؟?") != folded and re.search(r"ساعت.*(?:روشن|خاموش)", folded)):
             return Intent(lines=("clock status",), label="clock", detail="clock status")
+
+    acted = _actions(folded)
+    if acted is not None:
+        return acted
 
     utility = _utility(folded)
     if utility is not None:

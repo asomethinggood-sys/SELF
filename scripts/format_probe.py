@@ -621,6 +621,81 @@ async def run() -> dict[str, object]:
         instructions = {"ok": False, "failure": _head(f"{type(exc).__name__}: {exc}", 240)}
     record["instructions"] = instructions
 
+    # The shapes he photographed: a call written as bare JSON, no fence. Parsed,
+    # run, and never shown. This is deterministic — no model, no network — so a
+    # regression here is a red probe rather than a story about a bad afternoon.
+    wire: dict[str, object] = {}
+    try:
+        from havoc.runtime import Runtime
+        from havoc.services.yura_chat import YuraChat
+
+        scratch3 = await Runtime.create(config, logging.getLogger("probe-wire"))
+        scratch3.sender.dry_run = False
+        scratch3.load_features()
+        scratch3.permissions.set_self_id(1)
+
+        shapes = {
+            "his_autoreply": '{"command": "autoreply", "args": "add private * he\'s not here lil bro"}',
+            "his_profile": '{"command": "profile", "args": "name him"}',
+            "documented": '{"tool": "remind", "args": {"when": "1h", "what": "x"}}',
+            "openai": '{"name": "recall", "arguments": "{\\"about\\": \\"sara\\"}"}',
+            "command_as_tool": '{"tool": "fal", "args": "page 166"}',
+            "no_fence_two": '{"command": "clock", "args": "on"}\n{"tool": "recall", "args": {"about": "s"}}',
+        }
+        schema = scratch3.actions.schema if getattr(scratch3, "actions", None) else None
+        parsed = {name: parse_calls(text, schema=schema) for name, text in shapes.items()}
+
+        class _ScreenshotModel:
+            model = "probe-stub"
+            available = True
+
+            def __init__(self, replies: list[str]) -> None:
+                self.replies = replies
+                self.round = 0
+
+            async def converse(self, messages, *, max_tokens: int = 400, temperature: float = 0.8):
+                return self.replies[-1]
+
+            async def converse_tools(self, messages, *, tools, max_tokens: int = 400):
+                self.round += 1
+                return self.replies[min(self.round - 1, len(self.replies) - 1)], []
+
+        scratch3.ai = _ScreenshotModel(
+            [
+                '{"command": "autoreply", "args": "add private * he\'s not here lil bro"}',
+                '{"command": "autoreply", "args": "add --type any --private => he\'s not here lil bro"}',
+                "باشه دَدّا ✦",
+            ]
+        )
+        chat3 = YuraChat(scratch3)
+        answer = await chat3.answer(
+            "Set an auto reply to every private chat. If anyone messages me say he's not here lil bro",
+            chat_id=1,
+            is_owner=True,
+        )
+        rules = await scratch3.store.list_autoreplies()
+        wire = {
+            "ok": bool(
+                all(clean == "" or "{" not in clean for _, clean in parsed.values())
+                and all(calls for calls, _ in parsed.values())
+                and rules
+                and rules[0]["scope"] == "private"
+                and '"command"' not in answer.text
+                and "```" not in answer.text
+                and answer.rendered
+            ),
+            "shapes": {
+                name: [{"tool": call.name, "args": dict(call.args)} for call in calls]
+                for name, (calls, _) in parsed.items()
+            },
+            "rule": dict(rules[0]) if rules else None,
+            "said": _head(answer.text, 240),
+        }
+        await scratch3.db.close()
+    except Exception as exc:  # noqa: BLE001 - a broken wire is a finding
+        wire = {"ok": False, "failure": _head(f"{type(exc).__name__}: {exc}", 240)}
+    record["wire"] = wire
+
     voice: dict[str, object] = {}
     samples: list[str] = []
     sizes: list[int] = []
@@ -694,6 +769,7 @@ async def run() -> dict[str, object]:
             echo,
             translation,
             hands,
+            wire,
             instructions,
             speech,
             voice,

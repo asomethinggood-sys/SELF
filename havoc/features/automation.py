@@ -265,6 +265,14 @@ class Automations:
             return
         rules = await self.runtime.store.list_autoreplies(scope_chat_id=event.chat_id, enabled_only=True)
         for rule in rules:
+            # Who this rule is allowed to speak in. "Reply to anyone who DMs me"
+            # must not answer in a group — that is the difference between a
+            # secretary and a bot talking over him in public.
+            scope = str(rule["scope"] or "any") if "scope" in rule.keys() else "any"
+            if scope == "private" and not event.is_private:
+                continue
+            if scope == "group" and not event.is_group:
+                continue
             if not _match(event.text, rule["pattern"], rule["match_type"]):
                 continue
             key = f"autoreply:{rule['id']}:{event.chat_id}"

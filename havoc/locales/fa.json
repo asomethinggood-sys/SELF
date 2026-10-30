@@ -138,7 +138,7 @@
   "cmd.alias.description": "ساخت میان‌بر برای فرمان‌ها",
   "cmd.alias.usage": "[list|add|remove|clear]",
   "cmd.autoreply.description": "تنظیم پاسخ‌های خودکار",
-  "cmd.autoreply.usage": "[list|add|on|off|remove|clear]",
+  "cmd.autoreply.usage": "list|add <trigger> => <reply> [--type any] [--private|--group]|on|off|remove|clear",
   "cmd.away.description": "تنظیم پیام «دور بودن» برای گفت‌وگوهای خصوصی",
   "cmd.away.usage": "[on <متن>|off|status]",
   "cmd.backup.description": "پشتیبان‌گیری، بازگردانی و زمان‌بندی پشتیبان محلی",
@@ -328,7 +328,6 @@
   "detect.persian_ratio": "نسبت فارسی",
   "detect.primary": "زبان اصلی",
   "detect.processed": "رویدادهای پردازش‌شده",
-  "detect.queue": "اندازه صف",
   "detect.reactions": "قواعد واکنش",
   "detect.reason": "دلیل",
   "detect.status_header": "◍ موتور تشخیص",
@@ -1025,5 +1024,8 @@
   "actions.intent_capabilities": "کارهایی که می‌توانم",
   "actions.intent_counts": "{commands} فرمان · {features} قابلیت",
   "errors.needs_arguments": "⌁ {name} چیزی برای کار کردن می‌خواهد.\n\n  {usage}",
-  "help.legend_off": "× خاموش است — با `{prefix}enable <command>` برمی‌گردد"
+  "help.legend_off": "× خاموش است — با `{prefix}enable <command>` برمی‌گردد",
+  "autoreply.scope_private": "فقط خصوصی",
+  "autoreply.scope_group": "فقط گروه",
+  "autoreply.scope_any": "همه‌جا"
 }

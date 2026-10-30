@@ -114,16 +114,4 @@ def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(f"havoc.{name}")
 
 
-def recent_errors(log_dir: Path | str = "logs", limit: int = 5) -> list[str]:
-    """Tail the error log for the diagnostics command (already redacted)."""
-    path = Path(log_dir) / "error.log"
-    if not path.exists():
-        return []
-    try:
-        with path.open("r", encoding="utf-8", errors="replace") as handle:
-            lines = handle.readlines()[-200:]
-    except OSError:
-        return []
-    errors = [line.strip() for line in lines if "| ERROR" in line or "| CRITICAL" in line]
-    return errors[-limit:]
 

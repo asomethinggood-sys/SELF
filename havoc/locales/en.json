@@ -138,7 +138,7 @@
   "cmd.alias.description": "Create shortcuts for commands",
   "cmd.alias.usage": "[list|add|remove|clear]",
   "cmd.autoreply.description": "Configure automatic replies",
-  "cmd.autoreply.usage": "[list|add|on|off|remove|clear]",
+  "cmd.autoreply.usage": "list|add <trigger> => <reply> [--type any] [--private|--group]|on|off|remove|clear",
   "cmd.away.description": "Set an away message for private chats",
   "cmd.away.usage": "[on <text>|off|status]",
   "cmd.backup.description": "Export, import and schedule local backups",
@@ -328,7 +328,6 @@
   "detect.persian_ratio": "Persian ratio",
   "detect.primary": "Primary language",
   "detect.processed": "Events processed",
-  "detect.queue": "Queue size",
   "detect.reactions": "Reaction rules",
   "detect.reason": "Reason",
   "detect.status_header": "◍ Detection engine",
@@ -1025,5 +1024,8 @@
   "actions.intent_capabilities": "what i can do",
   "actions.intent_counts": "{commands} commands · {features} features",
   "errors.needs_arguments": "⌁ {name} needs something to work on.\n\n  {usage}",
-  "help.legend_off": "× is switched off — `{prefix}enable <command>` brings it back"
+  "help.legend_off": "× is switched off — `{prefix}enable <command>` brings it back",
+  "autoreply.scope_private": "DMs only",
+  "autoreply.scope_group": "groups only",
+  "autoreply.scope_any": "anywhere"
 }

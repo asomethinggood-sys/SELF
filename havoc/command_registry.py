@@ -129,9 +129,6 @@ class CommandContext:
     def t(self, key: str, /, *, digits: bool = False, **variables: Any) -> str:
         return self.runtime.t(key, self.language, digits=digits, **variables)
 
-    @property
-    def locale(self) -> LocaleManager:
-        return self.runtime.locales
 
     # -- argument helpers -------------------------------------------
     @property

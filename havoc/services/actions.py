@@ -189,9 +189,6 @@ class Tool:
         """Deletes always ask; writes and sends ask only when auto is off."""
         return self.scope in {"write", "send", "delete"}
 
-    @property
-    def routine(self) -> bool:
-        """True for the small things that should just happen."""
         return self.scope in {"read", "write", "send"} and not self.destructive
 
     @property
@@ -335,6 +332,11 @@ class ActionLayer:
 
     def as_functions(self) -> list[dict[str, Any]]:
         return [tool.as_function() for tool in self.offered()]
+
+    @property
+    def schema(self) -> dict[str, tuple[str, ...]]:
+        """``{tool: (property, ...)}`` — what the parser needs to read a bare string."""
+        return {tool.name: tuple(tool.properties) for tool in self._tools.values()}
 
     def catalogue(self, language: str = "en") -> str:
         """The lines that go into her system prompt. Short on purpose."""
@@ -664,22 +666,229 @@ async def _noop(turn: Turn, args: Mapping[str, Any]) -> ActionResult:  # pragma:
 TOOL_BLOCK = re.compile(
     r"```(?:tool|json)?\s*(?P<body>[\[{].*?[\]}])\s*```", re.IGNORECASE | re.DOTALL
 )
-#: A fence that says "tool" but whose contents are not valid JSON, and a stray
-#: JSON line. These are *not* executable — they are the leftovers that must never
-#: reach a person, because a copy-code block of her own machinery is the bug the
-#: owner photographed.
+#: A fence that says "tool" but whose contents are not valid JSON.
 TOOL_LEFTOVER = re.compile(
-    r"```[ \t]*(?:tool|json)?[ \t]*\r?\n?(?:(?!```).)*?\"tool\"(?:(?!```).)*?```",
+    r"```[ \t]*(?:tool|json)?[ \t]*\r?\n?(?:(?!```).)*?\"(?:tool|command)\"(?:(?!```).)*?```",
     re.IGNORECASE | re.MULTILINE | re.DOTALL,
 )
 #: The same thing without a fence, as a last resort (`[[do: {...}]]`).
 TOOL_INLINE = re.compile(r"\[\[\s*do\s*[::]\s*(?P<body>\{.*?\})\s*\]\]", re.IGNORECASE | re.DOTALL)
 
+#: Every key a model has been seen to use for the name of the thing it wants.
+#: "action" and "function" come from other frameworks; "command" is ambiguous and
+#: is handled last, because it is also the name of her own console tool.
+_NAME_KEYS = ("tool", "tool_name", "toolName", "name", "action", "function")
+_CONSOLE_KEYS = ("command", "cmd")
+_ARGS_KEYS = (
+    "args",
+    "arguments",
+    "input",
+    "params",
+    "parameters",
+    "values",
+    "arg",
+)
 
-def parse_calls(text: str) -> tuple[list[ToolCall], str]:
+
+def _first(mapping: Mapping[str, Any], keys: tuple[str, ...]) -> Any:
+    for key in keys:
+        if key in mapping and mapping[key] not in (None, ""):
+            return mapping[key]
+    return None
+
+
+def _args_of(data: Mapping[str, Any]) -> Any:
+    value = _first(data, _ARGS_KEYS)
+    return {} if value is None else value
+
+
+def _args_dict(value: Any, tool: str = "", schema: Mapping[str, Any] | None = None) -> dict[str, Any] | None:
+    """Whatever was in ``args``, as a mapping — or ``None`` if it cannot be one."""
+    if isinstance(value, Mapping):
+        return {str(key): item for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return {f"arg{index}": item for index, item in enumerate(value)}
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return {}
+        if text.startswith("{"):
+            try:
+                loaded = json.loads(text)
+            except (ValueError, TypeError):
+                loaded = None
+            if isinstance(loaded, dict):
+                return {str(key): item for key, item in loaded.items()}
+        # A bare string: the tool's only property is what it must mean. Anything
+        # else and it is handed over as ``args`` so validation can say so plainly.
+        properties = list(schema or ())
+        if tool and len(properties) == 1:
+            return {properties[0]: text}
+        return {"args": text}
+    return None
+
+
+def _args_text(value: Any) -> str:
+    """A value as the words a person would have typed."""
+    if isinstance(value, Mapping):
+        return " ".join(f"{key} {_args_text(item)}".strip() for key, item in value.items())
+    if isinstance(value, (list, tuple)):
+        return " ".join(_args_text(item) for item in value)
+    if value in (None, ""):
+        return ""
+    return str(value)
+
+
+def _call_of(data: Any, schema: Mapping[str, Any] | None = None) -> ToolCall | None:
+    """One object, read as a call — in any of the shapes models actually write.
+
+    Four have been seen in the wild, and all four now mean the same thing:
+
+    ``{"tool": "remind", "args": {"when": "30m", "what": "call mom"}}``
+        the documented shape;
+    ``{"name": "recall", "arguments": "{\"about\": \"sara\"}"}``
+        OpenAI's, with the arguments as a JSON *string*;
+    ``{"command": "autoreply", "args": "add hi => hello"}``
+        the console tool, implied by the key — she then runs that line;
+    ``{"tool": "fal", "args": "page 166"}``
+        a command named where a tool belongs: same console, same line.
+    """
+    if not isinstance(data, Mapping):
+        return None
+
+    name = _first(data, _NAME_KEYS)
+    arguments = _args_of(data)
+    if isinstance(name, Mapping):  # {"function": {"name": ..., "arguments": ...}}
+        arguments = name.get("arguments", arguments)
+        if isinstance(arguments, str) and arguments.strip().startswith("{"):
+            try:
+                arguments = json.loads(arguments)
+            except (ValueError, TypeError):
+                arguments = arguments
+        name = name.get("name")
+
+    if isinstance(name, str) and name.strip():
+        tool = name.strip().lower()
+        if tool == "command":
+            args = _args_dict(arguments, tool, schema)
+            if args is None:
+                return None
+            # The console with a bare string is a line: "fal page 166".
+            if set(args) == {"args"}:
+                line = str(args["args"]).strip()
+                if line:
+                    head, _, rest = line.partition(" ")
+                    return ToolCall("command", {"command": head, "args": rest})
+            return ToolCall("command", args)
+        if schema is not None and schema and tool not in schema:
+            # A name that is not one of her tools is a *command*: models write
+            # ``{"tool": "fal", "args": "page 166"}`` because both are "things she
+            # can do". Sending it to the console is what he meant.
+            line = " ".join(
+                part for part in (tool, _args_text(arguments).strip()) if part
+            )
+            head, _, rest = line.partition(" ")
+            return ToolCall("command", {"command": head, "args": rest})
+        args = _args_dict(arguments, tool, (schema or {}).get(tool))
+        if args is None:
+            return None
+        return ToolCall(tool, args)
+
+    # No tool-shaped key at all: the model named a *command* in the console slot.
+    console = _first(data, _CONSOLE_KEYS)
+    if isinstance(console, str) and console.strip():
+        line = " ".join(console.split())
+        head, _, rest = line.partition(" ")
+        extra = _args_dict(arguments, "command") or {}
+        tail = " ".join(str(part) for part in extra.values()).strip()
+        args = {"command": head, "args": " ".join(part for part in (rest, tail) if part).strip()}
+        return ToolCall("command", {key: value for key, value in args.items() if value})
+    return None
+
+
+def _looks_like_call(data: Any) -> bool:
+    """True for any object that *claims* to be a call, valid or not."""
+    if not isinstance(data, Mapping):
+        return False
+    if any(key in data for key in _CONSOLE_KEYS + ("tool", "tool_name", "toolName")):
+        return any(key in data for key in _ARGS_KEYS + _CONSOLE_KEYS) or "tool" in data
+    # ``{"name": …, "arguments": …}`` is the same claim in another framework's
+    # spelling — and it must not reach a chat window either.
+    return any(key in data for key in ("name", "action")) and any(
+        key in data for key in _ARGS_KEYS
+    )
+
+
+def _objects_in(body: str) -> list[Any]:
+    """Every JSON value in a fence: one object, an array, or objects back to back."""
+    blob = body.strip()
+    if not blob:
+        return []
+    try:
+        loaded = json.loads(blob)
+    except (ValueError, TypeError):
+        loaded = None
+    if isinstance(loaded, dict):
+        return [loaded]
+    if isinstance(loaded, list):
+        return list(loaded)
+    decoder = json.JSONDecoder()
+    out: list[Any] = []
+    index = 0
+    while index < len(blob):
+        while index < len(blob) and blob[index] in " \t\r\n,":
+            index += 1
+        if index >= len(blob):
+            break
+        try:
+            value, index = decoder.raw_decode(blob, index)
+        except ValueError:
+            break
+        if isinstance(value, dict):
+            out.append(value)
+    return out
+
+
+def _bare_calls(text: str, schema: Mapping[str, Any] | None = None) -> list[tuple[int, int, ToolCall]]:
+    """Call objects anywhere in the text — the model does not always use a fence.
+
+    The reported bug was exactly this: three copies of
+    ``{"command": "autoreply", "args": "add private * he's not here"}`` arrived as
+    her *message*, with a copy button in Telegram, and nothing ran. A model that
+    writes the object bare has asked for the thing; it is not prose.
+    """
+    found: list[tuple[int, int, ToolCall]] = []
+    decoder = json.JSONDecoder()
+    index = 0
+    while index < len(text):
+        start = text.find("{", index)
+        if start < 0:
+            break
+        try:
+            value, end = decoder.raw_decode(text, start)
+        except (ValueError, TypeError):
+            index = start + 1
+            continue
+        if isinstance(value, dict):
+            call = _call_of(value, schema)
+            if call is not None:
+                found.append((start, end, call))
+            index = end
+            continue
+        index = start + 1
+    return found
+
+
+def parse_calls(
+    text: str, *, schema: Mapping[str, Any] | None = None
+) -> tuple[list[ToolCall], str]:
     """Split a reply into tool calls and the words a person should see.
 
-    Anything that is not a well-formed tool object is left in the text: a model
+    ``schema`` is the tool layer's ``{tool: (property, ...)}``; with it, a bare
+    string argument can be given to the tool's only property instead of being a
+    validation error.
+
+    Anything that is not a well-formed call object is left in the text: a model
     that writes a JSON example in a sentence must not lose the sentence, and a
     block without a name or with a non-object body is prose, not an action.
     """
@@ -694,13 +903,33 @@ def parse_calls(text: str) -> tuple[list[ToolCall], str]:
             # fails, which used to dump the raw JSON into the chat as a code
             # block. Every object in the block is read; a block with none is
             # left alone as prose.
-            found = [call for call in map(_call_of, _objects_in(match.group("body"))) if call]
+            found = [
+                call
+                for call in (_call_of(item, schema) for item in _objects_in(match.group("body")))
+                if call
+            ]
             if not found:
                 continue
             calls.extend(found)
             removed.append((match.start(), match.end()))
+    # ...and the same shapes with no fence at all, which is what he photographed.
+    for start, end, call in _bare_calls(text, schema):
+        if any(begin <= start < stop for begin, stop in removed):
+            continue
+        calls.append(call)
+        removed.append((start, end))
     if not calls:
         return [], text
+    # The same call written three times is one call. Both because it is what the
+    # model does when it is unsure, and because doing it three times is worse
+    # than not doing it.
+    unique: list[ToolCall] = []
+    seen: set[str] = set()
+    for call in calls:
+        if call.key in seen:
+            continue
+        seen.add(call.key)
+        unique.append(call)
     out = []
     cursor = 0
     for start, end in sorted(removed):
@@ -708,7 +937,7 @@ def parse_calls(text: str) -> tuple[list[ToolCall], str]:
         cursor = end
     out.append(text[cursor:])
     cleaned = re.sub(r"\n{3,}", "\n\n", "".join(out)).strip()
-    return calls[:MAX_CALLS_PER_TURN], cleaned
+    return unique[:MAX_CALLS_PER_TURN], cleaned
 
 
 def scrub_tool_text(text: str) -> str:
@@ -716,12 +945,13 @@ def scrub_tool_text(text: str) -> str:
 
     Belt and braces for the turn-18 bug: the fenced block is parsed and executed
     first, and this removes any half-formed remains (a fence that is not valid
-    JSON, a bare ``{"tool": …}`` line). Nothing machine-shaped is allowed into a
-    message; an empty result is better than a block of JSON with a copy button.
+    JSON, a bare ``{"tool": …}`` or ``{"command": …}`` line). Nothing
+    machine-shaped is allowed into a message; an empty result is better than a
+    block of JSON with a copy button.
     """
-    if not text or "tool" not in text.lower():
+    if not text or '"' not in text:
         return text
-    cleaned = TOOL_LEFTOVER.sub("", text)
+    cleaned = TOOL_INLINE.sub("", TOOL_LEFTOVER.sub("", text))
     # ...and the object itself, wherever it starts, because ``{"tool": …`` is
     # machine syntax even when the model wrote it mid-sentence. Braces are counted
     # so a nested ``args`` object goes with it.
@@ -729,7 +959,8 @@ def scrub_tool_text(text: str) -> str:
         start = _stray_object(cleaned)
         if start is None:
             break
-        cleaned = cleaned[:start] + cleaned[_object_end(cleaned, start) :]
+        cleaned = cleaned[:start] + cleaned[_object_end(cleaned, start) :].lstrip(" \t")
+    cleaned = " ".join(cleaned.split()) if "\n" not in cleaned else cleaned
     if cleaned == text:
         return text
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
@@ -737,9 +968,22 @@ def scrub_tool_text(text: str) -> str:
 
 
 def _stray_object(text: str) -> int | None:
-    """The index of a ``{"tool": …`` that survived parsing, if there is one."""
-    marker = re.search(r"\{\s*\"tool\"\s*:", text)
-    return marker.start() if marker else None
+    """The index of a call object that survived parsing, if there is one."""
+    decoder = json.JSONDecoder()
+    index = 0
+    while index < len(text):
+        start = text.find("{", index)
+        if start < 0:
+            return None
+        try:
+            value, end = decoder.raw_decode(text, start)
+        except (ValueError, TypeError):
+            index = start + 1
+            continue
+        if _looks_like_call(value):
+            return start
+        index = end
+    return None
 
 
 def _object_end(text: str, start: int) -> int:
@@ -770,59 +1014,7 @@ def _object_end(text: str, start: int) -> int:
     return len(text)
 
 
-def _objects_in(body: str) -> list[Any]:
-    """Every JSON value in a fence: one object, an array, or objects back to back.
-
-    ``raw_decode`` is used so a newline-separated run of objects — which is what a
-    chat model actually writes when it means "do these two things" — parses into
-    two calls instead of failing as invalid JSON.
-    """
-    blob = body.strip()
-    if not blob:
-        return []
-    try:
-        loaded = json.loads(blob)
-    except (ValueError, TypeError):
-        loaded = None
-    if isinstance(loaded, dict):
-        return [loaded]
-    if isinstance(loaded, list):
-        return list(loaded)
-    decoder = json.JSONDecoder()
-    out: list[Any] = []
-    index = 0
-    while index < len(blob):
-        while index < len(blob) and blob[index] in " \t\r\n,":
-            index += 1
-        if index >= len(blob):
-            break
-        try:
-            value, index = decoder.raw_decode(blob, index)
-        except ValueError:
-            break
-        if isinstance(value, dict):
-            out.append(value)
-    return out
-
-
-def _call_of(data: Any) -> ToolCall | None:
-    if not isinstance(data, dict):
-        return None
-    name = data.get("tool") or data.get("name") or data.get("action")
-    args = data.get("args") or data.get("arguments") or data.get("input") or {}
-    if not isinstance(name, str) or not name.strip():
-        return None
-    if isinstance(args, str):
-        try:
-            args = json.loads(args)
-        except (ValueError, TypeError):
-            return None
-    if not isinstance(args, dict):
-        return None
-    return ToolCall(name.strip().lower(), {str(k): v for k, v in args.items()})
-
-
-def calls_from_native(payload: Any) -> list[ToolCall]:
+def calls_from_native(payload: Any, schema: Mapping[str, Any] | None = None) -> list[ToolCall]:
     """Tool calls out of an OpenAI-shaped ``tool_calls`` list."""
     calls: list[ToolCall] = []
     if not isinstance(payload, list):
@@ -832,7 +1024,7 @@ def calls_from_native(payload: Any) -> list[ToolCall]:
         if not isinstance(function, dict):
             continue
         call = _call_of(
-            {"tool": function.get("name"), "args": function.get("arguments") or {}}
+            {"tool": function.get("name"), "args": function.get("arguments") or {}}, schema
         )
         if call is not None:
             calls.append(call)

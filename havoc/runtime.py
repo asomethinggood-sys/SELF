@@ -22,7 +22,7 @@ from .database import Database
 from .event_engine import EventEngine, EventType, now_event
 from .feature_manager import FeatureManager, builtin_features
 from .health import Health, Metrics
-from .language_detection import detect_language, resolve_language
+from .language_detection import resolve_language
 from .localization import LocaleManager, MissingTranslationError, normalize_language_code
 from .migrations import apply_migrations
 from .permissions import Permissions
@@ -149,6 +149,7 @@ class Runtime:
 
         # The sender is created without a client; ``attach_client`` fills it in.
         sender = Sender(None, config, limiter, logger)
+
 
         async def _scheduler_error(kind: str, payload: dict[str, Any], exc: BaseException) -> None:
             health.record_error(f"scheduler:{payload.get('scope', kind) if payload else kind}", exc)
@@ -303,9 +304,6 @@ class Runtime:
         # auto (or unset): detect from the message, keep the configured fallback
         fallback = self.config.default_language
         return resolve_language(text, preference="auto", fallback=fallback)
-
-    async def language_estimate(self, text: str | None) -> Any:
-        return detect_language(text)
 
     # ------------------------------------------------------------------
     # Misc helpers

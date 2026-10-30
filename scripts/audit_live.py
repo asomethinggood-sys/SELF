@@ -264,39 +264,54 @@ async def _actions(runtime: Any) -> dict[str, Any]:
 
 
 def _dead_code(root: Path) -> dict[str, Any]:
-    """Definitions nobody calls, and scripts nobody runs.
+    """Definitions nothing *reaches*, and scripts nobody runs.
 
-    Grep-level on purpose: an AST pass that is wrong is worse than a list a person
-    can check. Functions decorated with ``@command``-style registration are
-    reached through the registry, so they are excluded by name pattern.
+    This is an AST pass, not a grep: a name in a comment or a docstring is not a
+    caller, and counting it as one is how a project keeps a hundred helpers nobody
+    uses. Three kinds of definition are exempt by construction, because Python or a
+    plugin reaches them without naming them: dunders (``__len__``, ``__iter__``),
+    ``__post_init__``/``__getattr__`` hooks, and callbacks a plugin API hands out.
     """
     import ast
 
+    from havoc.services.self_console import BLOCKED  # noqa: F401 - import check
+
     package = Path(__import__("havoc").__file__).parent
-    defined: dict[str, Path] = {}
-    for path in package.rglob("*.py"):
+    sources = list(package.rglob("*.py")) + list((root / "tests").rglob("*.py")) + list(
+        (root / "scripts").rglob("*.py")
+    )
+    loaded: dict[str, int] = {}
+    defined: list[tuple[str, str, str]] = []
+    trees = []
+    for path in sources:
         try:
             tree = ast.parse(path.read_text())
         except SyntaxError:
             continue
+        trees.append((path, tree))
         for node in ast.walk(tree):
+            if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+                loaded[node.id] = loaded.get(node.id, 0) + 1
+            elif isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load):
+                loaded[node.attr] = loaded.get(node.attr, 0) + 1
+    for path, tree in trees:
+        if not str(path).startswith(str(package)):
+            continue
+        for node in tree.body:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                if node.name.startswith("_") or node.name.startswith("test"):
-                    continue
-                defined.setdefault(node.name, path)
-    corpus = "\n".join(path.read_text() for path in package.rglob("*.py"))
-    tests = "\n".join(path.read_text() for path in (root / "tests").rglob("*.py"))
-    scripts = "\n".join(path.read_text() for path in (root / "scripts").rglob("*.py"))
-    everything = corpus + tests + scripts
+                defined.append((node.name, str(path.relative_to(root)), "function"))
+            elif isinstance(node, ast.ClassDef):
+                for sub in node.body:
+                    if isinstance(sub, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        defined.append((sub.name, str(path.relative_to(root)), f"{node.name}.method"))
+    #: Public API a plugin or a test reaches by string, not by name.
+    hooks = {"register_command", "add_strings", "register_hook", "has_raqm"}
     orphans = []
-    import collections
-
-    words = collections.Counter(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", everything))
-    for name, path in sorted(defined.items()):
-        # A function is reached by *being named* — a call, a registry tuple, a
-        # decorator, a test. The definition itself is one of those mentions.
-        if words[name] <= 1:
-            orphans.append({"function": name, "file": str(path.relative_to(root))})
+    for name, where, kind in sorted(defined):
+        if name.startswith("__") or name in hooks:
+            continue
+        if loaded.get(name, 0) == 0:
+            orphans.append({"function": name, "file": where, "kind": kind})
     todos = [
         {"file": str(path.relative_to(root)), "line": index, "text": line.strip()[:120]}
         for path in list(package.rglob("*.py"))
@@ -305,14 +320,13 @@ def _dead_code(root: Path) -> dict[str, Any]:
     ]
     bare_excepts = []
     for path in package.rglob("*.py"):
-        text = path.read_text()
-        for index, line in enumerate(text.splitlines(), 1):
+        for index, line in enumerate(path.read_text().splitlines(), 1):
             if re.search(r"except\s*:", line):
                 bare_excepts.append({"file": str(path.relative_to(root)), "line": index})
     return {
-        # Orphans count as rot now: a helper nobody calls is a promise nobody
-        # keeps. The sweep that emptied this list is only permanent if it fails
-        # the day a new one appears.
+        # An orphan is rot: a helper nobody calls is a promise nobody keeps. The
+        # sweep that emptied this list is only permanent if the day a new one
+        # appears is a red build.
         "ok": not todos and not bare_excepts and not orphans,
         "orphans": orphans,
         "todos": todos,
@@ -364,15 +378,73 @@ async def _sql(runtime: Any) -> dict[str, Any]:
 
 
 async def _schedule(runtime: Any) -> dict[str, Any]:
-    """The scheduler is where stale locks live. Ask it what it thinks is due."""
-    rows: dict[str, Any] = {}
-    try:
-        jobs = getattr(runtime.scheduler, "jobs", None)
-        rows["jobs"] = len(jobs) if jobs is not None else "unknown"
-        rows["running"] = str(getattr(runtime.scheduler, "running", "unknown"))
-    except Exception as exc:  # noqa: BLE001
-        rows["error"] = f"{type(exc).__name__}: {exc}"
-    return rows
+    """Does a due piece of work actually fire, and does a missed one do what it says?
+
+    A scheduler is where stale locks live: a row marked running forever, a job that
+    fires twice, a reminder left ``pending`` after its moment. This runs the real
+    tick and the real recovery, then reads the database.
+    """
+    from datetime import timedelta
+
+    from havoc.utils.time import utc_now
+
+    problems: list[str] = []
+    store = runtime.store
+    scheduler = runtime.scheduler
+    fired: list[str] = []
+
+    async def _on_reminder(row: Any) -> None:
+        fired.append(str(row["text"] if "text" in row.keys() else row))
+
+    scheduler.on_reminder = _on_reminder
+    ran: list[str] = []
+
+    async def _job(_payload: Any) -> None:
+        ran.append("job")
+
+    scheduler.register_job("audit_noop", _job)
+    reminder_id = await store.add_reminder(100, "audit reminder", utc_now() - timedelta(seconds=5))
+    scheduled_id = await store.add_schedule(chat_id=100, text="audit schedule", run_at=utc_now() - timedelta(seconds=5))
+    job_id = await scheduler.enqueue("audit_noop", utc_now() - timedelta(seconds=5))
+    summary = await scheduler.tick()
+    row = await store.get_reminder(reminder_id)
+    if row["status"] != "done":
+        problems.append(f"reminder stayed {row['status']}")
+    if fired != ["audit reminder"]:
+        problems.append(f"reminder fired {len(fired)} time(s)")
+    schedule_row = await store.db.fetch_one("SELECT enabled FROM schedules WHERE id = ?", (scheduled_id,))
+    if schedule_row and int(schedule_row["enabled"]) not in (0, 1):
+        problems.append("schedule left in an unknown state")
+    job_row = await store.db.fetch_one("SELECT status FROM jobs WHERE id = ?", (job_id,))
+    if job_row and str(job_row["status"]) == "pending":
+        problems.append("a due job is still pending after a tick")
+    if ran != ["job"]:
+        problems.append(f"the due job ran {len(ran)} time(s)")
+    if summary.get("errors"):
+        problems.append(f"tick reported {summary['errors']} error(s)")
+
+    # A second tick must not deliver it again — that is the double-send bug.
+    fired.clear()
+    await scheduler.tick()
+    if fired:
+        problems.append("a delivered reminder fired twice")
+
+    # A missed job under each policy: run_once keeps it, skip drops it, ask reports.
+    policies: dict[str, str] = {}
+    for policy in ("run_once", "skip", "ask"):
+        scheduler.missed_policy = policy
+        missed_id = await scheduler.enqueue(f"audit_missed_{policy}", utc_now() - timedelta(hours=1))
+        result = await scheduler.recover()
+        row = await store.db.fetch_one("SELECT status FROM jobs WHERE id = ?", (missed_id,))
+        policies[policy] = str(row["status"] if row else "gone")
+        if policy == "run_once" and policies[policy] != "pending":
+            problems.append(f"run_once turned a missed job into {policies[policy]}")
+        if policy in {"skip", "ask"} and policies[policy] == "pending":
+            problems.append(f"{policy} left a missed job pending")
+        if policy == "ask" and not result.get("jobs_missed"):
+            problems.append("ask did not count the job it dropped")
+
+    return {"ok": not problems, "problems": problems, "policies": policies, "summary": summary}
 
 
 async def main() -> int:
@@ -409,6 +481,8 @@ async def main() -> int:
             record["actions"]["ok"],
             record["commands"]["ok"],
             record["sql"]["ok"],
+            record["schedule"]["ok"],
+            record["dead_code"]["ok"],
         ]
     )
     Path(args.json).write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n")

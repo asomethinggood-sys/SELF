@@ -276,13 +276,16 @@ class Store:
         scope_chat_id: int | None = None,
         cooldown: int = 300,
         enabled: bool = True,
+        scope: str = "any",
     ) -> int:
+        if scope not in {"any", "private", "group"}:
+            raise ValueError(f"unknown autoreply scope: {scope!r}")
         return await self.db.insert(
             """
-            INSERT INTO autoreplies(pattern, match_type, response, language, scope_chat_id, cooldown, enabled, created_at)
-            VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO autoreplies(pattern, match_type, response, language, scope_chat_id, cooldown, enabled, scope, created_at)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (pattern, match_type, response, language, scope_chat_id, cooldown, int(enabled), iso(utc_now())),
+            (pattern, match_type, response, language, scope_chat_id, cooldown, int(enabled), scope, iso(utc_now())),
         )
 
     async def list_autoreplies(self, scope_chat_id: int | None = None, enabled_only: bool = False) -> list[Row]:

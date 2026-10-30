@@ -35,12 +35,8 @@ def italic(text: object) -> str:
     return f"<i>{escape(text)}</i>"
 
 
-def underline(text: object) -> str:
-    return f"<u>{escape(text)}</u>"
 
 
-def strike(text: object) -> str:
-    return f"<s>{escape(text)}</s>"
 
 
 def code(text: object) -> str:
@@ -54,16 +50,12 @@ def pre(text: object, language: str | None = None) -> str:
     return f"<pre>{body}</pre>"
 
 
-def spoiler(text: object) -> str:
-    return f"<tg-spoiler>{escape(text)}</tg-spoiler>"
 
 
 def link(text: object, url: str) -> str:
     return f'<a href="{html.escape(url, quote=True)}">{escape(text)}</a>'
 
 
-def mention(text: object, user_id: int) -> str:
-    return f'<a href="tg://user?id={int(user_id)}">{escape(text)}</a>'
 
 
 def quote(text: object) -> str:

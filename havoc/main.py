@@ -140,6 +140,10 @@ async def command_run(args: argparse.Namespace) -> int:
     router = runtime.handlers
     router.register(telegram.client)
     bridge = SystemEventBridge(runtime)
+    # Telegram's "wait N seconds" used to land in a counter nobody read. The bridge
+    # already emits the event the automation feature listens for; it just had to be
+    # handed to the sender.
+    runtime.sender.on_flood = bridge.flood_wait
 
     if args.no_plugins:
         runtime.config = config.with_overrides(plugins_enabled=False)

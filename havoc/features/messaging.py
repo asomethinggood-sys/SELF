@@ -62,8 +62,10 @@ async def cmd_autoreply(ctx: CommandContext) -> None:
         lines = [bold(ctx.t("autoreply.header", count=len(rows)))]
         for row in rows:
             state = "●" if row["enabled"] else "⚪"
+            where = str(row["scope"] or "any") if "scope" in row.keys() else "any"
+            tag = "" if where == "any" else f" · {escape(ctx.t(f'autoreply.scope_{where}'))}"
             lines.append(
-                f"{state} #{row['id']} [{escape(row['match_type'])}] {escape(truncate(row['pattern'], 30))} → "
+                f"{state} #{row['id']} [{escape(row['match_type'])}{tag}] {escape(truncate(row['pattern'], 30))} → "
                 f"{escape(truncate(row['response'], 40))}"
             )
         lines.append("")
@@ -75,9 +77,13 @@ async def cmd_autoreply(ctx: CommandContext) -> None:
         if not raw:
             raise CommandError("errors.missing_argument", usage=ctx.usage_text())
         pattern, response = _split_rule(raw)
+        match_type = (ctx.flag("type") or "contains").lower()
+        # "reply to anyone who DMs me" needs no trigger word — the trigger is the
+        # scope. ``--type any --private`` is that request written as flags.
+        if not pattern and match_type == "any":
+            pattern = "*"
         if not pattern or not response:
             raise CommandError("autoreply.separator_hint", separator="=>")
-        match_type = (ctx.flag("type") or "contains").lower()
         if match_type not in MATCH_TYPES:
             raise CommandError("errors.invalid_choice", field="type", choices=", ".join(MATCH_TYPES))
         if match_type == "regex":
@@ -90,9 +96,20 @@ async def cmd_autoreply(ctx: CommandContext) -> None:
         except ValueError as exc:
             raise CommandError("errors.not_a_number", field="cooldown") from exc
         scope = ctx.chat_id if ctx.has_flag("chat") else None
+        audience = "any"
+        if ctx.has_flag("private"):
+            audience = "private"
+        elif ctx.has_flag("group"):
+            audience = "group"
         validate_message_body(response)
         rule_id = await store.add_autoreply(
-            pattern, response, match_type=match_type, language=ctx.flag("lang") or "auto", scope_chat_id=scope, cooldown=cooldown
+            pattern,
+            response,
+            match_type=match_type,
+            language=ctx.flag("lang") or "auto",
+            scope_chat_id=scope,
+            cooldown=cooldown,
+            scope=audience,
         )
         await ctx.reply(
             ctx.t("autoreply.added", id=rule_id, pattern=escape(truncate(pattern, 40)))

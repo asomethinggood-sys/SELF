@@ -181,7 +181,6 @@ class Scheduler:
                 )
                 if policy == "ask":
                     await self._notify_missed("job", row)
-            summary["jobs_missed"] = 0
 
         if any(summary[key] for key in ("reminders_missed", "schedules_missed", "jobs_missed", "held")):
             self.logger.warning("missed jobs recovered: %s", summary)

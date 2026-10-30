@@ -29,7 +29,7 @@ from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
-from .language_detection import LanguageEstimate, detect_language
+from .language_detection import detect_language
 from .services.cache import TTLCache, dedupe_key
 from .utils.security import scrub_message_preview
 from .utils.text import extract_hashtags, extract_mentions, extract_urls
@@ -102,16 +102,6 @@ class NormalizedEvent:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
-    @property
-    def language_estimate(self) -> LanguageEstimate:
-        return LanguageEstimate(
-            language=self.language,
-            primary=self.language if self.language in ("en", "fa") else "en",
-            confidence=self.confidence,
-            persian_ratio=0.0,
-            persian_letters=0,
-            latin_letters=0,
-        )
 
     def safe_preview(self, limit: int = 60) -> str:
         return scrub_message_preview(self.text, limit)
@@ -290,10 +280,7 @@ class EventEngine:
         self._burst_threshold = burst_threshold
         self._burst_events: deque = deque(maxlen=burst_threshold * 4)
         self._burst_notified_at = 0.0
-        self._queue: asyncio.Queue[NormalizedEvent] | None = None
-        self._worker: asyncio.Task[None] | None = None
         self.debug = debug
-        self._running = False
 
     # ------------------------------------------------------------------
     # Subscriptions
@@ -401,64 +388,9 @@ class EventEngine:
         asyncio.create_task(self.emit(burst))
 
     # ------------------------------------------------------------------
-    # Async queue mode (used by the live client)
-    # ------------------------------------------------------------------
-    async def start(self) -> None:
-        if self._running:
-            return
-        self._queue = asyncio.Queue(maxsize=2000)
-        self._running = True
-        self._worker = asyncio.create_task(self._worker_loop(), name="havoc-event-worker")
-
-    async def stop(self) -> None:
-        self._running = False
-        if self._worker is not None:
-            self._worker.cancel()
-            try:
-                await self._worker
-            except (asyncio.CancelledError, Exception):
-                pass
-            self._worker = None
-        if self._queue is not None:
-            while not self._queue.empty():
-                try:
-                    self._queue.get_nowait()
-                except asyncio.QueueEmpty:  # pragma: no cover
-                    break
-            self._queue = None
-
-    async def submit(self, event: NormalizedEvent) -> bool:
-        """Queue an event for async processing (bounded, drops when saturated)."""
-        if self._queue is None:
-            await self.emit(event)
-            return True
-        try:
-            self._queue.put_nowait(event)
-            return True
-        except asyncio.QueueFull:
-            self.metrics.by_type["queue_full"] += 1
-            self.logger.warning("event queue full; dropping %s", event.type.value)
-            return False
-
-    async def _worker_loop(self) -> None:
-        assert self._queue is not None
-        while self._running:
-            try:
-                event = await self._queue.get()
-            except asyncio.CancelledError:
-                raise
-            try:
-                await self.emit(event)
-            except Exception:  # pragma: no cover - emit already isolates
-                self.logger.exception("unhandled error while emitting event")
-            finally:
-                self._queue.task_done()
-
-    # ------------------------------------------------------------------
     def snapshot(self) -> dict[str, Any]:
         return {
             "metrics": self.metrics.snapshot(),
-            "queue_size": self._queue.qsize() if self._queue else 0,
             "subscribers": [
                 {
                     "name": sub.name,

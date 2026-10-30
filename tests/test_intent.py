@@ -379,3 +379,54 @@ CONVERSATION_CORPUS = (
 @pytest.mark.parametrize("sentence", CONVERSATION_CORPUS)
 def test_plain_conversation_is_never_turned_into_a_command(sentence: str) -> None:
     assert detect(sentence) is None, f"{sentence!r} would have stolen her answer"
+
+
+# ---------------------------------------------------------------------------
+# The requests in his screenshots: a rule for his inbox, a name, a bio.
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("sentence", "expected"),
+    [
+        (
+            "Set an auto reply to every private chat. If anyone messages me say he's not here lil bro",
+            "autoreply add --type any --private => he's not here lil bro",
+        ),
+        ("if anyone messages me say he's not here lil bro", "autoreply add --type any --private => he's not here lil bro"),
+        ("if anyone dms me, tell them I'm busy", "autoreply add --type any --private => i'm busy"),
+        ("set an autoreply for DMs saying I'll be back at 9", "autoreply add --type any --private => i'll be back at 9"),
+        ("reply to every private chat with he is gone", "autoreply add --type any --private => he is gone"),
+        ("set an auto reply saying brb", "autoreply add --type any --any => brb"),
+        ("change my profile name to him", "profile name him"),
+        ("change my name to Yura", "profile name yura"),
+        ("set my bio to wandering soul", "bio set wandering soul"),
+        ("i'm away", "away on I am away right now"),
+        ("i'm back", "away off"),
+    ],
+)
+def test_a_request_about_her_behaviour_becomes_a_console_line(sentence: str, expected: str) -> None:
+    intent = detect(sentence)
+    assert intent is not None, f"{sentence!r} was answered instead of acted on"
+    assert intent.lines[0] == expected
+
+
+def test_an_auto_reply_is_switched_on_with_the_rule() -> None:
+    """"Set an auto reply" includes turning the feature on — a stored rule with the
+    feature off is a rule that never speaks."""
+    intent = detect("if anyone messages me say brb")
+    assert intent is not None
+    assert intent.lines == ("autoreply add --type any --private => brb", "autoreply on")
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "i set an autoreply yesterday lol",
+        "my name is Sina",
+        "what do you think of my name",
+        "i'm not sure about that",
+        "i was away for a week",
+        "do you like my bio",
+    ],
+)
+def test_a_sentence_about_things_is_not_an_order_about_them(sentence: str) -> None:
+    assert detect(sentence) is None

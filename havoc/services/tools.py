@@ -15,10 +15,11 @@ Two deliberate omissions:
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from ..utils.time import TimeParseError, format_datetime, parse_when, utc_now
-from .actions import ActionResult, Tool, Turn
+from .actions import MAX_CALLS_PER_TURN, ActionResult, Tool, Turn
 from .self_console import run as run_command
 from .translation_provider import TranslationError
 
@@ -261,26 +262,56 @@ def build_tools(runtime: Any) -> list[Tool]:
     )
 
     async def command(turn: Turn, args: dict[str, str]) -> ActionResult:
-        """Any of her own commands, dispatched exactly as if he had typed it."""
-        line = " ".join(
+        """Any of her own commands, dispatched exactly as if he had typed it.
+
+        One call may carry several lines — a New York model writing a compound
+        request ("clock off, then remind me") uses newlines or ``;`` — and each
+        line is dispatched on its own so one bad line does not swallow the rest.
+        """
+        raw = " ".join(
             part for part in (args.get("command", ""), args.get("args", "")) if part
         ).strip()
-        result = await run_command(
-            runtime,
-            line,
-            chat_id=turn.chat_id,
-            sender_id=turn.actor_id or 0,
-            message_id=turn.message_id,
-            language=turn.language,
-        )
-        if not result.ok and result.kind in {"blocked", "unknown"}:
-            return ActionResult(False, detail=result.note, kind=result.kind)
+        script = [part.strip() for part in re.split(r"[\n;]+|\s+&&\s+", raw) if part.strip()]
+        if not script:
+            return ActionResult(False, detail="no command given", kind="bad_args")
+        notes: list[str] = []
+        all_ok = True
+        for line in script[:MAX_CALLS_PER_TURN]:
+            result = await run_command(
+                runtime,
+                line,
+                chat_id=turn.chat_id,
+                sender_id=turn.actor_id or 0,
+                message_id=turn.message_id,
+                language=turn.language,
+            )
+            if not result.ok and result.kind in {"blocked", "unknown"}:
+                return ActionResult(False, detail=result.note, kind=result.kind)
+            if not result.ok:
+                all_ok = False
+                # The model guessed a syntax. Give it the line it should have
+                # written, so the next round can repair it instead of apologising.
+                name = (result.command or line.split(" ")[0]).strip().lower()
+                record = runtime.registry.resolve(name) if getattr(runtime, "registry", None) else None
+                usage = ""
+                if record is not None:
+                    usage = " ".join(str(getattr(record, "usage", "") or "").split())
+                hint = f"`{runtime.prefix}{name} {usage}`".replace("  ", " ").strip()
+                notes.append(f"{line}: {result.note}" + (f" — the form is {hint}" if usage else ""))
+            else:
+                notes.append(f"{line}: {result.note}")
+        if all_ok:
+            return ActionResult(
+                True,
+                note=" · ".join(notes)[:400],
+                title=_t(runtime, turn, "actions.card_ran_command", command=raw[:80]),
+                lines=tuple(notes[:3]),
+            )
         return ActionResult(
-            result.ok,
-            note=result.note,
-            detail="" if result.ok else result.note,
-            title=_t(runtime, turn, "actions.card_ran_command", command=line[:80]),
-            lines=(result.note[:240],) if result.note else (),
+            False,
+            detail="; ".join(notes)[:400],
+            note="; ".join(notes)[:400],
+            kind="failed",
         )
 
     tools.append(

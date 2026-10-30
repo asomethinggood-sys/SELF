@@ -35,6 +35,3 @@ def display(language: str = "en") -> str:
     return name(language)
 
 
-def bilingual() -> str:
-    """The form used in documentation and one-off notices."""
-    return f"{NAMES['en']} / {NAMES['fa']}"

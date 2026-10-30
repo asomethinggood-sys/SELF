@@ -355,9 +355,5 @@ def summarize_checks(results: Iterable[CheckResult]) -> tuple[bool, int, int]:
 
 
 
-async def timed(coro: Any) -> tuple[Any, float]:
-    started = time.monotonic()
-    result = await coro
-    return result, round((time.monotonic() - started) * 1000, 2)
 
 

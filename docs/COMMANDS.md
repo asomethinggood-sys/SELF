@@ -109,7 +109,7 @@ Total: **75 commands**.
 
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
-| `.autoreply` | Configure automatic replies _(owner only; changes state)._ | `.autoreply [list|add|on|off|remove|clear]` | `.ar`, `.پاسخ‌خودکار` |
+| `.autoreply` | Configure automatic replies _(owner only; changes state)._ | `.autoreply list|add <trigger> => <reply> [--type any] [--private|--group]|on|off|remove|clear` | `.ar`, `.پاسخ‌خودکار` |
 | `.away` | Set an away message for private chats _(owner only; changes state)._ | `.away [on <text>|off|status]` | `.دورباش` |
 | `.schedule` | Schedule a message for later _(owner only; changes state)._ | `.schedule <when> <text> [--to chat] [--repeat daily]` | `.زمان‌بندی` |
 | `.scheduled` | Manage scheduled messages _(owner only; changes state)._ | `.scheduled [list|cancel|reschedule]` | `.زمان‌بندی‌ها` |

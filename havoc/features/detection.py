@@ -35,7 +35,6 @@ async def detect_status_text(ctx: CommandContext) -> str:
         (ctx.t("detect.duplicates"), metrics["dropped_duplicates"]),
         (ctx.t("detect.errors"), metrics["subscriber_errors"]),
         (ctx.t("detect.bursts"), metrics["bursts"]),
-        (ctx.t("detect.queue"), engine.snapshot()["queue_size"]),
         (ctx.t("detect.watches"), len(watches)),
         (ctx.t("detect.triggers"), len(triggers)),
         (ctx.t("detect.reactions"), len(reactions)),

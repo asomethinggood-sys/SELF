@@ -60,6 +60,10 @@ class Sender:
         self.max_flood_wait = max_flood_wait
         self.sent_count = 0
         self.blocked_count = 0
+        #: Told when Telegram asks the account to wait. The runtime points this at
+        #: the event engine so ``FLOOD_WAIT`` reaches the owner instead of living
+        #: only in a counter he never sees.
+        self.on_flood: Any | None = None
         #: Filled in by the runtime: every message this process sends is recorded
         #: here, so a reply to one of them can be told apart from a reply to the
         #: owner's own message. Optional — tests and dry runs may not have one.
@@ -160,6 +164,7 @@ class Sender:
             wait = self.flood.handle(exc)
             if wait is None:
                 raise
+            await self._announce_flood(wait)
             if wait > self.max_flood_wait:
                 raise SendError(
                     f"Telegram asked to wait {wait:.0f}s before sending again", kind="floodwait"
@@ -167,6 +172,23 @@ class Sender:
             self.logger.warning("FloodWait: sleeping %.1fs before retry", wait)
             await asyncio.sleep(max(0.0, wait) + 0.5)
             return await operation()
+
+    async def _announce_flood(self, wait: float) -> None:
+        """Tell whoever is listening that Telegram said wait.
+
+        A ``FloodWait`` that only bumps a counter is a warning nobody reads. The
+        automation feature already knows how to tell the owner; it just never got
+        the event, because nothing emitted one.
+        """
+        hook = self.on_flood
+        if hook is None:
+            return
+        try:
+            result = hook(wait)
+            if asyncio.iscoroutine(result):
+                await result
+        except Exception as exc:  # noqa: BLE001 - a notification is not worth a send
+            self.logger.debug("flood-wait hook failed: %s", exc)
 
     # ------------------------------------------------------------------
     # Convenience wrappers
@@ -296,16 +318,6 @@ class Sender:
         except Exception as exc:  # noqa: BLE001
             raise SendError(_describe(exc), kind=_kind(exc)) from exc
 
-    async def forward(self, entity: Any, message: Any, to_chat: Any) -> SendResult:
-        if self.dry_run:
-            self.logger.info("DRY-RUN forward -> %s", to_chat)
-            return SendResult(ok=True, dry_run=True)
-        try:
-            await self.limiter.acquire_outbound()
-            forwarded = await self.client.forward_messages(to_chat, message, entity)
-            return SendResult(ok=True, message=forwarded)
-        except Exception as exc:  # noqa: BLE001
-            raise SendError(_describe(exc), kind=_kind(exc)) from exc
 
 
 def _describe(exc: BaseException) -> str:

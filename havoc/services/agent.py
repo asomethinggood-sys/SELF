@@ -38,10 +38,12 @@ from .ai_provider import AIMessage, AIProvider
 
 __all__ = ["Agent", "AgentStep"]
 
-#: How many times the model may be re-asked inside one turn. Two is "I ran what
-#: you asked, now answer" and "one correction"; ten is a chatbot writing a novel
-#: on the owner's quota.
-MAX_ROUNDS = 2
+#: How many times the model may be re-asked inside one turn: "I ran what you
+#: asked, now answer", then a correction, then one repair of a line the console
+#: rejected for its syntax. Ten would be a chatbot writing a novel on the owner's
+#: quota — and three is the number that makes a wrong guess recoverable instead of
+#: final.
+MAX_ROUNDS = 3
 
 
 @dataclass
@@ -133,7 +135,7 @@ class Agent:
                 text, raw = await converse_tools(
                     messages, tools=self.tools, max_tokens=max_tokens
                 )
-                calls = calls_from_native(raw)
+                calls = calls_from_native(raw, self.layer.schema)
             else:  # pragma: no cover - every provider in this repo has the method
                 text = await provider.converse(messages, max_tokens=max_tokens)
                 calls = []
@@ -142,8 +144,9 @@ class Agent:
             calls = []
         if calls:
             return text, calls
-        # No native call: the fenced block is the second route to the same door.
-        parsed, clean = parse_calls(text)
+        # No native call: a block — fenced or bare — is the second route to the
+        # same door.
+        parsed, clean = parse_calls(text, schema=self.layer.schema)
         return (clean if parsed else text), parsed
 
     def _observation(self, outcomes: list[Outcome], *, language: str, extra: str = "") -> str:
