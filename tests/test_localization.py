@@ -123,3 +123,41 @@ def test_a_translation_with_an_extra_placeholder_is_reported() -> None:
     manager.add_catalog("en", {"bye": "goodbye"})
     problems = manager.validate()
     assert any("bye" in problem and "unexpected name" in problem for problem in problems)
+
+
+# ---------------------------------------------------------------------------
+# A placeholder may be called "language", "key" or "variables"
+# ---------------------------------------------------------------------------
+# The startup banner, the reply-suggestion header and the AI self-test all say
+# the word "language" in their text. Passing it unpacked collided with
+# `interpolate`'s own arguments, so the bot printed a raw key — and printed it in
+# the one message the owner reads at boot. Reported as a wording bug, it was
+# actually a crash in the sugar.
+def test_a_catalog_may_use_the_word_language(locales: LocaleManager) -> None:
+    assert locales.interpolate("Language: {language}", language="en") == "Language: en"
+
+
+def test_a_catalog_may_use_the_word_key(locales: LocaleManager) -> None:
+    assert locales.interpolate("{key} failed", key="profile", language="en") == "profile failed"
+
+
+def test_a_catalog_may_use_the_word_variables(locales: LocaleManager) -> None:
+    assert locales.interpolate("{variables}", variables="plain") == "plain"
+
+
+def test_the_startup_banner_is_a_sentence(locales: LocaleManager) -> None:
+    """The exact call that was broken, in the exact shape the boot makes it."""
+    text = locales.t("startup.language", "en", language=locales.language_name("en", "en"))
+    assert text.startswith("Language:")
+    assert "{" not in text
+    assert text != "startup.language"
+
+
+def test_missing_placeholder_still_fails_loudly(locales: LocaleManager) -> None:
+    with pytest.raises(LocaleFormatError):
+        locales.interpolate("Language: {language}")
+
+
+def test_extra_placeholders_are_accepted(locales: LocaleManager) -> None:
+    """Passing more than the template needs must not raise: call sites are shared."""
+    assert locales.interpolate("{a}", a="1", b="2") == "1"

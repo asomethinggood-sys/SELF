@@ -361,7 +361,11 @@ class Runtime:
     # Lifecycle
     # ------------------------------------------------------------------
     async def start_background(self) -> None:
-        await self.event_engine.start()
+        # No engine to start: subscriptions are live the moment a feature
+        # registers them, and delivery is a direct await on each subscriber. The
+        # old begin/end pair existed for the queue that has since been removed —
+        # calling it at boot is what made `havoc run` die with an AttributeError
+        # one second after login.
         await self.scheduler.start()
         if self.plugin_loader is not None:
             records = await self.plugin_loader.load_all()
@@ -382,7 +386,6 @@ class Runtime:
             except Exception as exc:  # noqa: BLE001
                 self.logger.debug("error stopping fight loops: %s", exc)
         await self.scheduler.stop()
-        await self.event_engine.stop()
         if self.telegram is not None:
             try:
                 await self.telegram.disconnect()

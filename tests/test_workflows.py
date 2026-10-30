@@ -345,8 +345,32 @@ def test_only_deployable_changes_trigger_the_handover() -> None:
 def test_the_bot_is_started_in_the_background_so_it_can_be_watched() -> None:
     job = _load("auth-and-run.yml")["jobs"]["login"]
     script = next(s for s in job["steps"] if s.get("name") == "Run the userbot")["run"]
-    assert "python -m havoc run &" in script
+    assert "python -m havoc run" in script
+    assert "bot=$!" in script
     assert "wait \"$bot\"" in script
+
+
+def test_a_bot_that_dies_early_fails_the_run() -> None:
+    """A green run with a dead bot inside it is the worst possible report.
+
+    1.7 logged in, crashed on a removed method nine seconds later, and the
+    workflow called it a success. The verdict now comes from the process's own
+    exit code and how long it lived.
+    """
+    job = _load("auth-and-run.yml")["jobs"]["login"]
+    script = next(s for s in job["steps"] if s.get("name") == "Run the userbot")["run"]
+    assert "bot_status=$?" in script
+    assert "bot_uptime" in script
+    assert "::error::The bot died" in script
+    assert "exit 1" in script
+
+
+def test_the_run_publishes_its_own_status() -> None:
+    """The log archive is unreachable; one committed file is not."""
+    job = _load("auth-and-run.yml")["jobs"]["login"]
+    script = next(s for s in job["steps"] if s.get("name") == "Run the userbot")["run"]
+    assert "scripts/publish_status.py" in script
+    assert "--log .runtime/logs/bot.log" in script
 
 
 def test_the_database_survives_a_deploy() -> None:

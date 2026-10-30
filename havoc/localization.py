@@ -196,13 +196,38 @@ class LocaleManager:
             raise
         # Always interpolate so a template with placeholders and no supplied
         # variables fails loudly instead of leaking "{version}" to the user.
-        template = self.interpolate(template, key=key, language=language, **variables)
+        # Passed as a mapping, not as ``**variables``: a catalog may legitimately
+        # want the word {language} in its own text, and unpacking made that a
+        # TypeError the moment the caller said ``language=...`` — which is how the
+        # startup banner, the reply-suggestion header and the AI self-test all
+        # ended up printing a raw key instead of a sentence.
+        template = self.interpolate(template, key, language, variables)
         if localize_digits and requested == "fa":
             template = to_persian_digits(template)
         return template
 
-    def interpolate(self, template: str, /, *, key: str = "<inline>", language: str = "en", **variables: Any) -> str:
-        """Safely format ``template`` and validate that all fields are supplied."""
+    def interpolate(
+        self,
+        template: str,
+        key: str = "<inline>",
+        language: str = "en",
+        variables: Mapping[str, Any] | None = None,
+        /,
+        **extra: Any,
+    ) -> str:
+        """Safely format ``template`` and validate that all fields are supplied.
+
+        Everything after ``template`` that this method needs for its own
+        bookkeeping is *positional-only*, so a catalog is free to use
+        ``{language}``, ``{key}`` or ``{variables}`` as placeholders. Supplying
+        them as keywords therefore reaches the template, not this signature —
+        which is what makes ``"Language: {language}"`` work.
+        """
+        values: dict[str, Any] = dict(variables or {})
+        values.update(extra)
+        return self._interpolate(template, key=key, language=language, variables=values)
+
+    def _interpolate(self, template: str, *, key: str, language: str, variables: Mapping[str, Any]) -> str:
         formatter = string.Formatter()
         try:
             parsed = list(formatter.parse(template))

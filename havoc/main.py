@@ -17,9 +17,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import logging
 import os
 import signal
 import sys
+import traceback
 from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
@@ -759,8 +761,24 @@ def cli(argv: Sequence[str] | None = None) -> int:
             print("\nInterrupted.", file=sys.stderr)
             return 130
         except Exception as exc:  # noqa: BLE001 - top-level guard
+            # A one-line message was not enough: 1.7 died on an AttributeError and
+            # the only trace of it was a phrase in a log nobody could open. The
+            # traceback is printed here (redacted) so the reason is in the run
+            # output, and a copy is written where the workflow can publish it.
+            from .utils.security import redact_text
+
+            logger = logging.getLogger("havoc")
+            logger.exception("fatal error")
+            trace = redact_text(traceback.format_exc())
+            print(trace, file=sys.stderr)
             print(f"Fatal error: {type(exc).__name__}: {exc}", file=sys.stderr)
             print("خطای غیرمنتظره؛ فایل‌های logs/ را بررسی کنید.", file=sys.stderr)
+            try:
+                crash_path = Path(os.environ.get("LOG_DIR", "logs")) / "crash.log"
+                crash_path.parent.mkdir(parents=True, exist_ok=True)
+                crash_path.write_text(trace, encoding="utf-8")
+            except OSError:  # pragma: no cover - best effort
+                pass
             return EXIT_RUNTIME
     try:
         return func(args)

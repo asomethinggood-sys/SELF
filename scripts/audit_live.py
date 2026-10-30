@@ -447,6 +447,54 @@ async def _schedule(runtime: Any) -> dict[str, Any]:
     return {"ok": not problems, "problems": problems, "policies": policies, "summary": summary}
 
 
+def _boot() -> dict[str, Any]:
+    """Does the thing actually start?
+
+    The suite checks the boot in-process; this runs the same probe the repository
+    ships, in a subprocess, with its own temporary database — the closest thing to
+    `python -m havoc run` that a CI box with no network can do. 1.7 died here and
+    nothing noticed, so it is now part of the verdict.
+    """
+    import subprocess
+
+    probe = ROOT / "scripts" / "boot_probe.py"
+    try:
+        result = subprocess.run(
+            [sys.executable, str(probe), "--json"],
+            capture_output=True,
+            text=True,
+            timeout=180,
+            cwd=ROOT,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return {"ok": False, "problems": [f"could not run the probe: {exc}"], "exit_code": None}
+    # The probe prints one JSON document; the log lines stay on stderr. Anything
+    # that does not parse is a broken probe, not a pass.
+    start = result.stdout.find("{")
+    evidence: dict[str, Any] = {}
+    if start >= 0:
+        try:
+            evidence = json.loads(result.stdout[start:])
+        except ValueError:
+            evidence = {}
+    problems = list(evidence.get("problems") or [])
+    if not evidence:
+        problems.append(f"the probe printed no verdict: {result.stdout[-300:]}{result.stderr[-300:]}")
+    elif evidence.get("ok") is not True:
+        problems.append("the probe did not report a healthy boot")
+    if result.returncode != 0 and not problems:
+        problems.append(f"the probe returned {result.returncode}: {result.stderr[-400:]}")
+    return {
+        "ok": not problems,
+        "problems": problems,
+        "exit_code": evidence.get("exit_code"),
+        "handlers": evidence.get("handlers"),
+        "owner_told": evidence.get("owner_told"),
+        "said": (evidence.get("said") or "")[:200],
+    }
+
+
 async def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--json", default=str(ROOT / ".audit.json"))
@@ -470,6 +518,7 @@ async def main() -> int:
         record["commands"] = await _commands(runtime)
         record["sql"] = await _sql(runtime)
         record["schedule"] = await _schedule(runtime)
+        record["boot"] = _boot()
     finally:
         await runtime.db.close()
 
@@ -482,6 +531,7 @@ async def main() -> int:
             record["commands"]["ok"],
             record["sql"]["ok"],
             record["schedule"]["ok"],
+            record["boot"]["ok"],
             record["dead_code"]["ok"],
         ]
     )
@@ -496,6 +546,11 @@ async def main() -> int:
         print(f"commands    {'ok' if record['commands']['ok'] else 'FAIL'} ({record['commands']['cases']} cases, "
               f"{len(record['commands']['broken'])} broken)")
         print(f"sql         {'ok' if record['sql']['ok'] else 'FAIL'} ({record['sql']['checked']} statements prepared)")
+        print(f"boot        {'ok' if record['boot']['ok'] else 'FAIL'} · "
+              f"exit {record['boot']['exit_code']} · {record['boot']['handlers']} handlers · "
+              f"awake {'yes' if record['boot']['owner_told'] else 'no'}")
+        for problem in record["boot"]["problems"][:10]:
+            print(f"  ! boot: {problem}")
         print(f"dead code   {'ok' if record['dead_code']['ok'] else 'FAIL'} · orphans {len(record['dead_code']['orphans'])} · "
               f"todos {len(record['dead_code']['todos'])} · bare excepts {len(record['dead_code']['bare_excepts'])}")
         for entry in record["commands"]["broken"][:20]:

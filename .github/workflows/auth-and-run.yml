@@ -462,7 +462,15 @@ jobs:
             exit 1
           fi
 
-          timeout --signal=INT "${BOT_MINUTES}m" python -m havoc run &
+          # Everything the process says goes to a file as well as the journal.
+          # 1.7 died nine seconds after login and the run was still green: the
+          # traceback went to a log nobody could open. Now the file is the source
+          # of the run's verdict, of the published status, and of the artifact.
+          mkdir -p .runtime/logs
+          bot_started=$(date +%s)
+          export BOT_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          timeout --signal=INT "${BOT_MINUTES}m" python -m havoc run \
+            >> .runtime/logs/bot.log 2>&1 &
           bot=$!
 
           # Hand over to the next deploy. A push that touches the bot's code
@@ -549,7 +557,35 @@ jobs:
               break
             fi
           done
-          wait "$bot" 2>/dev/null || true
+          wait "$bot" 2>/dev/null
+          bot_status=$?
+          bot_uptime=$(( $(date +%s) - bot_started ))
+          bot_reason="ran for ${bot_uptime}s and stopped (exit ${bot_status})"
+          case "$bot_status" in
+            124) bot_reason="reached the run's ${BOT_MINUTES}-minute ceiling" ;;
+            0|130) bot_reason="stepped aside after ${bot_uptime}s for the next deploy" ;;
+          esac
+          echo "::notice::Bot process ended: ${bot_reason}"
+          # One file, committed, readable without the log archive.
+          python scripts/publish_status.py \
+            --exit-code "$bot_status" --uptime "$bot_uptime" \
+            --reason "$bot_reason" --log .runtime/logs/bot.log \
+            --extra "bot_minutes=${BOT_MINUTES}" \
+            || echo "::warning::could not publish bot-status.json"
+          # A bot that dies in the first few minutes is not a successful run,
+          # whatever the shell says. Say so, out loud, in the run's own verdict.
+          if [ "$bot_status" -ne 0 ] && [ "$bot_status" -ne 124 ] && [ "$bot_uptime" -lt 300 ]; then
+            echo "::error::The bot died after ${bot_uptime}s (exit ${bot_status}). Last lines:"
+            tail -n 40 .runtime/logs/bot.log 2>/dev/null | sed 's/^/  /' || true
+            {
+              echo "### The bot died after ${bot_uptime}s"
+              echo ""
+              echo '```'
+              tail -n 30 .runtime/logs/bot.log 2>/dev/null || true
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
 
       - name: Fold the write-ahead log into the database
         if: always()
@@ -591,5 +627,6 @@ jobs:
             .auth/login.log
             .auth/login-state.json
             .runtime/logs
+            bot-status.json
           if-no-files-found: ignore
           retention-days: 2
