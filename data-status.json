@@ -7,20 +7,19 @@
     "bookmarks": 1,
     "chat_settings": 1,
     "features": 17,
-    "interactive_sessions": 1,
-    "jobs": 998,
+    "jobs": 1043,
     "language_prefs": 1,
-    "profile_history": 997,
+    "profile_history": 1029,
     "profile_snapshots": 3,
-    "reminders": 6,
+    "reminders": 7,
     "schema_migrations": 7,
-    "settings": 32,
+    "settings": 36,
     "sqlite_sequence": 8,
-    "usage_stats": 26,
-    "yura_actions": 12,
+    "usage_stats": 29,
+    "yura_actions": 22,
     "yura_history": 98,
-    "yura_memory": 46,
-    "yura_people": 1
+    "yura_memory": 54,
+    "yura_people": 10
   },
   "tables": {
     "aliases": 0,
@@ -32,39 +31,39 @@
     "dedupe": 0,
     "diagnostics": 0,
     "features": 17,
-    "interactive_sessions": 1,
-    "jobs": 998,
+    "interactive_sessions": 0,
+    "jobs": 1043,
     "language_prefs": 1,
     "notes": 0,
     "plugins": 0,
-    "profile_history": 997,
+    "profile_history": 1029,
     "profile_presets": 0,
     "profile_snapshots": 3,
     "reaction_rules": 0,
-    "reminders": 6,
+    "reminders": 7,
     "schedules": 0,
     "schema_migrations": 7,
-    "settings": 32,
+    "settings": 36,
     "sqlite_sequence": 8,
     "templates": 0,
     "triggers": 0,
-    "usage_stats": 26,
+    "usage_stats": 29,
     "watches": 0,
-    "yura_actions": 12,
+    "yura_actions": 22,
     "yura_history": 98,
     "yura_lessons": 0,
-    "yura_memory": 46,
-    "yura_people": 1
+    "yura_memory": 54,
+    "yura_people": 10
   },
   "restored_from": {
     "cache_hit": "false",
-    "run_id": "41102467671"
+    "run_id": "41108798384"
   },
-  "boot_log_lines": 45,
+  "boot_log_lines": 46,
   "boot_log_tail": [
-    "2026-10-30T17:32:40+00:00 run=41099524626 boots=43 db=700416B",
     "2026-10-30T17:44:32+00:00 run=41100654692 boots=44 db=700416B",
-    "2026-10-30T17:55:56+00:00 run=41102467671 boots=45 db=700416B"
+    "2026-10-30T17:55:56+00:00 run=41102467671 boots=45 db=700416B",
+    "2026-10-30T18:41:02+00:00 run=41108798384 boots=46 db=782336B"
   ],
-  "boots": 45
+  "boots": 46
 }
