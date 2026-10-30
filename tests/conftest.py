@@ -150,6 +150,7 @@ class FakeClient:
         self.pinned: list[tuple[Any, Any, bool]] = []
         self.unpinned: list[tuple[Any, Any]] = []
         self.raw_requests: list[Any] = []
+        self.uploads: list[Any] = []
         self.dialogs: list[Any] = []
         self.history: list[FakeMessage] = []
         self._next_id = 1000
@@ -224,6 +225,10 @@ class FakeClient:
         Path(str(file)).write_bytes(b"fake-bytes")
         return str(file)
 
+    async def upload_file(self, file: Any, **kwargs: Any) -> Any:
+        self.uploads.append(file)
+        return FakeUpload(str(file))
+
     async def __call__(self, request: Any) -> Any:
         self.raw_requests.append(request)
         return None
@@ -231,6 +236,13 @@ class FakeClient:
     @property
     def is_connected(self) -> bool:
         return True
+
+
+class FakeUpload:
+    """Stands in for Telethon's ``InputFile``."""
+
+    def __init__(self, name: str = "file") -> None:
+        self.name = name
 
 
 class FakeTelegram:
@@ -249,6 +261,9 @@ class FakeTelegram:
 
     async def get_messages(self, entity: Any, **kwargs: Any) -> Any:
         return await self.client.get_messages(entity, **kwargs)
+
+    async def download_media(self, message: Any, file: Any = None, **kwargs: Any) -> str:
+        return await self.client.download_media(message, file, **kwargs)
 
     async def disconnect(self) -> None:
         self.connected = False

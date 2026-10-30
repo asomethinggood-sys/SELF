@@ -742,6 +742,35 @@ _WHY_ASK = re.compile(
     re.I,
 )
 _NEWS_ASK = re.compile(r"^(?:what'?s\s+new|whats\s+new|changelog|what\s+changed)\s*[?!.]*$", re.I)
+_REMEMBER_ASK = re.compile(
+    r"^(?:please\s+)?(?:remember|keep\s+in\s+mind|note\s+that|don'?t\s+forget)\s+"
+    r"(?:that\s+)?(?P<fact>.+)$",
+    re.I,
+)
+_FORGET_ASK = re.compile(
+    r"^(?:please\s+)?(?:forget|drop)\s+(?:what\s+(?:i|you)\s+(?:said|know)\s+about\s+)?"
+    r"(?P<what>.+)$",
+    re.I,
+)
+_MEMORIES_ASK = re.compile(
+    r"^(?:what\s+do\s+you\s+remember|what\s+do\s+you\s+know\s+about\s+me|your\s+memories"
+    r"|show\s+(?:me\s+)?(?:your\s+)?memories)\s*[?!.]*$",
+    re.I,
+)
+_RECALL_ASK = re.compile(
+    r"^(?:what\s+do\s+you\s+(?:remember|know)\s+about|what\s+did\s+i\s+tell\s+you\s+about)\s+"
+    r"(?P<what>.+)\s*[?!.]*$",
+    re.I,
+)
+_USERNAME_ASK = re.compile(
+    r"^(?:change|set|make)\s+(?:your|my|the)\s+(?:username|handle)\s+(?:to\s+)?(?P<name>@?[\w]+)$",
+    re.I,
+)
+_ABILITIES_ASK = re.compile(
+    r"^(?:what\s+can\s+you\s+do|what\s+are\s+your\s+(?:abilities|skills|powers)"
+    r"|list\s+your\s+(?:abilities|skills)|what\s+are\s+you\s+capable\s+of)\s*[?!.]*$",
+    re.I,
+)
 _VERSION_ASK = re.compile(
     r"^(?:what|which)\s+version\s+are\s+you(?:\s+running)?\s*[?!.]*$", re.I
 )
@@ -802,6 +831,35 @@ def _surface(text: str) -> Intent | None:
 
     if _GROUPS_ASK.match(folded):
         return Intent(lines=("groups",), label="chats", detail="groups")
+
+    match = _REMEMBER_ASK.match(original)
+    if match:
+        fact = match.group("fact").strip(" .,!?")
+        if fact and len(fact) > 3:
+            return Intent(lines=(f"remember {fact}",), label="memory", detail="remember")
+
+    match = _FORGET_ASK.match(original)
+    if match:
+        what = match.group("what").strip(" .,!?")
+        if what and len(what) > 1:
+            return Intent(lines=(f"forget {what}",), label="memory", detail="forget")
+
+    if _MEMORIES_ASK.match(folded):
+        return Intent(lines=("memories",), label="memory", detail="memories")
+
+    match = _RECALL_ASK.match(original)
+    if match:
+        what = match.group("what").strip(" .,!?")
+        if what:
+            return Intent(lines=(f"recall {what}",), label="memory", detail="recall")
+
+    match = _USERNAME_ASK.match(original)
+    if match:
+        name = match.group("name").lstrip("@")
+        return Intent(lines=(f"username {name}",), label="profile", detail=f"username · {name}")
+
+    if _ABILITIES_ASK.match(folded):
+        return Intent(lines=("abilities",), label="self", detail="abilities")
 
     if _DOCTOR_ASK.match(folded):
         return Intent(lines=("diagnose",), label="self", detail="diagnose")

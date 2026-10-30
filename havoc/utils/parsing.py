@@ -23,6 +23,8 @@ import shlex
 from dataclasses import dataclass, field
 
 _TELEGRAM_EMOJI_ONLY = re.compile(r"^[\W_]+$")
+#: A quote that starts a token, i.e. one the tokenizer treats as grouping.
+_GROUPING_QUOTE = re.compile(r"""(?:^|\s)["']""")
 
 
 class ParseError(ValueError):
@@ -56,6 +58,10 @@ class ParsedCommand:
     raw: str = ""
     rest: tuple[str, ...] = ()
     rest_raw: str = ""
+    #: The first argument token as typed, before lowercasing for subcommand
+    #: matching — ``.remember Sara's …`` must keep its capital when the token
+    #: turns out to be an argument rather than a subcommand.
+    sub_raw: str = ""
 
     @property
     def full_name(self) -> str:
@@ -180,7 +186,12 @@ def parse_command(text: str, prefix: str = ".") -> ParsedCommand | None:
         return None
     name = tokens[0].lstrip("/").lower()
     tokens_after_name = tokens[1:]
-    subcommand = tokens_after_name[0].lower() if tokens_after_name and not tokens_after_name[0].startswith("-") else None
+    sub_token = (
+        tokens_after_name[0]
+        if tokens_after_name and not tokens_after_name[0].startswith("-")
+        else None
+    )
+    subcommand = sub_token.lower() if sub_token else None
     rest = tuple(tokens_after_name[1:]) if subcommand else tuple(tokens_after_name)
 
     # Raw remainder keeps everything after the command name untouched, which
@@ -196,9 +207,12 @@ def parse_command(text: str, prefix: str = ".") -> ParsedCommand | None:
 
     # Quoted segments were already unquoted by the tokenizer; prefer that view
     # so bodies never reach the user wrapped in quotes.
-    if any(quote in raw_args for quote in ("\"", "'")):
+    # Only a *grouping* quote means the tokenizer reshaped the text. An
+    # apostrophe inside a word (``Sara's``, ``don't``) is not a quote, and
+    # treating it as one threw away the original casing and spacing.
+    if _GROUPING_QUOTE.search(raw_args):
         rest_raw = " ".join(rest)
-        raw_args = rest_raw if subcommand is None else " ".join((subcommand, rest_raw)).strip()
+        raw_args = rest_raw if sub_token is None else " ".join((sub_token, rest_raw)).strip()
 
     return ParsedCommand(
         prefix=prefix,
@@ -210,6 +224,7 @@ def parse_command(text: str, prefix: str = ".") -> ParsedCommand | None:
         raw=text,
         rest=rest,
         rest_raw=rest_raw,
+        sub_raw=sub_token or "",
     )
 
 
@@ -225,7 +240,7 @@ def demote_subcommand(parsed: ParsedCommand) -> ParsedCommand:
         prefix=parsed.prefix,
         name=parsed.name,
         subcommand=None,
-        args=(parsed.subcommand, *parsed.args),
+        args=(parsed.sub_raw or parsed.subcommand, *parsed.args),
         flags=parsed.flags,
         raw_args=parsed.raw_args,
         raw=parsed.raw,

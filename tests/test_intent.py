@@ -113,7 +113,8 @@ def test_a_translation_names_the_language() -> None:
 @pytest.mark.parametrize(
     ("text", "line"),
     (
-        ("what can you do", "help"),
+        # ``.abilities`` reads the live registry; ``.help`` is the static list.
+        ("what can you do", "abilities"),
         ("who are you", "about"),
         ("show me my reminders", "reminders"),
         ("tell me a joke", "joke"),

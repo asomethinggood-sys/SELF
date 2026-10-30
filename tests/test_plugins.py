@@ -116,18 +116,18 @@ async def test_plugin_api_settings_roundtrip(runtime, tmp_path: Path) -> None:
 __plugin_name__ = "settings"
 
 def setup(api):
-    async def remember(ctx):
+    async def setgreeting(ctx):
         await api.set_setting("greeting", "hello")
         value = await api.get_setting("greeting", "none")
         await ctx.reply(str(value))
 
-    api.register_command(name="remember", handler=remember)
+    api.register_command(name="setgreeting", handler=setgreeting)
 '''
     _write(plugins, "settings.py", source)
     await PluginLoader(plugins, runtime, runtime.logger).load_all()
     from conftest import invoke
 
-    sent = await invoke(runtime, ".remember")
+    sent = await invoke(runtime, ".setgreeting")
     assert any("hello" in message.text for message in sent)
     assert await runtime.store.get_setting("plugin.settings.greeting") == "hello"
 

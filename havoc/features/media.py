@@ -124,7 +124,7 @@ def register(runtime: Any) -> None:
             "pic",
             cmd_pic,
             category="media",
-            aliases=("image", "photo", "file", "sendfile"),
+            aliases=("image", "file", "sendfile"),
             usage="<path|url> [...] [--caption text] [--to chat] [--silent]",
             changes_state=True,
             subcommands=("info", "help", "types"),

@@ -9,7 +9,7 @@ account other than the logged-in user.
 `.` in the usage column stands for the active prefix (default `.`).
 
 
-Total: **108 commands**.
+Total: **117 commands**.
 
 
 ## Account
@@ -41,6 +41,7 @@ Total: **108 commands**.
 
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
+| `.abilities` | What she can actually do, from the live registry _(owner only)._ | `.abilities` | `.skills` |
 | `.about` | Show version and capability summary _(owner only)._ | `.about` | `.درباره` |
 | `.commands` | List every available command _(owner only)._ | `.commands [page]` | `.فرمان‌ها`, `.دستورها` |
 | `.diagnose` | Connection, scheduler, model, database, queue, last error _(owner only)._ | `.diagnose` | `.doctor`, `.health` |
@@ -137,7 +138,18 @@ Total: **108 commands**.
 
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
-| `.pic` | Send a picture or file (path or URL); several files become an album _(owner only; changes state)._ | `.pic <path|url> [...] [--caption text] [--to chat] [--silent]` | `.image`, `.photo`, `.file`, `.sendfile`, `.عکس`, `.تصویر` |
+| `.geo` | Send a location point _(owner only; changes state)._ | `.geo <lat>, <lon>` | — |
+| `.pic` | Send a picture or file (path or URL); several files become an album _(owner only; changes state)._ | `.pic <path|url> [...] [--caption text] [--to chat] [--silent]` | `.image`, `.file`, `.sendfile`, `.عکس`, `.تصویر` |
+| `.poll` | Post a real poll in this chat _(owner only; changes state)._ | `.poll <question> | <option> | <option>` | — |
+
+## Memory
+
+| Command | Description | Usage | Aliases |
+| --- | --- | --- | --- |
+| `.forget` | Drop what she remembers about something, or one fact by number _(owner only; changes state)._ | `.forget <words|#id>` | — |
+| `.memories` | Everything she remembers, with the numbers .forget wants _(owner only)._ | `.memories [count]` | `.memory`, `.facts` |
+| `.recall` | What she remembers that mentions those words _(owner only)._ | `.recall <words>` | — |
+| `.remember` | Keep one sentence about you, and use it later _(owner only; changes state)._ | `.remember <fact>` | `.keep` |
 
 ## Messages
 
@@ -175,8 +187,10 @@ Total: **108 commands**.
 | `.bio` | Set or rotate your profile bio _(owner only; changes state)._ | `.bio [show|set|add|rotation|preview|reset]` | `.بیو` |
 | `.clock` | Show a configurable clock in your profile name _(owner only; changes state)._ | `.clock [on <timezone>|off|status]` | `.ساعت` |
 | `.counter` | Manage local counters (usable in bio rotation) _(owner only; changes state)._ | `.counter [list|inc|reset|delete] <name>` | `.counters`, `.شمارنده` |
+| `.photo` | Use the picture you replied to as her profile photo _(owner only; changes state; asks for confirmation; reply required)._ | `.photo (reply to a picture)` | `.avatar`, `.pfp`, `.setpic` |
 | `.preset` | Save and apply profile presets _(owner only; changes state)._ | `.preset [list|create|apply|preview|delete|schedule|scheduled|unschedule]` | — |
 | `.profile` | Preview, restore and review profile changes _(owner only; changes state)._ | `.profile [show|preview|restore|history|name]` | `.پروفایل` |
+| `.username` | Change her @username, or remove it; Telegram's rules apply _(owner only; changes state)._ | `.username [new|off]` | `.handle` |
 
 ## Reach
 
