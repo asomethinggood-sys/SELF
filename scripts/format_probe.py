@@ -292,7 +292,7 @@ async def run() -> dict[str, object]:
         voice = {
             # one point per complaint: long enough, ornamented, faced, laid out
             "ok": (
-                min(sizes) >= 220
+                min(sizes) >= 400  # a story is measured, not assumed
                 and len(with_glyph) == len(samples)
                 and faced >= 1
                 and structured >= 1
