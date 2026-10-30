@@ -1,9 +1,10 @@
 name: Handover selftest
 
 # Proves the handover script — not a hand-written curl — can start a workflow
-# with the token a normal run gets. It dispatches `noop.yml`, then asks GitHub
-# whether a run of it appeared, and commits the answer so it can be read without
-# the run log (which is not always reachable).
+# with the token a normal run gets. It dispatches the AI probe (a workflow that
+# already exists in GitHub's index, and harmless to run), then asks GitHub
+# whether a dispatch-triggered run of it appeared, and commits the answer so it
+# can be read without the run log (which is not always reachable).
 
 on:
   push:
@@ -27,7 +28,10 @@ jobs:
         id: dispatch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HANDOVER_WORKFLOW: noop.yml
+          # A workflow that has already run at least once: GitHub resolves the
+          # dispatch endpoint by a workflow it knows about, and a file that has
+          # never produced a run is not one of them (measured: noop.yml → 404).
+          HANDOVER_WORKFLOW: ai-probe.yml
         run: |
           set -uo pipefail
           # GitHub indexes a new workflow file a moment after the push, so a
@@ -57,7 +61,7 @@ jobs:
           cat .handover-selftest.json
           exit 0
 
-      - name: Did a no-op run appear?
+      - name: Did a dispatched run appear?
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -66,8 +70,8 @@ jobs:
           for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
             count=$(curl -sS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
               "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/runs?per_page=50" \
-              | python -c "import json,sys;d=json.load(sys.stdin);print(len([r for r in d.get('workflow_runs',[]) if r['name']=='Noop' and r['event']=='workflow_dispatch']))")
-            echo "attempt $attempt: $count no-op run(s)"
+              | python -c "import json,sys;d=json.load(sys.stdin);print(len([r for r in d.get('workflow_runs',[]) if r['name']=='AI probe' and r['event']=='workflow_dispatch']))")
+            echo "attempt $attempt: $count dispatched probe run(s)"
             if [ "$count" -gt 0 ]; then seen=yes; break; fi
             sleep 10
           done
