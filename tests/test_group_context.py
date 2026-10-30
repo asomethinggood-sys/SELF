@@ -373,7 +373,7 @@ async def test_a_cut_reply_never_leaves_half_a_sentence(runtime) -> None:
     """A model that hits the ceiling mid-thought used to send the fragment."""
     replies, client = await _runtime_with(runtime)
     runtime.ai = StubProvider(
-        "باشه بابا، حرف تو درسته و قبولش دارم. " * 12
+        "باشه بابا، حرف تو درسته و قبولش دارم. " * 60
         + "ولی این یکی رو دیگه نمی‌تونم قبول کنم چون"
     )
 

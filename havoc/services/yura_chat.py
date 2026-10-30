@@ -45,13 +45,19 @@ MAX_FILE_BYTES = 100_000
 #: language, so this is the whole catalogue: inside the lifetime of a conversation
 #: no line comes back twice.
 SENT_MEMORY = 4000
-#: The reply itself, before any file block.
-MAX_REPLY_CHARS = 3500
-#: A reply that is asked for a program needs room for the program. 700 tokens is
-#: about 500 words: enough for a paragraph, not for three hundred lines of
-#: pygame. The file block is computed by the model, so the ceiling has to move
-#: with the request.
-FILE_TOKENS = 4000
+#: The reply itself, before any file block. One Telegram message holds 4096
+#: characters; this leaves room for the tags `rich` adds, so a long answer arrives
+#: as one bubble instead of being split in the middle of a sentence.
+MAX_REPLY_CHARS = 4000
+#: The ceiling for an ordinary answer. The owner does not care about tokens and a
+#: message can hold 4096 characters, so the budget is the length of a *message*,
+#: not the length of a text message someone types with two thumbs. Persian costs
+#: more tokens per character than English, so this is generous on purpose.
+CHAT_TOKENS = 2500
+#: A reply that is asked for a program needs room for the program: three hundred
+#: lines of pygame do not fit anywhere else. The file block is computed by the
+#: model, so the ceiling has to move with the request.
+FILE_TOKENS = 6000
 #: Words that mean "give me an actual file", in both languages the owner uses.
 _FILE_WORDS = (
     "file", "code", "script", "program", "snippet", "write me", "make me a game",
@@ -337,7 +343,7 @@ class YuraChat:
             try:
                 reply = await self.provider.converse(
                     messages,
-                    max_tokens=FILE_TOKENS if _wants_file(prompt) else 700,
+                    max_tokens=FILE_TOKENS if _wants_file(prompt) else CHAT_TOKENS,
                 )
             except AIError as exc:
                 self.last_error = f"{exc.kind}: {exc}"

@@ -255,6 +255,9 @@ async def run() -> dict[str, object]:
             "samples": samples,
             "with_a_glyph": len(with_glyph),
             "shortest": min((len(text) for text in samples), default=0),
+            "longest": max((len(text) for text in samples), default=0),
+            "budget_tokens": 2500,
+            "message_chars": 4096,
         }
     except AIError as exc:
         voice = {"ok": False, "failure": f"{exc.kind}: {_head(exc, 200)}"}

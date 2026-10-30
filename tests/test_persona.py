@@ -640,12 +640,12 @@ async def test_asking_for_code_buys_the_model_more_tokens(runtime) -> None:
     await invoke(runtime, ".yura write a python script that prints 1")
     budget = provider.calls[-1][0].__class__
     del budget
-    assert provider.last_max_tokens == 4000
+    assert provider.last_max_tokens == 6000
 
     plain = StubProvider(["mrrp."])
     runtime.ai = plain
     await invoke(runtime, ".yura how was your day")
-    assert plain.last_max_tokens == 700, "ordinary chat must not ask for a program's budget"
+    assert plain.last_max_tokens == 2500, "ordinary chat must not ask for a program's budget"
 
 
 async def test_a_truncated_file_block_is_salvaged_not_dropped(runtime) -> None:
@@ -798,7 +798,7 @@ def test_the_bar_still_exists_in_his_own_chat(runtime) -> None:
 
 def test_a_reply_that_stops_mid_word_is_cut_to_the_last_sentence() -> None:
     """A message that just ends was reported as "it crops messages"."""
-    complete = "این یک جملهٔ کامل است و ادامه دارد. " * 14
+    complete = "این یک جملهٔ کامل است و ادامه دارد. " * 60
     cut = complete + "و بعد یک جملهٔ نصفه که هیچ‌وقت"
     assert persona.finish_sentence(cut).endswith(".")
     assert "نصفه" not in persona.finish_sentence(cut)
@@ -810,7 +810,7 @@ def test_a_short_reply_is_never_touched() -> None:
 
 
 def test_a_long_reply_that_ends_cleanly_is_left_alone() -> None:
-    fine = "این یک جملهٔ کامل است و ادامه دارد. " * 14
+    fine = "این یک جملهٔ کامل است و ادامه دارد. " * 60
     assert persona.finish_sentence(fine) == fine.rstrip()
 
 
@@ -821,3 +821,14 @@ def test_the_message_she_answers_is_described_not_quoted() -> None:
         assert "«" not in block and "»" not in block
         assert "یورا این کیه" in block
     assert "do not repeat it" in persona.quoted_prompt("hi", "en")
+
+
+async def test_a_long_answer_uses_the_whole_message(runtime) -> None:
+    """4096 characters fit in one Telegram message; a 700-token ceiling was not it."""
+    long_reply = "و بعد نشستم به فکر کردن به این که چرا اینقدر دوستت دارم و چرا " * 45
+    runtime.ai = StubProvider([long_reply])
+    await invoke(runtime, ".yura tell me properly")
+
+    sent = html.unescape(last_text(runtime))
+    assert len(sent) > 2500, "a long answer was cut down to a fragment"
+    assert not sent.rstrip().endswith("…")
