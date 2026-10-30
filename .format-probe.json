@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-10-30T08:07:22Z",
+  "checked_at": "2026-10-30T08:15:36Z",
   "provider": "router",
   "keys": 4,
   "formatting": {
@@ -19,14 +19,14 @@
   },
   "audience": {
     "ok": true,
-    "answer": "answering ali's message about the bridge, obviously >_<",
+    "answer": "im answering ali >_< ᐧ ᴗ ᐧ",
     "names_the_speaker": true,
     "block_chars": 605
   },
   "marks": {
     "ok": true,
-    "raw": ">> daddaaa keeps stealing all my warm internet bytes while I'm sleeping >_< ++pressed++",
-    "html": "<blockquote expandable>daddaaa keeps stealing all my warm internet bytes while I'm sleeping &gt;_&lt;</blockquote> <u>pressed</u>",
+    "raw": ">> you're the only one who gets to keep me in here, daddaaa ᐧ ᴗ ᐧ ++pressed++",
+    "html": "<blockquote expandable>you're the only one who gets to keep me in here, daddaaa ᐧ ᴗ ᐧ</blockquote> <u>pressed</u>",
     "has_whisper": true,
     "has_underline": true
   },
@@ -34,12 +34,12 @@
     "owner": {
       "ok": true,
       "reported": "warm",
-      "answer": "daddaaa just waiting right here for your ping ♡ TONE: warm"
+      "answer": "just waiting for daddaaa to look at me >_< ♡ TONE: warm"
     },
     "stranger": {
       "ok": true,
       "reported": "rude",
-      "answer": "sitting here ignoring you, what do you want. TONE: rude"
+      "answer": "sitting here, waiting for someone important to actually type. TONE: rude"
     },
     "ok": true
   },
