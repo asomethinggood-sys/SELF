@@ -1002,5 +1002,10 @@
   "owner.id_note": "added by hand",
   "help.index": "everything she can do",
   "cmd.owner.description": "Who owns her: the only accounts that can change her mind",
-  "cmd.owner.usage": "[list | add @handle | remove <id>]"
+  "cmd.owner.usage": "[list | add @handle | remove <id>]",
+  "remind.card_title": "Reminder set for {when}",
+  "remind.card_line": "{text}",
+  "remind.card_note": "You'll be reminded in the same chat · {relative}",
+  "remind.card_repeat": "and again every {spec}",
+  "remind.card_id": "reminder #{id}"
 }

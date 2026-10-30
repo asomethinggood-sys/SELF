@@ -85,6 +85,11 @@ async def report_scheduler_problem(runtime: Any, kind: str, info: dict[str, Any]
 # ---------------------------------------------------------------------------
 # Reminder commands
 # ---------------------------------------------------------------------------
+def _strip_tags(text: str) -> str:
+    """Card lines are plain words; a locale that formats inside one is flattened."""
+    return str(text).replace("<i>", "").replace("</i>", "").replace("<b>", "").replace("</b>", "")
+
+
 async def cmd_remind(ctx: CommandContext) -> None:
     if not ctx.args:
         raise CommandError("errors.missing_argument", usage=ctx.usage_text())
@@ -113,15 +118,27 @@ async def cmd_remind(ctx: CommandContext) -> None:
         created_by=getattr(ctx.event, "sender_id", None),
         meta={"language": ctx.language},
     )
+    # The card, not the log line: this is the moment the owner is looking for an
+    # answer, and "◷ Reminder #4 set for …" reads like a database row.
+    lines = [
+        ctx.t("remind.card_line", text=escape(truncate(body, 200))),
+        _strip_tags(
+            ctx.t(
+                "remind.card_note",
+                when=escape(format_datetime(when, tz, ctx.language)),
+                relative=escape(humanize_delta(when - utc_now(), ctx.language)),
+            )
+        ),
+    ]
+    if recurrence:
+        lines.append(ctx.t("remind.card_repeat", spec=escape(recurrence)))
     await ctx.reply(
-        ctx.t(
-            "remind.created",
-            id=reminder_id,
-            when=escape(format_datetime(when, tz, ctx.language)),
-            relative=escape(humanize_delta(when - utc_now(), ctx.language)),
-            text=escape(truncate(body, 300)),
+        ui.card(
+            ctx.t("remind.card_title", when=escape(format_datetime(when, tz, ctx.language))),
+            lines,
+            icon="◷",
+            footer=ctx.t("remind.card_id", id=reminder_id),
         )
-        + (("\n" + ctx.t("remind.recurring", spec=escape(recurrence))) if recurrence else "")
     )
     ctx.runtime.metrics.count("reminders_created")
 
