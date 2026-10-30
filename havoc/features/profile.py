@@ -272,7 +272,7 @@ async def cmd_clock(ctx: CommandContext) -> None:
         else:
             template = fmt or "◷ {time}"
         if "{time}" not in template and "{date}" not in template:
-            raise CommandError("clock.invalid_template")
+            raise CommandError("clock.invalid_template", time="{time}", date="{date}")
         me = await _me(ctx)
         if me is not None:
             await _ensure_snapshot(ctx, me)
@@ -286,7 +286,7 @@ async def cmd_clock(ctx: CommandContext) -> None:
     if action == "off":
         await ctx.store.set_setting("clock.enabled", False)
         await ctx.runtime.feature_manager.set_enabled("clock", False)
-        await ctx.reply(ctx.t("clock.disabled"))
+        await ctx.reply(ctx.t("clock.disabled", prefix=ctx.runtime.prefix))
         return
     if action in {"status", "state"}:
         enabled = await ctx.store.get_bool("clock.enabled", False)
@@ -407,7 +407,7 @@ async def cmd_bio(ctx: CommandContext) -> None:
     if action == "preview":
         pool = await ctx.store.get_setting("bio.pool", []) or []
         if not pool:
-            raise CommandError("bio.pool_empty")
+            raise CommandError("bio.pool_empty", prefix=ctx.runtime.prefix)
         counters = await _counter_values(ctx.runtime)
         index = int(await ctx.store.get_setting("bio.index", 0) or 0) % len(pool)
         preview = _resolve_placeholders(str(pool[index]), counters)

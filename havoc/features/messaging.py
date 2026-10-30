@@ -442,7 +442,7 @@ async def cmd_fight(ctx: CommandContext) -> None:
     if action == "send":
         drafted = await ctx.store.get_chat_setting(ctx.chat_id, "fight.draft", None)
         if not drafted:
-            raise CommandError("fight.no_draft")
+            raise CommandError("fight.no_draft", prefix=ctx.runtime.prefix)
         text = str(drafted)
         await runtime.sender.send(ctx.chat_id, escape(text))
         await ctx.store.delete_chat_setting(ctx.chat_id, "fight.draft")

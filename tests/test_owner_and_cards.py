@@ -210,3 +210,29 @@ async def test_the_command_tool_runs_for_the_owner(runtime) -> None:
 def test_the_blocked_list_does_not_contain_the_useful_ones() -> None:
     for useful in ("fal", "clock", "poem", "remind", "translate", "weather", "note"):
         assert useful not in BLOCKED
+
+
+# ---------------------------------------------------------------------------
+# Her console finds real bugs
+# ---------------------------------------------------------------------------
+async def test_a_locale_string_never_asks_for_a_variable_nobody_passes(runtime) -> None:
+    """A command's error message must render, not print its own key.
+
+    Found by driving her console: `.clock on nonsense` answered with the literal
+    text "clock.invalid_template" because the locale string used ``{time}`` as an
+    example and the formatter read it as a variable it had not been given.
+    """
+    reply = await run(runtime, "clock on -- template nothing", chat_id=100, sender_id=42)
+    assert "clock.invalid_template" not in reply.note
+    assert "{time}" in reply.note or "template" in reply.note.lower()
+
+    off = await run(runtime, "clock off", chat_id=100, sender_id=42)
+    assert not off.note.startswith("clock."), off.note
+
+
+async def test_she_can_turn_a_feature_of_herself_on(runtime) -> None:
+    """The exact sentence from the owner: "yura turn on clock"."""
+    await runtime.feature_manager.set_enabled("clock", False)
+    reply = await run(runtime, "feature clock on", chat_id=100, sender_id=42)
+    assert reply.ok, reply.note
+    assert await runtime.feature_manager.is_enabled("clock") is True

@@ -124,7 +124,7 @@
   "clock.disabled": "Profile clock disabled. Use {prefix}profile restore to bring back your original name.",
   "clock.enabled": "◷ Profile clock enabled — updating every minute using template {template} in {tz}.",
   "clock.header": "◷ Profile clock",
-  "clock.invalid_template": "The template must contain {time} or {date}.",
+  "clock.invalid_template": "The template must contain {{time}} or {{date}}.",
   "clock.preview": "Preview",
   "clock.state": "State",
   "clock.template": "Template",
