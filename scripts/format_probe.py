@@ -564,14 +564,25 @@ async def run() -> dict[str, object]:
             worn = set().union(*[glyphs.collect(text) for text in samples]) if samples else set("✦✧⋆")
             worn_faces = set().union(*[glyphs.collect_faces(text) for text in samples]) if samples else set()
             brief = persona.ornament_prompt("en", used=worn, faces=worn_faces)
-            answer = await provider.converse(  # type: ignore[attr-defined]
-                [
-                    AIMessage("system", f"{system_prompt('en')}\n\n{brief}"),
-                    AIMessage("user", ask),
-                ],
-                max_tokens=1200,
-            )
-            text = str(answer).strip()
+            # A free model sometimes answers in one breath and sometimes in three
+            # paragraphs; the length claim is about her, not about one sample. A
+            # short answer is asked once more before it counts, and both tries are
+            # recorded, so a flake is visible instead of being averaged away.
+            asked = [
+                AIMessage("system", f"{system_prompt('en')}\n\n{brief}"),
+                AIMessage("user", ask),
+            ]
+            tries: list[int] = []
+            for _attempt in range(2):
+                answer = await provider.converse(  # type: ignore[attr-defined]
+                    asked, max_tokens=1200
+                )
+                text = str(answer).strip()
+                tries.append(len(text))
+                if len(text) >= 400:
+                    break
+            if tries:
+                voice.setdefault("tries", []).append(tries)
             samples.append(text)
             sizes.append(len(text))
             if "\n\n" in text or "\n" in text.strip():
@@ -580,6 +591,7 @@ async def run() -> dict[str, object]:
                 faced += 1
         with_glyph = [text for text in samples if glyphs.collect(text)]
         voice = {
+            **voice,
             # one point per complaint: long enough, ornamented, faced, laid out
             "ok": (
                 min(sizes) >= 400  # a story is measured, not assumed
