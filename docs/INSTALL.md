@@ -228,6 +228,13 @@ installs the package, and a bot that is not running cannot hear you — nothing
 can start it from inside Telegram, which is exactly why the queue is kept full
 before anything goes wrong.
 
+One trap worth knowing, because it cost a six-hour outage: **`GITHUB_TOKEN` is a
+secret, not one of the automatic `GITHUB_*` variables.** A step that talks to the
+API without it in its own `env` sends an empty `Authorization` header, gets 401,
+and the stand-down guard then refuses to stand down — on purpose, since an
+unconfirmed answer must never leave the bot down. The test suite now fails if a
+step that calls the API forgets the token.
+
 ## What survives a restart, and how it was checked
 
 Two mechanisms keep your data, and they fail independently:
