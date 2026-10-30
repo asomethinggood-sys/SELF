@@ -159,7 +159,9 @@ planned. A future run must *extend* these, not replace them:
 | The sentences | `intent._reach` | "send X to Y", "say … in saved messages", "N times", "with a spoiler", "don't talk to", "react with", "then" chains |
 | Commands | `.send` `.say` `.broadcast` `.outbox` `.unsend` `.emoji` `.plan` `.ignore` | the console surface, owner-only |
 | Tools | `tools.send_message`, `tools.plan`, `tools.react` | the model can reach the same code the commands do |
-| Proof | `tests/test_toolbox.py` (23 tests), audit `boot` | the boot, the plan arithmetic and every sentence above |
+| Written by her | `--compose` on `.send` | he gives the job ("wish her luck"), she writes the line; with `--repeat N` every line differs |
+| Many at once | `.broadcast` queue | more than two chats becomes one job per chat, paced 1.2s apart, so the reply is instant and a restart does not lose the tail |
+| Proof | `tests/test_toolbox.py` (33 tests), audit `boot` | the boot, the plan arithmetic, the clock, and every sentence above |
 
 What is *not* yet there: the read side (inbox, unread, mentions, folders), the
 account side (sessions, privacy, 2FA, contacts, blocking), and the remaining

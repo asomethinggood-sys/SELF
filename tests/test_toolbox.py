@@ -330,3 +330,35 @@ def test_a_model_answer_is_cleaned_before_it_is_sent() -> None:
 
     reply = '1. "hey, are you free tonight?"\n2. hi! how did it go?\nSure! Here they are:'
     assert _clean_written(reply, 5) == ["hey, are you free tonight?", "hi! how did it go?"]
+
+
+async def test_a_broadcast_to_many_is_queued_not_looped(runtime) -> None:
+    """"send to 10 different people": ten jobs, not a ten-second silence."""
+    await invoke(runtime, ".broadcast saved,999,777,555,333 hello everyone", chat_id=OWNER)
+    jobs = await runtime.db.fetch_all("SELECT payload FROM jobs WHERE kind = 'reach_send'")
+    assert len(jobs) == 5, len(jobs)
+    assert not [row for row in runtime.client.sent if "hello everyone" in row.text]
+
+
+async def test_multitasking_runs_everything_queued_at_once(runtime) -> None:
+    """Many actions at one moment must all happen on the next tick."""
+    for index in range(4):
+        await runtime.scheduler.enqueue(
+            "reach_send", utc_now() - timedelta(seconds=1), {"chat_id": 999, "text": f"burst {index}"}
+        )
+    fired = await runtime.scheduler.tick()
+    assert fired["jobs"] == 4, fired
+    assert len([row for row in runtime.client.sent if "burst" in row.text]) == 4
+
+
+async def test_reacting_to_a_reply_goes_through_the_console(runtime, monkeypatch) -> None:
+    calls: list[tuple[int, int, str]] = []
+
+    async def fake_react(chat_id, message_id, emoji):
+        calls.append((chat_id, message_id, emoji))
+        return True
+
+    monkeypatch.setattr(runtime.reach, "react", fake_react)
+    reply = FakeMessage(id=321, chat_id=GROUP, sender_id=FRIEND, text="look at this")
+    await invoke(runtime, ".emoji ❤", chat_id=GROUP, reply=reply)
+    assert calls == [(GROUP, 321, "❤")]

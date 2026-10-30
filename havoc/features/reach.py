@@ -287,6 +287,26 @@ async def cmd_broadcast(ctx: CommandContext) -> None:
         raise CommandError(
             "reach.broadcast_confirm", count=len(found), prefix=ctx.runtime.prefix
         )
+    if len(found) > 2 and not dry:
+        # More than two chats is a queue, not a loop: holding his reply for a
+        # minute of pacing is how a broadcast looks broken. Each send is its own
+        # job, so a restart in the middle does not lose the rest.
+        from datetime import timedelta
+
+        from ..utils.time import utc_now
+
+        base = utc_now()
+        for index, target in enumerate(found):
+            await ctx.runtime.scheduler.enqueue(
+                "reach_send",
+                base + timedelta(seconds=1.2 * index),
+                {"chat_id": target.id, "text": text, "plan_id": None},
+            )
+        header = ctx.t("reach.broadcast_queued", total=len(found))
+        await ctx.reply(
+            bold(header) + ("\n" + escape(", ".join(missing)) if missing else "")
+        )
+        return
     sent = 0
     failed = 0
     for target in found:
@@ -299,7 +319,7 @@ async def cmd_broadcast(ctx: CommandContext) -> None:
             sent += 1
         elif not report.ok:
             failed += 1
-        await ctx.runtime.reach.pause(1.0)
+        await ctx.runtime.reach.pause(0.7)
     header = ctx.t(
         "reach.broadcast_done",
         total=len(found),

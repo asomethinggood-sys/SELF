@@ -1075,5 +1075,6 @@
   "cmd.ignore.usage": "[list|on <کی>|off <کی>]",
   "reach.outbox_total": "{count} خط · {total} در کل",
   "reach.compose_failed": "نتونستم بنویسمش.",
-  "reach.queued_more": "و {count} تای دیگر روی ساعت"
+  "reach.queued_more": "و {count} تای دیگر روی ساعت",
+  "reach.broadcast_queued": "⟡ پخش · {total} گفتگو صف شد، یکی‌یکی"
 }

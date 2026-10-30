@@ -1075,5 +1075,6 @@
   "cmd.ignore.usage": "[list|on <who>|off <who>]",
   "reach.outbox_total": "{count} lines · {total} in all",
   "reach.compose_failed": "I couldn't write that one.",
-  "reach.queued_more": "and {count} more on the clock"
+  "reach.queued_more": "and {count} more on the clock",
+  "reach.broadcast_queued": "⟡ broadcast · {total} chats queued, one by one"
 }
