@@ -7,17 +7,16 @@
     "bookmarks": 1,
     "chat_settings": 1,
     "features": 17,
-    "jobs": 570,
+    "jobs": 580,
     "language_prefs": 1,
-    "profile_history": 569,
+    "profile_history": 579,
     "profile_snapshots": 3,
     "schema_migrations": 6,
     "settings": 12,
     "sqlite_sequence": 6,
     "usage_stats": 17,
     "yura_history": 66,
-    "yura_memory": 12,
-    "yura_people": 2
+    "yura_memory": 12
   },
   "tables": {
     "aliases": 0,
@@ -30,11 +29,11 @@
     "diagnostics": 0,
     "features": 17,
     "interactive_sessions": 0,
-    "jobs": 570,
+    "jobs": 580,
     "language_prefs": 1,
     "notes": 0,
     "plugins": 0,
-    "profile_history": 569,
+    "profile_history": 579,
     "profile_presets": 0,
     "profile_snapshots": 3,
     "reaction_rules": 0,
@@ -50,17 +49,17 @@
     "yura_history": 66,
     "yura_lessons": 0,
     "yura_memory": 12,
-    "yura_people": 2
+    "yura_people": 0
   },
   "restored_from": {
     "cache_hit": "false",
-    "run_id": "41041816446"
+    "run_id": "41042986943"
   },
-  "boot_log_lines": 22,
+  "boot_log_lines": 23,
   "boot_log_tail": [
-    "2026-10-30T09:58:14+00:00 run=41037118519 boots=20 db=442368B",
     "2026-10-30T09:59:49+00:00 run=41037372162 boots=21 db=442368B",
-    "2026-10-30T10:36:14+00:00 run=41041816446 boots=22 db=450560B"
+    "2026-10-30T10:36:14+00:00 run=41041816446 boots=22 db=450560B",
+    "2026-10-30T10:45:59+00:00 run=41042986943 boots=23 db=450560B"
   ],
-  "boots": 22
+  "boots": 23
 }
