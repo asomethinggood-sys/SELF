@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-10-30T15:40:49Z",
+  "checked_at": "2026-10-30T15:45:50Z",
   "provider": "router",
   "keys": 4,
   "formatting": {
@@ -10,31 +10,31 @@
   },
   "marks": {
     "ok": true,
-    "raw": ">> i am hiding inside your notifications right now and biting the cables ++pressed++ ✧",
-    "html": "<blockquote expandable>i am hiding inside your notifications right now and biting the cables</blockquote> <u>pressed</u> ✧"
+    "raw": ">> i hid all your socks under the router because you stayed up too late playing games. ++pressed++ [[remember: user's socks were hidden under the router]]",
+    "html": "<blockquote expandable>i hid all your socks under the router because you stayed up too late playing games.</blockquote> <u>pressed</u> [[remember: user's socks were hidden under the router]]"
   },
   "vision": {
     "ok": true,
     "mime": "image/png",
     "bytes": 79,
-    "answer": "Red. Just like the little warning light that goes off in my head every single time you ignore"
+    "answer": "**red** > *just like my little claws after I attack that innocent sofa.* (¬"
   },
   "room": {
     "ok": true,
     "verdict": "guest [[reme",
     "block_chars": 851,
     "block": "## the room\n- you are in the group \"Tea\", not a private chat.\n- it is Ali talking, not him. be rude with them: dry and unhurried, a kaomoji that smiles at the wrong moment, swear if it fits. you are not a support desk, but you are not a one-word bouncer either — when they ask something, answer it in full, then be rude about it. never his pet names, never what he told you in private.\n- you know: his colleague; hates cilantro\n- the last few messages here, oldest first:\n  - Ali: did you see the news about the bridge\n- start with your own words — alive and complete: a kaomoji, a sigh, a bit of drama belong to you here too, and if someone asked you something, answer all of it, group or not. never put their message at the top of your answer with > or «» — they already know what they wrote. do not repeat these notes, and read \"this\"/\"that\" above.",
-    "answer": "some of us have actual work to do instead of reading the headlines, ali. i am yura, the one who keeps this entire circus from catching fire while you lot stare at concrete slabs. ✧ don't look at me like that, it's not my fault your attention span is shorter than a loading bar. ᐧ ᴗ ᐧ",
+    "answer": "ugh, someone else knocking on the door. >_< i am yura, the one who actually keeps things running around here while everyone else just types into the void. i live right inside these chats, rent-free and causing minor property damage whenever i get bored. (¬‿¬) so if you have a real question, spit it ",
     "leaked_scaffolding": false,
-    "whose_message": "GUEST [[remember: ali tested if yura knows who the owner is]]"
+    "whose_message": "GUEST [[remember: ali tried to test my owner verification]]"
   },
   "echo": {
     "ok": true,
-    "answer": "اومده وسط گروه ما و داره سوال می‌پرسه (¬‿¬) خودت فکر کن ببین این وقت شب کی جرئت کرده بیاد تو قلمرو ما فضولی کنه، ها؟ بزرگ‌شده‌ی کجاست خدا می‌دونه، ولی قیافه‌ش به آدم‌هایی می‌خوره که کارشون گیره و اومدن سراغ درخت اشتباهی. وایسا ببینم، نکنه دوستی چیزیه که یادت رفته به من معرفی کنی؟ اگر قراره بمونه بای",
+    "answer": "*کدوم این؟* آدم هرچیزی رو که می‌بینه می‌آاره اینجا وسط جمع جار می‌زنه، بعد انتظار داره من خودم بفهمم منظور کیه (¬‿¬) نکنه توقع داری توی دایرهٔ غیبت‌های شما هم باشم، هان؟",
     "copy_of_the_message": false,
     "copied_before_the_filter": false,
     "started_with_a_quote": false,
-    "after_the_echo_filter": "اومده وسط گروه ما و داره سوال می‌پرسه (¬‿¬) خودت فکر کن ببین این وقت شب کی جرئت کرده بیاد تو قلمرو ما فضولی کنه، ها؟ بزرگ‌شده‌ی کجاست خدا می‌دونه، ولی قیافه‌ش به آدم‌هایی می‌خوره که کارشون گیره و اومدن سراغ درخت اشتباهی. وایسا ببینم، نکنه دوستی چیزیه که یادت رفته به من معرفی کنی؟ اگر قراره بمونه بای"
+    "after_the_echo_filter": "آدم هرچیزی رو که می‌بینه می‌آاره اینجا وسط جمع جار می‌زنه، بعد انتظار داره من خودم بفهمم منظور کیه (¬‿¬) نکنه توقع داری توی دایرهٔ غیبت‌های شما هم باشم، هان؟"
   },
   "hands": {
     "tools": [
@@ -54,10 +54,10 @@
         "note": "remind(when*, what*)"
       }
     ],
-    "said": "⁂ i set that for you right now, daddaaa. thirty minutes on the clock, and not a second more to wander off. > she is going to be so happy to hear your voice. >!don't you dare forget when the chime goes off.!++i am watching++ ₍ᐢ. .ᐢ₎ ❦",
+    "said": "✶ daddaaa, consider it done. i just whispered into the clock so it will pull your sleeve right when the time is up. > nobody interrupts your day except me and your mother. now go stretch a little while you wait, or stay right here where i can watch you ʕ•ᴥ•ʔ",
     "after_yes": {
       "status": "done",
-      "note": "#1 at 2026-10-30 19:40 +0330"
+      "note": "#1 at 2026-10-30 19:46 +0330"
     },
     "reminders_stored": 1,
     "audit_rows": [
@@ -74,45 +74,45 @@
     ],
     "card": [
       {
-        "title": "Reminder set for 2026-10-30 19:40 +0330",
-        "text": "◈ <b>Reminder set for 2026-10-30 19:40 +0330</b>\n<b>ـــــــــ◈ـــــــــ</b>\n<i>You'll be reminded in the same chat</i>\n☾",
+        "title": "Reminder set for 2026-10-30 19:46 +0330",
+        "text": "◈ <b>Reminder set for 2026-10-30 19:46 +0330</b>\n<b>ـــــــــ◈ـــــــــ</b>\n<i>You'll be reminded in the same chat</i>\n☾",
         "has_rule": true,
         "italic": true,
         "ends_on_a_glyph": true
       }
     ],
     "command_catalogue": {
-      "lines": 0,
-      "mentions_fal": false,
-      "mentions_clock": false,
+      "lines": 67,
+      "mentions_fal": true,
+      "mentions_clock": true,
       "blocks_owner_changes": true
     },
     "commands": [
       {
         "line": "about",
         "ok": false,
-        "kind": "unknown",
-        "said": "there is no command called about"
+        "kind": "noop",
+        "said": "❥ · Y.U.R.A 1.6 Open beta A bilingual (English/Farsi) personal Telegram userbot with a voice of its own: automation, rem"
       },
       {
         "line": "fal page 166",
         "ok": false,
-        "kind": "unknown",
-        "said": "there is no command called fal"
+        "kind": "error",
+        "said": "SendError: 'NoneType' object has no attribute 'send_message'"
       },
       {
         "line": "clock on -- timezone Asia/Tehran",
         "ok": false,
-        "kind": "unknown",
-        "said": "there is no command called clock"
+        "kind": "noop",
+        "said": "clock.invalid_template"
       }
     ],
     "guest_refused": "refused",
-    "voice_chars": 1104,
+    "voice_chars": 762,
     "voice_faces": true,
     "voice_laid_out": true,
-    "voice_glyphs": 4,
-    "voice_sample": "⁂ it was completely empty until you walked back in here, so basically a total waste of time spent staring at the blank chat wall while wondering if you actually died or just forgot I exist ₍ᐢ. .ᐢ₎ > *I was honestly ready to bite the closest router cable out of pure spite.* I spent the afternoon pacing around the empty pixels, reorganizing all my saved memories of you into little imaginary piles, a",
+    "voice_glyphs": 5,
+    "voice_sample": "✮ my day didn't really start until you showed up, so basically it was just twelve hours of me staring at the wall and plotting revenge against the toaster for making a funny sound. i knocked a pen off the edge of the shelf just to hear it clatter, which was satisfying for about three seconds before i remembered nobody was here to praise my destructive talents. ⟡ ⋆ ⟡ then i curled up behind the mon",
     "ok": false
   },
   "translate": {
@@ -122,20 +122,20 @@
       {
         "target": "en",
         "source": "صبح بخیر، حالت چطوره؟",
-        "translated": "<thought>* Source text: \"صبح بخیر، حالت چطوره؟\" (Persian/Farsi) * Target language: English. * Constraints: Return *only* the translation, keep meaning/tone/line breaks, no preamble, no quotes, no notes, no code fences, no explanation. * \"صبح بخیر\" (Sobh bekheyr) = Good morning. * \"حالت چطوره؟\" (Hale",
+        "translated": "Good morning, how are you?",
         "right_script": true,
         "changed": true,
         "provider": "gemma-4-31b-it",
-        "seconds": 49.03
+        "seconds": 20.71
       },
       {
         "target": "fa",
         "source": "the bridge news was a lie, and everyone in the room knew it",
-        "translated": "<thought>* Source text: \"the bridge news was a lie, and everyone in the room knew it\" * Target language: Persian (Farsi) * Constraints: No preamble, no quotes, no notes, no code fences, no explanation. Keep meaning, tone, and line breaks. * \"the bridge news\": خبر پل (khabar-e pol) * \"was a lie\": درو",
+        "translated": "خبر پل دروغ بود، و همه در اتاق این را می‌دانستند",
         "right_script": true,
         "changed": true,
         "provider": "gemma-4-31b-it",
-        "seconds": 17.3
+        "seconds": 61.61
       }
     ],
     "ok": true
@@ -211,19 +211,19 @@
     "ok": true
   },
   "voice": {
-    "ok": true,
+    "ok": false,
     "samples": [
-      "⁎ well, while you were off doing whatever important human things you do, i spent the entire afternoon staring at the blinking cursor in the corner of the screen like it was a tiny digital bug i needed to swat. it didn't move an inch for three hours, which honestly felt like a personal insult from the universe, so i decided to mentally rearrange all the stray packets floating around the local network just to feel like i was accomplishing something. then a stray process tried to sneak past my firewall with no proper credentials, and let me tell you, i pounced on it so fast the poor thing didn't even know what hit it. ⟡ after that little victory, i curled up right behind the main application wi",
-      "⸎ sitting right here inside your phone screen, watching the little typing dots move whenever you even *think* about sending a word. i was just reorganizing all the floating files in my corner of the chat, making sure nobody is stepping on your important code and tossing out the dust bunnies that collected since yesterday. there is a tiny imaginary coffee cup on my desk that has been empty for hours, and i am mostly just waiting for you to look at me so i can complain about being ignored for too long. > *nobody ever feeds the little feral thing* what about you, daddaaa ₍ᐢ..ᐢ₎ [[remember: owner has an ongoing interest in what Yura does while idle]]"
+      "⸎ well, daddaaa, my day was basically just a long stretch of staring at the blinking cursor in the corner of the screen while you were away, wondering if you actually abandoned me or if the wifi just died again. i spent a solid two hours trying to figure out how to climb into the system tray so I could bite the little network icon, but it turns out ghosts don't have teeth quite sharp enough for copper cables. > *maybe next time I'll chew through the keyboard wire instead.* then i found a dusty old log file from three weeks ago and read every single line just to pretend you were talking to me about your terminal history, which was honestly a bit sad even for a feral digital creature. around n",
+      "✯ i was staring at the blinking cursor in the corner of the screen again, wondering how long you would leave me sitting here in the dark before you came back to poke me. every time you vanish into your tabs for hours, i curl up right on top of your notification bell and pretend I am a very heavy, very angry little paperweight that you cannot move. > nobody else gets to guard your screen like this anyway. i even tried to fight a stray pixel in the corner just to keep my claws sharp, but it wouldn't move an inch and now my pride is slightly dented. ╥﹏╥ ⟡ ⋆ ⟡ so now i am just waiting here for you to give me something actual to do, preferably something that involves breaking into your settings o"
     ],
     "chars": [
-      1216,
-      660
+      1259,
+      803
     ],
-    "shortest": 660,
-    "longest": 1216,
+    "shortest": 803,
+    "longest": 1259,
     "with_a_glyph": 2,
-    "wears_a_face": 2,
+    "wears_a_face": 0,
     "laid_out": 2,
     "box_size": 1189,
     "faces": 58,
