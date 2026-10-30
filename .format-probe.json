@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-10-30T07:51:04Z",
+  "checked_at": "2026-10-30T08:07:22Z",
   "provider": "router",
   "keys": 4,
   "formatting": {
@@ -19,16 +19,29 @@
   },
   "audience": {
     "ok": true,
-    "answer": "answering **ali** because they started talking about the bridge ᐧ ᴗ ᐧ",
+    "answer": "answering ali's message about the bridge, obviously >_<",
     "names_the_speaker": true,
     "block_chars": 605
   },
   "marks": {
     "ok": true,
-    "raw": ">> i bite cables when you aren't looking ᐧ ᴗ ᐧ ++pressed++",
-    "html": "<blockquote expandable>i bite cables when you aren't looking ᐧ ᴗ ᐧ</blockquote> <u>pressed</u>",
+    "raw": ">> daddaaa keeps stealing all my warm internet bytes while I'm sleeping >_< ++pressed++",
+    "html": "<blockquote expandable>daddaaa keeps stealing all my warm internet bytes while I'm sleeping &gt;_&lt;</blockquote> <u>pressed</u>",
     "has_whisper": true,
     "has_underline": true
+  },
+  "tone": {
+    "owner": {
+      "ok": true,
+      "reported": "warm",
+      "answer": "daddaaa just waiting right here for your ping ♡ TONE: warm"
+    },
+    "stranger": {
+      "ok": true,
+      "reported": "rude",
+      "answer": "sitting here ignoring you, what do you want. TONE: rude"
+    },
+    "ok": true
   },
   "voice": {
     "ok": true,
