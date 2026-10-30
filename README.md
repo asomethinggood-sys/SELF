@@ -387,8 +387,10 @@ live account from this environment.
 
 ### Working with limits you should know about
 
-- **`.translate` needs a provider.** With `TRANSLATE_PROVIDER=none` it explains
-  how to configure one instead of pretending to translate.
+- **`.translate` uses the model she already talks with** (Gemma 4 31B on the
+  free keys), so it works on a clone with keys and nothing else configured;
+  `TRANSLATE_PROVIDER=mymemory` or `libretranslate` overrides it. With no AI key
+  at all it explains what is missing instead of pretending to translate.
 - **`.summarize` is extractive offline.** It selects sentences; it does not
   paraphrase unless an AI provider is configured.
 - **`.search` sees what your account can see.** Telegram does not index history

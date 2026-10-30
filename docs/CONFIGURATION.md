@@ -102,7 +102,7 @@ Two things that are easy to misread as a bad key:
 A free OpenRouter key allows **50 model requests a day**; past that every call
 returns `429` with `free-models-per-day` until the UTC reset. The probe records
 that as a quota fact and does not fail the build for it.
-| `TRANSLATE_PROVIDER` | `none`, `mymemory`, `libretranslate` | `.translate` and auto-translation |
+| `TRANSLATE_PROVIDER` | `ai` (default), `mymemory`, `libretranslate`, `none` | `.translate` and auto-translation; `ai` asks Gemma 4 31B through the same keys she talks with |
 | `TRANSLATE_URL` | — | Self-hosted LibreTranslate endpoint |
 | `TRANSLATE_API_KEY` | — | Optional key for the endpoint above |
 

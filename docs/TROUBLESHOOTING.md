@@ -40,9 +40,12 @@ or ids listed in `OWNER_IDS`.
 
 ## "Translation is not configured"
 
-Expected with no provider set. Configure `TRANSLATE_PROVIDER` (`mymemory` needs
-no key) and restart. When translation is unavailable, `.translate` and
-`auto_translate` print this hint instead of failing silently.
+Only happens when she has no AI key at all: translation runs on the same model
+she talks with (Gemma 4 31B), so a working bot can already translate. Add
+`AI_API_KEY` or put keys in `.auth/ai-keys.json`, or set
+`TRANSLATE_PROVIDER=mymemory` (no key needed), then restart. When translation is
+unavailable, `.translate` and `auto_translate` print this hint instead of failing
+silently.
 
 ## Telegram asks for a code on every start
 

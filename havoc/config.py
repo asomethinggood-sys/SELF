@@ -26,7 +26,7 @@ from pathlib import Path
 SUPPORTED_LANGUAGES = ("en", "fa")
 MISSED_JOB_POLICIES = ("run_once", "skip", "ask")
 AI_PROVIDERS = ("none", "openai_compatible")
-TRANSLATE_PROVIDERS = ("none", "mymemory", "libretranslate")
+TRANSLATE_PROVIDERS = ("none", "ai", "mymemory", "libretranslate")
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 
 #: Proxy protocols Telethon can use. ``mtproxy`` needs a secret; the others do
@@ -242,8 +242,11 @@ class Config:
 
     @property
     def translation_available(self) -> bool:
+        # "none" is the default and it means "not chosen by hand", not "off":
+        # the runtime hands the AI engine to the translator whenever there is
+        # one, so a fresh clone can translate without an extra key or flag.
         if self.translate_provider == "none":
-            return False
+            return self.ai_available or bool(self.ai_api_key)
         if self.translate_provider == "libretranslate":
             return bool(self.libretranslate_url)
         return True

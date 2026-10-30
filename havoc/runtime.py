@@ -118,7 +118,10 @@ class Runtime:
                     timeout=config.ai_timeout,
                     enabled=True,
                 )
-        translator = build_translation_provider(config)
+        # Translation speaks through the same engine she does (Gemma 31B by
+        # default), so `.translate` works on a clone with keys but no
+        # translation provider configured.
+        translator = build_translation_provider(config, ai)
         feature_manager = FeatureManager(
             store,
             config=config,

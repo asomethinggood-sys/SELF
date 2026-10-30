@@ -328,12 +328,21 @@ class AIRouter:
             return find(self.selection)
         return None
 
-    def plan(self, *, vision: bool = False) -> list[tuple[Credential, ModelSpec]]:
+    def plan(
+        self, *, vision: bool = False, only: str | None = None
+    ) -> list[tuple[Credential, ModelSpec]]:
         """The ordered (credential, model) pairs one message may try.
 
         ``vision`` narrows the list to models that can see a picture. Without the
         filter a photo would be sent to a text-only model, which answers 400 and
         burns a request from a 500-a-day allowance to learn nothing.
+
+        ``only`` *prefers* one model without forbidding the rest: a caller that
+        asks for Gemma 31B (translation does) gets Gemma 31B while a key for it
+        is alive, and still gets an answer instead of an error when every key
+        behind that model is spent. The preference is a sort, not a filter, on
+        purpose — a translation command that fails because a free tier ran dry is
+        worse than one that used the second choice.
         """
         now = utc_now()
         chosen = self.selected_spec()
@@ -358,6 +367,9 @@ class AIRouter:
             # the voice, and the 20-a-day model should be spent late.
             candidates.sort(key=lambda credential: -self.remaining(credential, spec))
             pairs.extend((credential, spec) for credential in candidates)
+        if only:
+            wanted = only.strip().lower()
+            pairs.sort(key=lambda pair: 0 if wanted in {pair[1].key.lower(), pair[1].api_id.lower()} else 1)
         return pairs
 
     # ------------------------------------------------------------------
@@ -378,6 +390,7 @@ class AIRouter:
         *,
         max_tokens: int = 400,
         temperature: float = 0.85,
+        only: str | None = None,
     ) -> str:
         """Try credentials in order until one answers. Raises the last AIError."""
         if not self.credentials:
@@ -386,7 +399,7 @@ class AIRouter:
         attempts: list[Attempt] = []
         last: AIError | None = None
         wants_vision = any(getattr(message, "has_image", False) for message in messages)
-        for credential, spec in self.plan(vision=wants_vision):
+        for credential, spec in self.plan(vision=wants_vision, only=only):
             if len(attempts) >= MAX_ATTEMPTS:
                 break
             # The plan was drawn before this message touched anything; a key that

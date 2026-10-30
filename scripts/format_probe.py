@@ -35,7 +35,7 @@ from pathlib import Path
 from havoc import persona
 from havoc.config import load_config
 from havoc.persona import picture_prompt, system_prompt
-from havoc.services import tts
+from havoc.services import translation_provider, tts
 from havoc.services.ai_provider import AIError, AIMessage, AIProvider
 from havoc.services.ai_router import AIRouter
 from havoc.services.vision import make_picture
@@ -263,6 +263,50 @@ async def run() -> dict[str, object]:
     # messages, at full length (no truncation before measuring): the answer has
     # to fill a paragraph or three, carry an ornament, wear a face and be *laid
     # out* — more than one paragraph, or at least a divider on its own line.
+    # -- 5a. does .translate actually translate? ---------------------------
+    # The command used to answer "you have no API" on a bot with five keys; the
+    # fix is that it asks the model she already talks with. This runs the real
+    # provider built the way the runtime builds it, over the real router, in both
+    # directions, and keeps the text — a translation is evidence or it is nothing.
+    translation: dict[str, object] = {}
+    try:
+        engine = translation_provider.build_translation_provider(config, provider)
+        translation["provider"] = engine.name
+        translation["model"] = getattr(engine, "model", "")
+        runs: list[dict[str, object]] = []
+        for text, target, script in (
+            ("صبح بخیر، حالت چطوره؟", "en", "latin"),
+            ("the bridge news was a lie, and everyone in the room knew it", "fa", "persian"),
+        ):
+            started = asyncio.get_event_loop().time()
+            result = await engine.translate(text, target)
+            out = result.text.strip()
+            reached = (
+                any("a" <= ch.lower() <= "z" for ch in out)
+                if script == "latin"
+                else any("\u0600" <= ch <= "\u06FF" for ch in out)
+            )
+            runs.append(
+                {
+                    "target": target,
+                    "source": _head(text, 120),
+                    "translated": _head(out, 300),
+                    "right_script": reached,
+                    "changed": out != text.strip(),
+                    "provider": result.provider,
+                    "seconds": round(asyncio.get_event_loop().time() - started, 2),
+                }
+            )
+        translation["runs"] = runs
+        translation["ok"] = engine.available and all(
+            step["right_script"] and step["changed"] for step in runs
+        )
+        if not engine.available:
+            translation["failure"] = "no engine: the AI provider is not configured"
+    except Exception as exc:  # noqa: BLE001 - "could not translate" is a result
+        translation = {"ok": False, "failure": _head(f"{type(exc).__name__}: {exc}", 240)}
+    record["translate"] = translation
+
     # -- 5b. does she have a voice in each language? ------------------------
     # A voice name is the one thing a unit test cannot check: the wrong name only
     # shows up when the service answers. Throat, not opinion — a real note is
@@ -360,7 +404,7 @@ async def run() -> dict[str, object]:
 
     record["ok"] = all(
         bool(part.get("ok"))
-        for part in (formatting, marks, vision, room, echo, speech, voice)  # type: ignore[union-attr]
+        for part in (formatting, marks, vision, room, echo, translation, speech, voice)  # type: ignore[union-attr]
     )
     return record
 
@@ -368,7 +412,7 @@ async def run() -> dict[str, object]:
 def main() -> int:
     record = asyncio.run(run())
     print(f"provider: {record['provider']} · keys: {record['keys']}")
-    for name in ("formatting", "marks", "vision", "room", "echo", "speech", "voice"):
+    for name in ("formatting", "marks", "vision", "room", "echo", "translate", "speech", "voice"):
         part = record.get(name, {})  # type: ignore[assignment]
         print(f"{name}: {'OK' if part.get('ok') else 'FAILED'}")
         if part.get("raw"):
@@ -377,6 +421,10 @@ def main() -> int:
             print(f"  telegram shows: {part['html']}")
         if part.get("answer"):
             print(f"  it saw:         {part['answer']}")
+        if part.get("model"):
+            print(f"  engine:         {part.get('provider')} · {part['model']}")
+        for step in part.get("runs") or []:
+            print(f"  → {step['target']}:        {step['translated']}  [{step['seconds']}s]")
         for code, row in (part.get("languages") or {}).items():
             state = f"{row.get('bytes', 0)} bytes" if row.get("ok") else row.get("failure", "?")
             print(f"  {code}: {row.get('voice')} · {state}")
