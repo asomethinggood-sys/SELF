@@ -1,6 +1,6 @@
 {
   "app": "havoc",
-  "created_at": "2026-10-30T13:37:37+00:00",
+  "created_at": "2026-10-30T13:43:06+00:00",
   "tables": {
     "aliases": [],
     "autoreplies": [],
@@ -116,10 +116,10 @@
     ],
     "language_prefs": [
       {
-        "language": "fa",
+        "language": "en",
         "scope": "global",
         "scope_id": "",
-        "updated_at": "2026-10-30T13:20:06+00:00"
+        "updated_at": "2026-10-30T13:42:35+00:00"
       }
     ],
     "notes": [],
@@ -156,13 +156,13 @@
       },
       {
         "key": "ai.usage",
-        "updated_at": "2026-10-30T13:30:57+00:00",
-        "value": "{\"2b9beacf67a2|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-30\",\"count\":112},\"e8bfd373256a|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-30\",\"count\":112},\"e8bfd373256a|google:gemini-3.1-flash-lite\":{\"day\":\"2026-10-30\",\"count\":20},\"2b9beacf67a2|google:gemini-3.1-flash-lite\":{\"day\":\"2026-10-30\",\"count\":20}}"
+        "updated_at": "2026-10-30T13:42:12+00:00",
+        "value": "{\"2b9beacf67a2|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-30\",\"count\":112},\"e8bfd373256a|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-30\",\"count\":112},\"e8bfd373256a|google:gemini-3.1-flash-lite\":{\"day\":\"2026-10-30\",\"count\":21},\"2b9beacf67a2|google:gemini-3.1-flash-lite\":{\"day\":\"2026-10-30\",\"count\":21}}"
       },
       {
         "key": "ai.health",
-        "updated_at": "2026-10-30T13:30:57+00:00",
-        "value": "{\"2b9beacf67a2\":{\"disabled\":false,\"cooldown_until\":\"2026-10-30T13:26:05.754850+00:00\",\"error\":\"\",\"successes\":146,\"failures\":9},\"e8bfd373256a\":{\"disabled\":false,\"cooldown_until\":\"2026-10-30T13:26:58.359708+00:00\",\"error\":\"\",\"successes\":145,\"failures\":6},\"90d9d7b7c27e\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"rate_limited: HTTP 429: {\\\"error\\\":{\\\"message\\\":\\\"Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day\\\",\\\"code\\\":429,\\\"metadata\\\":{\\\"headers\\\":{\\\"X-RateLimit-Limit\\\":\\\"50\\\",\\\"X-RateLimit-Remaining\\\":\\\"0\\\",\\\"X-RateLimit-Reset\\\":\\\"1793318400000\\\"},\\\"limit_source\\\":\\\"openrouter_fre\",\"successes\":0,\"failures\":1},\"bcf26c2f3c33\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":1,\"failures\":0}}"
+        "updated_at": "2026-10-30T13:42:12+00:00",
+        "value": "{\"2b9beacf67a2\":{\"disabled\":false,\"cooldown_until\":\"2026-10-30T13:26:05.754850+00:00\",\"error\":\"\",\"successes\":147,\"failures\":9},\"e8bfd373256a\":{\"disabled\":false,\"cooldown_until\":\"2026-10-30T13:26:58.359708+00:00\",\"error\":\"\",\"successes\":146,\"failures\":6},\"90d9d7b7c27e\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"rate_limited: HTTP 429: {\\\"error\\\":{\\\"message\\\":\\\"Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day\\\",\\\"code\\\":429,\\\"metadata\\\":{\\\"headers\\\":{\\\"X-RateLimit-Limit\\\":\\\"50\\\",\\\"X-RateLimit-Remaining\\\":\\\"0\\\",\\\"X-RateLimit-Reset\\\":\\\"1793318400000\\\"},\\\"limit_source\\\":\\\"openrouter_fre\",\"successes\":0,\"failures\":1},\"bcf26c2f3c33\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":1,\"failures\":0}}"
       },
       {
         "key": "clock.timezone",
@@ -231,8 +231,8 @@
       },
       {
         "key": "yura.sent_ids.-1002274583096",
-        "updated_at": "2026-10-30T11:34:49+00:00",
-        "value": "[69241,69244,69245,69254,69256,69260,69261,69263,69265,69267,69269,69271,69274,69277,69281,69283,69285,69288,69289,69291,69294,69298,69301,69307,69310,69314,69326,69330,69332,69334,69339,69341,69344,69346,69349,69351,69354,69358,69360,69363,69364,69379]"
+        "updated_at": "2026-10-30T13:42:35+00:00",
+        "value": "[69241,69244,69245,69254,69256,69260,69261,69263,69265,69267,69269,69271,69274,69277,69281,69283,69285,69288,69289,69291,69294,69298,69301,69307,69310,69314,69326,69330,69332,69334,69339,69341,69344,69346,69349,69351,69354,69358,69360,69363,69364,69379,69423,69426,69428]"
       },
       {
         "key": "yura.sent_ids.-1003812320394",
