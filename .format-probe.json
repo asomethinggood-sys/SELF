@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-10-30T07:01:58Z",
+  "checked_at": "2026-10-30T07:03:37Z",
   "provider": "router",
   "keys": 4,
   "formatting": {
@@ -16,6 +16,18 @@
     "bytes": 79,
     "model": "gemini-3.5-flash-lite",
     "answer": "Red"
+  },
+  "marks": {
+    "ok": true,
+    "raw": ">> i told the ceiling lamp it has to be quiet when you're here. ++pressed++",
+    "html": "<blockquote expandable>i told the ceiling lamp it has to be quiet when you're here.</blockquote> <u>pressed</u>",
+    "has_whisper": true,
+    "has_underline": true
+  },
+  "voice": {
+    "ok": true,
+    "provider": "edge",
+    "bytes": 18288
   },
   "ok": true
 }
