@@ -1,6 +1,6 @@
 {
   "app": "havoc",
-  "created_at": "2026-10-30T15:35:28+00:00",
+  "created_at": "2026-10-30T15:41:03+00:00",
   "tables": {
     "aliases": [],
     "autoreplies": [],
@@ -331,6 +331,16 @@
         "key": "yura.own_ids.-1003812320394",
         "updated_at": "2026-10-30T15:31:24+00:00",
         "value": "[33129,33130,33142]"
+      },
+      {
+        "key": "owner.resolved",
+        "updated_at": "2026-10-30T15:36:03+00:00",
+        "value": "{\"edited_by_nyx\":7542695649}"
+      },
+      {
+        "key": "owner.ids",
+        "updated_at": "2026-10-30T15:36:03+00:00",
+        "value": "[]"
       }
     ],
     "templates": [],
