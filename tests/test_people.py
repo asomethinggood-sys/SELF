@@ -287,15 +287,23 @@ async def test_the_fallback_uses_the_tone_of_the_room(runtime) -> None:
 # ---------------------------------------------------------------------------
 # The line she will not cross, even when told to be mean
 # ---------------------------------------------------------------------------
-def test_swearing_is_allowed_and_slurs_are_not() -> None:
-    assert persona.is_acceptable("fuck off, i'm busy")
+def test_swearing_and_insults_are_hers_to_use() -> None:
+    """No blocklist in front of her mouth: he corrects her, and she keeps it."""
+    assert persona.is_acceptable("what the fuck do you want")
+    assert persona.is_acceptable("you're being an idiot")
+    assert persona.is_acceptable("احمقی")
+    # The one floor that is not about tone: nobody gets told to die.
     assert not persona.is_acceptable("kys")
-    assert not persona.is_acceptable("you're a retard")
     assert not persona.is_acceptable("برو بمیر")
-    assert persona.is_acceptable("cocoon")  # not a slur, just a word with letters in it
 
 
-async def test_a_reply_that_crosses_the_line_is_replaced(runtime) -> None:
+async def test_an_insult_is_delivered_not_rewritten(runtime) -> None:
+    await _enable(runtime, reply="what the fuck do you want. >_<")
+    await runtime.persona_replies.on_group_message(_event("yura what's up"))
+    assert "what the fuck do you want" in runtime.client.sent[-1].text
+
+
+async def test_self_harm_is_the_one_thing_still_refused(runtime) -> None:
     await _enable(runtime, reply="kys")
     await runtime.persona_replies.on_group_message(_event("yura say something mean"))
     sent = runtime.client.sent[-1].text

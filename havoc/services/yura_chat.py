@@ -133,6 +133,29 @@ class YuraChat:
         # straight to the offline bank instead of burning a request and a
         # timeout to learn the same thing again.
         self.quota_until: datetime | None = None
+        #: The rules the last answer walked over, for a caller that wants to say so.
+        self.broken: tuple[str, ...] = ()
+
+    @property
+    def lessons(self) -> Any:
+        """The lesson book, if the runtime has one (tests may not)."""
+        return getattr(self.runtime, "lessons", None)
+
+    async def _note_violations(
+        self, reply: str, lessons: tuple[str, ...], person_id: int | None = None
+    ) -> tuple[str, ...]:
+        """Count any of her own rules this answer walked over. Returns their text."""
+        book = self.lessons
+        if book is None or not lessons or not reply:
+            return ()
+        try:
+            rows = await book.for_person(person_id)
+            hits = await book.violations(reply, rows)
+            for lesson in hits:
+                await book.note_break(lesson)
+            return tuple(lesson.rule for lesson in hits)
+        except Exception:  # noqa: BLE001 - counting must never cost an answer
+            return ()
 
     @property
     def provider(self) -> AIProvider:
@@ -201,6 +224,8 @@ class YuraChat:
         person: Any = None,
         is_owner: bool | None = None,
         chat_title: str = "",
+        lessons: tuple[str, ...] = (),
+        reminder: str = "",
     ) -> Answer:
         """Reply to ``text``. Never raises for provider problems.
 
@@ -211,7 +236,9 @@ class YuraChat:
         speaking and what was being said in the room, so a group turn is not
         answered as if the owner had typed it. ``person`` is their
         :class:`havoc.services.people.Person` row — the tone she owes them and
-        everything the owner told her about them.
+        everything the owner told her about them. ``lessons`` are the corrections
+        he has given her — carried into the prompt as things she agreed to, not
+        applied as a filter on the way out.
         """
         who = person if person is not None else getattr(audience, "person", None)
         owner = bool(is_owner) if is_owner is not None else bool(
@@ -257,8 +284,11 @@ class YuraChat:
             facts=tuple(getattr(who, "facts", ()) or getattr(audience, "known", ()) or ()),
             chat_title=chat_title,
         )
+        taught = persona.lessons_prompt(language=language, rules=lessons, reminder=reminder)
         if relationship:
             block = f"{block}\n\n{relationship}" if block else relationship
+        if taught:
+            block = f"{block}\n\n{taught}" if block else taught
         if block:
             system = messages[0].content if messages else ""
             messages[0] = AIMessage("system", f"{system}\n\n{block}")
@@ -306,13 +336,19 @@ class YuraChat:
             self.fallbacks += 1
             reply = fallback
 
-        # Swearing is a tone; slurs and "kill yourself" are not, and the line
-        # does not move because someone asked her to be mean. A reply that
-        # crosses it is replaced, not argued with.
-        if not persona.is_acceptable(reply):
-            self.logger.warning("yura: dropped a reply that crossed a line")
+        # There is no filter in front of her mouth: she may swear, insult and be
+        # nasty, and he corrects her when it is wrong — that correction is stored
+        # and shaped the prompt above. The one thing not negotiable is telling
+        # someone to end themselves, which is not a tone.
+        if persona.is_self_harm(reply):
+            self.logger.warning("yura: a reply encouraged self-harm; answering in her own words")
             reply = fallback
             source = "offline"
+        # A rule she walked over is not suppressed. It is counted, and the next
+        # turn tells her — so she can own it and change.
+        self.broken = await self._note_violations(
+            reply, lessons, getattr(who, "user_id", None)
+        )
         answer = await self._apply(reply, chat_id=chat_id, language=language)
         if not answer.text and not answer.files:
             answer.text = fallback

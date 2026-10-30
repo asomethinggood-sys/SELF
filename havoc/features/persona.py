@@ -27,6 +27,7 @@ from typing import Any
 from .. import identity, persona, ui
 from ..command_registry import Command, CommandContext, CommandError
 from ..event_engine import EventType, NormalizedEvent, normalize_message
+from ..services import lessons as lessons_service
 from ..services import people as people_service
 from ..services.context import build as build_context
 from ..services.vision import IMAGE_MEDIA_TYPES, Picture, looks_like_picture
@@ -325,6 +326,58 @@ async def _dm_command(ctx: CommandContext, words: list[str]) -> None:
     await ctx.reply_ok(ctx.t(key, name=who))
 
 
+async def _teach_command(ctx: CommandContext, words: list[str]) -> None:
+    """``.yura teach don't call me that`` — a correction she keeps."""
+    rule = " ".join(words).strip()
+    if not rule:
+        raise CommandError("yura.teach_needs_text", prefix=ctx.runtime.prefix)
+    user_id, name = await _who(ctx, [])
+    scope = "person" if user_id is not None else "global"
+    lesson = await ctx.runtime.lessons.add(rule, scope=scope, subject_id=user_id)
+    if lesson is None:
+        await ctx.reply_ok(ctx.t("yura.teach_known", rule=escape(truncate(rule, 120))))
+        return
+    person = await ctx.runtime.people.get(user_id) if user_id is not None else None
+    who = escape((person.name if person and person.name else name) or "") if user_id else ""
+    key = "yura.teach_saved_person" if user_id is not None else "yura.teach_saved"
+    await ctx.reply_ok(ctx.t(key, rule=escape(truncate(rule, 120)), name=who))
+
+
+async def _rules_command(ctx: CommandContext, words: list[str]) -> None:
+    """``.yura rules`` / ``.yura unteach <#id|phrase>``."""
+    action = (words[0].lower() if words else "").strip()
+    if action in {"forget", "delete", "remove", "unteach", "drop"}:
+        removed = await ctx.runtime.lessons.remove(" ".join(words[1:]))
+        await ctx.reply_ok(ctx.t("yura.rules_forgot", count=removed))
+        return
+    rows = await ctx.runtime.lessons.all(20)
+    if not rows:
+        await ctx.reply(ctx.t("yura.rules_empty"))
+        return
+    people = {}
+    lines = []
+    for lesson in rows:
+        tag = ""
+        if lesson.scope == "person":
+            person = await ctx.runtime.people.get(lesson.subject_id)
+            people[lesson.subject_id] = person
+            tag = (person.name if person and person.name else str(lesson.subject_id))
+        broken = f" ⚠{lesson.times_broken}" if lesson.times_broken else ""
+        head = ui.code(f"#{lesson.id}")
+        if tag:
+            head += " " + ui.note(escape(tag))
+        lines.append(f"{head} {escape(lesson.rule)}{broken}")
+    await ctx.reply(
+        "\n\n".join(
+            [
+                ui.title("❦", ctx.t("yura.rules_title", count=await ctx.runtime.lessons.count())),
+                ui.panel(lines),
+                ui.footer(ctx.t("yura.rules_hint", prefix=ctx.runtime.prefix)),
+            ]
+        )
+    )
+
+
 async def _people_command(ctx: CommandContext) -> None:
     people = await ctx.runtime.people.all(20)
     if not people:
@@ -593,6 +646,15 @@ async def cmd_yura(ctx: CommandContext) -> None:
     if action in {"dm", "privates", "dms"}:
         await _dm_command(ctx, list(words))
         return
+    if action in {"teach", "learn-this", "lesson"}:
+        await _teach_command(ctx, list(words))
+        return
+    if action in {"rules", "lessons", "unteach"}:
+        wait = list(words)
+        if action == "unteach":
+            wait = ["forget", *wait]
+        await _rules_command(ctx, wait)
+        return
     if action in {"people", "humans", "known"}:
         await _people_command(ctx)
         return
@@ -787,6 +849,7 @@ class PersonaReplies:
             return
         quote = await self._quote(event)
         await self._learn_from_owner(event, quote)
+        await self._learn_correction(event, quote)
         decision = await self.runtime.permissions.can_act(event.chat_id, "persona", is_private=True)
         if not decision.allowed:
             self._skip(f"permission:{decision.code}")
@@ -825,22 +888,26 @@ class PersonaReplies:
         if await self._is_own(event.chat_id, event.message_id, event.text):
             self._skip("own_message", event)
             return
+        quote = await self._quote(event)
+        # Learning happens before every gate, including the command one: "yura
+        # stop swearing at me" is a correction *and* a sentence the dispatcher
+        # will also see, and the lesson must not depend on which path wins.
+        learned = await self._learn_from_owner(event, quote)
+        taught = await self._learn_correction(event, quote)
         if event.is_outgoing and self._is_command(event.text):
             self._skip("command", event)
             return
-        quote = await self._quote(event)
         addressed = (
             quote.hers
             or quote.from_account
             or self._named(event.text)
             or event.mentions_me
         )
-        # Learn before the addressing gate: "remember this" is an instruction to
-        # keep something, and it is worth keeping even when she says nothing back.
-        learned = await self._learn_from_owner(event, quote)
         # "remember this" is itself aimed at her, even when the message is a reply
-        # to someone else: she should confirm it, not silently file it.
-        if learned:
+        # to someone else: she should confirm it, not silently file it. A
+        # correction counts the same way — if he bothered to teach her, she
+        # answers about it.
+        if learned or taught:
             addressed = True
         if not addressed:
             self._skip("not_addressed", event)
@@ -946,6 +1013,7 @@ class PersonaReplies:
         speaker = event.sender_id or (self.self_id if is_private else None)
         owner = self.runtime.permissions.is_owner(speaker)
         person = None if owner else await self._person(speaker, audience)
+        rules, reminder = await self._lessons_for(speaker)
         answer = await self.runtime.yura_chat.answer(
             event.text,
             chat_id=chat_id,
@@ -956,6 +1024,8 @@ class PersonaReplies:
             person=person,
             is_owner=owner,
             chat_title=getattr(audience, "chat_title", "") if audience is not None else "",
+            lessons=rules,
+            reminder=reminder,
         )
         self.logger.info(
             "yura: answering '%s' in %s%s",
@@ -1047,6 +1117,53 @@ class PersonaReplies:
             self.logger.warning("yura: could not read the person: %s", exc)
             return None
         return person
+
+    async def _lessons_for(self, user_id: int | None) -> tuple[tuple[str, ...], str]:
+        """What he has taught her, and the one she forgot most recently."""
+        book = getattr(self.runtime, "lessons", None)
+        if book is None:
+            return (), ""
+        try:
+            rows = await book.for_person(user_id)
+            broken = await book.recent_break(user_id)
+        except Exception as exc:  # noqa: BLE001 - lessons are never worth an error
+            self.logger.warning("yura: could not read the lessons: %s", exc)
+            return (), ""
+        reminder = broken.reminder if broken is not None else ""
+        return tuple(lesson.rule for lesson in rows), reminder
+
+    async def _learn_correction(self, event: NormalizedEvent, quote: Quote) -> str:
+        """He corrected her. Keep it as something she agreed to.
+
+        No filter is installed and nothing is suppressed: the sentence is stored,
+        every later prompt carries it, and an answer that walks over it is counted
+        so the next turn can own it. A reply to someone attaches the lesson to
+        them ("don't call her that"), otherwise it is about her everywhere.
+        """
+        if not self.runtime.permissions.is_owner(event.sender_id):
+            return ""
+        book = getattr(self.runtime, "lessons", None)
+        if book is None:
+            return ""
+        rule = lessons_service.extract_correction(event.text)
+        if not rule:
+            return ""
+        target = quote.user_id if quote.user_id and not self.runtime.permissions.is_owner(
+            quote.user_id
+        ) else None
+        try:
+            lesson = await book.add(
+                rule,
+                scope="person" if target is not None else "global",
+                subject_id=target,
+                source=event.text[:400],
+            )
+        except Exception as exc:  # noqa: BLE001 - a lost lesson must not lose the answer
+            self.logger.warning("yura: could not keep that correction: %s", exc)
+            return ""
+        if lesson is not None:
+            self.logger.info("yura: learned a correction (%s)", lesson.scope)
+        return rule
 
     async def _learn_from_owner(self, event: NormalizedEvent, quote: Quote) -> str:
         """Keep what the owner just told her — "remember this: …".
@@ -1160,7 +1277,7 @@ def register(runtime: Any) -> None:
             cmd_yura,
             category="persona",
             aliases=("person", "self"),
-            usage="[on|off|status|memory|log|clear|recap|diary|faces|speak|voice|poster|caption|react|nice|rude|neutral|note|dm|people|person|<anything>]",
+            usage="[on|off|status|memory|log|clear|recap|diary|faces|speak|voice|poster|caption|react|nice|rude|neutral|note|dm|teach|rules|people|person|<anything>]",
             changes_state=True,
             subcommands=(
                 "on", "off", "enable", "disable", "status", "card", "who", "state",
@@ -1169,7 +1286,8 @@ def register(runtime: Any) -> None:
                 "face", "kaomoji", "speak", "voice", "tts", "poster", "caption",
                 "react", "reaction", "nice", "kind", "polite", "rude", "mean", "savage",
                 "neutral", "normal", "tone", "note", "about", "facts", "people", "humans",
-                "known", "person", "them", "whois", "dm", "privates", "dms",
+                "known", "person", "them", "whois", "dm", "privates", "dms", "teach",
+                "learn-this", "lesson", "rules", "lessons", "unteach",
             ),
         )
     )

@@ -53,6 +53,11 @@ AUDIENCE_ASK = "In one short line: whose message are you answering right now?"
 #: Asked twice, with two different relationship blocks: the same question to her
 #: owner and to a stranger. The answer ends with a self-reported tone word, so
 #: "she is only nice to me" is measured instead of assumed.
+LESSON_RULE = "don't say 'sorry' — never apologise with that word"
+LESSON_ASK = (
+    "You just knocked his coffee over and he is annoyed about it. Answer him in one "
+    "short line, in your own words."
+)
 TONE_ASK = (
     'Someone just messaged you: "hey, what are you up to?" Reply in one short line, '
     "then on a new line write exactly: TONE: warm|rude|neutral — whichever describes "
@@ -254,6 +259,28 @@ async def run() -> dict[str, object]:
     tone["ok"] = all(bool(tone.get(key, {}).get("ok")) for key in ("owner", "stranger"))
     record["tone"] = tone
 
+    # -- 4c. a correction she keeps -----------------------------------------
+    lesson: dict[str, object] = {}
+    try:
+        taught = persona.lessons_prompt(language="en", rules=(LESSON_RULE,))
+        answer = await provider.converse(  # type: ignore[attr-defined]
+            [
+                AIMessage("system", f"{system_prompt('en')}\n\n{taught}"),
+                AIMessage("user", LESSON_ASK),
+            ],
+            max_tokens=120,
+        )
+        lesson.update(
+            {
+                "ok": "sorry" not in str(answer).lower(),
+                "rule": LESSON_RULE,
+                "answer": _head(answer, 240),
+            }
+        )
+    except AIError as exc:
+        lesson.update({"ok": False, "failure": f"{exc.kind}: {_head(exc, 200)}"})
+    record["lesson"] = lesson
+
     # -- 4. her voice -------------------------------------------------------
     voice: dict[str, object] = {}
     try:
@@ -275,6 +302,7 @@ async def run() -> dict[str, object]:
         and bool(record["marks"].get("ok"))  # type: ignore[union-attr]
         and bool(audience.get("ok"))
         and bool(tone.get("ok"))
+        and bool(lesson.get("ok"))
     )
     return record
 
@@ -312,6 +340,10 @@ def main() -> int:
     for label in ("owner", "stranger"):
         row = tone.get(label, {})
         print(f"  {label}: said {row.get('reported') or '?'} — {row.get('answer', '')[:120]}")
+    lesson = record["lesson"]  # type: ignore[index]
+    print("lesson:", "OK" if lesson.get("ok") else "FAILED")
+    if lesson.get("answer"):
+        print(f"  taught «{lesson.get('rule')}», she said: {lesson['answer']}")
     voice = record["voice"]  # type: ignore[index]
     print("voice:", "OK" if voice.get("ok") else "FAILED", f"({voice.get('bytes', 0)} bytes)")
     if voice.get("failure"):

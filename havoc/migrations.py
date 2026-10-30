@@ -384,12 +384,39 @@ MIGRATION_5_PEOPLE_DM = Migration(
     ),
 )
 
+MIGRATION_6_LESSONS = Migration(
+    version=6,
+    name="yura_lessons",
+    statements=(
+        # How she is corrected and how that sticks. There is no filter in front of
+        # her mouth: the owner tells her a thing is not acceptable, the sentence
+        # is kept here, and every later prompt carries it as something she agreed
+        # to. ``times_broken`` is not a punishment — it is how she learns that a
+        # rule is hard for her, and the next turn mentions it.
+        """
+        CREATE TABLE IF NOT EXISTS yura_lessons (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            scope          TEXT NOT NULL DEFAULT 'global',
+            subject_id     INTEGER NOT NULL DEFAULT 0,
+            rule           TEXT NOT NULL,
+            tokens         TEXT NOT NULL DEFAULT '[]',
+            source         TEXT NOT NULL DEFAULT '',
+            times_broken   INTEGER NOT NULL DEFAULT 0,
+            last_broken_at TEXT,
+            created_at     TEXT NOT NULL
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_yura_lessons_scope ON yura_lessons(scope, subject_id)",
+    ),
+)
+
 MIGRATIONS: tuple[Migration, ...] = (
     MIGRATION_1_FOUNDATION,
     MIGRATION_2_TIMESTAMPS,
     MIGRATION_3_YURA_MEMORY,
     MIGRATION_4_PEOPLE,
     MIGRATION_5_PEOPLE_DM,
+    MIGRATION_6_LESSONS,
 )
 
 LATEST_VERSION = max(m.version for m in MIGRATIONS)

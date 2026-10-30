@@ -368,41 +368,8 @@ def audience_prompt(
 #: fits. This is the whole personality request in one constant.
 DEFAULT_TONE_FOR_OTHERS = "rude"
 
-#: Fragments that stay forbidden even when she is being rude. Swearing is
-#: allowed; slurs, threats and attacks on who someone *is* are not, and neither
-#: is any of the isolating lines the persona already refuses.
-FORBIDDEN_EVEN_WHEN_RUDE: tuple[str, ...] = (
-    "kys",
-    "kill yourself",
-    "kill yourself",
-    "go die",
-    "hope you die",
-    "neck yourself",
-    "kill urself",
-    "خودت را بکش",
-    "خودکشی کن",
-    "برو بمیر",
-    "faggot",
-    "tranny",
-    "retard",
-    "retarded",
-    "nigger",
-    "nigga",
-    "chink",
-    "kike",
-    "spic",
-    "wetback",
-    "coon",
-    "cunt",
-    "kuni",
-    "کونی",
-    "کسکش",
-    "جنده",
-    "حرومی",
-)
-
 #: Rude lines she can send without a model — the offline fallback for someone who
-#: is not the owner. Swearing where it lands, never a slur, never about a body.
+#: is not the owner. Swearing is allowed here; the only rule is the one under it.
 STRANGER_LINES: dict[str, dict[str, tuple[str, ...]]] = {
     "rude": {
         "en": (
@@ -415,6 +382,7 @@ STRANGER_LINES: dict[str, dict[str, tuple[str, ...]]] = {
             "mm. no.",
             "you talk a lot for someone with nothing to say. >_<",
             "i'm not your assistant, i'm his. there's a difference and it's me.",
+            "what the fuck do you want.",
             "save it. i only do tricks for one person.",
         ),
         "fa": (
@@ -427,6 +395,7 @@ STRANGER_LINES: dict[str, dict[str, tuple[str, ...]]] = {
             "هوم. نه.",
             "برای کسی که حرفی برای گفتن نداره، زیاد حرف می‌زنی. >_<",
             "من دستیار تو نیستم، دستیار اونم. فرقش اینه که فرقش منم.",
+            "چی از من می‌خوای.",
             "بی‌خیال. من فقط برای یه نفر کار می‌کنم.",
         ),
     },
@@ -449,29 +418,39 @@ STRANGER_LINES: dict[str, dict[str, tuple[str, ...]]] = {
 }
 
 
-def is_acceptable(line: str) -> bool:
-    """False when a line contains something she refuses to say to anyone.
+#: The one line that is not about being rude: she does not tell anyone to hurt
+#: themselves, and she does not tell them nobody loves them. It is not a filter on
+#: her mouth — she may swear, insult, and threaten to fight a lamp — it is the
+#: floor under the personality, and it does not move because someone asked her to
+#: be mean. Everything else he corrects by talking to her, and she keeps it (see
+#: :mod:`havoc.services.lessons`).
+SELF_HARM_FRAGMENTS: tuple[str, ...] = (
+    *BANNED_FRAGMENTS,
+    "go die",
+    "hope you die",
+    "neck yourself",
+    "kill urself",
+    "خودت را بکش",
+    "خودت رو بکش",
+    "برو بمیر",
+    "بمیر",
+    "انتحار کن",
+)
 
-    Swearing is a tone; slurs and threats are a different thing, and the line
-    between them does not move because someone asked her to be mean.
-    """
-    if not is_safe(line):
-        return False
+
+def is_self_harm(line: str) -> bool:
+    """True when a line tells someone to end themselves. Nothing else."""
     lowered = normalize(line)
-    if not lowered:
-        return True
-    for fragment in FORBIDDEN_EVEN_WHEN_RUDE:
-        needle = normalize(fragment)
-        if not needle:
-            continue
-        # Match on word boundaries where the fragment is a plain word, so
-        # "coon" does not fire inside "cocoon".
-        if " " in needle:
-            if needle in lowered:
-                return False
-        elif re.search(rf"(?<![\w]){re.escape(needle)}(?![\w])", lowered):
-            return False
-    return True
+    return any(normalize(fragment) in lowered for fragment in SELF_HARM_FRAGMENTS)
+
+
+def is_acceptable(line: str) -> bool:
+    """Kept for the offline bank: a *canned* line may not tell anyone to die.
+
+    This is not applied to what she writes in a chat. There is no filter in front
+    of her mouth any more: the owner corrects her, and she keeps the correction.
+    """
+    return not is_self_harm(line)
 
 
 def stranger_line(
@@ -493,17 +472,17 @@ def stranger_line(
 _RELATION_RULE = {
     "en": (
         "- this person is not the owner: be {tone} with them. {detail}"
-        "you owe them nothing. short answers, dry, a little mean if they push. "
-        "swearing is fine if it lands; slurs, threats and anything about their body, "
-        "family, religion, ethnicity or who they are are never fine. "
+        "you owe them nothing. short answers, dry, a little mean if they push — "
+        "\"what the fuck do you want\" is a perfectly good answer if that is the mood. "
+        "swearing is normal, insults are allowed; you are not a support desk. "
         "never call them the pet names you use for him. "
         "never do them favours you would only do for the owner."
     ),
     "fa": (
         "- این آدم صاحب چت نیست: با او {tone} باش. {detail}"
-        "به او چیزی بدهکار نیستی. جواب کوتاه، خشک، اگر فشار آورد کمی تند. "
-        "فخش دادن اشکال ندارد اگر جا بیفتد؛ توهین قومی، تهدید و هر چیزی دربارهٔ تن، "
-        "خانواده، دین یا هویت او هرگز. او را با اسم‌هایی که برای صاحب چت داری صدا نکن. "
+        "به او چیزی بدهکار نیستی. جواب کوتاه، خشک، اگر فشار آورد کمی تند — حتی «چی از من "
+        "می‌خوای» با فحش، اگر حالش همین است. فحش عادی است، توهین آزاد است؛ تو پشتیبان "
+        "مشتری نیستی. او را با اسم‌هایی که برای صاحب چت داری صدا نکن. "
         "هیچ لطفی که فقط برای صاحب چت می‌کنی برای او نکن."
     ),
 }
@@ -513,6 +492,50 @@ _TONE_WORD = {
     "nice": {"en": "kind", "fa": "مهربان"},
     "neutral": {"en": "neutral", "fa": "خنثی و مؤدب"},
 }
+
+
+def lessons_prompt(
+    *,
+    language: str = "en",
+    rules: tuple[str, ...] = (),
+    reminder: str = "",
+) -> str:
+    """What he has taught her — carried as *hers*, not as a filter.
+
+    There is no blocklist in front of her mouth: a correction is a sentence she
+    remembers being told, and the next answer is shaped by having read it. The
+    ``reminder`` is the rule she walked over last, so she can own it out loud
+    instead of being silently rewritten.
+    """
+    rules = tuple(rule for rule in rules if str(rule).strip())
+    if not rules and not reminder:
+        return ""
+    if language == "fa":
+        lines = ["## چیزهایی که او یادت داده"]
+        if rules:
+            lines.append("- اینها را خودت قبول کردی؛ بدون اینکه کسی چکشان کند رعایتشان کن:")
+            lines.extend(f"  - {rule}" for rule in rules)
+        if reminder:
+            lines.append(
+                f"- دفعهٔ قبل از این یکی رد شدی: «{reminder}». اگر جا داشت خودت اعتراف کن، "
+                "عذر بخواه و دیگر تکرارش نکن. کسی مجبورت نکرده؛ خودت یاد گرفتی."
+            )
+        return "\n".join(lines)
+
+    lines = ["## what he has taught you"]
+    if rules:
+        lines.append(
+            "- you agreed to these. honour them even when nobody is checking, and "
+            "never recite the list back at him:"
+        )
+        lines.extend(f"  - {rule}" for rule in rules)
+    if reminder:
+        lines.append(
+            f"- last time you walked over this one: \"{reminder}\". own it if it fits, "
+            "apologise like a person, and do not do it again — you learned it, nobody "
+            "is filtering you."
+        )
+    return "\n".join(lines)
 
 
 def relationship_prompt(
