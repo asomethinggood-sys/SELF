@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import random
 import time
+from collections import deque
 from typing import Any
 
 from .. import identity, persona, ui
@@ -424,6 +425,10 @@ class PersonaReplies:
         self.reacted = 0
         self._since_mood = 0
         self._since_reaction = 0
+        # Message ids this process sent, per chat. Content is not enough to tell
+        # her own message from the owner's — formatted text loses its marks in
+        # the Telegram copy — but the id never lies.
+        self._own_ids: dict[int, deque[int]] = {}
 
     @property
     def self_id(self) -> int | None:
@@ -452,6 +457,20 @@ class PersonaReplies:
             return True
         first = stripped.split(maxsplit=1)[0].lower() if stripped else ""
         return first in _INTERNAL_WORDS
+
+    def _note_own(self, chat_id: int, message_id: Any) -> None:
+        if message_id is None:
+            return
+        bucket = self._own_ids.setdefault(chat_id, deque(maxlen=80))
+        bucket.append(int(message_id))
+
+    def _is_own(self, chat_id: int, message_id: Any, text: str) -> bool:
+        """True when this message is one she wrote, not one the owner wrote."""
+        if message_id is not None and int(message_id) in self._own_ids.get(chat_id, ()):
+            return True
+        if not text:
+            return False
+        return persona.is_own_line(text) or self.runtime.yura_chat.was_sent(chat_id, text)
 
     def _named(self, text: str) -> bool:
         """True when the message says her name, in either spelling or alphabet."""
@@ -504,8 +523,16 @@ class PersonaReplies:
         mention. The gate is checked before the picture is fetched, so a group
         photo nobody asked about is never downloaded.
         """
-        if event.is_outgoing or not event.is_group or event.message_id is None:
+        if not event.is_group or event.message_id is None:
             return
+        # In a group this account writes two kinds of message: the owner's and
+        # hers. Replying to her is an *outgoing* message here, which is why the
+        # first version of this handler never fired — and why her own answers
+        # have to be recognised by id, not by who "sent" them.
+        if self._is_own(event.chat_id, event.message_id, event.text):
+            return
+        if event.is_outgoing and self._is_command(event.text):
+            return  # the dispatcher answers commands
         quoted, hers = await self._quoted_chain(event)
         addressed = hers or self._named(event.text) or event.mentions_me
         if not addressed:
@@ -582,17 +609,20 @@ class PersonaReplies:
         """
         sender = self.runtime.sender
         if source != "model":
-            await sender.send(chat_id, html, reply_to=reply_to)
+            result = await sender.send(chat_id, html, reply_to=reply_to)
+            self._note_own(chat_id, getattr(getattr(result, "message", None), "id", None))
             return
         try:
             placeholder = await sender.send(chat_id, self.TYPING, reply_to=reply_to)
         except Exception:  # noqa: BLE001 - fall back to one clean message
-            await sender.send(chat_id, html, reply_to=reply_to)
+            result = await sender.send(chat_id, html, reply_to=reply_to)
+            self._note_own(chat_id, getattr(getattr(result, "message", None), "id", None))
             return
         message = getattr(placeholder, "message", None)
         message_id = getattr(message, "id", None)
         if getattr(placeholder, "dry_run", False) or message_id is None:
             return
+        self._note_own(chat_id, message_id)
         try:
             await sender.edit(chat_id, message_id, html)
         except Exception as exc:  # noqa: BLE001 - the placeholder must not be the answer
@@ -647,14 +677,17 @@ class PersonaReplies:
                 break
             text = " ".join(str(getattr(current, "raw_text", "") or "").split())
             sender = getattr(current, "sender_id", None)
-            mine = bool(getattr(current, "out", False)) or (
+            out = bool(getattr(current, "out", False))
+            from_this_account = out or (
                 sender is not None and self.self_id is not None and sender == self.self_id
             )
-            # Only quote something she said or the owner said: a third party's
-            # message must not be folded into a prompt by being pointed at.
-            if sender is not None and self.self_id is not None and sender != self.self_id \
-                    and not getattr(current, "out", False):
+            # Only quote something from this account: a third party's message
+            # must not be folded into a prompt by being pointed at.
+            if not from_this_account:
                 break
+            # ...and "hers" means she wrote it, which in a group is only knowable
+            # from the id she sent or the shape of her own lines.
+            mine = self._is_own(event.chat_id, getattr(current, "id", None), text)
             hers = hers or mine
             if text:
                 lines.append(text[:400])
@@ -715,7 +748,9 @@ def register(runtime: Any) -> None:
     runtime.event_engine.subscribe(
         "persona.group_reply",
         replies.on_group_message,
-        {EventType.MESSAGE},
+        # OUTGOING as well as MESSAGE: in a group the owner's own message —
+        # including a reply to her — arrives as outgoing from this account.
+        {EventType.MESSAGE, EventType.OUTGOING},
         priority=45,
         description="Yura answers a reply to her, or her name, in a group",
     )

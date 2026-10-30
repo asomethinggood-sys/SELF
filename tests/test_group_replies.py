@@ -75,6 +75,8 @@ async def _replies(runtime):
     replies = runtime.persona_replies
     replies._group_last.clear()
     replies._group_window.clear()
+    # 600 is the message she sent: reality is that her own process knows the id.
+    replies._note_own(GROUP, 600)
     return replies, client
 
 
@@ -159,6 +161,44 @@ async def test_the_group_hourly_cap_holds(runtime) -> None:
     replies._group_last[GROUP] = None  # type: ignore[assignment]
     replies._group_window[GROUP] = [time.monotonic()] * replies.MAX_GROUP_PER_HOUR
     await replies.on_group_message(_incoming("yura hi"))
+    assert client.sent == []
+
+
+async def test_an_outgoing_reply_to_her_is_answered(runtime) -> None:
+    """The reported bug: in a group the owner's own message is outgoing.
+
+    Listening only for incoming messages meant replying to her there did
+    nothing at all, while the same gesture worked in Saved Messages.
+    """
+    replies, client = await _replies(runtime)
+    message = FakeMessage(
+        id=610, chat_id=GROUP, sender_id=42, text="why?", out=True, is_group=True, reply=_hers()
+    )
+    await replies.on_group_message(
+        normalize_message(message, self_id=42, prefix=".", event_type=EventType.OUTGOING)
+    )
+    assert client.sent, "her own account's group reply was ignored"
+
+
+async def test_her_own_group_message_is_recognised_by_id(runtime) -> None:
+    replies, client = await _replies(runtime)
+    message = FakeMessage(
+        id=600, chat_id=GROUP, sender_id=42, text="i said what i said", out=True, is_group=True
+    )
+    await replies.on_group_message(
+        normalize_message(message, self_id=42, prefix=".", event_type=EventType.OUTGOING)
+    )
+    assert client.sent == [], "she answered herself"
+
+
+async def test_an_outgoing_command_is_left_to_the_dispatcher(runtime) -> None:
+    replies, client = await _replies(runtime)
+    message = FakeMessage(
+        id=611, chat_id=GROUP, sender_id=42, text=".yura poem", out=True, is_group=True
+    )
+    await replies.on_group_message(
+        normalize_message(message, self_id=42, prefix=".", event_type=EventType.OUTGOING)
+    )
     assert client.sent == []
 
 
