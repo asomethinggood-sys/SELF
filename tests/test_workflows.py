@@ -401,8 +401,14 @@ def test_the_bot_only_stands_down_for_a_run_that_exists() -> None:
     script = step["run"]
 
     assert "replacement_queued" in script
-    # It asks GitHub which runs exist for the newer commit.
-    assert "/actions/runs?head_sha=" in script
+    # It asks GitHub which runs of its own workflow are queued on this branch,
+    # excluding itself — not which runs exist for the newest commit. Asking about
+    # the newest commit deadlocks the moment a docs-only push moves the head to a
+    # commit that starts no run: the queued deploy can never be confirmed and the
+    # bot sits in front of it for six hours.
+    assert "/actions/runs?branch=" in script
+    assert "head_sha=" not in script
+    assert "GITHUB_RUN_ID" in script
     # Standing down is conditional on that answer being yes.
     handover = script.index("kill -INT")
     assert script.index("confirmed") < handover

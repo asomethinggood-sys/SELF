@@ -470,12 +470,30 @@ jobs:
           # does not guarantee a run: GitHub ignores pushes whose message asks
           # it to, and a broken workflow file yields none either. Standing down
           # without this check once left the bot down for hours.
+          # Is another run of this workflow queued or running on this branch?
+          #
+          # This used to ask for runs of the *newest commit* only, which deadlocked
+          # the bot: a push of docs moved the remote head to a commit that starts
+          # no run, so the check could never be satisfied, the bot never stood
+          # down, and the deploy queued for the previous commit waited behind it
+          # for six hours. A queue is a queue: if any run other than this one is
+          # waiting, it is the newer code's turn.
           replacement_queued() {
             curl -sfS --max-time 20 \
               -H "Authorization: Bearer ${GITHUB_TOKEN}" \
               -H "Accept: application/vnd.github+json" \
-              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=$1&per_page=30" \
-              | python -c "import json,sys; runs=json.load(sys.stdin).get('workflow_runs') or []; live={'queued','in_progress','requested','waiting','pending'}; print('yes' if any(r.get('status') in live for r in runs) else 'no')" \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/runs?branch=${GITHUB_REF_NAME}&per_page=50" \
+              | python -c "
+          import json, os, sys
+          runs = json.load(sys.stdin).get('workflow_runs') or []
+          live = {'queued', 'in_progress', 'requested', 'waiting', 'pending'}
+          me = os.environ.get('GITHUB_RUN_ID')
+          others = [r for r in runs
+                    if str(r.get('id')) != me
+                    and str(r.get('status')) in live
+                    and str(r.get('path', '')).endswith('auth-and-run.yml')]
+          print('yes' if others else 'no')
+          " \
               2>/dev/null || echo "unknown"
           }
 
@@ -500,7 +518,7 @@ jobs:
               # worth more than a deploy that may never start.
               confirmed=""
               for _ in 1 2 3 4 5 6 7 8 9 10; do
-                case "$(replacement_queued "$remote")" in
+                case "$(replacement_queued)" in
                   yes) confirmed="yes"; break ;;
                   no)  break ;;
                   *)   sleep 10 ;;
