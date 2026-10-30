@@ -111,3 +111,39 @@ real gap:
 `scripts/audit_live.py` fails on an orphan from this commit on: `dead code ok ·
 orphans 0`, gated in CI. A helper nobody calls is a promise nobody keeps, and the
 sweep is only permanent if the day a new one appears is a red build.
+
+### The everyday asks that were still only conversation
+
+The floor covered switching things on and off, reminders, notes, translation and
+search. Everything else — the small things a person actually types — reached her
+as a sentence, and a free model would answer the sentence. "What time is it" got a
+paragraph about time; the clock in the card did not appear.
+
+Thirty-three phrasings now become the command they mean, written as whole
+sentences (anchored at both ends, like the lookup rules) so a sentence that merely
+*mentions* the words stays conversation:
+
+| He says | She runs |
+| --- | --- |
+| `what time is it`, `what's the time in Tehran?`, `ساعت چنده` | `time`, `time tehran` |
+| `what's today's date`, `what day is it` | `time` |
+| `flip a coin`, `heads or tails`, `شیر یا خط` | `coin` |
+| `give me a random number between 1 and 10` | `random 1 10` |
+| `what's 12 times 8`, `what is 3 plus 4`, `calculate 45 / 9` | `calc 12 * 8`, `calc 3 + 4`, `calc 45 / 9` |
+| `make a backup`, `back up the database` | `backup export` |
+| `run a selfcheck`, `check yourself`, `are you ok` | `selfcheck` |
+| `ping`, `how fast are you` | `ping` |
+| `what language is this`, `این چه زبانیه` | `detect` |
+| `tell me a poem`, `read me a hafez poem` | `poem` |
+| `what's on my agenda`, `what do i have scheduled` | `agenda today` |
+| `what's on my agenda this week` | `agenda week` |
+| `show my bookmarks` | `bookmark list` |
+| `summarize this`, `summarize the last 20 messages`, `tldr` | `summarize`, `summarize 20` |
+| `what version are you`, `ورژن چیه` | `about` |
+
+Spoken arithmetic is normalized first, so `times`, `plus`, `divided by` and `x`
+become the operators before the shape is read. A place name is only accepted if it
+is short and carries no content words: **"the time in that poem about"** is a
+sentence about a poem, and it is answered as one. `are you there` and `are you
+awake` were deliberately left out of `ping` — that is talking to her, not measuring
+a round trip, and `.yura are you awake` still reaches her own voice.

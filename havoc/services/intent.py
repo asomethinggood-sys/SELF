@@ -457,6 +457,171 @@ def _knowledge(text: str) -> Intent | None:
     return None
 
 
+#: Number words a person types into a sum, mapped to what arithmetic wants.
+_MATH_WORDS = (
+    (r"\bplus\b|\band\b|\badded to\b", "+"),
+    (r"\bminus\b|\bless\b|\btake away\b", "-"),
+    (r"\btimes\b|\bmultiplied by\b|\bx\b|\binto\b", "*"),
+    (r"\bdivided by\b|\bover\b", "/"),
+    (r"\bmod\b|\bmodulo\b", "%"),
+    (r"\bto the power of\b|\braised to\b", "**"),
+)
+
+#: ``what time is it (in Tokyo)`` — the place is optional and stripped of manners.
+_ASK_TIME = re.compile(
+    r"^(?:"
+    r"(?:what time is it|what time is it now) in (?P<place_a>[^?]+)"
+    r"|what(?:'s| is) the time in (?P<place_b>[^?]+)"
+    r"|time in (?P<place_c>[^?]+)"
+    r"|what time is it|what(?:'s| is) the time|current time|the time please"
+    r"|ساعت چنده|ساعت چند است|ساعت چند شده|چه ساعتیه|ساعت چقدره"
+    r")\s*(?:now|please|لطفا)?\s*[?.!؟]*$"
+)
+_ASK_DATE = re.compile(
+    r"^(?:what(?:'s| is) (?:the |today'?s )?date|what day is (?:it|today)|today'?s date"
+    r"|what is today|تاریخ امروز|امروز چندمه)\s*[?.!؟]*$"
+)
+_COIN = re.compile(
+    r"^(?:(?:please )?(?:flip|toss) (?:a|the) coin(?: for me)?|heads or tails|شیر یا خط)"
+    r"\s*[?.!؟]*$"
+)
+_RANDOM_NUMBER = re.compile(
+    r"^(?:(?:give me|pick|choose|generate)\s+)?(?:a\s+)?random\s+(?:number|integer)"
+    r"(?:\s+(?:between\s+)?(?P<low>-?\d+)\s*(?:and|to|-)\s*(?P<high>-?\d+))?\s*[?.!]*$"
+)
+_SUM = re.compile(
+    r"^(?:what(?:'s| is)|calculate|compute|how much is|solve|work out|محاسبه)\s+"
+    r"(?P<expr>[0-9\s.,+\-*/%^()×÷]+?)\s*[=?]*$"
+)
+_BACKUP = re.compile(
+    r"^(?:(?:make|create|take|run|do)(?: me)?(?: a| an)? backup"
+    r"|back(?:ing)? up(?: (?:the |my )?(?:database|data|everything|it))?"
+    r"|back (?:the database|everything|it) up"
+    r"|(?:پشتیبان|بکاپ) (?:بگیر|بساز))\s*[.!]*$"
+)
+_SELFCHECK = re.compile(
+    r"^(?:(?:run |do )?(?:a )?self[\s-]?check|check yourself|are you (?:ok|okay|healthy|alive)\b"
+    r"|خودت رو چک کن)\s*[?.!]*$"
+)
+#: "are you there" is talking to her; "ping" is asking the round trip.
+_PING = re.compile(r"^(?:ping|how fast are you)\s*[?.!]*$")
+_LANG_OF_TEXT = re.compile(
+    r"^(?:what language is (?:this|that|it)|which language is (?:this|that)|detect (?:the |its )?language"
+    r"|این چه زبانیه)\s*[?.!؟]*$"
+)
+_POEM_ASK = re.compile(
+    r"^(?:(?:tell|read|recite|give)(?: me)?(?: a)?(?: short)?(?: (?:hafez|rumi|moulana|saadi|khayyam|فال)?)? poem"
+    r"|(?:tell|read|recite)(?: me)? (?:a )?(?:hafez|rumi|saadi|khayyam) poem|a poem|poem please"
+    r"|(?:یک )?شعر(?: بگو| بخون)?)$"
+)
+_AGENDA_WEEK = re.compile(
+    r"^(?:what(?:'s| is) on (?:my|the) agenda (?:this|next) week|my week|what do i have this week)\s*[?.!]*$"
+)
+_AGENDA = re.compile(
+    r"^(?:what(?:'s| is) on (?:my|the) agenda|my agenda|what(?:'s| is) planned(?: for today)?"
+    r"|what do i have (?:scheduled|planned|today)|what(?:'s| is) (?:on )?today)\s*[?.!]*$"
+)
+_BOOKMARKS_LIST = re.compile(
+    r"^(?:(?:show|list)(?: me)?(?: my)? bookmarks|my bookmarks|what did i bookmark)\s*[?.!]*$"
+)
+_SUMMARIZE = re.compile(
+    r"^(?:summar(?:y|ize|ise)|tl;?dr)(?:\s+(?:the\s+)?(?:last\s+)?(?P<count>\d+)\s+messages?)?"
+    r"(?:\s+(?:this|that|here|for me))?\s*[?.!]*$"
+)
+_VERSION = re.compile(
+    r"^(?:(?:what|which) version(?: are you| is (?:this|it))?|your version|version"
+    r"|what(?:'s| is) your version|ورژن(?:ت چیه| چیه)?)\s*[?.!؟]*$"
+)
+
+
+def _utility(text: str) -> Intent | None:
+    """The small, unambiguous asks: the time, a coin, a sum, a poem.
+
+    Every rule is a whole sentence — anchored at ``^`` and closed at ``$`` — for
+    the same reason :func:`_misc` is: "the time in that poem was beautiful" is a
+    sentence about a poem, not a request for a clock in Tokyo. A question that
+    happens to contain the words is conversation; a question that *is* the words
+    is an instruction.
+    """
+    folded = _clean(text)
+
+    match = _ASK_TIME.match(folded)
+    if match:
+        place = next((value for value in match.groups() if value), None)
+        if place:
+            place = re.sub(r"\b(?:please|now|right now|لطفا)\b", "", place).strip(" ,.?!؟")
+            # "the time in that poem about" is a sentence about a poem. A place is
+            # a short name, not a clause carrying pronouns or content words.
+            if len(place.split()) > 3 or re.search(
+                r"\b(?:that|this|it|about|poem|song|book|story|verse|line|movie|photo)\b", place
+            ):
+                # The words were there, the ask was not: this is a sentence about
+                # a poem that happens to mention a time.
+                return None
+        line = f"time {place}" if place else "time"
+        return Intent(lines=(line,), label="time", detail=line)
+
+    if _ASK_DATE.match(folded):
+        return Intent(lines=("time",), label="time", detail="date")
+
+    if _VERSION.match(folded):
+        return Intent(lines=("about",), label="about", detail="about")
+
+    if _COIN.match(folded):
+        return Intent(lines=("coin",), label="coin", detail="coin")
+
+    match = _RANDOM_NUMBER.match(folded)
+    if match:
+        if match.group("low") and match.group("high"):
+            line = f"random {match.group('low')} {match.group('high')}"
+        else:
+            line = "random"
+        return Intent(lines=(line,), label="random", detail=line)
+
+    spoken = folded
+    for word, symbol in _MATH_WORDS:
+        spoken = re.sub(word, f" {symbol} ", spoken)
+    spoken = " ".join(spoken.split())
+    match = _SUM.match(spoken)
+    if match:
+        expression = " ".join(match.group("expr").strip(" =?").split())
+        if re.search(r"\d", expression) and re.search(r"[-+*/%^]", expression):
+            line = f"calc {expression}"
+            return Intent(lines=(line,), label="calc", detail=line)
+
+    if _BACKUP.match(folded):
+        return Intent(lines=("backup export",), label="backup", detail="backup export")
+
+    if _SELFCHECK.match(folded):
+        return Intent(lines=("selfcheck",), label="selfcheck", detail="selfcheck")
+
+    if _PING.match(folded):
+        return Intent(lines=("ping",), label="ping", detail="ping")
+
+    if _LANG_OF_TEXT.match(folded):
+        return Intent(lines=("detect",), label="detect", detail="detect")
+
+    if _POEM_ASK.match(folded):
+        return Intent(lines=("poem",), label="poem", detail="poem")
+
+    if _AGENDA_WEEK.match(folded):
+        return Intent(lines=("agenda week",), label="agenda", detail="agenda week")
+
+    if _AGENDA.match(folded):
+        return Intent(lines=("agenda today",), label="agenda", detail="agenda today")
+
+    if _BOOKMARKS_LIST.match(folded):
+        return Intent(lines=("bookmark list",), label="bookmark", detail="bookmark list")
+
+    match = _SUMMARIZE.match(folded)
+    if match:
+        count = match.group("count")
+        line = f"summarize {count}" if count else "summarize"
+        return Intent(lines=(line,), label="summarize", detail=line)
+
+    return None
+
+
 def _misc(text: str) -> Intent | None:
     """The read-only shapes: a question opener, or an order to show something.
 
@@ -467,7 +632,7 @@ def _misc(text: str) -> Intent | None:
     folded = _clean(text)
     rules: list[tuple[str, str]] = [
         (r"^(?:what can you do|what do you do|list (?:your )?(?:commands|features)|show (?:me )?(?:the )?(?:commands|help)|help me|^help$|کمک|دستورها)", "help"),
-        (r"^(?:who are you|what are you|what is your version|your version|tell me about (?:you|yourself)|کی هستی|ورژن)", "about"),
+        (r"^(?:who are you|what are you|what is your version|your version|tell me about (?:yourself|you)\b|کی هستی|ورژن)", "about"),
         (r"^(?:status|what is your status|your status|how is the bot|وضعیت)$", "status"),
         (r"^(?:settings|show (?:me )?(?:the )?settings|تنظیمات)", "settings"),
         (r"^(?:features|list (?:the )?features|قابلیت ?ها)", "features"),
@@ -538,6 +703,10 @@ def detect(
             folded,
         ) or (folded.rstrip(" ؟?") != folded and re.search(r"ساعت.*(?:روشن|خاموش)", folded)):
             return Intent(lines=("clock status",), label="clock", detail="clock status")
+
+    utility = _utility(folded)
+    if utility is not None:
+        return utility
 
     # "turn off X and Y" / "X off" / "X رو خاموش کن"
     for pattern, on in ((_OFF_LEAD, False), (_ON_LEAD, True), (_OFF_TAIL, False), (_ON_TAIL, True)):

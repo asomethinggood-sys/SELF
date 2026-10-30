@@ -244,3 +244,85 @@ async def test_the_model_running_the_tool_is_not_run_twice(runtime) -> None:
     reminders = await runtime.store.list_reminders(status="pending", limit=5)
     assert reminders == []
     assert await runtime.store.get_setting("clock.enabled", "unset") is False
+
+
+# ---------------------------------------------------------------------------
+# The small, unambiguous asks. Each of these used to be answered with a
+# sentence — a paragraph of "the time here is…" — and nothing happened.
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("sentence", "expected"),
+    [
+        ("what time is it", "time"),
+        ("what's the time in Tehran?", "time tehran"),
+        ("what time is it in tokyo", "time tokyo"),
+        ("ساعت چنده", "time"),
+        ("what's today's date", "time"),
+        ("flip a coin", "coin"),
+        ("toss a coin for me", "coin"),
+        ("شیر یا خط", "coin"),
+        ("random number", "random"),
+        ("give me a random number between 1 and 10", "random 1 10"),
+        ("what's 12 times 8", "calc 12 * 8"),
+        ("what is 3 plus 4", "calc 3 + 4"),
+        ("calculate 45 / 9", "calc 45 / 9"),
+        ("make a backup", "backup export"),
+        ("back up the database", "backup export"),
+        ("run a selfcheck", "selfcheck"),
+        ("check yourself", "selfcheck"),
+        ("are you ok", "selfcheck"),
+        ("ping", "ping"),
+        ("how fast are you", "ping"),
+        ("what language is this", "detect"),
+        ("این چه زبانیه", "detect"),
+        ("tell me a poem", "poem"),
+        ("read me a hafez poem", "poem"),
+        ("what's on my agenda", "agenda today"),
+        ("what's on my agenda this week", "agenda week"),
+        ("what do i have scheduled", "agenda today"),
+        ("show my bookmarks", "bookmark list"),
+        ("summarize this", "summarize"),
+        ("summarize the last 20 messages", "summarize 20"),
+        ("tldr", "summarize"),
+        ("what version are you", "about"),
+        ("ورژن چیه", "about"),
+    ],
+)
+def test_everyday_asks_become_actions(sentence: str, expected: str) -> None:
+    intent = detect(sentence)
+    assert intent is not None, f"{sentence!r} was answered instead of acted on"
+    assert intent.lines[0] == expected
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "the time in that poem about was beautiful",
+        "i love that poem you sent yesterday",
+        "the time we spent together was nice",
+        "you are so random sometimes",
+        "tell me about your day",
+        "can you back me up on this",
+        "i read a poem yesterday",
+        "do you like the clock on my profile?",
+        "شعر قشنگی بود",
+    ],
+)
+def test_a_sentence_that_merely_mentions_the_words_is_still_conversation(sentence: str) -> None:
+    assert detect(sentence) is None
+
+
+async def test_a_coin_flip_is_a_flip_not_a_paragraph(runtime) -> None:
+    ai = WordsOnly("heads or tails, darling ✦")
+    runtime.ai = ai
+    answer = await runtime.yura_chat.answer("flip a coin", chat_id=100, is_owner=True)
+    assert "Heads" in answer.text or "Tails" in answer.text
+    assert answer.text != ai.reply
+    assert answer.rendered is True
+
+
+async def test_asking_the_time_answers_with_the_time(runtime) -> None:
+    runtime.ai = WordsOnly("it is always now ✦")
+    answer = await runtime.yura_chat.answer("what time is it", chat_id=100, is_owner=True)
+    assert "◷" in answer.text or "UTC" in answer.text
+    assert '```' not in answer.text
