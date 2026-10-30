@@ -723,7 +723,7 @@ def register(runtime: Any) -> None:
             cmd_yura,
             category="persona",
             aliases=("person", "self"),
-            usage="[on|off|status|memory|log|clear|<anything>]",
+            usage="[on|off|status|memory|log|clear|recap|diary|faces|speak|voice|poster|caption|react|<anything>]",
             changes_state=True,
             subcommands=(
                 "on", "off", "enable", "disable", "status", "card", "who", "state",
