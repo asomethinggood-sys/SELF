@@ -200,6 +200,23 @@ async def test_her_own_lines_are_marked_as_hers(runtime) -> None:
     assert "yura (you): mrrp" in prompt
 
 
+async def test_a_stranger_does_not_hear_the_owners_private_names(runtime) -> None:
+    replies, client = await _runtime_with(runtime)
+    await replies.on_group_message(_event("yura are you around"))
+    prompt = _all_text(runtime.ai.calls[-1])
+    assert "do not use the owner's private names" in prompt
+    assert "do not repeat anything the owner told you in private" in prompt
+
+
+async def test_the_privacy_rule_is_not_applied_to_the_owner(runtime) -> None:
+    replies, client = await _runtime_with(runtime)
+    await replies._note_own(GROUP, 600)
+    hers = FakeMessage(id=600, chat_id=GROUP, sender_id=OWNER, text="mrrp", out=True)
+    await replies.on_group_message(_event("you there?", out=True, sender_id=OWNER, reply=hers))
+    prompt = _all_text(runtime.ai.calls[-1])
+    assert "private names" not in prompt
+
+
 # ---------------------------------------------------------------------------
 # The builder itself
 # ---------------------------------------------------------------------------

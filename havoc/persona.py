@@ -316,9 +316,14 @@ def audience_prompt(
         if speaker:
             who = "خودِ صاحب چت" if is_owner else f"{speaker} (صاحب چت نیست)"
             lines.append(f"- آخرین پیام از {who} است. جواب همان کسی را بده که نوشته.")
+        if speaker and not is_owner:
+            lines.append(
+                "- این آدم صاحب چت نیست: اسم‌های خصوصی او را صدا نکن، چیزی که در "
+                "خصوصی به تو گفته را اینجا نگو، و کوتاه و مؤدب باش."
+            )
         if transcript:
             lines.append("- چیزهایی که همین الان در این چت گفته شده (از قدیم به جدید):")
-            lines.extend(transcript)
+            lines.extend(f"  {line}" for line in transcript)
             lines.append(
                 "- «این» و «اون» و «نظرش چیه» به همین چیزها برمی‌گردد، نه به حدس."
             )
@@ -335,9 +340,17 @@ def audience_prompt(
             else f"{speaker} — a member of this chat, NOT the owner"
         )
         lines.append(f"- the last message is from {who}. Answer that person, in their name.")
+        if not is_owner:
+            # Privacy, not politeness: the owner's pet names and everything they
+            # said in private are in the same prompt, and a group member must not
+            # hear them.
+            lines.append(
+                "- this is not the owner: do not use the owner's private names for you, "
+                "do not repeat anything the owner told you in private, keep it short."
+            )
     if transcript:
         lines.append("- what has just been said here, oldest first:")
-        lines.extend(transcript)
+        lines.extend(f"  {line}" for line in transcript)
         lines.append(
             '- "this", "that" and "what do you think" point at those lines: read them '
             "before answering, and never guess what they refer to."
