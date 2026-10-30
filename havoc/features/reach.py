@@ -1,0 +1,549 @@
+"""The toolbox: send, repeat, hide, self-destruct, broadcast, react, plan.
+
+Every ability in here is one command with one implementation, and every other
+route to it — a sentence, a tool call from the model, a step inside a plan — goes
+through that same command. That is the difference between a bot that has features
+and a bot that has *hands*: there is exactly one way to send a spoiler that
+deletes itself in ten seconds, and everything that wants to do it uses it.
+
+The shapes his messages actually take:
+
+    .send @name hey, I'm late                    one message, one person
+    .send @name hey --repeat 10 --every 30s      ten of them, paced
+    .send @name,sara,amir the same thing         several people, one sentence
+    .send @name secret --spoiler                 under a tap
+    .send @name boo --delete-after 10s           and gone again
+    .send @name good morning --at 08:00          later
+    .broadcast groups --limit 100 --dry          a list, a count, a rehearsal
+    .emoji ❤                                      react to what is replied to
+    .plan list / .plan stop [word]                the timeline
+    .outbox                                       what actually left the account
+    .ignore @name / .unignore @name               do not answer them
+"""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from ..command_registry import Command, CommandContext, CommandError
+from ..services import reach as reach_module
+from ..utils.formatting import bold, code, escape, strip_html
+from ..utils.text import truncate
+
+#: A broadcast is not a conversation. Past this many targets it needs `--yes`.
+BROADCAST_CONFIRM_OVER = 25
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+def _targets(ctx: CommandContext, raw: str) -> list[str]:
+    """``@name,sara, amir`` → three names. Commas and "and" both separate."""
+    text = str(raw or "").replace(" and ", ",").replace("\n", ",")
+    return [part.strip() for part in text.split(",") if part.strip()]
+
+
+def _flag_seconds(ctx: CommandContext, name: str) -> float | None:
+    # ``ctx.flag`` answers "" for a flag that was not given, not None: treating
+    # the empty string as a value made every plain `.send` fail with "repeat must
+    # be a number".
+    raw = ctx.flag(name)
+    if raw is None or raw is True or str(raw).strip() == "":
+        return None
+    seconds = reach_module.parse_duration(str(raw))
+    if seconds is None:
+        raise CommandError("errors.not_a_number", field=name)
+    return seconds
+
+
+def _flag_int(ctx: CommandContext, name: str, default: int) -> int:
+    raw = ctx.flag(name)
+    if raw is None or raw is True or str(raw).strip() == "":
+        return default
+    try:
+        return int(str(raw))
+    except ValueError as exc:
+        raise CommandError("errors.not_a_number", field=name) from exc
+
+
+def _split_targets_and_text(ctx: CommandContext) -> tuple[list[str], str]:
+    """The targets are the first argument; everything after it is the message.
+
+    ``.send @name hello there`` keeps "hello there" whole — the text is not a
+    list of words to be re-joined wrongly.
+    """
+    args = [part for part in ctx.args if part.strip()]
+    if not args:
+        raise CommandError("reach.usage_send", prefix=ctx.runtime.prefix)
+    # The positional arguments are already free of flags, so the body survives
+    # exactly as typed — including words that look like options in a sentence.
+    targets = _targets(ctx, args[0])
+    text = " ".join(args[1:]).strip()
+    return targets, text
+
+
+async def _resolve_or_explain(ctx: CommandContext, raw: str) -> Any:
+    """One name, resolved — and if it is not a chat, the nearest ones instead.
+
+    ``Reach.resolve_or_raise`` owns the "no such chat" error; the suggestion list
+    lives here because it is a *command* nicety, not something the send path
+    should spend two lookups on for every message.
+    """
+    try:
+        return await ctx.runtime.reach.resolve_or_raise(raw)
+    except reach_module.ReachError:
+        pass
+    near = await ctx.runtime.reach.candidates(raw, limit=5)
+    if near:
+        names = ", ".join(f"{escape(item.label)} ({item.id})" for item in near)
+        raise CommandError("reach.ambiguous", name=escape(raw), options=names)
+    raise CommandError("reach.unknown_target", name=escape(raw))
+
+
+def _report_line(report: Any) -> str:
+    if not report.ok:
+        return f"{escape(str(report.target.label if report.target else '—'))} · {escape(report.error)}"
+    label = escape(report.target.label if report.target else "—")
+    detail = escape(report.summary)
+    extra = ""
+    if report.deletes_at:
+        extra = f" · {escape(report.deletes_at)}"
+    return f"{label} · {detail}{extra}"
+
+
+# ---------------------------------------------------------------------------
+# .send
+# ---------------------------------------------------------------------------
+async def cmd_send(ctx: CommandContext) -> None:
+    if (ctx.sub or "").lower() in {"list", "ls"}:
+        await cmd_outbox(ctx)
+        return
+    targets, text = _split_targets_and_text(ctx)
+    if not text.strip():
+        raise CommandError("reach.usage_send", prefix=ctx.runtime.prefix)
+    if len(targets) > 1:
+        # Several names in one send is a broadcast, and a broadcast is paced and
+        # counted. It must not silently become N unthrottled sends.
+        ctx.runtime.logger.info("reach: multi-target send to %s chats", len(targets))
+    repeat = max(1, min(_flag_int(ctx, "repeat", 1), reach_module.MAX_REPEAT))
+    every = _flag_seconds(ctx, "every") or 0.0
+    delete_after = _flag_seconds(ctx, "delete_after") or _flag_seconds(ctx, "ttl")
+    at = (ctx.flag("at") or "").strip() or None
+    dry = bool(ctx.has_flag("dry"))
+    if len(targets) == 1:
+        resolved = [await _resolve_or_explain(ctx, targets[0])]
+    else:
+        resolved, missing = await ctx.runtime.reach.resolve_many(targets)
+        if missing:
+            raise CommandError(
+                "reach.unknown_target", name=escape(", ".join(missing))
+            )
+    lines: list[str] = []
+    for target in resolved:
+        try:
+            report = await ctx.runtime.reach.deliver(
+                target,
+                text,
+                spoiler_hidden=bool(ctx.has_flag("spoiler")),
+                silent=bool(ctx.has_flag("silent")),
+                repeat=repeat,
+                every=every,
+                delete_after=delete_after,
+                at=at,
+                dry_run=True if dry else None,
+            )
+        except reach_module.ReachError as exc:
+            lines.append(f"{escape(target.label)} · {escape(str(exc))}")
+            continue
+        lines.append(_report_line(report))
+    await ctx.reply("\n".join([bold(ctx.t("reach.sent_header", count=len(lines))), *lines]))
+
+
+# ---------------------------------------------------------------------------
+# .broadcast
+# ---------------------------------------------------------------------------
+async def cmd_broadcast(ctx: CommandContext) -> None:
+    targets, text = _split_targets_and_text(ctx)
+    if not targets:
+        raise CommandError("reach.usage_broadcast", prefix=ctx.runtime.prefix)
+    limit = _flag_int(ctx, "limit", 0)
+    dry = bool(ctx.has_flag("dry"))
+    # A list of chats, resolved one by one, with the ones that do not exist
+    # named rather than silently missing.
+    found: list[Any] = []
+    missing: list[str] = []
+    for raw_target in targets:
+        target = await ctx.runtime.reach.resolve(raw_target)
+        if target is None:
+            # A category word is a request for a list: "groups", "dms".
+            listed = await _category(ctx, raw_target)
+            if listed:
+                found.extend(listed)
+                continue
+            missing.append(raw_target)
+            continue
+        found.append(target)
+    if limit:
+        found = found[:limit]
+    if not found:
+        raise CommandError("reach.unknown_target", name=escape(", ".join(missing) or "those chats"))
+    if len(found) > BROADCAST_CONFIRM_OVER and not ctx.has_flag("yes"):
+        raise CommandError(
+            "reach.broadcast_confirm", count=len(found), prefix=ctx.runtime.prefix
+        )
+    sent = 0
+    failed = 0
+    for target in found:
+        try:
+            report = await ctx.runtime.reach.deliver(target, text, dry_run=True if dry else None)
+        except reach_module.ReachError:
+            failed += 1
+            continue
+        if report.ok and not report.dry_run:
+            sent += 1
+        elif not report.ok:
+            failed += 1
+        await ctx.runtime.reach.pause(1.0)
+    header = ctx.t(
+        "reach.broadcast_done",
+        total=len(found),
+        sent=0 if dry else sent,
+        failed=failed,
+        dry=ctx.t("common.on") if dry else ctx.t("common.off"),
+    )
+    await ctx.reply(bold(header) + ("\n" + escape(", ".join(missing)) if missing else ""))
+
+
+async def _category(ctx: CommandContext, word: str) -> list[Any]:
+    """``groups`` / ``dms`` / ``channels`` → the chats of that kind."""
+    wanted = str(word or "").lower().strip().rstrip(":")
+    if wanted not in {"groups", "group", "dms", "dm", "privates", "channels", "channel", "chats"}:
+        return []
+    client = ctx.runtime.client
+    dialogs = getattr(client, "get_dialogs", None)
+    if dialogs is None:
+        return []
+    try:
+        rows = await dialogs(limit=400)
+    except Exception as exc:  # noqa: BLE001 - no dialogs is not a crash
+        ctx.runtime.logger.warning("broadcast: could not read dialogs: %s", exc)
+        return []
+    out: list[Any] = []
+    for dialog in rows or []:
+        entity = getattr(dialog, "entity", None) or dialog
+        target = ctx.runtime.reach._target_from(entity)
+        if wanted.startswith("group") and target.kind != "group":
+            continue
+        if wanted.startswith(("dm", "private")) and target.kind != "user":
+            continue
+        if wanted.startswith("channel") and target.kind != "channel":
+            continue
+        if not getattr(dialog, "is_user", None) and wanted.startswith(("dm", "private")):
+            continue
+        out.append(target)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# .outbox / .unsend / .emoji
+# ---------------------------------------------------------------------------
+async def cmd_outbox(ctx: CommandContext) -> None:
+    try:
+        wanted = int(ctx.arg(0) or 10)
+    except ValueError:
+        wanted = 10
+    rows = await ctx.runtime.store.outbox(limit=max(1, min(wanted, 30)))
+    total = await ctx.runtime.store.count_outbox()
+    if not rows:
+        await ctx.reply(ctx.t("reach.outbox_empty"))
+        return
+    lines = [bold(ctx.t("reach.outbox_header", count=len(rows)))]
+    if total > len(rows):
+        lines.append(ctx.t("reach.outbox_total", total=total))
+    for row in rows:
+        mark = {"sent": "●", "deleted": "○", "failed": "✕", "dry": "◌"}.get(str(row["status"]), "·")
+        when = str(row["sent_at"] or "")[11:16]
+        body = truncate(" ".join(strip_html(str(row["text"] or "")).split()), 40)
+        lines.append(
+            f"{mark} #{row['id']} {code(str(row['chat_id']))} {escape(when)} · {escape(body)}"
+        )
+    await ctx.reply("\n".join(lines))
+
+
+async def cmd_unsend(ctx: CommandContext) -> None:
+    raw = (ctx.args[0] if ctx.args else "").strip()
+    if not raw:
+        raise CommandError("reach.usage_unsend", prefix=ctx.runtime.prefix)
+    row = await ctx.runtime.store.outbox_row(int(raw)) if raw.isdigit() else None
+    if row is None:
+        raise CommandError("reach.unknown_outbox", id=escape(raw))
+    ok = await ctx.runtime.reach.delete(int(row["chat_id"]), int(row["message_id"] or 0))
+    if ok:
+        await ctx.runtime.store.mark_deleted(int(row["id"]), note="unsent")
+    await ctx.reply(ctx.t("reach.unsent" if ok else "reach.unsend_failed", id=row["id"]))
+
+
+async def cmd_emoji(ctx: CommandContext) -> None:
+    emoji = (ctx.args[0] if ctx.args else "").strip()
+    if not emoji:
+        raise CommandError("reach.usage_emoji", prefix=ctx.runtime.prefix)
+    message = getattr(ctx, "message", None)
+    target_id = getattr(message, "reply_to_msg_id", None)
+    if not target_id:
+        raise CommandError("reach.usage_emoji", prefix=ctx.runtime.prefix)
+    ok = await ctx.runtime.reach.react(ctx.chat_id, int(target_id), emoji)
+    await ctx.reply(ctx.t("reach.reacted" if ok else "reach.react_failed", emoji=escape(emoji)))
+
+
+# ---------------------------------------------------------------------------
+# .plan
+# ---------------------------------------------------------------------------
+async def cmd_plan(ctx: CommandContext) -> None:
+    action = (ctx.sub or "list").lower()
+    if action in {"list", "ls", "show"}:
+        plans = await ctx.runtime.plans.show(limit=10)
+        if not plans:
+            await ctx.reply(ctx.t("plan.empty", prefix=ctx.runtime.prefix))
+            return
+        lines = [bold(ctx.t("plan.header", count=len(plans)))]
+        for plan in plans:
+            lines.append(
+                f"⟡ #{plan['id']} {escape(plan['label'])} · {len(plan['steps'])} "
+                f"{ctx.t('plan.steps_word')}"
+            )
+            for step in plan["steps"][:6]:
+                lines.append(f"   {escape(str(step['at'])[11:16])} {code(escape(step['action']))}")
+        await ctx.reply("\n".join(lines))
+        return
+    if action in {"stop", "cancel", "off", "kill"}:
+        needle = " ".join(ctx.args).strip() if ctx.args else ""
+        result = await ctx.runtime.plans.cancel(needle or None)
+        if not result.get("ok"):
+            raise CommandError("plan.nothing_to_stop")
+        await ctx.reply(
+            ctx.t("plan.stopped", id=result["id"], label=escape(str(result["label"])))
+        )
+        return
+    if action in {"add", "make", "do", "run"}:
+        # `.plan do <sentence>`: the same reader the sentence floor uses.
+        sentence = ctx.raw_args or " ".join(ctx.args)
+        sentence = sentence.split(" ", 1)[1] if sentence.lower().startswith(("do ", "make ")) else sentence
+        from ..services import intent as intent_module
+        from ..services.plans import build_plan
+
+        plan = build_plan(sentence, intent=intent_module)
+        if plan.empty:
+            raise CommandError("plan.unreadable")
+        result = await ctx.runtime.plans.create(
+            plan, said=sentence, owner_id=getattr(ctx.event, "sender_id", None)
+        )
+        if ctx.has_flag("json") and result.get("ok"):
+            await ctx.reply(code(json.dumps(result["plan"], ensure_ascii=False)))
+            return
+        await ctx.reply(
+            ctx.t(
+                "plan.created",
+                id=result["id"],
+                steps=result["steps"],
+                first=escape(str(result["first_at"])[11:16]),
+                last=escape(str(result["last_at"])[11:16]),
+                label=escape(result["label"]),
+            )
+        )
+        return
+    raise CommandError("plan.usage", prefix=ctx.runtime.prefix)
+
+
+# ---------------------------------------------------------------------------
+# .ignore / .unignore / .ignored
+# ---------------------------------------------------------------------------
+async def cmd_ignore(ctx: CommandContext) -> None:
+    action = (ctx.sub or "list").lower()
+    if action in {"list", "ls", "show"}:
+        rows = await ctx.runtime.store.ignored_people()
+        if not rows:
+            await ctx.reply(ctx.t("ignore.empty"))
+            return
+        lines = [bold(ctx.t("ignore.header", count=len(rows)))]
+        for row in rows:
+            lines.append(f"⨯ {escape(str(row['name'] or '—'))} {code(str(row['user_id']))}")
+        await ctx.reply("\n".join(lines))
+        return
+    if action in {"off", "remove", "unignore", "forgive", "restore"}:
+        raw = " ".join(ctx.args).strip()
+        found = await _ignorable(ctx, raw)
+        if found is None:
+            raise CommandError("ignore.unknown", name=escape(raw))
+        await ctx.runtime.store.unignore_person(found[0])
+        await ctx.reply(ctx.t("ignore.removed", name=escape(found[1])))
+        return
+    if action in {"on", "add", "mute", "block"}:
+        raw = " ".join(ctx.args).strip()
+        found = await _ignorable(ctx, raw)
+        if found is None:
+            raise CommandError("ignore.unknown", name=escape(raw))
+        await ctx.runtime.store.ignore_person(found[0], found[1])
+        await ctx.reply(ctx.t("ignore.added", name=escape(found[1]), id=found[0]))
+        return
+    raise CommandError("ignore.usage", prefix=ctx.runtime.prefix)
+
+
+async def _ignorable(ctx: CommandContext, raw: str) -> tuple[int, str] | None:
+    """``(user_id, name)`` for a person he named, or ``None``.
+
+    A :class:`Person` row carries ``user_id``; a resolved :class:`Target` carries
+    ``id``; a bare number has neither. All three must reach the ignore table, so
+    this is the one place that knows the difference.
+    """
+    text = str(raw or "").strip()
+    if not text:
+        return None
+    if text.lstrip("-").isdigit():
+        # A number is a person, whether or not she has a row for them yet: "don't
+        # talk to 483920" must work on the first day, before they ever message.
+        person = await ctx.runtime.people.get(int(text))
+        if person is not None:
+            return int(person.user_id), str(person.label or person.user_id)
+        found = await ctx.runtime.reach.resolve(text)
+        if found is not None:
+            return int(found.id), str(found.label or found.id)
+        return int(text), text
+    matches = await ctx.runtime.people.search(text, limit=1)
+    if matches:
+        person = matches[0]
+        return int(person.user_id), str(person.label or person.user_id)
+    found = await ctx.runtime.reach.resolve(text)
+    if found is not None:
+        return int(found.id), str(found.label or found.id)
+    return None
+
+# ---------------------------------------------------------------------------
+# Registration
+# ---------------------------------------------------------------------------
+def register(runtime: Any) -> None:
+    async def _plan_step(row: Any) -> None:
+        """The scheduler's door into a plan step.
+
+        A closure over this runtime, not a module global: a test may build two
+        runtimes in one process, and the second one must not inherit the first
+        one's scheduler.
+        """
+        import json
+
+        payload = row["payload"]
+        data = json.loads(payload) if isinstance(payload, str) else dict(payload or {})
+        await runtime.plans.run_step(data)
+
+    runtime.scheduler.register_job("reach_send", runtime.reach.send_later)
+    runtime.scheduler.register_job("reach_unsend", runtime.reach.unsend)
+    runtime.scheduler.register_job("plan_step", _plan_step)
+
+    runtime.registry.register(
+        Command(
+            "send",
+            cmd_send,
+            category="reach",
+            aliases=("say", "msg", "message"),
+            usage="<to> <text> [--repeat N] [--every 30s] [--spoiler] [--silent] "
+                  "[--delete-after 10s] [--at 21:00] [--dry]",
+            description="Send a message, with repeats, spoilers and self-destruct.",
+            owner_only=True,
+            changes_state=True,
+            examples=(
+                ".send @sara running late",
+                ".send @sara,amir the meeting moved",
+                ".send @sara boo --spoiler --delete-after 10s",
+                ".send @sara still here? --repeat 3 --every 1m",
+            ),
+            subcommands=("list",),
+        )
+    )
+    runtime.registry.register(
+        Command(
+            "broadcast",
+            cmd_broadcast,
+            category="reach",
+            usage="<to…|groups|dms> <text> [--limit N] [--dry] [--yes]",
+            description="Send the same message to a list of chats, paced.",
+            owner_only=True,
+            changes_state=True,
+            needs_confirmation=False,
+            examples=(
+                ".broadcast groups good morning --limit 20 --dry",
+                ".broadcast @a,@b,@c dinner is ready",
+            ),
+        )
+    )
+    runtime.registry.register(
+        Command(
+            "outbox",
+            cmd_outbox,
+            category="reach",
+            aliases=("sent",),
+            usage="[limit]",
+            description="The last messages this account sent, from the database.",
+            owner_only=True,
+        )
+    )
+    runtime.registry.register(
+        Command(
+            "unsend",
+            cmd_unsend,
+            category="reach",
+            usage="<outbox id>",
+            description="Delete a message by its outbox number.",
+            owner_only=True,
+            changes_state=True,
+        )
+    )
+    runtime.registry.register(
+        Command(
+            "emoji",
+            cmd_emoji,
+            category="reach",
+            aliases=("reaction", "reactto"),
+            usage="<emoji>  (reply to the message)",
+            description="React to the message you replied to.",
+            owner_only=True,
+            changes_state=True,
+        )
+    )
+    runtime.registry.register(
+        Command(
+            "plan",
+            cmd_plan,
+            category="reach",
+            aliases=("timeline",),
+            usage="[list|stop [word]|add <sentence>]",
+            description="Timelines: one sentence, many moments.",
+            owner_only=True,
+            changes_state=True,
+            subcommands=("list", "show", "stop", "cancel", "add", "do", "make"),
+        )
+    )
+    runtime.registry.register(
+        Command(
+            "ignore",
+            cmd_ignore,
+            category="reach",
+            aliases=("mute-person",),
+            usage="[list|on <who>|off <who>]",
+            description="Never answer this person again.",
+            owner_only=True,
+            changes_state=True,
+            subcommands=("list", "on", "add", "off", "remove", "unignore"),
+        )
+    )
+
+
+__all__ = [
+    "cmd_broadcast",
+    "cmd_emoji",
+    "cmd_ignore",
+    "cmd_outbox",
+    "cmd_plan",
+    "cmd_send",
+    "cmd_unsend",
+    "register",
+]

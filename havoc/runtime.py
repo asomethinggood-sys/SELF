@@ -74,6 +74,10 @@ class Runtime:
     sent_ledger: Any = None
     lessons: LessonBook = None  # type: ignore[assignment] - set in create()
     yura_chat: YuraChat = None  # type: ignore[assignment] - set in create()
+    #: Reaching people: resolve a name, send with options, log it.
+    reach: Any = None
+    #: Timelines: one sentence, many moments.
+    plans: Any = None
     fight_loop: FightLoop = None  # type: ignore[assignment] - set in create()
     plugin_loader: PluginLoader | None = None
     stats: dict[str, int] = field(default_factory=dict)
@@ -207,6 +211,11 @@ class Runtime:
 
         runtime.actions = ActionLayer(runtime, build_tools(runtime))
         runtime.yura_chat = YuraChat(runtime)
+        from .services.plans import PlanRunner
+        from .services.reach import Reach
+
+        runtime.reach = Reach(runtime)
+        runtime.plans = PlanRunner(runtime)
         runtime.fight_loop = FightLoop(runtime)
         from .handlers import Router
 

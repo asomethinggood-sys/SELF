@@ -332,4 +332,113 @@ def build_tools(runtime: Any) -> list[Tool]:
         )
     )
 
+    # ------------------------------------------------------------------
+    # Reaching people, and sequences over time
+    # ------------------------------------------------------------------
+    # These are the tools the "no send_message" rule in the module docstring was
+    # waiting for: a send that resolves the target, refuses a stranger, is paced,
+    # is recorded in the outbox and is verified after the fact. The old refusal was
+    # right — a bare send_message would have been a spam cannon. This is not bare.
+    async def send_to(turn: Turn, args: dict[str, str]) -> ActionResult:
+        who = (args.get("to") or "").strip()
+        body = (args.get("text") or "").strip()
+        if not who or not body:
+            return ActionResult(False, detail="both 'to' and 'text' are needed", kind="bad_args")
+        target = await runtime.reach.resolve(who)
+        if target is None:
+            near = await runtime.reach.candidates(who, limit=4)
+            hint = ", ".join(f"{item.label} ({item.id})" for item in near) if near else ""
+            return ActionResult(
+                False,
+                detail=f"no chat called {who!r}" + (f"; did you mean {hint}?" if hint else ""),
+                kind="unknown_target",
+            )
+        report = await runtime.reach.deliver(
+            target,
+            body,
+            spoiler_hidden=bool(args.get("spoiler")),
+            repeat=int(args.get("repeat") or 1),
+            delete_after=float(args["delete_after"]) if args.get("delete_after") else None,
+            at=args.get("at") or None,
+        )
+        if not report.ok:
+            return ActionResult(False, detail=report.error or "the send failed", kind="failed")
+        return ActionResult(
+            True,
+            note=f"sent to {target.label} ({target.id}): {report.summary}",
+            title=_t(runtime, turn, "reach.sent_header", count=1),
+            lines=(f"{target.label} · {report.summary}",),
+        )
+
+    async def plan_it(turn: Turn, args: dict[str, str]) -> ActionResult:
+        sentence = (args.get("sentence") or args.get("text") or "").strip()
+        if not sentence:
+            return ActionResult(False, detail="a sentence is needed", kind="bad_args")
+        from . import intent as intent_module
+        from .plans import build_plan
+
+        plan = build_plan(sentence, intent=intent_module)
+        if plan.empty:
+            return ActionResult(False, detail="could not read that as a timeline", kind="failed")
+        result = await runtime.plans.create(plan, said=sentence, owner_id=turn.actor_id)
+        return ActionResult(
+            True,
+            note=f"plan #{result['id']} with {result['steps']} steps",
+            title=_t(runtime, turn, "plan.header", count=1),
+            lines=tuple(plan.describe()),
+        )
+
+    async def react_to(turn: Turn, args: dict[str, str]) -> ActionResult:
+        emoji = (args.get("emoji") or "").strip()
+        message_id = args.get("message_id") or turn.message_id
+        if not emoji or not message_id:
+            return ActionResult(False, detail="an emoji and a message are needed", kind="bad_args")
+        ok = await runtime.reach.react(turn.chat_id, int(message_id), emoji)
+        if not ok:
+            return ActionResult(False, detail="telegram refused the reaction", kind="failed")
+        return ActionResult(True, note=f"reacted {emoji}", title=_t(runtime, turn, "reach.reacted", emoji=emoji))
+
+    tools.append(
+        Tool(
+            name="send_message",
+            summary=(
+                "send a message to a named person or chat, with repeats, a spoiler, "
+                "self-destruct or a later time"
+            ),
+            properties={
+                "to": "@handle, a name from his chats, an id, or 'saved'",
+                "text": "exactly what to send, in his words",
+                "repeat": "how many times (default 1)",
+                "delete_after": "seconds after which it deletes itself",
+                "spoiler": "true to hide it behind a tap",
+                "at": "a time like 21:00 or 30m, instead of now",
+            },
+            required=("to", "text"),
+            run=send_to,
+            scope="write",
+            risk="medium",
+        )
+    )
+    tools.append(
+        Tool(
+            name="plan",
+            summary="turn a whole sequence with times into scheduled steps",
+            properties={"sentence": "the sentence he said, verbatim"},
+            required=("sentence",),
+            run=plan_it,
+            scope="write",
+            risk="medium",
+        )
+    )
+    tools.append(
+        Tool(
+            name="react",
+            summary="react to a message with one emoji",
+            properties={"emoji": "one emoji", "message_id": "the message number; defaults to his"},
+            required=("emoji",),
+            run=react_to,
+            scope="write",
+        )
+    )
+
     return tools

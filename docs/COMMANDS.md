@@ -9,7 +9,7 @@ account other than the logged-in user.
 `.` in the usage column stands for the active prefix (default `.`).
 
 
-Total: **75 commands**.
+Total: **82 commands**.
 
 
 ## Ai
@@ -131,6 +131,18 @@ Total: **75 commands**.
 | `.counter` | Manage local counters (usable in bio rotation) _(owner only; changes state)._ | `.counter [list|inc|reset|delete] <name>` | `.counters`, `.شمارنده` |
 | `.preset` | Save and apply profile presets _(owner only; changes state)._ | `.preset [list|create|apply|preview|delete|schedule|scheduled|unschedule]` | — |
 | `.profile` | Preview, restore and review profile changes _(owner only; changes state)._ | `.profile [show|preview|restore|history|name]` | `.پروفایل` |
+
+## Reach
+
+| Command | Description | Usage | Aliases |
+| --- | --- | --- | --- |
+| `.broadcast` | Send the same message to a list of chats, paced _(owner only; changes state)._ | `.broadcast <to…|groups|dms> <text> [--limit N] [--dry] [--yes]` | — |
+| `.emoji` | React to the message you replied to _(owner only; changes state)._ | `.emoji <emoji>` | `.reaction`, `.reactto` |
+| `.ignore` | Never answer this person again _(owner only; changes state)._ | `.ignore [list|on <who>|off <who>]` | `.mute-person` |
+| `.outbox` | The last messages this account sent, from the database _(owner only)._ | `.outbox [limit]` | `.sent` |
+| `.plan` | Timelines: one sentence, many moments _(owner only; changes state)._ | `.plan [list|stop [word]|add <sentence>]` | `.timeline` |
+| `.send` | Send a message, with repeats, spoilers and self-destruct _(owner only; changes state)._ | `.send <to> <text> [--repeat N] [--every 30s] [--spoiler] [--silent] [--delete-after 10s] [--at 21:00] [--dry]` | `.say`, `.msg`, `.message` |
+| `.unsend` | Delete a message by its outbox number _(owner only; changes state)._ | `.unsend <outbox id>` | — |
 
 ## Scheduling & time
 

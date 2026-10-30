@@ -455,6 +455,69 @@ MIGRATION_8_AUTOREPLY_SCOPE = Migration(
     ),
 )
 
+MIGRATION_9_TOOLBOX = Migration(
+    version=9,
+    name="toolbox",
+    statements=(
+        # Every message this account sends on his behalf, in one place. Without
+        # this table "did it actually send?" is an opinion: the send either has a
+        # row or it did not happen, and `.outbox` reads the same rows.
+        """
+        CREATE TABLE IF NOT EXISTS outbox (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            chat_id     INTEGER NOT NULL,
+            message_id  INTEGER,
+            kind        TEXT NOT NULL DEFAULT 'text',
+            text        TEXT NOT NULL DEFAULT '',
+            status      TEXT NOT NULL DEFAULT 'sent',
+            note        TEXT,
+            plan_id     INTEGER,
+            sent_at     TEXT NOT NULL DEFAULT (datetime('now')),
+            deleted_at  TEXT
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_outbox_chat ON outbox(chat_id, sent_at)",
+        # A plan is a sentence he said, broken into timed steps. The steps are
+        # console lines, so a plan can do anything a command can do and nothing
+        # needs a second implementation.
+        """
+        CREATE TABLE IF NOT EXISTS plans (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            owner_id    INTEGER,
+            label       TEXT NOT NULL DEFAULT '',
+            said        TEXT NOT NULL DEFAULT '',
+            status      TEXT NOT NULL DEFAULT 'pending',
+            created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+            stopped_at  TEXT,
+            note        TEXT
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS plan_steps (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            plan_id     INTEGER NOT NULL,
+            idx         INTEGER NOT NULL,
+            at          TEXT NOT NULL,
+            action      TEXT NOT NULL,
+            status      TEXT NOT NULL DEFAULT 'pending',
+            fired_at    TEXT,
+            note        TEXT
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_plan_steps_plan ON plan_steps(plan_id, idx)",
+        # People he told her not to talk to. A row here beats every other rule:
+        # "don't answer him" is not a preference, it is an instruction.
+        """
+        CREATE TABLE IF NOT EXISTS ignored (
+            user_id     INTEGER PRIMARY KEY,
+            name        TEXT NOT NULL DEFAULT '',
+            reason      TEXT NOT NULL DEFAULT '',
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """,
+    ),
+)
+
 MIGRATIONS: tuple[Migration, ...] = (
     MIGRATION_1_FOUNDATION,
     MIGRATION_2_TIMESTAMPS,
@@ -464,6 +527,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     MIGRATION_6_LESSONS,
     MIGRATION_7_ACTIONS,
     MIGRATION_8_AUTOREPLY_SCOPE,
+    MIGRATION_9_TOOLBOX,
 )
 
 LATEST_VERSION = max(m.version for m in MIGRATIONS)

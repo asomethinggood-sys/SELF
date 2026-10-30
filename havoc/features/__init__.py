@@ -22,6 +22,7 @@ MODULE_ORDER: tuple[str, ...] = (
     "information",
     "profile",
     "messaging",
+    "reach",
     "persona",
     "media",
     "detection",

@@ -931,6 +931,8 @@ class PersonaReplies:
         self._dm_last: dict[int, float] = {}
         self.answered = 0
         self.group_answered = 0
+        #: Answers in a one-to-one chat with somebody else — his side or theirs.
+        self.dm_answered = 0
         self.skipped = 0
         self.reacted = 0
         self._since_mood = 0
@@ -1171,7 +1173,7 @@ class PersonaReplies:
         about is never downloaded.
         """
         if not event.is_group:
-            await self.on_private_message(event)
+            await self.on_dm_chat(event)
             return
         if event.message_id is None:
             self._skip("not_group")
@@ -1199,6 +1201,9 @@ class PersonaReplies:
         # ``mentioned`` flag for a mention **and for every reply to the account**,
         # so trusting it made her answer each person who replied to the owner, and
         # each person who tagged him. His name is not her name.
+        if event.sender_id is not None and await self.runtime.store.is_ignored(event.sender_id):
+            self._skip("ignored", event)
+            return
         addressed = quote.hers or self._named(event.text)
         # "remember this" is itself aimed at her, even when the message is a reply
         # to someone else: she should confirm it, not silently file it. A
@@ -1244,6 +1249,83 @@ class PersonaReplies:
         self._group_window.setdefault(event.chat_id, []).append(now)
         self.group_answered += 1
 
+    # -- a private chat that is not Saved Messages --------------------------
+    async def on_dm_chat(self, event: NormalizedEvent) -> None:
+        """One-to-one with somebody else: his side, or theirs.
+
+        This is the hole that made her look dead. Saved Messages had a handler,
+        groups had a handler, and the ordinary private chat — the place where he
+        actually sits and calls her — had neither: his own line arrived as
+        *outgoing*, the stranger handler refused it (`not_dm`), and the self-chat
+        handler refused it too (`not_own_chat`). So he typed "yura say hi" into a
+        DM and nothing, ever, happened.
+
+        Two sides now:
+
+        * **his** outgoing line is answered when it is addressed to her — her name
+          in it, or a reply to one of her messages — and only then. His ordinary
+          conversation with somebody else stays his: being answered mid-sentence
+          by your own bot is worse than silence.
+        * **their** incoming line goes to :meth:`on_private_message`, which is
+          opt-in per person, exactly as before.
+        """
+        if event.is_outgoing:
+            await self.on_owner_in_dm(event)
+        else:
+            await self.on_private_message(event)
+
+    async def on_owner_in_dm(self, event: NormalizedEvent) -> None:
+        """He called her by name in a one-to-one chat. Answer *there*."""
+        if event.message_id is None:
+            self._skip("not_dm", event)
+            return
+        if await self._is_own(event.chat_id, event.message_id, event.text):
+            self._skip("own_message", event)
+            return
+        if self._is_command(event.text):
+            self._skip("command", event)
+            return
+        quote = await self._quote(event)
+        # Teaching happens before every gate: "remember this" in a DM is both a
+        # lesson and a sentence, and the lesson must not depend on the gate.
+        learned = await self._learn_from_owner(event, quote)
+        taught = await self._learn_correction(event, quote)
+        addressed = quote.hers or self._named(event.text) or learned or taught
+        if not addressed:
+            self._skip("not_addressed", event)
+            return
+        picture = await self._picture(event)
+        if picture is None and not event.text.strip():
+            self._skip("empty", event)
+            return
+        decision = await self.runtime.permissions.can_act(event.chat_id, "persona", is_private=True)
+        if not decision.allowed:
+            self._skip(f"permission:{decision.code}", event)
+            return
+        # The same hourly budget as answering a stranger: a chat with another
+        # person is not a place to flood, even when he is the one typing.
+        now = time.monotonic()
+        last = self._dm_last.get(event.chat_id)
+        cutoff = now - 3600
+        window = [stamp for stamp in self._dm_window.get(event.chat_id, []) if stamp >= cutoff]
+        self._dm_window[event.chat_id] = window
+        if last is not None and now - last < self.MIN_DM_INTERVAL:
+            self._skip("dm_cooldown", event)
+            return
+        if len(window) >= self.MAX_DM_PER_HOUR:
+            self._skip("dm_cooldown", event)
+            return
+        await self._answer(
+            event,
+            chat_id=event.chat_id,
+            picture=picture,
+            quoted=quote.text,
+            is_private=False,
+        )
+        self._dm_last[event.chat_id] = now
+        window.append(now)
+        self.dm_answered += 1
+
     # -- someone else's private chat ---------------------------------------
     async def on_private_message(self, event: NormalizedEvent) -> None:
         """Answer a private message — but only from someone he introduced.
@@ -1262,6 +1344,11 @@ class PersonaReplies:
         speaker = event.sender_id
         if speaker is None or self.runtime.permissions.is_owner(speaker):
             self._skip("owner_chat", event)
+            return
+        # "Don't answer him" is an instruction, not a preference: a name in this
+        # table beats every other rule, including a person he introduced earlier.
+        if await self.runtime.store.is_ignored(speaker):
+            self._skip("ignored", event)
             return
         # A read, not a touch: a row is only created for someone she actually
         # answers. A stranger messaging the account must not leave a file behind

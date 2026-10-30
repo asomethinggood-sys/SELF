@@ -266,6 +266,151 @@ class Store:
     # ------------------------------------------------------------------
     # Auto replies
     # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Outbox, plans and the people she must not answer
+    # ------------------------------------------------------------------
+    async def add_outbox(
+        self,
+        chat_id: int,
+        *,
+        message_id: int | None = None,
+        text: str = "",
+        kind: str = "text",
+        status: str = "sent",
+        note: str | None = None,
+        plan_id: int | None = None,
+    ) -> int:
+        """Record one outbound thing. A send with no row here did not happen."""
+        return await self.db.insert(
+            """
+            INSERT INTO outbox(chat_id, message_id, kind, text, status, note, plan_id, sent_at)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (int(chat_id), message_id, kind, text[:4000], status, note, plan_id, iso(utc_now())),
+        )
+
+    async def outbox(self, limit: int = 10, *, chat_id: int | None = None) -> list[Any]:
+        if chat_id is None:
+            return await self.db.fetch_all(
+                "SELECT * FROM outbox ORDER BY id DESC LIMIT ?", (max(1, int(limit)),)
+            )
+        return await self.db.fetch_all(
+            "SELECT * FROM outbox WHERE chat_id = ? ORDER BY id DESC LIMIT ?",
+            (int(chat_id), max(1, int(limit))),
+        )
+
+    async def outbox_row(self, row_id: int) -> Any:
+        return await self.db.fetch_one("SELECT * FROM outbox WHERE id = ?", (int(row_id),))
+
+    async def mark_deleted(self, row_id: int, *, note: str = "") -> bool:
+        changed = await self.db.execute(
+            "UPDATE outbox SET status = 'deleted', deleted_at = ?, note = COALESCE(NULLIF(?, ''), note) WHERE id = ?",
+            (iso(utc_now()), note, int(row_id)),
+        )
+        return bool(changed)
+
+    async def count_outbox(self, *, since_seconds: int = 86400) -> int:
+        row = await self.db.fetch_one(
+            "SELECT COUNT(*) AS n FROM outbox WHERE sent_at >= ?",
+            (iso(utc_now() - timedelta(seconds=since_seconds)),),
+        )
+        return int(row["n"]) if row else 0
+
+    # -- plans ---------------------------------------------------------
+    async def add_plan(
+        self, *, owner_id: int | None, label: str, said: str, status: str = "pending"
+    ) -> int:
+        return await self.db.insert(
+            "INSERT INTO plans(owner_id, label, said, status, created_at) VALUES(?, ?, ?, ?, ?)",
+            (owner_id, label[:200], said[:2000], status, iso(utc_now())),
+        )
+
+    async def add_plan_step(self, plan_id: int, idx: int, at: str, action: str) -> int:
+        return await self.db.insert(
+            "INSERT INTO plan_steps(plan_id, idx, at, action, status) VALUES(?, ?, ?, ?, 'pending')",
+            (int(plan_id), int(idx), at, action[:500]),
+        )
+
+    async def plan(self, plan_id: int) -> Any:
+        return await self.db.fetch_one("SELECT * FROM plans WHERE id = ?", (int(plan_id),))
+
+    async def plan_steps(self, plan_id: int) -> list[Any]:
+        return await self.db.fetch_all(
+            "SELECT * FROM plan_steps WHERE plan_id = ? ORDER BY idx", (int(plan_id),)
+        )
+
+    async def plans(self, limit: int = 10, *, status: str | None = None) -> list[Any]:
+        if status is None:
+            return await self.db.fetch_all(
+                "SELECT * FROM plans ORDER BY id DESC LIMIT ?", (max(1, int(limit)),)
+            )
+        return await self.db.fetch_all(
+            "SELECT * FROM plans WHERE status = ? ORDER BY id DESC LIMIT ?",
+            (status, max(1, int(limit))),
+        )
+
+    async def newest_plan(self, *, pending_only: bool = True) -> Any:
+        if pending_only:
+            return await self.db.fetch_one(
+                "SELECT * FROM plans WHERE status = 'pending' ORDER BY id DESC LIMIT 1"
+            )
+        return await self.db.fetch_one("SELECT * FROM plans ORDER BY id DESC LIMIT 1")
+
+    async def find_plan(self, needle: str) -> Any:
+        """A plan by number or by a word of its label/sentence."""
+        text = str(needle or "").strip().lstrip("#")
+        if text.isdigit():
+            return await self.plan(int(text))
+        like = f"%{text.lower()}%"
+        return await self.db.fetch_one(
+            "SELECT * FROM plans WHERE LOWER(label) LIKE ? OR LOWER(said) LIKE ? ORDER BY id DESC LIMIT 1",
+            (like, like),
+        )
+
+    async def close_plan(self, plan_id: int, status: str, *, note: str = "") -> bool:
+        changed = await self.db.execute(
+            "UPDATE plans SET status = ?, stopped_at = ?, note = ? WHERE id = ? AND status = 'pending'",
+            (status, iso(utc_now()), note[:300], int(plan_id)),
+        )
+        return bool(changed)
+
+    async def step_fired(self, step_id: int, *, status: str = "done", note: str = "") -> bool:
+        """Claim a step. One runner wins; the other sees ``False``."""
+        changed = await self.db.execute(
+            "UPDATE plan_steps SET status = ?, fired_at = ?, note = ? WHERE id = ? AND status = 'pending'",
+            (status, iso(utc_now()), note[:300], int(step_id)),
+        )
+        return bool(changed)
+
+    async def pending_steps(self, plan_id: int) -> list[Any]:
+        return await self.db.fetch_all(
+            "SELECT * FROM plan_steps WHERE plan_id = ? AND status = 'pending' ORDER BY idx",
+            (int(plan_id),),
+        )
+
+    # -- people she must not answer ------------------------------------
+    async def ignore_person(self, user_id: int, name: str = "", reason: str = "") -> None:
+        await self.db.execute(
+            """
+            INSERT INTO ignored(user_id, name, reason, created_at) VALUES(?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET name = excluded.name, reason = excluded.reason
+            """,
+            (int(user_id), name[:120], reason[:200], iso(utc_now())),
+        )
+
+    async def unignore_person(self, user_id: int) -> bool:
+        changed = await self.db.execute("DELETE FROM ignored WHERE user_id = ?", (int(user_id),))
+        return bool(changed)
+
+    async def is_ignored(self, user_id: int | None) -> bool:
+        if user_id is None:
+            return False
+        row = await self.db.fetch_one("SELECT user_id FROM ignored WHERE user_id = ?", (int(user_id),))
+        return row is not None
+
+    async def ignored_people(self) -> list[Any]:
+        return await self.db.fetch_all("SELECT * FROM ignored ORDER BY created_at DESC")
+
     async def add_autoreply(
         self,
         pattern: str,

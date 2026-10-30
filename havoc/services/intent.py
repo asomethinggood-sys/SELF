@@ -19,6 +19,7 @@ English and Persian, because he speaks both to her.
 from __future__ import annotations
 
 import re
+import sys
 from dataclasses import dataclass, field
 
 #: Verbs that mean "change the state of the account".
@@ -684,6 +685,247 @@ def _actions(text: str) -> Intent | None:
     return None
 
 
+# ---------------------------------------------------------------------------
+# The toolbox: sending, reacting, ignoring, timelines
+# ---------------------------------------------------------------------------
+# These are the sentences he actually types at his phone, and they are the ones a
+# keyword matcher gets wrong most often, because the *target* and the *body* sit
+# inside the same line. So each shape is anchored, the body is taken verbatim, and
+# a sentence without an explicit "who" stays conversation.
+_SAY = re.compile(
+    r"^(?:please\s+)?(?:can you\s+|could you\s+)?"
+    r"(?:message|text|dm|msg|ping)\s+(?P<who>@[\w.]+|saved messages|saved|me)"
+    r"\s*(?:,|and)?\s*(?:saying|say|that|to say|telling (?:him|her|them))?\s*(?P<body>.+)$",
+    re.I,
+)
+#: The target first, no "to": "send @sara surprise with a spoiler". Only shapes
+#: that are unmistakably a chat — a handle, a number, saved messages — because a
+#: bare word here would turn "send him the file" into a send to a person "him".
+_SEND_FIRST = re.compile(
+    r"^(?:please\s+)?(?:can you\s+|could you\s+)?"
+    r"(?:send|message|text|dm|msg|pass|deliver)\s+"
+    r"(?P<who>@[\w.]+|saved messages|our saved messages|my saved messages|saved|\d{4,})"
+    r"\s+(?P<body>.+)$",
+    re.I,
+)
+_SEND_TO = re.compile(
+    r"^(?:please\s+)?(?:can you\s+|could you\s+)?"
+    r"(?:send|forward|pass|deliver)\s+(?P<body>.+?)\s+(?:to|for)\s+(?P<who>.+)$",
+    re.I,
+)
+_SAY_IN = re.compile(
+    r"^(?:please\s+)?(?:say|write|put|send)\s+(?P<body>.+?)\s+"
+    r"(?:in|to|into)\s+(?P<who>our saved messages|saved messages|my saved messages|saved)$",
+    re.I,
+)
+_SAY_INTO = re.compile(
+    r"^(?:then\s+)?(?:in|into|to)\s+(?P<who>our saved messages|saved messages|my saved messages|saved)"
+    r"\s*(?:,|and)?\s*(?:say|saying|write|put|post)?\s*(?P<body>.+)$",
+    re.I,
+)
+_IGNORE = re.compile(
+    r"^(?:please\s+)?(?:don'?t|do not|never)\s+(?:talk|answer|reply|respond)\s+"
+    r"(?:to\s+|back to\s+)?(?P<who>@[\w.]+|[\w][\w\s.-]{1,40})$",
+    re.I,
+)
+_UNIGNORE = re.compile(
+    r"^(?:please\s+)?(?:talk|answer|reply|respond)\s+(?:to\s+)?(?P<who>@[\w.]+|[\w][\w\s.-]{1,40})\s+again$"
+    r"|^(?:unignore|unblock|stop ignoring)\s+(?P<who2>@[\w.]+|[\w][\w\s.-]{1,40})$",
+    re.I,
+)
+_REACT = re.compile(
+    r"^(?:please\s+)?(?:react|put a reaction|leave a reaction)\s*"
+    r"(?:to (?:that|this|it)\s*)?(?:with\s+|using\s+)?(?P<emoji>[^\s]+)",
+    re.I,
+)
+_PLAN_STOP = re.compile(
+    r"^(?:stop|cancel|kill|end)\s+(?:the\s+)?(?:plan|timeline)\s*(?P<what>.*)$|"
+    r"^(?:stop|cancel)\s+(?P<what2>that|it|everything)$",
+    re.I,
+)
+_PLAN_ASK = re.compile(r"^(?:what'?s (?:planned|scheduled)|my plans|show (?:me )?the plans?)$", re.I)
+_TIMES = re.compile(r"\b(?P<count>\d{1,3}|a couple of|three|five|ten)\s+times\b", re.I)
+_SPOILER = re.compile(r"\b(?:with a |as a |in a )?spoiler\b|\bhidden\b", re.I)
+_SILENT = re.compile(r"\b(?:silently|quietly|without a sound|no notification)\b", re.I)
+_DELETE_AFTER = re.compile(
+    r"\b(?:and )?(?:delete|remove|unsend)\s+(?:it|them)?\s*(?:after|in)\s+"
+    r"(?P<amount>\d+(?:\.\d+)?)\s*(?P<unit>s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hour|hours)\b",
+    re.I,
+)
+_SEQUENCE = re.compile(r"\b(?:and then|then|after that|afterwards|next)\b|\b(?:بعد|سپس)\b", re.I)
+_FOR_A_WHILE = re.compile(
+    r"\bfor\s+\d+(?:\.\d+)?\s*(?:s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hour|hours)\b",
+    re.I,
+)
+#: Counting words for "ten times". Deliberately *not* named _WORD_NUMBERS:
+#: that dict already exists for durations ("one hour"), and shadowing it
+#: turned every "set a timer in one hour" into silence.
+_COUNT_WORDS = {"a couple of": 2, "three": 3, "five": 5, "ten": 10}
+
+#: Guards the plan reader from reading itself: a clause inside a timeline is an
+#: instruction, and must not be re-read as another timeline.
+_READING_PLAN = False
+
+
+def _reach_options(body: str) -> tuple[str, list[str]]:
+    """Pull the options out of a dictated message, verbatim text preserved."""
+    text = str(body or "").strip()
+    flags: list[str] = []
+    match = _TIMES.search(text)
+    if match:
+        raw = match.group("count").lower()
+        count = _COUNT_WORDS.get(raw)
+        if count is None:
+            try:
+                count = int(raw)
+            except ValueError:
+                count = None
+        if count and 1 < count <= 500:
+            flags += ["--repeat", str(count)]
+        text = (text[: match.start()] + " " + text[match.end():]).strip(" ,.")
+    match = _DELETE_AFTER.search(text)
+    if match:
+        flags += ["--delete-after", f"{match.group('amount')}{match.group('unit').lower()}"]
+        text = (text[: match.start()] + " " + text[match.end():]).strip(" ,.")
+    if _SPOILER.search(text):
+        flags.append("--spoiler")
+        text = _SPOILER.sub(" ", text).strip(" ,.")
+    if _SILENT.search(text):
+        flags.append("--silent")
+        text = _SILENT.sub(" ", text).strip(" ,.")
+    text = re.sub(r"\s+", " ", text).strip(" ,.;")
+    return text, flags
+
+
+def _who(raw: str) -> str:
+    who = " ".join((raw or "").split()).strip(" .,!")
+    who = re.sub(r"^(?:to|for|my|our)\s+", "", who, flags=re.I)
+    if who.lower() in {"saved", "saved messages", "my saved messages", "our saved messages"}:
+        return "saved"
+    if who.lower() in {"me", "myself"}:
+        return "me"
+    return who
+
+
+def _tidy(text: str) -> str:
+    """:func:`_clean` without the lowercasing: the body he dictated is verbatim.
+
+    "say I'm your good girl" is a message to send, so the capital I and the
+    apostrophe are the content, not formatting to be normalised away.
+    """
+    tidied = (text or "").translate(_PERSIAN_DIGITS)
+    tidied = tidied.replace("\u200c", " ").replace("‌", " ")
+    tidied = re.sub(r"[\u200e\u200f\u202a-\u202e]", "", tidied)
+    return " ".join(tidied.strip().split())
+
+
+def _reach(text: str, *, allow_plan: bool = True) -> Intent | None:
+    """Sending, reacting, ignoring and timelines, read from the sentence."""
+    original = _tidy(_lead(_tidy(text)))
+    folded = original.lower()
+    if not folded:
+        return None
+
+    if _PLAN_ASK.match(folded):
+        return Intent(lines=("plan list",), label="plan", detail="plans")
+
+    match = _PLAN_STOP.match(original) if allow_plan else None
+    if match:
+        what = (match.group("what") or match.group("what2") or "").strip()
+        return Intent(lines=(f"plan stop {what}".strip(),), label="plan", detail="stop")
+
+    # A timeline is read before anything else: "clock off for ten minutes, then on
+    # and off again after three" must not be answered with one clock command.
+    if allow_plan and (_SEQUENCE.search(folded) or _FOR_A_WHILE.search(folded)):
+        lines = _plan_lines(original)
+        if lines:
+            return Intent(lines=lines, label="plan", detail="timeline")
+
+    match = _IGNORE.match(original)
+    if match:
+        who = _who(match.group("who"))
+        if who:
+            return Intent(lines=(f"ignore on {who}",), label="ignore", detail=f"ignore {who}")
+
+    match = _UNIGNORE.match(original)
+    if match:
+        who = _who(match.group("who") or match.group("who2") or "")
+        if who:
+            return Intent(lines=(f"ignore off {who}",), label="ignore", detail=f"unignore {who}")
+
+    match = _REACT.match(original)
+    if match and not re.match(r"^(?:react|reaction)\b\s*$", folded, re.I):
+        emoji = match.group("emoji").strip(" .,!")
+        if emoji and len(emoji) <= 12 and emoji.lower() not in _NOISE:
+            return Intent(lines=(f"emoji {emoji}",), label="react", detail=f"react {emoji}")
+
+    match = _SAY_INTO.match(original)
+    if match:
+        body, flags = _reach_options(match.group("body"))
+        if body and len(body) > 1:
+            return Intent(
+                lines=(" ".join(["send saved", body, *flags]),),
+                label="send",
+                detail="send · saved messages",
+            )
+
+    match = _SAY_IN.match(original)
+    if match:
+        body, flags = _reach_options(match.group("body"))
+        if body and len(body) > 1:
+            return Intent(
+                lines=(" ".join(["send saved", body, *flags]),),
+                label="send",
+                detail="send · saved messages",
+            )
+
+    match = _SAY.match(original)
+    if match:
+        who = _who(match.group("who"))
+        body, flags = _reach_options(match.group("body"))
+        if who and body and len(body) > 1 and body.lower() not in _NOISE:
+            return Intent(
+                lines=(" ".join(["send", who, body, *flags]),), label="send", detail=f"send · {who}"
+            )
+
+    match = _SEND_FIRST.match(original)
+    if match:
+        body, flags = _reach_options(match.group("body"))
+        who = _who(match.group("who"))
+        if body and len(body) > 1:
+            return Intent(
+                lines=(" ".join(["send", who, body, *flags]),),
+                label="send",
+                detail=f"send · {who}",
+            )
+
+    match = _SEND_TO.match(original)
+    if match:
+        who = _who(match.group("who"))
+        body, flags = _reach_options(match.group("body"))
+        targets = [part.strip() for part in re.split(r",|\band\b", who) if part.strip()]
+        if targets and body and len(body) > 1:
+            joined = ",".join(targets)
+            command = "broadcast" if len(targets) > 2 else "send"
+            return Intent(
+                lines=(" ".join([command, joined, body, *flags]),),
+                label="send",
+                detail=f"send · {len(targets)}",
+            )
+
+    return None
+
+
+def _plan_lines(sentence: str) -> tuple[str, ...]:
+    """Read a whole timeline sentence into one console line."""
+    from .plans import build_plan
+
+    plan = build_plan(sentence, intent=sys.modules[__name__])
+    if plan.empty or len(plan.steps) < 2:
+        return ()
+    return (f"plan do {sentence}",)
+
+
 def _utility(text: str) -> Intent | None:
     """The small, unambiguous asks: the time, a coin, a sum, a poem.
 
@@ -809,6 +1051,7 @@ def detect(
     *,
     features: set[str] | frozenset[str] = frozenset(),
     commands: set[str] | frozenset[str] = frozenset(),
+    allow_plan: bool = True,
 ) -> Intent | None:
     """Read ``text`` as an instruction, or return ``None`` for conversation."""
     folded = _clean(text)
@@ -823,6 +1066,10 @@ def detect(
     knowledge = _knowledge(folded)
     if knowledge is not None:
         return knowledge
+
+    reached = _reach(text, allow_plan=allow_plan)
+    if reached is not None:
+        return reached
 
     # Clock is the one the owner says most, and it has its own subcommands. It is
     # also the one that must not misfire: "do you like the clock on my profile?"

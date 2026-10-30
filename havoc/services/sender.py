@@ -278,7 +278,27 @@ class Sender:
             except Exception as exc:  # noqa: BLE001 - a reaction is a flourish
                 self.logger.warning("react failed: %s", exc)
                 continue
-        return False
+        # The real client has no `send_reaction` method at all — only the raw
+        # request — so every reaction this bot ever "sent" was a silent False.
+        # That is why she never reacted, in groups or anywhere else.
+        try:
+            from telethon.tl.functions.messages import SendReactionRequest
+            from telethon.tl.types import ReactionEmoji
+        except ImportError:  # pragma: no cover - Telethon is a dependency
+            return False
+        try:
+            await self.limiter.acquire_outbound()
+            await self.client(
+                SendReactionRequest(
+                    peer=chat_id,
+                    msg_id=int(message_id),
+                    reaction=[ReactionEmoji(emoticon=emoji)],
+                )
+            )
+            return True
+        except Exception as exc:  # noqa: BLE001 - reactions are often restricted
+            self.logger.warning("react failed: %s", _describe(exc))
+            return False
 
     async def notify_owner(self, text: str, owner_id: int | None = None, **kwargs: Any) -> SendResult:
         """Deliver to Saved Messages (``me``) unless an explicit target is set.

@@ -161,3 +161,19 @@ def test_missing_placeholder_still_fails_loudly(locales: LocaleManager) -> None:
 def test_extra_placeholders_are_accepted(locales: LocaleManager) -> None:
     """Passing more than the template needs must not raise: call sites are shared."""
     assert locales.interpolate("{a}", a="1", b="2") == "1"
+
+
+def test_a_catalog_may_say_the_word_language(locales: LocaleManager) -> None:
+    """``{language}`` is a placeholder, not a reserved word.
+
+    Passing ``language=...`` used to collide with the interpolator's own
+    parameter, which is how the startup banner and the AI self-test ended up
+    printing ``startup.language`` at the owner instead of "Language: English".
+    """
+    template = "Language: {language}"
+    assert locales.interpolate(template, "probe", "en", language="Persian") == "Language: Persian"
+
+
+def test_interpolation_reports_a_missing_placeholder(locales: LocaleManager) -> None:
+    with pytest.raises(Exception):
+        locales.interpolate("Hello {missing}", "probe", "en", {})

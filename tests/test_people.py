@@ -415,3 +415,59 @@ async def test_a_tone_choice_survives_the_sweep(runtime) -> None:
     await runtime.people.set_tone(3333, "nice")
     assert await runtime.people.prune() == 0
     assert await runtime.people.get(3333) is not None
+
+
+# ---------------------------------------------------------------------------
+# His own side of a private chat: calling her there must work
+# ---------------------------------------------------------------------------
+# The hole that made her look dead: Saved Messages had a handler, groups had a
+# handler, and the ordinary one-to-one chat had neither. His line arrived as
+# outgoing, the stranger handler refused it ("not_dm"), the self-chat handler
+# refused it ("not_own_chat"), and he was talking to nobody.
+def _owner_dm(runtime, text: str, *, mid: int = 970, reply_to: int | None = None):
+    message = FakeMessage(
+        id=mid, chat_id=FRIEND, sender_id=OWNER, text=text, out=True,
+        is_private=True, is_group=False,
+    )
+    message.sender = OWNER_USER
+    message.reply_to_msg_id = reply_to
+    return normalize_message(message, self_id=OWNER, prefix=".", event_type=EventType.OUTGOING)
+
+
+async def test_calling_her_by_name_in_a_dm_gets_an_answer(runtime) -> None:
+    await _enable(runtime, reply="hi both of you.")
+    event = _owner_dm(runtime, "hey, yura, say hi to him")
+    await runtime.persona_replies.on_dm_chat(event)
+    assert runtime.ai.calls, "she ignored him calling her by name in a DM"
+    assert runtime.client.sent, "nothing was delivered into the DM"
+    assert runtime.client.sent[-1].chat_id == FRIEND
+
+
+async def test_his_ordinary_conversation_in_a_dm_is_left_alone(runtime) -> None:
+    """Being answered mid-sentence by your own bot is worse than silence."""
+    await _enable(runtime)
+    await runtime.persona_replies.on_dm_chat(_owner_dm(runtime, "ok, see you at nine"))
+    assert runtime.ai.calls == []
+    assert runtime.persona_replies.last_skip == "not_addressed"
+
+
+async def test_replying_to_her_message_in_a_dm_is_answered(runtime) -> None:
+    """The reply button is a call even when her name is not in the text."""
+    await _enable(runtime, reply="as you wish.")
+    await runtime.persona_replies._note_own(FRIEND, 500)
+    hers = FakeMessage(id=500, chat_id=FRIEND, sender_id=OWNER, text="i said what i said", out=True)
+    message = FakeMessage(
+        id=971, chat_id=FRIEND, sender_id=OWNER, text="and then?", out=True,
+        is_private=True, is_group=False, reply=hers,
+    )
+    message.sender = OWNER_USER
+    event = normalize_message(message, self_id=OWNER, prefix=".", event_type=EventType.OUTGOING)
+    await runtime.persona_replies.on_dm_chat(event)
+    assert runtime.ai.calls, "a reply to her own message was ignored in a DM"
+
+
+async def test_a_stranger_in_a_dm_still_gets_nothing(runtime) -> None:
+    await _enable(runtime)
+    await runtime.persona_replies.on_dm_chat(_dm(runtime, "hey yura"))
+    assert runtime.ai.calls == []
+    assert runtime.persona_replies.last_skip == "dm_not_allowed"

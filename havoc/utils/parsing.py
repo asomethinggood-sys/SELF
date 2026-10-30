@@ -115,6 +115,10 @@ VALUE_FLAGS: frozenset[str] = frozenset(
         "to", "repeat", "every", "type", "lang", "match", "event", "cooldown",
         "format", "intensity", "name", "last", "bio", "limit", "chat", "timezone",
         "caption", "source", "path",
+        # A time, a lifespan, a count and a list length are values, not booleans:
+        # without these, `.send @x hi --at 21:00` scheduled a send at the literal
+        # time "true".
+        "at", "delete_after", "ttl", "until", "from", "count", "each", "gap",
     }
 )
 
