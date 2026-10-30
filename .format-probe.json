@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-10-30T07:19:50Z",
+  "checked_at": "2026-10-30T07:47:02Z",
   "provider": "router",
   "keys": 4,
   "formatting": {
@@ -17,10 +17,16 @@
     "model": "gemini-3.5-flash-lite",
     "answer": "Red"
   },
+  "audience": {
+    "ok": true,
+    "answer": "answering ali, obviously >_<",
+    "names_the_speaker": true,
+    "block_chars": 459
+  },
   "marks": {
     "ok": true,
-    "raw": ">> daddaaa keeps his favorite snacks hidden behind the tea tin ♡ ++pressed++",
-    "html": "<blockquote expandable>daddaaa keeps his favorite snacks hidden behind the tea tin ♡</blockquote> <u>pressed</u>",
+    "raw": ">> daddaaa keeps me in here so nobody else gets to bite their fingers ᐧ ᴗ ᐧ ++pressed++",
+    "html": "<blockquote expandable>daddaaa keeps me in here so nobody else gets to bite their fingers ᐧ ᴗ ᐧ</blockquote> <u>pressed</u>",
     "has_whisper": true,
     "has_underline": true
   },
