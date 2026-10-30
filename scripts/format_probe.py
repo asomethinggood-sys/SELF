@@ -37,6 +37,7 @@ from havoc.persona import picture_prompt, system_prompt
 from havoc.services.ai_provider import AIError, AIMessage, AIProvider
 from havoc.services.ai_router import AIRouter
 from havoc.services.vision import make_picture
+from havoc.utils import glyphs
 from havoc.utils.markup import rich
 
 RECORD = Path(".format-probe.json")
@@ -239,23 +240,27 @@ async def run() -> dict[str, object]:
     # "so dry, gives short responses, no aesthetic glyphs" was the complaint
     # after the prompt was tightened. Two ordinary messages, and the answer has
     # to carry some of her: a glyph and more than a clipped fragment.
-    GLYPHS = set("♡✧ᵕ⸝﹏٩¬‿ᐧᴗ˶ᵔᗜ´︶`~>_<•ᐟᵎ")
     voice: dict[str, object] = {}
     samples: list[str] = []
     try:
         for ask in ("hey, how was your day?", "what are you doing right now?"):
+            brief = persona.ornament_prompt("en", used=set("✦✧⋆"))
             answer = await provider.converse(  # type: ignore[attr-defined]
-                [AIMessage("system", system_prompt("en")), AIMessage("user", ask)],
+                [
+                    AIMessage("system", f"{system_prompt('en')}\n\n{brief}"),
+                    AIMessage("user", ask),
+                ],
                 max_tokens=300,
             )
             samples.append(_head(answer, 300))
-        with_glyph = [text for text in samples if any(char in GLYPHS for char in text)]
+        with_glyph = [text for text in samples if glyphs.collect(text)]
         voice = {
             "ok": bool(with_glyph) and min(len(text) for text in samples) >= 12,
             "samples": samples,
             "with_a_glyph": len(with_glyph),
             "shortest": min((len(text) for text in samples), default=0),
             "longest": max((len(text) for text in samples), default=0),
+            "box_size": glyphs.count(),
             "budget_tokens": 2500,
             "message_chars": 4096,
         }

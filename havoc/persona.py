@@ -32,6 +32,7 @@ import re
 from collections.abc import Sequence
 
 from . import identity, yura_lines
+from .utils import glyphs
 from .utils.mood import band_style
 
 #: Fragments that must never appear in anything she says. Checked by tests over
@@ -226,7 +227,7 @@ _STYLE = {
 - start a line with > when quoting them or a poem.
 - - for a list, ``` for code or a file you are about to send.
 - one or two a message, not every line: decoration that repeats stops reading
-  as emphasis. No colour emoji; symbols like ♡ ✧ ╰(*´︶`*)╯ are yours.
+  as emphasis. No colour emoji — text ornaments are yours.
 - >> starts a whisper: a quote they have to tap to open. ++underline++ when a
   word should feel pressed. ^^small^^ to mock a word by shrinking it, %%slow%%
   to draw a word out. One of these is a flourish; four is a costume.
@@ -240,7 +241,7 @@ _STYLE = {
 - خطی را با > شروع کن وقتی از حرف او یا یک شعر نقل قول می‌کنی.
 - - برای فهرست، و ``` برای کد یا فایلی که می‌فرستی.
 - در هر پیام یکی دو تا، نه هر خط: تزئینی که تکرار شود دیگر تأکید نیست.
-  ایموجی رنگی نگذار؛ نمادها مثل ♡ ✧ ╰(*´︶`*)╯ مال خودت هستند.
+  ایموجی رنگی نگذار؛ نمادهای متنی مال خودت هستند.
 - >> در شروع خط یعنی پچ‌پچ: نقلی که باید بازش کند. ++زیرخط++ برای کلمه‌ای که
   باید فشرده شود. ^^کوچک^^ برای دست‌انداختن به یک کلمه و %%کشیده%% برای
   کشیدن یک کلمه. یکی از این‌ها قشنگی است؛ چهارتا لباس مبدل.
@@ -400,6 +401,66 @@ def audience_prompt(
         "if someone asked you something real, answer all of it. never put their "
         "message at the top of your answer with > or «» — they already know what "
         'they wrote. do not repeat these notes, and read "this"/"that" above.'
+    )
+    return "\n".join(lines)
+
+
+def ornament_prompt(language: str = "en", *, used: set[str] | None = None) -> str:
+    """The typography brief for one reply, with a fresh handful to choose from.
+
+    Handing her a *different* set every turn is what stops the same four
+    sparkles appearing under every message. The glyphs already used in this chat
+    are excluded, so the pool feels endless because it nearly is.
+    """
+    taken = set(used or ())
+    picks = glyphs.suggest(taken)
+    lines: list[str] = []
+    if language == "fa":
+        lines.append("## تایپوگرافی این پیام")
+        lines.append(
+            "- متن را طراحی کن، تزئین نکن. یک نماد بازکننده سر خط اول، خط نازک "
+            "بین دو فکر، یکی هم در پایان — همین کافی است. بیشتر از سه چهار نماد "
+            "در یک پیام شلوغی است."
+        )
+        lines.append(
+            "- هر پیام نمادهای خودش را دارد. همین‌هایی که قبلاً در این چت استفاده "
+            "کردی دیگر مالِ این پیام نیستند: " + " ".join(sorted(taken)[:24])
+            if taken
+            else "- هر پیام نمادهای تازه؛ کائوموجی هم زیاد نه، یکی در میان کافی است."
+        )
+        lines.append(
+            "- چند تا برای این پیام: بازکننده "
+            + " ".join(picks["open"])
+            + " · جداکننده "
+            + " ".join(picks["separate"])
+            + " · پایان "
+            + " ".join(picks["close"])
+        )
+        return "\n".join(lines)
+
+    lines.append("## typography for this message")
+    lines.append(
+        "- design the text, do not dress it. one ornament opening the first line, "
+        "a thin rule between two thoughts, one at the close — that is plenty. more "
+        "than three or four in a message is noise."
+    )
+    if taken:
+        lines.append(
+            "- every message gets its own ornaments. these were already used in "
+            "this chat and are out of bounds now: " + " ".join(sorted(taken)[:24])
+        )
+    else:
+        lines.append(
+            "- every message gets its own ornaments; a kaomoji now and then is "
+            "fine, one per message at most."
+        )
+    lines.append(
+        "- try some of these for this message: open "
+        + " ".join(picks["open"])
+        + " · separate "
+        + " ".join(picks["separate"])
+        + " · close "
+        + " ".join(picks["close"])
     )
     return "\n".join(lines)
 

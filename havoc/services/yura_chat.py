@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import persona
+from ..utils import glyphs
 from ..utils.security import injection_notice, looks_like_injection
 from ..utils.time import to_local, utc_now
 from .ai_provider import AIError, AIMessage, AIProvider
@@ -299,6 +300,11 @@ class YuraChat:
         # like a broken record rather than a personality.
         said = tuple(content for role, content in history if role == "assistant" and content)
         repeated = persona.repeat_prompt(said, language)
+        # The ornaments of her last few answers: what she may not use again, and
+        # what the typography brief hands her instead.
+        worn: set[str] = set()
+        for line in said[-3:]:
+            worn |= glyphs.collect(line)
         if relationship and not block:
             # A private chat has no room to describe, so the relationship block is
             # the whole thing there. In a group the room block already says who
@@ -309,6 +315,8 @@ class YuraChat:
             block = f"{block}\n\n{taught}" if block else taught
         if repeated:
             block = f"{block}\n\n{repeated}" if block else repeated
+        ornaments = persona.ornament_prompt(language, used=worn)
+        block = f"{block}\n\n{ornaments}" if block else ornaments
         if block:
             system = messages[0].content if messages else ""
             messages[0] = AIMessage("system", f"{system}\n\n{block}")
@@ -376,7 +384,7 @@ class YuraChat:
             reply, lessons, getattr(who, "user_id", None)
         )
         answer = await self._apply(
-            reply, chat_id=chat_id, language=language, incoming=spoken
+            reply, chat_id=chat_id, language=language, incoming=spoken, worn=worn
         )
         if not answer.text and not answer.files:
             answer.text = fallback
@@ -395,7 +403,13 @@ class YuraChat:
         )
 
     async def _apply(
-        self, reply: str, *, chat_id: int, language: str, incoming: str = ""
+        self,
+        reply: str,
+        *,
+        chat_id: int,
+        language: str,
+        incoming: str = "",
+        worn: set[str] | None = None,
     ) -> Answer:
         """Pull directives out of a raw reply and perform them.
 
@@ -434,6 +448,10 @@ class YuraChat:
 
         visible = persona.strip_leaks(cleaned)
         visible = persona.strip_echo(visible, incoming)
+        # A repeat of an ornament she used a moment ago is swapped for a fresh one
+        # of the same kind — that, together with the brief above, is why the same
+        # four sparkles stop appearing under every message.
+        visible = glyphs.restyle(visible, worn)
         visible = persona.finish_sentence(visible)
         visible = re.sub(r"\n{3,}", "\n\n", visible).strip()
         if len(visible) > MAX_REPLY_CHARS:

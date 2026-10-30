@@ -550,3 +550,33 @@ async def test_a_reply_after_a_restart_is_still_hers(runtime) -> None:
     )
 
     assert client.sent, "a reply to her message was lost across a restart"
+
+
+# ---------------------------------------------------------------------------
+# Typography: her ornaments change from message to message
+# ---------------------------------------------------------------------------
+async def test_the_prompt_hands_her_fresh_glyphs(runtime) -> None:
+
+    replies, client = await _runtime_with(runtime)
+    await runtime.memory.append(GROUP, "assistant", "✦ earlier ✦ line")
+    await replies.on_group_message(_event("yura, say something"))
+
+    prompt = _all_text(runtime.ai.calls[-1])
+    assert "typography for this message" in prompt
+    assert "out of bounds" in prompt
+    assert "✦" in prompt
+
+
+async def test_an_ornament_she_repeats_is_swapped(runtime) -> None:
+    from havoc.utils import glyphs
+
+    replies, client = await _runtime_with(runtime)
+    await runtime.memory.append(GROUP, "assistant", "✦ old answer ✦")
+    runtime.ai = StubProvider("✦ new answer ✦ with a rule")
+
+    await replies.on_group_message(_event("yura, say something"))
+
+    sent = client.sent[-1][1]
+    assert "new answer" in sent
+    assert "✦" not in sent, "she reused the ornament from her last answer"
+    assert glyphs.collect(sent)
