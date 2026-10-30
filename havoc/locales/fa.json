@@ -594,6 +594,7 @@
   "note.search_header": "⌕ {count} یادداشت",
   "note.show_header": "✎ یادداشت #{id} — {title}",
   "notify.burst": "≋ هجوم رویداد: {count} رویداد در {window} ثانیه (آخرین گفت‌وگو {chat}). خودکارسازی برای محافظت از حساب کند شده است.",
+  "notify.burst_suppressed": "≋ {count} هشدار انفجار دیگر از آخرین اطلاع، یک‌جا شمرده شد نه یکی‌یکی.",
   "notify.deleted": "⌫ {count} پیام در گفت‌وگوی {chat} حذف شد",
   "notify.disconnected": "⏚ اتصال به تلگرام قطع شد.",
   "notify.edited": "✎ پیامی در گفت‌وگوی {chat} ویرایش شد\n{link}\n«{preview}»",

@@ -594,6 +594,7 @@
   "note.search_header": "⌕ {count} note(s)",
   "note.show_header": "✎ Note #{id} — {title}",
   "notify.burst": "≋ Event burst: {count} events in {window}s (latest chat {chat}). Automation may be slowed to protect the account.",
+  "notify.burst_suppressed": "≋ {count} more burst(s) since the last notice, folded in rather than sent one by one.",
   "notify.deleted": "⌫ {count} message(s) were deleted in chat {chat}",
   "notify.disconnected": "⏚ Connection to Telegram was lost.",
   "notify.edited": "✎ A message was edited in chat {chat}\n{link}\n“{preview}”",

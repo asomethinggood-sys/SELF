@@ -41,6 +41,11 @@ NOTIFY_COOLDOWN = 30.0
 class AutomationState:
     sent: TTLCache[str] = field(default_factory=lambda: TTLCache[bool](maxsize=512, ttl=180))
     last_flood_notice: float = 0.0
+    #: Bursts are a description of the account's traffic, not an event the owner
+    #: can act on. One notice every half hour is information; one every few
+    #: minutes is the bot spamming the very chat it is supposed to be quiet in.
+    last_burst_notice: float = 0.0
+    bursts_suppressed: int = 0
     triggered: int = 0
     replied: int = 0
     notified: int = 0
@@ -203,17 +208,31 @@ class Automations:
             )
         )
 
+    #: Seconds between two burst notices. Thirty minutes: often enough to notice
+    #: a real flood, rare enough that the notification never becomes the flood.
+    BURST_NOTICE_INTERVAL = 1800.0
+
     async def on_burst(self, event: NormalizedEvent) -> None:
+        if not await self.runtime.store.feature_enabled("notifications"):
+            return
+        now = time.monotonic()
+        if self.state.last_burst_notice and now - self.state.last_burst_notice < self.BURST_NOTICE_INTERVAL:
+            self.state.bursts_suppressed += 1
+            return
+        suppressed = self.state.bursts_suppressed
+        self.state.bursts_suppressed = 0
+        self.state.last_burst_notice = now
         language = await self._owner_language()
-        await self._notify_owner(
-            self.runtime.t(
-                "notify.burst",
-                language,
-                count=event.extra.get("count", 0),
-                window=event.extra.get("window", 0),
-                chat=escape(str(event.extra.get("sample_chat", "—"))),
-            )
+        notice = self.runtime.t(
+            "notify.burst",
+            language,
+            count=event.extra.get("count", 0),
+            window=event.extra.get("window", 0),
+            chat=escape(str(event.extra.get("sample_chat", "—"))),
         )
+        if suppressed:
+            notice += "\n" + self.runtime.t("notify.burst_suppressed", language, count=suppressed)
+        await self._notify_owner(notice)
 
     async def on_network(self, event: NormalizedEvent) -> None:
         language = await self._owner_language()
@@ -566,6 +585,9 @@ def _link(event: NormalizedEvent) -> str:
 # ---------------------------------------------------------------------------
 def register(runtime: Any) -> None:
     automations = Automations(runtime)
+    # Exposed so the tests (and `.diagnostics`) can reach the same instance the
+    # events reach, instead of one built separately with its own throttles.
+    runtime.automation = automations
     engine = runtime.event_engine
 
     engine.subscribe(
