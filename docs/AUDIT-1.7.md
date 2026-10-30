@@ -49,6 +49,7 @@ Rules of restraint, because a wrong action is worse than a missing one:
 | Dry run could not be turned off | `.dryrun off` is a state change, so it was previewed instead of run — a lock with the key inside it | `.dryrun` and `.stop` are exempt from their own gate |
 | Cooldown started **before** the command ran | one failure on a typo locked the command for its whole cooldown | checked before, started only after the handler succeeds |
 | A switched-off command had no switch | nothing could stop `fal` (a command with no feature behind it) | `.disable <command>` / `.enable <command>`, persisted, and the way back can never be switched off |
+| A switched-off command looked identical to a working one | `.help` showed it as if it worked; it now carries `×` and a one-line legend |
 | Commands that answered nothing | `.calc`, `.search`, `.convert-time`, `.digits`, `.transform`, `.suggest`, `.summarize`, `.textstats`, `.normalize`, `.rtl`, `.detect` replied with silence when arguments were missing | the dispatcher notices a command that sent nothing and prints what it needs |
 
 ## Rot
@@ -66,11 +67,16 @@ Rules of restraint, because a wrong action is worse than a missing one:
 * 17 features switch on and off; the one that cannot (`auto_translate`) fails only
   because the deployment has no translator configured — that is a fact, not a bug.
 * 7 tools: schema valid, and a guest's attempt is refused before anything runs.
-* 626 locale keys used, 0 missing in English, 0 missing in Persian.
+* 627 locale keys used, 0 missing in English, 0 missing in Persian.
+* 177 SQL statements **prepared against the real schema**: no handler selects a
+  column a migration has moved or dropped. That check is in the audit now — it is
+  the quietest kind of rot, because nothing fails until someone runs that command.
 * State survives a restart: disabled commands, `actions.auto`, clock state, reminders.
 * Reminders fire on tick, do not fire while the emergency stop is on, and fire after
   it is resumed.
 * 276 command cases, 0 broken, 0 silent.
+* The scheduler's `recover()` no longer carries a no-op summary line, and a missed
+  job under the "ask" policy is reported instead of silently dropped.
 
 ## Version
 

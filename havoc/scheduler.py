@@ -171,12 +171,17 @@ class Scheduler:
             (iso(now - timedelta(seconds=self.grace_seconds)),),
         )
         summary["jobs_missed"] = len(overdue_jobs)
-        if policy == "skip":
+        if policy in {"skip", "ask"}:
+            # A job has no "held" state to park in: either it runs on the next tick
+            # (run_once) or it is dropped. Both non-run policies drop it, and "ask"
+            # is honest about it by saying so.
             for row in overdue_jobs:
                 await self.store.db.execute(
                     "UPDATE jobs SET status = 'skipped', updated_at = ? WHERE id = ?", (iso(now), row["id"])
                 )
-            summary["jobs_missed"] = 0 if not overdue_jobs else summary["jobs_missed"]
+                if policy == "ask":
+                    await self._notify_missed("job", row)
+            summary["jobs_missed"] = 0
 
         if any(summary[key] for key in ("reminders_missed", "schedules_missed", "jobs_missed", "held")):
             self.logger.warning("missed jobs recovered: %s", summary)

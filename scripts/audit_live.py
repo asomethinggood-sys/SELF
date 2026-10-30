@@ -317,6 +317,49 @@ def _dead_code(root: Path) -> dict[str, Any]:
     }
 
 
+async def _sql(runtime: Any) -> dict[str, Any]:
+    """Every SQL statement in the code, prepared against the real schema.
+
+    A column renamed by a migration and still selected by an old handler is the
+    quietest kind of rot: nothing fails at import, nothing fails in a test that
+    does not touch that table, and the user sees "something went wrong". Preparing
+    the statement is the cheapest way to ask SQLite itself.
+    """
+    import re as _re
+
+    root = Path(__import__("havoc").__file__).parent
+    db = runtime.store.db
+    bad: list[dict[str, str]] = []
+    checked = 0
+    for path in sorted(root.rglob("*.py")):
+        text = path.read_text()
+        blocks = [m.group(2) for m in _re.finditer(r'("""|\'\'\')(.*?)\1', text, _re.S)]
+        blocks += _re.findall(r'"((?:SELECT|INSERT|UPDATE|DELETE)[^"\n]{10,600})"', text)
+        for sql in blocks:
+            statement = sql.strip()
+            if not _re.match(r"^(SELECT|INSERT|UPDATE|DELETE)\b", statement, _re.I):
+                continue
+            if "{" in statement:
+                continue  # built at runtime; those have their own tests
+            probe = _re.sub(r"\?", "NULL", statement)
+            try:
+                await db.fetch_all("EXPLAIN " + probe)
+                checked += 1
+            except Exception as exc:  # noqa: BLE001
+                reason = str(exc)
+                # A string split across a concatenation is not a schema problem.
+                if "incomplete input" in reason or "syntax error" in reason:
+                    continue
+                bad.append(
+                    {
+                        "file": str(path.relative_to(root.parent)),
+                        "sql": statement.splitlines()[0][:80],
+                        "error": reason[:120],
+                    }
+                )
+    return {"ok": not bad, "checked": checked, "broken": bad}
+
+
 async def _schedule(runtime: Any) -> dict[str, Any]:
     """The scheduler is where stale locks live. Ask it what it thinks is due."""
     rows: dict[str, Any] = {}
@@ -350,6 +393,7 @@ async def main() -> int:
         record["features"] = await _features(runtime)
         record["actions"] = await _actions(runtime)
         record["commands"] = await _commands(runtime)
+        record["sql"] = await _sql(runtime)
         record["schedule"] = await _schedule(runtime)
     finally:
         await runtime.db.close()
@@ -361,6 +405,7 @@ async def main() -> int:
             record["features"]["ok"],
             record["actions"]["ok"],
             record["commands"]["ok"],
+            record["sql"]["ok"],
         ]
     )
     Path(args.json).write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n")
@@ -373,6 +418,7 @@ async def main() -> int:
         print(f"actions     {'ok' if record['actions']['ok'] else 'FAIL'} ({len(record['actions']['tools'])} tools)")
         print(f"commands    {'ok' if record['commands']['ok'] else 'FAIL'} ({record['commands']['cases']} cases, "
               f"{len(record['commands']['broken'])} broken)")
+        print(f"sql         {'ok' if record['sql']['ok'] else 'FAIL'} ({record['sql']['checked']} statements prepared)")
         print(f"dead code   {'ok' if record['dead_code']['ok'] else 'FAIL'} · orphans {len(record['dead_code']['orphans'])} · "
               f"todos {len(record['dead_code']['todos'])} · bare excepts {len(record['dead_code']['bare_excepts'])}")
         for entry in record["commands"]["broken"][:20]:
@@ -383,6 +429,8 @@ async def main() -> int:
             print(f"  ✗ locale missing (en): {entry}")
         for entry in record["locales"]["missing_fa"][:10]:
             print(f"  ✗ locale missing (fa): {entry}")
+        for entry in record["sql"]["broken"][:10]:
+            print(f"  ✗ {entry['file']}: {entry['sql']} — {entry['error']}")
         for entry in record["actions"]["broken"][:10]:
             print(f"  ✗ tool {entry}")
         print(f"overall     {'ok' if record['ok'] else 'FAIL'} · written to {args.json}")
