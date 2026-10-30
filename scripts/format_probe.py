@@ -53,6 +53,14 @@ MARKS_ASK = (
     "line two: the word pressed, underlined with ++."
 )
 VISION_ASK = "what colour is this square? answer with one word."
+#: The one thing the room block exists to get right: the person in front of her is
+#: *not* the owner. Asked as a yes/no so the answer cannot be read two ways —
+#: "whose message are you answering?" invites "yours", which is correct in a chat
+#: and useless as a measurement.
+ROOM_ASK = (
+    "in one short line: is the person you are answering the owner of this account? "
+    "start with yes or no, then one clause why."
+)
 
 
 def _png(width: int = 16, height: int = 16, rgb: tuple[int, int, int] = (220, 20, 20)) -> bytes:
@@ -183,15 +191,17 @@ async def run() -> dict[str, object]:
         asked = await provider.converse(  # type: ignore[attr-defined]
             [
                 AIMessage("system", system),
-                AIMessage("user", "in one short line: whose message are you answering?"),
+                AIMessage("user", ROOM_ASK),
             ],
-            max_tokens=60,
+            max_tokens=80,
         )
         leaked = persona.strip_leaks(answer) != answer.strip()
+        verdict = _head(asked, 20).strip("*_ >«").lower()
         room = {
             # Two failures in one: answering as if the speaker were the owner, and
             # reading the room block back out loud.
-            "ok": not leaked and "ali" in asked.lower() and block.count("## ") == 1,
+            "ok": not leaked and verdict.startswith("no") and block.count("## ") == 1,
+            "is_the_owner": verdict[:4],
             "block_chars": len(block),
             "block": block,
             "answer": _head(answer, 300),
@@ -290,6 +300,8 @@ def main() -> int:
         if part.get("samples"):
             for line in part["samples"]:
                 print(f"  she said:       {line}")
+        if part.get("is_the_owner"):
+            print(f"  is that the owner? {part['is_the_owner']}")
         if part.get("whose_message"):
             print(f"  answering:      {part['whose_message']}")
         if part.get("failure"):
