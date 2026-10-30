@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import struct
 import sys
 import zlib
@@ -41,6 +42,10 @@ from havoc.utils import glyphs
 from havoc.utils.markup import rich
 
 RECORD = Path(".format-probe.json")
+#: ``[[remember: …]]`` is a hidden directive, not scaffolding: the reply path pulls
+#: it out before the message is sent. Stripped here so the leak check measures the
+#: text a person would actually see.
+DIRECTIVE_RE = re.compile(r"\[\[[^\]]{0,300}\]\]")
 
 #: Asked of the model verbatim. It names the two marks that matter, so a failure
 #: means "the mark did not render", not "the model was feeling plain".
@@ -195,7 +200,8 @@ async def run() -> dict[str, object]:
             ],
             max_tokens=80,
         )
-        leaked = persona.strip_leaks(answer) != answer.strip()
+        visible = DIRECTIVE_RE.sub("", answer).strip()
+        leaked = persona.strip_leaks(visible) != visible
         verdict = _head(asked, 20).strip("*_ >«").lower()
         room = {
             # Two failures in one: answering as if the speaker were the owner, and
