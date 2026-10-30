@@ -392,14 +392,18 @@ live account from this environment.
   you through one gated tool — "yura, fal page 166" is the `.fal` you already
   have, not a second version of it. Answers that do something are drawn: a mark,
   a bold title, a ruled line, italic facts and one closing glyph, changing every
-  time.
-- **One owner, in settings.** `OWNER_USERNAMES=edited_by_nyx` (the default) is
-  resolved to an id once at login and remembered. Only an owner can command her,
-  change her or make her act; everyone else can talk to her and nothing more.
+  time. Small things happen when he asks — a reminder, a clock, a stored fact —
+  without a yes/no question; only deleting stops to ask.
+- **One owner, in settings.** `OWNER_IDS=7542695649` is the default, so ownership
+  is a number and not a lookup; `OWNER_USERNAMES=edited_by_nyx` is also resolved
+  to an id once at login and remembered, and the logged-in account is always an
+  owner. Only an owner can command her, change her or make her act; everyone else
+  can talk to her and nothing more.
 - **She has hands, not a free pass.** A message that needs a lookup, a
   translation, a stored fact or a reminder is answered by her *doing* it: reads
-  run freely, writes ask once, deletes ask every time, and money or identity are
-  refused outright. Four actions a message, twenty an hour, every attempt in the
+  run freely, writes run freely too (a reminder is not a question), deletes ask
+  every time, and money or identity are refused outright; `actions.auto=0` puts
+  the once-per-tool confirm back. Four actions a message, twenty an hour, every attempt in the
   `yura_actions` audit table. `.yura agent off` turns the hands back into a
   conversation, `.yura actions` shows what she did. Nothing about how she writes
   changes — the same voice, paragraphs and typography, with a one-line receipt

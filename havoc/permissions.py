@@ -42,7 +42,7 @@ class Permissions:
     def __init__(self, config: Any, store: Any) -> None:
         self.config = config
         self.store = store
-        self._owner_ids: set[int] = set(config.owner_ids)
+        self._owner_ids: set[int] = set(getattr(config, "owner_ids", ()) or ())
         self._self_id: int | None = None
         #: Handles from the config, and the ids they were resolved to.
         self._handles: tuple[str, ...] = tuple(getattr(config, "owner_usernames", ()) or ())

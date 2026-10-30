@@ -532,6 +532,10 @@ def _visible(answer: Any) -> str:
     with kaomoji (``╰(*´︶`*)╯``), which must arrive exactly as authored — so model
     text is rendered, everything else is only escaped.
     """
+    if getattr(answer, "rendered", False):
+        # A card is built from ui.* helpers, so it is already HTML and already
+        # escaped. Running it through ``rich`` printed the tags to the owner.
+        return answer.text
     if answer.source == "model":
         return rich(answer.text)
     return escape(answer.text)
@@ -717,6 +721,9 @@ async def cmd_yura(ctx: CommandContext) -> None:
     if action in {"actions", "did", "audit"}:
         await _actions_command(ctx, words)
         return
+    if action in {"auto", "asking", "permissions", "confirm"}:
+        await _auto_command(ctx, words)
+        return
     if action in {"yes", "approve", "ok", "بله", "آره"}:
         await _confirm_command(ctx, approve=True)
         return
@@ -765,6 +772,32 @@ async def _agent_command(ctx: CommandContext, action: str, words: list[str]) -> 
     enabled = word in {"on", "enable", "yes", "1", "روشن", "بله"}
     await ctx.runtime.store.set_setting(yura_chat_module.AGENT_SETTING, "1" if enabled else "0")
     await ctx.reply(ctx.t("actions.agent_on" if enabled else "actions.agent_off"))
+
+
+async def _auto_command(ctx: CommandContext, words: list[str]) -> None:
+    """`.yura auto on|off` — whether small things still stop to ask.
+
+    Off by default is the old behaviour he complained about; on is the default and
+    what he asked for. Deleting asks either way.
+    """
+    layer = getattr(ctx.runtime, "actions", None)
+    if layer is None or not layer.tools:
+        await ctx.reply(ctx.t("actions.agent_off"))
+        return
+    # ``words`` still carries the subcommand itself (``["auto", "off"]``).
+    word = next((word.lower() for word in words[1:] if word.strip()), "")
+    if word in {"on", "enable", "yes", "1", "روشن", "بله"}:
+        await ctx.store.set_setting("actions.auto", "1")
+        await ctx.reply(ctx.t("actions.auto_on"))
+        return
+    if word in {"off", "disable", "no", "0", "خاموش", "نه"}:
+        await ctx.store.set_setting("actions.auto", "0")
+        await ctx.reply(ctx.t("actions.auto_off"))
+        return
+    state = ctx.t("settings.state_on") if await layer.is_auto() else ctx.t("settings.state_off")
+    await ctx.reply(
+        ctx.t("actions.auto_state", state=escape(state), prefix=escape(ctx.runtime.prefix))
+    )
 
 
 async def _confirm_command(ctx: CommandContext, *, approve: bool) -> None:

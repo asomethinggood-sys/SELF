@@ -62,8 +62,9 @@ jobs:
           API_ID: ${{ secrets.API_ID }}
           API_HASH: ${{ secrets.API_HASH }}
           SESSION_STRING: ${{ secrets.SESSION_STRING }}
-          # Optional: only needed if you want someone other than the logged-in
-          # account to be able to issue commands.
+          # Optional. Unset is fine: the default is the owner's own id, and the
+          # logged-in account is always an owner too. Set secrets.OWNER_IDS only
+          # to grant someone else the hands.
           OWNER_IDS: ${{ secrets.OWNER_IDS }}
           DATA_DIR: ${{ github.workspace }}/.runtime/data
           DATABASE_PATH: ${{ github.workspace }}/.runtime/data/havoc.db

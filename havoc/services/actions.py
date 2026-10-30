@@ -13,17 +13,19 @@ The policy, in one place so it can be argued with:
 ``read``
     free. Looking at something she already had access to is not an action.
 ``write``
-    confirmed **once per tool**: the first time she wants to touch something, the
-    owner sees what and where, and approving it means approving that tool from
-    then on. A companion that asks "may I remember this?" every single time is a
-    form, not a companion.
+    free by default (:data:`AUTO_SETTING`). Setting a reminder or turning her own
+    clock off is a small thing; asking a yes/no question for it once, let alone
+    every time, is a form, not a companion. The owner is the only one who can
+    reach this layer at all, so the leash that matters is the one below.
 ``send``
-    same once-only rule, because a message leaving the account is a real thing.
+    free by default for the same reason — she is already allowed to reply.
 ``delete``
-    never silent, never remembered. Every single time, every single item.
+    never silent, never remembered. Every single time, every single item, even
+    with auto on. This is the one thing where a mistake is not reversible.
 ``money`` / ``identity``
-    refused. Not confirmed — refused. There is no button for this, no "advanced"
-    setting, and no amount of asking in the chat changes it.
+    refused. Not confirmed — refused.
+    There is no button for this, no "advanced" setting, and no amount of asking
+    in the chat changes it.
 
 Budgets are facts, not suggestions: :data:`MAX_CALLS_PER_TURN` per turn,
 :data:`MAX_ACTIONS_PER_HOUR` per hour, and a loop breaker — the same tool with the
@@ -83,6 +85,12 @@ MAX_RESULT_CHARS = 1200
 
 PENDING_SETTING = "actions.pending"
 ALLOWED_SETTING = "actions.allowed"
+#: ``actions.auto`` — routine hands do not ask. On by default, because the owner
+#: said so in as many words: "i hate how it asks for permissions for every small
+#: task… just turn it off". Only deleting still stops to ask, and money/identity
+#: were never a question in the first place. Set it to 0 for the old behaviour,
+#: where the first use of each writing tool needed a yes.
+AUTO_SETTING = "actions.auto"
 
 
 class ActionError(Exception):
@@ -181,8 +189,13 @@ class Tool:
 
     @property
     def needs_confirm(self) -> bool:
-        """Reads never ask; writes once; deletes always."""
+        """Deletes always ask; writes and sends ask only when auto is off."""
         return self.scope in {"write", "send", "delete"}
+
+    @property
+    def routine(self) -> bool:
+        """True for the small things that should just happen."""
+        return self.scope in {"read", "write", "send"} and not self.destructive
 
     @property
     def schema(self) -> dict[str, Any]:
@@ -221,7 +234,7 @@ class Tool:
         out: dict[str, str] = {}
         for name in self.properties:
             if name in data and data[name] is not None:
-                out[name] = str(data[name]).strip()[:4000]
+                out[name] = _as_text(data[name]).strip()[:4000]
         return out
 
     def as_function(self) -> dict[str, Any]:
@@ -234,6 +247,21 @@ class Tool:
                 "parameters": self.schema,
             },
         }
+
+
+def _as_text(value: Any) -> str:
+    """A value as the line of text the tool wants.
+
+    The model writes ``{"args": {"timezone": "Asia/Tehran"}}`` as often as it
+    writes ``{"args": "timezone Asia/Tehran"}``, and the first form used to be a
+    validation failure — she then told him she could not do the thing he had just
+    asked for. A nested object is turned into the words he would have typed.
+    """
+    if isinstance(value, dict):
+        return " ".join(f"{key} {_as_text(item)}".strip() for key, item in value.items())
+    if isinstance(value, (list, tuple)):
+        return " ".join(_as_text(item) for item in value)
+    return str(value)
 
 
 @dataclass
@@ -329,7 +357,8 @@ class ActionLayer:
                 "در پایان جوابت یک بلوک بگذار:\n"
                 "```tool\n{\"tool\": \"نام\", \"args\": {\"…\": \"…\"}}\n```\n"
                 "قانون‌ها: هیچ‌وقت دربارهٔ این مکانیزم حرف نزن، هیچ‌وقت چیزی که نشد را نگو که شد. "
-                "خواندن آزاد است؛ نوشتن یک‌بار از او اجازه می‌گیرد؛ پاک کردن هر بار. "
+                "خواندن و کارهای کوچک آزاد است؛ پاک کردن اول از او اجازه می‌گیرد. کار کوچک را "
+                "همان لحظه انجام بده، هرگز نپرس آیا یادآور بگذارم یا چیزی را خاموش کنم. "
                 "حداکثر چهار کار در هر پیام. اگر بلوکی نگذاری، هیچ چیز عوض نمی‌شود — "
                 "و *همان‌طور که همیشه می‌نویسی* جواب می‌دهی: همان لحن، همان پاراگراف‌ها، "
                 "همان تایپوگرافی. دست‌ها صدای تو را عوض نمی‌کنند."
@@ -340,8 +369,10 @@ class ActionLayer:
                 "end your reply with one block:\n"
                 "```tool\n{\"tool\": \"name\", \"args\": {\"…\": \"…\"}}\n```\n"
                 "rules: never mention this machinery. never claim something you did not do. "
-                "reading is free; writing asks him once; deleting asks every time. four "
-                "actions per message at most. if you send no block, nothing changes — and "
+                "reading and small writing are free; deleting asks him first. do a small "
+                "thing the moment he asks for it — never ask him whether to set a reminder "
+                "or turn something off. four actions per message at most. if you send no "
+                "block, nothing changes — and "
                 "you answer *exactly as you always do*: same voice, same paragraphs, same "
                 "typography. hands do not change your voice."
             )
@@ -352,6 +383,30 @@ class ActionLayer:
     # ------------------------------------------------------------------
     def _allowed_key(self, tool: Tool) -> str:
         return f"{ALLOWED_SETTING}.{tool.name}"
+
+    async def is_auto(self) -> bool:
+        """True when routine actions run without a question (the default)."""
+        if self.store is None:
+            return True
+        try:
+            return bool(await self.store.get_bool(AUTO_SETTING, True))
+        except Exception:  # noqa: BLE001 - a broken setting must not start asking
+            return True
+
+    async def should_ask(self, tool: Tool, turn: Turn) -> bool:
+        """The one place the confirm policy lives.
+
+        Deleting: always, unless this very turn already said yes for it.
+        Everything else: never while auto is on. With auto off, the old rule —
+        once per tool — comes back, so nothing is unreachable.
+        """
+        if not tool.needs_confirm or tool.name in turn.approved:
+            return False
+        if tool.destructive:
+            return True
+        if await self.is_auto():
+            return False
+        return not await self.is_allowed(tool)
 
     async def is_allowed(self, tool: Tool) -> bool:
         """True when this tool has already been approved once (writes only)."""
@@ -412,11 +467,7 @@ class ActionLayer:
             await self._audit(turn, tool, call, decision="rejected", status="failed", error=str(exc))
             return Outcome("failed", tool=tool.name, note=str(exc))
 
-        if (
-            tool.needs_confirm
-            and tool.name not in turn.approved
-            and not (tool.scope != "delete" and await self.is_allowed(tool))
-        ):
+        if await self.should_ask(tool, turn):
             token = await self._ask(turn, tool, args)
             if token:
                 await self._audit(turn, tool, call, decision="asked", status="waiting")
@@ -611,7 +662,15 @@ async def _noop(turn: Turn, args: Mapping[str, Any]) -> ActionResult:  # pragma:
 #: A fenced block the model ends a reply with. Kept deliberately boring: models
 #: are reliable with a fence and a small JSON object, and unreliable with clever.
 TOOL_BLOCK = re.compile(
-    r"```(?:tool|json)?\s*(?P<body>\{.*?\})\s*```", re.IGNORECASE | re.DOTALL
+    r"```(?:tool|json)?\s*(?P<body>[\[{].*?[\]}])\s*```", re.IGNORECASE | re.DOTALL
+)
+#: A fence that says "tool" but whose contents are not valid JSON, and a stray
+#: JSON line. These are *not* executable — they are the leftovers that must never
+#: reach a person, because a copy-code block of her own machinery is the bug the
+#: owner photographed.
+TOOL_LEFTOVER = re.compile(
+    r"```[ \t]*(?:tool|json)?[ \t]*\r?\n?(?:(?!```).)*?\"tool\"(?:(?!```).)*?```",
+    re.IGNORECASE | re.MULTILINE | re.DOTALL,
 )
 #: The same thing without a fence, as a last resort (`[[do: {...}]]`).
 TOOL_INLINE = re.compile(r"\[\[\s*do\s*[::]\s*(?P<body>\{.*?\})\s*\]\]", re.IGNORECASE | re.DOTALL)
@@ -630,14 +689,15 @@ def parse_calls(text: str) -> tuple[list[ToolCall], str]:
     removed: list[tuple[int, int]] = []
     for pattern in (TOOL_BLOCK, TOOL_INLINE):
         for match in pattern.finditer(text):
-            try:
-                data = json.loads(match.group("body"))
-            except (ValueError, TypeError):
+            # A fence may hold *several* objects — the model writes one per line
+            # when it wants two things done, and json.loads on the whole body
+            # fails, which used to dump the raw JSON into the chat as a code
+            # block. Every object in the block is read; a block with none is
+            # left alone as prose.
+            found = [call for call in map(_call_of, _objects_in(match.group("body"))) if call]
+            if not found:
                 continue
-            call = _call_of(data)
-            if call is None:
-                continue
-            calls.append(call)
+            calls.extend(found)
             removed.append((match.start(), match.end()))
     if not calls:
         return [], text
@@ -649,6 +709,100 @@ def parse_calls(text: str) -> tuple[list[ToolCall], str]:
     out.append(text[cursor:])
     cleaned = re.sub(r"\n{3,}", "\n\n", "".join(out)).strip()
     return calls[:MAX_CALLS_PER_TURN], cleaned
+
+
+def scrub_tool_text(text: str) -> str:
+    """Whatever is left of a tool block after parsing, make it not her answer.
+
+    Belt and braces for the turn-18 bug: the fenced block is parsed and executed
+    first, and this removes any half-formed remains (a fence that is not valid
+    JSON, a bare ``{"tool": …}`` line). Nothing machine-shaped is allowed into a
+    message; an empty result is better than a block of JSON with a copy button.
+    """
+    if not text or "tool" not in text.lower():
+        return text
+    cleaned = TOOL_LEFTOVER.sub("", text)
+    # ...and the object itself, wherever it starts, because ``{"tool": …`` is
+    # machine syntax even when the model wrote it mid-sentence. Braces are counted
+    # so a nested ``args`` object goes with it.
+    while True:
+        start = _stray_object(cleaned)
+        if start is None:
+            break
+        cleaned = cleaned[:start] + cleaned[_object_end(cleaned, start) :]
+    if cleaned == text:
+        return text
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+    return cleaned
+
+
+def _stray_object(text: str) -> int | None:
+    """The index of a ``{"tool": …`` that survived parsing, if there is one."""
+    marker = re.search(r"\{\s*\"tool\"\s*:", text)
+    return marker.start() if marker else None
+
+
+def _object_end(text: str, start: int) -> int:
+    """The index just past the object that begins at ``start`` (or the line end)."""
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(start, len(text)):
+        char = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth <= 0:
+                return index + 1
+        elif char == "\n" and depth <= 0:
+            return index
+    return len(text)
+
+
+def _objects_in(body: str) -> list[Any]:
+    """Every JSON value in a fence: one object, an array, or objects back to back.
+
+    ``raw_decode`` is used so a newline-separated run of objects — which is what a
+    chat model actually writes when it means "do these two things" — parses into
+    two calls instead of failing as invalid JSON.
+    """
+    blob = body.strip()
+    if not blob:
+        return []
+    try:
+        loaded = json.loads(blob)
+    except (ValueError, TypeError):
+        loaded = None
+    if isinstance(loaded, dict):
+        return [loaded]
+    if isinstance(loaded, list):
+        return list(loaded)
+    decoder = json.JSONDecoder()
+    out: list[Any] = []
+    index = 0
+    while index < len(blob):
+        while index < len(blob) and blob[index] in " \t\r\n,":
+            index += 1
+        if index >= len(blob):
+            break
+        try:
+            value, index = decoder.raw_decode(blob, index)
+        except ValueError:
+            break
+        if isinstance(value, dict):
+            out.append(value)
+    return out
 
 
 def _call_of(data: Any) -> ToolCall | None:

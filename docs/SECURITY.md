@@ -50,7 +50,7 @@ writes the attempt to `yura_actions` before it either.
 | Scope | Policy |
 | --- | --- |
 | `read` | free — looking at something the account can already see |
-| `write`, `send` | confirmed **once per tool**, then remembered |
+| `write`, `send` | free by default — the owner asked for small things to just happen; set `actions.auto=0` to bring back confirm-once-per-tool |
 | `delete` | confirmed **every time**, never remembered |
 | `money`, `identity` | **refused** — no confirm, no setting, no exception |
 

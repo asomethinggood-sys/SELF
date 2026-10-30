@@ -37,7 +37,7 @@ from havoc import persona, ui
 from havoc.config import load_config
 from havoc.persona import picture_prompt, system_prompt
 from havoc.services import self_console, translation_provider, tts
-from havoc.services.actions import ToolCall, Turn
+from havoc.services.actions import ToolCall, Turn, parse_calls
 from havoc.services.agent import Agent
 from havoc.services.ai_provider import AIError, AIMessage, AIProvider
 from havoc.services.ai_router import AIRouter
@@ -269,11 +269,12 @@ async def run() -> dict[str, object]:
     # messages, at full length (no truncation before measuring): the answer has
     # to fill a paragraph or three, carry an ornament, wear a face and be *laid
     # out* — more than one paragraph, or at least a divider on its own line.
-    # -- 5. her hands: does a real model use one, and does it ask first? ----
-    # Two claims are measured here. That she can act at all (a reminder actually
-    # lands in the database, after a confirmation she asked for), and that having
-    # hands does not change her voice (the same layout/ornament checks the voice
-    # section uses, run on an answer written with the tool catalogue in the prompt).
+    # -- 5. her hands: does a real model use one, without asking first? ----
+    # Three claims are measured here. That she can act at all (a reminder actually
+    # lands in the database), that a small thing needs no yes (turn 18: he said
+    # "turn the asking off"), and that having hands does not change her voice (the
+    # same layout/ornament checks the voice section uses, run on an answer written
+    # with the tool catalogue in the prompt).
     hands: dict[str, object] = {}
     try:
         from havoc.runtime import Runtime
@@ -308,35 +309,44 @@ async def run() -> dict[str, object]:
         outcomes = [
             {"tool": o.tool, "status": o.status, "note": _head(o.note, 160)} for o in step.outcomes
         ]
+        said = str(step.text or "")
         hands.update(
             {
                 "tools": [tool.name for tool in layer.tools],
+                # Turn 18: a reminder must not come back as a question.
                 "asked_first": step.waiting is not None,
+                "auto": await layer.is_auto(),
                 "outcomes": outcomes,
-                "said": _head(step.text, 300),
+                "said": _head(said, 300),
+                # ...and none of her machinery may reach a person.
+                "no_tool_code": "```" not in said and '"tool"' not in said,
             }
         )
-        # The yes. A user account cannot send an inline keyboard, so the confirm
-        # is typed — but the *policy* is the same one a button would have used.
+        # A delete would still ask; a typed yes is the only confirm a user account
+        # can send (no inline keyboard). Small writes should never get here now.
+        resolved = None
         if step.waiting is not None:
             resolved = await layer.resolve(turn.chat_id, approve=True)
-            reminders = await scratch.store.list_reminders(status="pending", limit=5)
-            actions = await layer.recent(turn.chat_id, limit=5)
-            hands.update(
-                {
-                    "after_yes": {"status": resolved.status, "note": _head(resolved.note, 120)},
-                    "reminders_stored": len(reminders),
-                    "audit_rows": [
-                        {"tool": r["tool"], "decision": r["decision"], "status": r["status"]}
-                        for r in actions
-                    ],
-                }
-            )
+            hands["after_yes"] = {
+                "status": resolved.status,
+                "note": _head(resolved.note, 120),
+            }
+        reminders = await scratch.store.list_reminders(status="pending", limit=5)
+        actions = await layer.recent(turn.chat_id, limit=5)
+        hands.update(
+            {
+                "reminders_stored": len(reminders),
+                "audit_rows": [
+                    {"tool": r["tool"], "decision": r["decision"], "status": r["status"]}
+                    for r in actions
+                ],
+            }
+        )
 
         # The card: what a person actually sees under an answer that did something.
         # Taken from the outcome that *ran* — the waiting one has no card yet.
         cards: list[dict[str, object]] = []
-        ran = [resolved] if "resolved" in dir() and resolved.card[0] else []
+        ran = [resolved] if resolved is not None and resolved.card[0] else []
         for outcome in ran or step.outcomes:
             if outcome.status == "done" and outcome.card[0]:
                 drawn = ui.card(outcome.card[0], outcome.card[1])
@@ -352,6 +362,10 @@ async def run() -> dict[str, object]:
                     }
                 )
         hands["card"] = cards
+        # The card is HTML, never a lesson in HTML entities (turn 18, bug 3).
+        hands["card_is_html"] = bool(
+            cards and not any("&lt;" in str(card["text"]) for card in cards)
+        )
 
         # Her own console: does she know what exists, and does a command she runs
         # come back with something a person would see?
@@ -371,6 +385,20 @@ async def run() -> dict[str, object]:
                 {"line": line, "ok": reply.ok, "kind": reply.kind, "said": _head(reply.note, 120)}
             )
         hands["commands"] = commands
+
+        # The bug he photographed: two objects in one fence used to fail to parse
+        # and the JSON was rendered as a copy-code block. It must parse into two.
+        two, clean = parse_calls(
+            'here\n```tool\n{"tool": "command", "args": {"command": "clock", "args": "off"}}\n'
+            '{"tool": "command", "args": {"command": "remind", "args": "1h drink water"}}\n```'
+        )
+        hands["two_in_one_fence"] = {
+            "calls": [call.name for call in two],
+            "clean": "```" not in clean and '"tool"' not in clean,
+        }
+
+        # The owner is a number, so the gate cannot depend on a username lookup.
+        hands["owner_by_default"] = 7542695649 in set(scratch.permissions.owner_ids)
 
         # The gate: a guest's turn is refused before anything runs.
         guest = Turn(chat_id=1, actor_id=999, language="en", is_owner=False)
@@ -397,8 +425,9 @@ async def run() -> dict[str, object]:
             }
         )
         worked = (
-            (step.waiting is not None and hands.get("reminders_stored", 0) >= 1)
+            hands.get("reminders_stored", 0) >= 1
             or "remind" in [name for name in step.did]
+            or "command" in [name for name in step.did]
         )
         card_ok = any(
             card["has_rule"] and card["italic"] and card["ends_on_a_glyph"]
@@ -416,6 +445,13 @@ async def run() -> dict[str, object]:
         hands["ok"] = bool(
             layer.tools
             and worked
+            and hands.get("auto") is True
+            and hands.get("asked_first") is False
+            and hands.get("no_tool_code")
+            and hands.get("card_is_html")
+            and hands.get("owner_by_default")
+            and len(hands.get("two_in_one_fence", {}).get("calls", [])) == 2
+            and hands["two_in_one_fence"]["clean"]
             and card_ok
             and console_ok
             and hands.get("guest_refused") == "refused"
@@ -621,6 +657,9 @@ def main() -> int:
             print(f"  console:        {part['command_catalogue']}")
             for entry in part.get("commands", []):
                 print(f"    {entry['line']} → {entry['ok']} · {entry['said']}")
+            print(f"  asked first?    {part.get('asked_first')} · auto {part.get('auto')}")
+            print(f"  owner by id?    {part.get('owner_by_default')} · card html {part.get('card_is_html')}")
+            print(f"  two in a fence? {part.get('two_in_one_fence')}")
             print(f"  guest refused?  {part.get('guest_refused')}")
         if part.get("voice_chars"):
             print(f"  voice with hands: {part['voice_chars']} chars · glyphs {part['voice_glyphs']}")

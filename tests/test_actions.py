@@ -55,6 +55,17 @@ def _layer(runtime, *tools: Tool) -> ActionLayer:
     return ActionLayer(runtime, tools or (_tool(),))
 
 
+async def _strict(runtime) -> ActionLayer:
+    """The pre-auto policy: every first write stops at a question.
+
+    Auto is the default now (the owner asked for it), so the tests that are
+    *about* the confirmation machinery have to switch it off explicitly. That
+    keeps both behaviours pinned instead of deleting the half he complained about.
+    """
+    await runtime.store.set_setting("actions.auto", "0")
+    return ActionLayer(runtime, (_tool(),))
+
+
 # ---------------------------------------------------------------------------
 # The tool shape
 # ---------------------------------------------------------------------------
@@ -107,6 +118,7 @@ async def test_a_read_runs_without_asking(runtime) -> None:
 
 async def test_a_write_asks_once_and_then_remembers(runtime) -> None:
     log: list = []
+    await runtime.store.set_setting("actions.auto", "0")
     layer = _layer(runtime, _tool("note", scope="write", calls=log))
     turn = Turn(chat_id=7, is_owner=True)
 
@@ -134,8 +146,37 @@ async def test_a_delete_asks_every_single_time(runtime) -> None:
     assert len(log) == 1
 
 
+async def test_a_small_write_just_happens(runtime) -> None:
+    """He asked for this: "turn off the asking for every small task"."""
+    log: list = []
+    layer = _layer(runtime, _tool("note", scope="write", calls=log))
+    outcome = await layer.execute(ToolCall("note", {"what": "a"}), Turn(chat_id=11, is_owner=True))
+    assert outcome.status == "done", "a routine write must not stop at a question"
+    assert log == [("note", {"what": "a"})]
+    assert await layer.pending(11) is None
+
+
+async def test_auto_never_covers_deleting(runtime) -> None:
+    """Auto is about small things; a delete is not a small thing."""
+    log: list = []
+    assert await _layer(runtime).is_auto() is True
+    layer = _layer(runtime, _tool("wipe", scope="delete", risk="medium", calls=log))
+    outcome = await layer.execute(ToolCall("wipe", {"what": "a"}), Turn(chat_id=12, is_owner=True))
+    assert outcome.status == "needs_confirm"
+    assert log == []
+
+
+async def test_auto_can_be_turned_off_again(runtime) -> None:
+    await runtime.store.set_setting("actions.auto", "0")
+    layer = _layer(runtime, _tool("note", scope="write"))
+    assert await layer.is_auto() is False
+    outcome = await layer.execute(ToolCall("note", {"what": "a"}), Turn(chat_id=13, is_owner=True))
+    assert outcome.status == "needs_confirm"
+
+
 async def test_no_means_no(runtime) -> None:
     log: list = []
+    await runtime.store.set_setting("actions.auto", "0")
     layer = _layer(runtime, _tool("note", scope="write", calls=log))
     await layer.execute(ToolCall("note", {"what": "a"}), Turn(chat_id=3, is_owner=True))
     outcome = await layer.resolve(3, approve=False)
@@ -145,6 +186,7 @@ async def test_no_means_no(runtime) -> None:
 
 
 async def test_a_question_goes_stale(runtime) -> None:
+    await runtime.store.set_setting("actions.auto", "0")
     layer = _layer(runtime, _tool("note", scope="write"))
     await layer.execute(ToolCall("note", {"what": "a"}), Turn(chat_id=4, is_owner=True))
     record = await layer.pending(4)
@@ -203,6 +245,7 @@ async def test_the_hourly_valve_counts_rows_not_memory(runtime) -> None:
 
 
 async def test_every_attempt_is_written_down(runtime) -> None:
+    await runtime.store.set_setting("actions.auto", "0")
     layer = _layer(runtime, _tool("note", scope="write"))
     await layer.execute(ToolCall("note", {"what": "a"}), Turn(chat_id=11, actor_id=42, is_owner=True))
     rows = await layer.recent(11)
@@ -307,6 +350,7 @@ async def test_a_write_stops_at_the_question(runtime) -> None:
         '```tool\n{"tool": "note", "args": {"what": "a"}}\n```',
         "this should never be asked for",
     )
+    await runtime.store.set_setting("actions.auto", "0")
     layer = _layer(runtime, _tool("note", scope="write", calls=log))
     step = await Agent(layer).run(
         provider, [AIMessage("user", "remember a")], turn=Turn(chat_id=2, is_owner=True), max_tokens=100

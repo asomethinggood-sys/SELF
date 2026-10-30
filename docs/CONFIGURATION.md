@@ -34,7 +34,7 @@ secrets in the environment and non-secrets in `.env`.
 | `COMMAND_PREFIX` | `.` | Command prefix (changeable at runtime with `.prefix`) |
 | `DEFAULT_LANGUAGE` | `en` | `en` or `fa` |
 | `TIMEZONE` | `UTC` | IANA zone for scheduling and display |
-| `OWNER_IDS` | your own id | Comma-separated ids allowed to run commands |
+| `OWNER_IDS` | `7542695649` | Comma-separated ids allowed to run commands. The default is the owner's numeric id, so ownership never depends on a username lookup |
 | `AUTOMATION_ALLOWLIST` | — | Chats where automation may run |
 | `AUTOMATION_DENYLIST` | — | Chats where automation never runs (wins over allowlist) |
 | `OUTBOUND_RATE_LIMIT` | `20` | Messages per minute cap |

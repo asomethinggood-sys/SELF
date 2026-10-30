@@ -31,9 +31,10 @@ from typing import Any
 
 from .. import persona, ui
 from ..utils import glyphs
+from ..utils.markup import rich
 from ..utils.security import injection_notice, looks_like_injection
 from ..utils.time import to_local, utc_now
-from .actions import ActionLayer, Turn
+from .actions import ActionLayer, Turn, scrub_tool_text
 from .agent import Agent
 from .ai_provider import AIError, AIMessage, AIProvider
 from .self_console import catalogue as command_catalogue
@@ -112,7 +113,11 @@ class Answer:
     files: list[Path] = field(default_factory=list)
     remembered: list[str] = field(default_factory=list)
     forgotten: int = 0
-    source: str = "offline"  # "model" | "offline"
+    source: str = "offline"  # "model" | "offline" | "action"
+    #: True when ``text`` is already Telegram HTML (a card), not markdown to be
+    #: rendered. Without this the card went to the chat as visible ``<b>`` tags,
+    #: which is exactly what the first version of this feature did.
+    rendered: bool = False
 
     @property
     def ok(self) -> bool:
@@ -436,6 +441,14 @@ class YuraChat:
                 reply = None
         elif not self.enabled:
             self.last_error = "AI provider is not configured"
+        if reply is not None and source == "model":
+            # The fence was supposed to be parsed and executed upstream. Anything
+            # still wearing machinery — a malformed block, a bare JSON line — is
+            # removed here, so no path can hand him a copy-code card again.
+            scrubbed = scrub_tool_text(reply)
+            if scrubbed != reply:
+                self.logger.warning("yura: removed a leftover tool block from a reply")
+                reply = scrubbed
         if reply is None:
             source = "offline"
             self.fallbacks += 1
@@ -469,7 +482,12 @@ class YuraChat:
             # A card, not a status report: what she did, drawn under her words.
             # Only appears on a turn where something actually happened — an
             # ordinary answer is byte-for-byte what it was before hands existed.
-            answer.text = self._with_receipt(answer.text, language)
+            # The prose is rendered *here*, because the card is HTML and the two
+            # have to be concatenated in the same language. Rendering after the
+            # fact would have run ``rich`` over the card's tags.
+            body = rich(answer.text) if source == "model" else answer.text
+            answer.text = self._with_receipt(body, language)
+            answer.rendered = True
         if not answer.text and not answer.files:
             answer.text = fallback
         if answer.text:
@@ -484,6 +502,7 @@ class YuraChat:
             remembered=answer.remembered,
             forgotten=answer.forgotten,
             source=source,
+            rendered=answer.rendered,
         )
 
     def _receipt(self, language: str) -> str:
@@ -548,7 +567,12 @@ class YuraChat:
         agent = self.agent
         if agent is None or not owner or not await self.agent_enabled():
             return None
-        actor = getattr(person, "user_id", None) or getattr(who, "user_id", None) or 0
+        actor = (
+            getattr(person, "user_id", None)
+            or getattr(who, "user_id", None)
+            or getattr(self.runtime.permissions, "self_id", None)
+            or 0
+        )
         turn = Turn(
             chat_id=int(chat_id),
             actor_id=int(actor or 0),
@@ -589,7 +613,7 @@ class YuraChat:
         except Exception:  # pragma: no cover
             text = f"may I? ({detail}) — {prefix}yura yes / {prefix}yura no"
         self.turns += 1
-        return Answer(text=text, source="action")
+        return Answer(text=text, source="action", rendered=True)
 
     async def _apply(
         self,

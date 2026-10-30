@@ -461,7 +461,14 @@ class Dispatcher:
                     name = command.name
 
         sender_id = getattr(event, "sender_id", None) or getattr(message, "sender_id", None)
-        is_owner = runtime.permissions.is_owner(sender_id) or bool(getattr(event, "out", False))
+        # ``is_outgoing`` is the same claim as ``out``: this line came from the
+        # account itself, which is also what her own console produces when she runs
+        # one of her commands for the owner.
+        is_owner = (
+            runtime.permissions.is_owner(sender_id)
+            or bool(getattr(event, "out", False))
+            or bool(getattr(event, "is_outgoing", False))
+        )
         base_lang = language
 
         if command is None:

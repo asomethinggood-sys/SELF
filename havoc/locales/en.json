@@ -1007,5 +1007,8 @@
   "remind.card_line": "{text}",
   "remind.card_note": "You'll be reminded in the same chat · {relative}",
   "remind.card_repeat": "and again every {spec}",
-  "remind.card_id": "reminder #{id}"
+  "remind.card_id": "reminder #{id}",
+  "actions.auto_on": "⌁ small things just happen now. only deleting still asks you first.",
+  "actions.auto_off": "⌁ back to the old way: the first use of each tool asks you once.",
+  "actions.auto_state": "⌁ asking before small things is {state}. `{prefix}yura auto on` or `{prefix}yura auto off` decides it."
 }

@@ -243,22 +243,29 @@ async def run(
 
     said: list[str] = []
     proxy = _Proxy(runtime, _CapturingSender(runtime.sender, said))
+    # ``out=True`` is the truth: this is the account acting, not a stranger
+    # typing. Without it the dispatcher asked "is this sender the owner?" about a
+    # sender id of 0 and every command she ran for him answered "restricted to
+    # the account owner" — the bug he photographed.
+    self_id = int(sender_id or 0) or int(getattr(getattr(runtime, "permissions", None), "self_id", 0) or 0)
     event = NormalizedEvent(
         type=EventType.MESSAGE,
         chat_id=int(chat_id),
         message_id=message_id,
-        sender_id=int(sender_id),
+        sender_id=self_id,
         timestamp=time.time(),
         text=f"{prefix}{bare}",
         language=language,
+        is_outgoing=True,
         is_private=bool(is_private),
         is_group=not is_private,
     )
     message = _ConsoleMessage(
         id=int(message_id or 0),
         chat_id=int(chat_id),
-        sender_id=int(sender_id),
+        sender_id=self_id,
         text=f"{prefix}{bare}",
+        out=True,
         is_private=bool(is_private),
         is_group=not is_private,
     )

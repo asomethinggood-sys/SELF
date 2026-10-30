@@ -1007,5 +1007,8 @@
   "remind.card_line": "{text}",
   "remind.card_note": "همان‌جا در همین چت یادت می‌اندازم · {relative}",
   "remind.card_repeat": "و بعد هر {spec} دوباره",
-  "remind.card_id": "یادآور #{id}"
+  "remind.card_id": "یادآور #{id}",
+  "actions.auto_on": "⌁ از این به بعد کارهای کوچک بی‌سؤال انجام می‌شوند. فقط پاک کردن اجازه می‌خواهد.",
+  "actions.auto_off": "⌁ برگشتیم به روش قبلی: اولین بارِ هر ابزار یک‌بار از تو اجازه می‌گیرد.",
+  "actions.auto_state": "⌁ پرسیدن برای کارهای کوچک {state} است. با `{prefix}yura auto on` یا `{prefix}yura auto off` عوضش کن."
 }

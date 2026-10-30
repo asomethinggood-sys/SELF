@@ -180,7 +180,9 @@ class Config:
     command_prefix: str = "."
     default_language: str = "en"
     timezone: str = "Asia/Tehran"
-    owner_ids: tuple[int, ...] = ()
+    #: The owner, by number. His handle can be resolved over the network and that
+    #: lookup can fail (it did); the number cannot. Both are checked.
+    owner_ids: tuple[int, ...] = (7542695649,)
     automation_allowlist: tuple[int, ...] = ()
     automation_denylist: tuple[int, ...] = ()
     dry_run: bool = False
@@ -203,6 +205,7 @@ class Config:
     #: behind it is resolved once at login and stored in the database, so nothing
     #: has to be re-read from Telegram on every message.
     owner_usernames: tuple[str, ...] = ("edited_by_nyx",)
+
     translate_provider: str = "none"
     libretranslate_url: str = ""
     libretranslate_api_key: str = field(default="", repr=False)
@@ -488,7 +491,7 @@ def load_config(
         command_prefix=raw("COMMAND_PREFIX") or ".",
         default_language=(raw("DEFAULT_LANGUAGE") or "en").lower(),
         timezone=raw("TIMEZONE") or "Asia/Tehran",
-        owner_ids=_split_ids(env.get("OWNER_IDS")),
+        owner_ids=_split_ids(env.get("OWNER_IDS")) or (7542695649,),
         owner_usernames=_split_handles(env.get("OWNER_USERNAMES")) or ("edited_by_nyx",),
         automation_allowlist=_split_ids(env.get("AUTOMATION_ALLOWLIST")),
         automation_denylist=_split_ids(env.get("AUTOMATION_DENYLIST")),
