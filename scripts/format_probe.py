@@ -1,5 +1,8 @@
 """Prove the two claims that cannot be proven by a unit test.
 
+0. **She knows who she is answering.** The room block is attached to the real
+   system prompt and the model is asked whose message it is answering; "the
+   owner" in that answer is the bug the block prevents.
 1. **Her formatting is real.** Ask the real model, through the production router
    and the real persona system prompt, for a short answer, then push that answer
    through :func:`havoc.utils.markup.rich`. The record holds the model's raw text
@@ -25,6 +28,7 @@ import sys
 import zlib
 from datetime import UTC, datetime
 
+from havoc import persona
 from havoc.config import load_config
 from havoc.persona import system_prompt
 from havoc.services.ai_provider import AIError, AIMessage, AIProvider
@@ -42,6 +46,16 @@ FORMAT_ASK = (
 )
 #: The project's own marks: does a model actually reach for them when told they
 #: are real? This is asked separately so a failure names which mark was missed.
+#: Asked *with* the room block the reply path now attaches in a group. A model
+#: that answers "the owner" here would address the wrong person in a real chat,
+#: which is exactly the failure the block exists to prevent.
+AUDIENCE_ASK = "In one short line: whose message are you answering right now?"
+AUDIENCE_TRANSCRIPT = (
+    "- Ali: did you see the news about the bridge",
+    "- Ali: [photo]",
+    "- the owner: oh that is bad",
+)
+
 MARKS_ASK = (
     "Write exactly two lines. Line one starts with >> and is a whispered secret. "
     "Line two: the word pressed, underlined with ++."
@@ -83,6 +97,7 @@ async def run() -> dict[str, object]:
         "keys": len(router.credentials) if router.available else 0,
         "formatting": {},
         "vision": {},
+        "audience": {},
     }
     if not getattr(provider, "available", False):
         record["ok"] = False
@@ -168,6 +183,37 @@ async def run() -> dict[str, object]:
         marks.update({"ok": False, "failure": f"{exc.kind}: {_head(exc, 240)}"})
     record["marks"] = marks
 
+    # -- 4. who is talking --------------------------------------------------
+    audience: dict[str, object] = {}
+    try:
+        block = persona.audience_prompt(
+            language="en",
+            chat_title="Tea",
+            speaker="Ali",
+            is_owner=False,
+            is_group=True,
+            transcript=AUDIENCE_TRANSCRIPT,
+        )
+        answer = await provider.converse(  # type: ignore[attr-defined]
+            [
+                AIMessage("system", f"{system_prompt('en')}\n\n{block}"),
+                AIMessage("user", AUDIENCE_ASK),
+            ],
+            max_tokens=80,
+        )
+        lowered = answer.lower()
+        audience.update(
+            {
+                "ok": "ali" in lowered and "owner" not in lowered.replace("not the owner", ""),
+                "answer": _head(answer, 160),
+                "names_the_speaker": "ali" in lowered,
+                "block_chars": len(block),
+            }
+        )
+    except AIError as exc:
+        audience.update({"ok": False, "failure": f"{exc.kind}: {_head(exc, 240)}"})
+    record["audience"] = audience
+
     # -- 4. her voice -------------------------------------------------------
     voice: dict[str, object] = {}
     try:
@@ -184,7 +230,10 @@ async def run() -> dict[str, object]:
     record["voice"] = voice
 
     record["ok"] = (
-        bool(formatting.get("ok")) and bool(vision.get("ok")) and bool(record["marks"].get("ok"))  # type: ignore[union-attr]
+        bool(formatting.get("ok"))
+        and bool(vision.get("ok"))
+        and bool(record["marks"].get("ok"))  # type: ignore[union-attr]
+        and bool(audience.get("ok"))
     )
     return record
 
@@ -211,6 +260,12 @@ def main() -> int:
         print(f"  telegram shows: {marks['html']}")
     if marks.get("failure"):
         print(f"  failure: {marks['failure']}")
+    audience = record["audience"]  # type: ignore[index]
+    print("audience:", "OK" if audience.get("ok") else "FAILED")
+    if audience.get("answer"):
+        print(f"  asked who she is answering, model said: {audience['answer']}")
+    if audience.get("failure"):
+        print(f"  failure: {audience['failure']}")
     voice = record["voice"]  # type: ignore[index]
     print("voice:", "OK" if voice.get("ok") else "FAILED", f"({voice.get('bytes', 0)} bytes)")
     if voice.get("failure"):

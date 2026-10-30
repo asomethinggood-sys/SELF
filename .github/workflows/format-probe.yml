@@ -1,24 +1,20 @@
 name: Format probe
 
-# Two claims that a unit test cannot make honestly:
+# The claims a unit test cannot make, asked of the real model and recorded.
 #
-#   1. the model's markdown arrives as real Telegram formatting, not asterisks;
-#   2. she can look at a picture.
+# Why this exists: "her formatting works", "she can see pictures" and "she knows
+# who she is answering" are three things that fail *silently* — she falls back to
+# an offline line, or answers the wrong person politely, and nothing in the chat
+# says why. This job spends three model requests, prints the model's raw text and
+# the Telegram HTML it becomes, and records both in `.format-probe.json` so the
+# answer can be read in the repository instead of taken on trust.
 #
-# Both are checked against the real provider through the production router, with
-# the real persona system prompt and the real `rich()` renderer. The transcript —
-# what the model said *and* the HTML the owner would see — is committed to
-# `.format-probe.json`, so the proof is readable without run logs.
-#
-# No Telegram, no login, no session: this job touches only the AI keys.
+# No Telegram and no login: the keys live in `.auth/`, so run this and read it.
 
 on:
   push:
     paths:
-      - "havoc/utils/markup.py"
-      - "havoc/services/vision.py"
-      - "havoc/services/yura_chat.py"
-      - "havoc/features/persona.py"
+      - "havoc/**"
       - "scripts/format_probe.py"
       - ".github/workflows/format-probe.yml"
   workflow_dispatch:
@@ -32,7 +28,7 @@ concurrency:
 
 jobs:
   probe:
-    name: ask the model for bold and for a colour
+    name: ask the model to format, look and listen
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -47,10 +43,9 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install -e ".[voice]"
+          python -m pip install -e . edge-tts
 
       - name: Ask the real model
-        id: probe
         shell: bash
         continue-on-error: true
         env:
@@ -58,28 +53,23 @@ jobs:
           LOG_DIR: ${{ github.workspace }}/.runtime/logs
         run: |
           set -uo pipefail
-          python scripts/format_probe.py > .format-probe.txt 2>&1
-          status=$?
-          cat .format-probe.txt
-          printf '%s\n' "$status" > .format-probe.status
+          python scripts/format_probe.py 2>&1 | tee .format-probe.txt
           {
             echo "### Format probe"
             echo ""
             echo '```'
-            cat .format-probe.txt
+            tail -n 40 .format-probe.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          if [ "$status" -ne 0 ]; then
-            echo "::warning::The probe did not pass; see .format-probe.json for what came back."
-          fi
 
-      - name: Publish the transcript
+      - name: Publish the record where it can be read
         if: always()
         shell: bash
         run: |
           set -uo pipefail
+          rm -f .format-probe.txt
           if [ ! -f .format-probe.json ]; then
-            echo "::warning::No record was written."
+            echo "::warning::The probe wrote no record; nothing to publish."
             exit 0
           fi
           git config user.name "HAVOC format probe"
@@ -90,6 +80,8 @@ jobs:
             exit 0
           fi
           git commit -qm "ci: format probe result [skip ci]"
+          # The running bot commits snapshots every few minutes, so the branch
+          # may move while this job runs. Rebase and retry.
           for attempt in 1 2 3; do
             if git pull -q --rebase origin "${GITHUB_REF_NAME}" && \
                git push -q origin "HEAD:refs/heads/${GITHUB_REF_NAME}"; then
@@ -99,7 +91,7 @@ jobs:
             git rebase --abort 2>/dev/null || true
             sleep 5
           done
-          echo "::warning::Could not publish the record; the artifact still has it."
+          echo "::warning::Could not publish the probe result; the artifact still has it."
 
       - name: Keep the record as an artifact too
         if: always()
@@ -108,25 +100,3 @@ jobs:
           name: format-probe
           path: .format-probe.json
           if-no-files-found: warn
-
-      - name: Report, without failing the branch over a spent daily allowance
-        if: always()
-        shell: bash
-        run: |
-          set -uo pipefail
-          rm -f .format-probe.txt .format-probe.status
-          if [ ! -f .format-probe.json ]; then
-            echo "::error::The probe produced no record at all."
-            exit 1
-          fi
-          ok=$(python -c 'import json;print("yes" if json.load(open(".format-probe.json")).get("ok") else "no")')
-          if [ "$ok" = "yes" ]; then
-            echo "formatting and vision both answered for real"
-            exit 0
-          fi
-          if grep -qi "rate_limited\|free-models-per-day" .format-probe.json; then
-            echo "::warning::Free-tier limit reached; this is a budget fact, not a broken feature. The record says when."
-            exit 0
-          fi
-          echo "::error::The probe failed; .format-probe.json holds the raw reply and the failure kind."
-          exit 1

@@ -51,10 +51,13 @@ _ITALIC_UNDER_RE = re.compile(r"(?<![\w])_(?=\S)([^_\n]{1,400}?)_(?![\w])")
 _STRIKE_RE = re.compile(r"~~(?=\S)([^\n]{1,400}?)~~")
 _SPOILER_RE = re.compile(r"\|\|(?=\S)([^\n]{1,400}?)\|\|")
 _HEADING_RE = re.compile(r"(?m)^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$")
-_QUOTE_RE = re.compile(r"(?m)^\s{0,3}&gt;\s?(.*)$")
+#: A quote marker is ``>`` **and a space** (or the end of the line). Without the
+#: space, a face like ``>_<`` — which her own lines end with — would open a
+#: blockquote and swallow the rest of the sentence inside it.
+_QUOTE_RE = re.compile(r"(?m)^\s{0,3}&gt;(?:\s(.*)|$)")
 #: ``>> line`` is a quote the reader has to tap to open. Telegram supports it as
 #: an attribute of <blockquote>, so nothing new is sent — only the attribute.
-_WHISPER_RE = re.compile(r"(?m)^\s{0,3}&gt;&gt;\s?(.*)$")
+_WHISPER_RE = re.compile(r"(?m)^\s{0,3}&gt;&gt;(?:\s(.*)|$)")
 _UNDERLINE_RE = re.compile(r"\+\+(?=\S)([^+\n]{1,200}?)\+\+")
 _SMALL_RE = re.compile(r"\^\^(?=\S)([^^\n]{1,60}?)\^\^")
 _SPACED_RE = re.compile(r"%%(?=\S)([^%\n]{1,60}?)%%")

@@ -74,6 +74,20 @@ _UNSAFE_NAME = re.compile(r"[^0-9A-Za-z._\u0600-\u06ff-]+")
 PICTURE_SETTING = "yura.last_picture"
 
 
+def _audience_block(audience: Any, language: str) -> str:
+    """The per-turn room block, or an empty string when there is nothing to say."""
+    if audience is None or not getattr(audience, "usable", False):
+        return ""
+    return persona.audience_prompt(
+        language=language,
+        chat_title=str(getattr(audience, "chat_title", "") or ""),
+        speaker=str(getattr(audience, "speaker", "") or ""),
+        is_owner=bool(getattr(audience, "is_owner", False)),
+        is_group=bool(getattr(audience, "is_group", False)),
+        transcript=tuple(getattr(audience, "transcript", ()) or ()),
+    )
+
+
 @dataclass
 class Answer:
     """What one turn produced."""
@@ -183,12 +197,16 @@ class YuraChat:
         greeting: bool = False,
         picture: Any = None,
         quoted: str = "",
+        audience: Any = None,
     ) -> Answer:
         """Reply to ``text``. Never raises for provider problems.
 
         ``picture`` is a :class:`havoc.services.vision.Picture` the owner sent —
         she looks at it and answers about it. ``quoted`` is the message they used
         Telegram's reply button on, so "this one?" has something to point at.
+        ``audience`` is a :class:`havoc.services.context.ChatContext`: who is
+        speaking and what was being said in the room, so a group turn is not
+        answered as if the owner had typed it.
         """
         spoken = text.strip()
         prompt = spoken or ("" if picture is not None else persona.call_prompt(language))
@@ -215,6 +233,10 @@ class YuraChat:
         # Context first, then the current turn: appending before reading would
         # put the same message in the prompt twice.
         _, messages = await self._context(chat_id, language, greeting=greeting)
+        block = _audience_block(audience, language)
+        if block:
+            system = messages[0].content if messages else ""
+            messages[0] = AIMessage("system", f"{system}\n\n{block}")
         if picture is not None:
             # A multimodal turn: the words and the picture in one message, which
             # is the only shape every provider accepts for a photo plus a

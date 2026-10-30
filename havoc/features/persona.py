@@ -20,12 +20,14 @@ from __future__ import annotations
 
 import random
 import time
-from collections import deque
+from collections import Counter, deque
+from dataclasses import dataclass
 from typing import Any
 
 from .. import identity, persona, ui
 from ..command_registry import Command, CommandContext, CommandError
-from ..event_engine import EventType, NormalizedEvent
+from ..event_engine import EventType, NormalizedEvent, normalize_message
+from ..services.context import build as build_context
 from ..services.vision import IMAGE_MEDIA_TYPES, Picture, looks_like_picture
 from ..services.vision import download as download_picture
 from ..utils.formatting import escape
@@ -117,6 +119,12 @@ async def _card(ctx: CommandContext) -> str:
         f"{ui.bold(ctx.t('yura.turns'))} {ui.code(str(getattr(chat, 'turns', 0)))}",
         f"{ui.bold(ctx.t('yura.bank'))} {ui.code(str(persona.capacity()))}",
     ]
+    replies = getattr(runtime, "persona_replies", None)
+    if replies is not None and replies.last_skip:
+        rows.append(
+            f"{ui.bold(ctx.t('yura.last_skip'))} {ui.code(escape(replies.last_skip))}"
+            + f" {ui.note(escape(ctx.t('yura.skip_note', count=replies.skipped)))}"
+        )
     if chat is not None and chat.fallbacks:
         rows.append(
             f"{ui.bold(ctx.t('yura.fallbacks'))} {ui.code(str(chat.fallbacks))}"
@@ -284,6 +292,22 @@ def _visible(answer: Any) -> str:
     return escape(answer.text)
 
 
+def _normalized_for(ctx: CommandContext) -> Any:
+    """The command's message as a normal event, so the reply path can read it."""
+    message = getattr(ctx, "message", None)
+    if message is None:
+        return None
+    try:
+        return normalize_message(
+            message,
+            self_id=ctx.runtime.permissions.self_id,
+            prefix=ctx.runtime.prefix,
+            event_type=EventType.MESSAGE,
+        )
+    except Exception:  # noqa: BLE001 - a missing message is not an error
+        return None
+
+
 async def _chat(ctx: CommandContext, text: str, *, greeting: bool = False) -> None:
     probe = _invocation_text(ctx) or " ".join(filter(None, [ctx.sub or "", *ctx.args]))
     language = _language_for(ctx, text, probe)
@@ -294,12 +318,26 @@ async def _chat(ctx: CommandContext, text: str, *, greeting: bool = False) -> No
     picture = None
     if message is not None and looks_like_picture(getattr(message, "media", None)):
         picture = await download_picture(ctx.runtime.client, message)
+    # The command path is a conversation too: in a group it needs the same room
+    # context as the automatic one, or "yura what do you think" about a message
+    # above is a question about nothing.
+    quoted, audience = "", None
+    normalized = _normalized_for(ctx)
+    if normalized is not None:
+        try:
+            replies = ctx.runtime.persona_replies
+            quoted = await replies.quote_for(normalized)
+            audience = await replies.room_for(normalized)
+        except Exception:  # noqa: BLE001 - context is a bonus
+            quoted, audience = "", None
     answer = await ctx.runtime.yura_chat.answer(
         text,
         chat_id=ctx.chat_id,
         language=language,
         greeting=greeting,
         picture=picture,
+        quoted=quoted,
+        audience=audience,
     )
     if answer.text:
         # `rich` for model text, not `escape`: she writes **bold** and > quotes
@@ -387,6 +425,23 @@ async def cmd_yura(ctx: CommandContext) -> None:
     await _chat(ctx, text)
 
 
+#: Her sent message ids, per chat, persisted so a restart does not erase the fact
+#: that the message being replied to was hers.
+OWN_IDS_SETTING = "yura.own_ids"
+OWN_IDS_LIMIT = 60
+
+
+@dataclass
+class Quote:
+    """The message (chain) being replied to, and where it came from."""
+
+    text: str = ""
+    hers: bool = False
+    #: True when the replied-to message was written by this account — hers or the
+    #: owner's. Replying to it is addressing the account either way.
+    from_account: bool = False
+
+
 class PersonaReplies:
     """Her two automatic paths, and the gates on each.
 
@@ -425,10 +480,15 @@ class PersonaReplies:
         self.reacted = 0
         self._since_mood = 0
         self._since_reaction = 0
-        # Message ids this process sent, per chat. Content is not enough to tell
-        # her own message from the owner's — formatted text loses its marks in
-        # the Telegram copy — but the id never lies.
+        # Message ids she sent, per chat, persisted: a restart between her answer
+        # and the owner's reply must not make her forget that the message being
+        # replied to was hers. Content is not enough — formatted text loses its
+        # marks in the Telegram copy — but the id never lies.
         self._own_ids: dict[int, deque[int]] = {}
+        # Why the last message in a group was not answered. "She ignored me" and
+        # "a gate said no" look identical from the chat, and only one is a bug.
+        self.last_skip = ""
+        self.skips: Counter = Counter()
 
     @property
     def self_id(self) -> int | None:
@@ -458,15 +518,51 @@ class PersonaReplies:
         first = stripped.split(maxsplit=1)[0].lower() if stripped else ""
         return first in _INTERNAL_WORDS
 
-    def _note_own(self, chat_id: int, message_id: Any) -> None:
+    def _skip(self, reason: str, event: NormalizedEvent | None = None) -> None:
+        """Note that a message went unanswered, and why.
+
+        "She ignored me" and "a gate said no" look identical from the chat and
+        only one of them is a bug, so the reason is kept and logged — a live
+        account is the only place the difference shows.
+        """
+        self.skipped += 1
+        self.skips[reason] += 1
+        self.last_skip = reason
+        if event is not None:
+            self.logger.info(
+                "yura: did not answer %s in chat %s (%s)",
+                getattr(event, "message_id", "?"),
+                getattr(event, "chat_id", "?"),
+                reason,
+            )
+
+    async def _own_bucket(self, chat_id: int) -> deque[int]:
+        bucket = self._own_ids.get(chat_id)
+        if bucket is not None:
+            return bucket
+        stored: Any = None
+        try:
+            stored = await self.runtime.store.get_setting(f"{OWN_IDS_SETTING}.{chat_id}", None)
+        except Exception:  # pragma: no cover - storage trouble must not silence her
+            stored = None
+        ids = [int(value) for value in (stored or []) if str(value).lstrip("-").isdigit()]
+        bucket = deque(ids[-OWN_IDS_LIMIT:], maxlen=OWN_IDS_LIMIT)
+        self._own_ids[chat_id] = bucket
+        return bucket
+
+    async def _note_own(self, chat_id: int, message_id: Any) -> None:
         if message_id is None:
             return
-        bucket = self._own_ids.setdefault(chat_id, deque(maxlen=80))
+        bucket = await self._own_bucket(chat_id)
         bucket.append(int(message_id))
+        try:
+            await self.runtime.store.set_setting(f"{OWN_IDS_SETTING}.{chat_id}", list(bucket))
+        except Exception:  # pragma: no cover - see above
+            pass
 
-    def _is_own(self, chat_id: int, message_id: Any, text: str) -> bool:
+    async def _is_own(self, chat_id: int, message_id: Any, text: str) -> bool:
         """True when this message is one she wrote, not one the owner wrote."""
-        if message_id is not None and int(message_id) in self._own_ids.get(chat_id, ()):
+        if message_id is not None and int(message_id) in await self._own_bucket(chat_id):
             return True
         if not text:
             return False
@@ -489,26 +585,25 @@ class PersonaReplies:
             return
         self_id = self.self_id
         if self_id is None or event.chat_id != self_id:
-            self.skipped += 1
+            self._skip("not_own_chat")
             return
-        quoted, _hers = await self._quoted_chain(event)
-        if (
-            persona.is_own_line(event.text)
-            or self.runtime.yura_chat.was_sent(event.chat_id, event.text)
-            or self._is_command(event.text)
-        ):
-            self.skipped += 1
+        if await self._is_own(event.chat_id, event.message_id, event.text):
+            self._skip("own_message")
             return
+        if self._is_command(event.text):
+            self._skip("command")
+            return
+        quote = await self._quote(event)
         decision = await self.runtime.permissions.can_act(event.chat_id, "persona", is_private=True)
         if not decision.allowed:
-            self.skipped += 1
+            self._skip(f"permission:{decision.code}")
             return
         now = time.monotonic()
         if not self._budget_ok(now):
-            self.skipped += 1
+            self._skip("cooldown")
             return
         await self._answer(
-            event, chat_id=event.chat_id, picture=picture, quoted=quoted, is_private=True
+            event, chat_id=event.chat_id, picture=picture, quoted=quote.text, is_private=True
         )
         self._last_at = now
         self._window.append(now)
@@ -518,40 +613,51 @@ class PersonaReplies:
     async def on_group_message(self, event: NormalizedEvent) -> None:
         """Answer only what was addressed to her.
 
-        Three ways a message is addressed to her, and nothing else counts: a
-        Telegram reply to one of her own messages, her name in the text, or a
-        mention. The gate is checked before the picture is fetched, so a group
-        photo nobody asked about is never downloaded.
+        Ways a message is addressed, and nothing else counts: a Telegram reply to
+        one of *her* messages, a reply to the owner's own message (they are the
+        one who installed her), her name in the text, or a mention. The gate is
+        checked before the picture is fetched, so a group photo nobody asked
+        about is never downloaded.
         """
         if not event.is_group or event.message_id is None:
+            self._skip("not_group")
             return
         # In a group this account writes two kinds of message: the owner's and
         # hers. Replying to her is an *outgoing* message here, which is why the
         # first version of this handler never fired — and why her own answers
         # have to be recognised by id, not by who "sent" them.
-        if self._is_own(event.chat_id, event.message_id, event.text):
+        if await self._is_own(event.chat_id, event.message_id, event.text):
+            self._skip("own_message", event)
             return
         if event.is_outgoing and self._is_command(event.text):
-            return  # the dispatcher answers commands
-        quoted, hers = await self._quoted_chain(event)
-        addressed = hers or self._named(event.text) or event.mentions_me
+            self._skip("command", event)
+            return
+        quote = await self._quote(event)
+        addressed = (
+            quote.hers
+            or quote.from_account
+            or self._named(event.text)
+            or event.mentions_me
+        )
         if not addressed:
+            self._skip("not_addressed", event)
             return
         picture = await self._picture(event)
         if picture is None and not event.text.strip():
+            self._skip("empty", event)
             return
         decision = await self.runtime.permissions.can_act(event.chat_id, "persona", is_private=False)
         if not decision.allowed:
-            self.skipped += 1
+            self._skip(f"permission:{decision.code}", event)
             return
         now = time.monotonic()
         if not self._group_budget_ok(event.chat_id, now):
-            self.skipped += 1
+            self._skip("cooldown", event)
             return
         # Every ninth group answer is a reaction instead of a line: a companion
         # that always has something to say is a broadcaster.
         self._since_reaction += 1
-        if hers and self._since_reaction % 9 == 0:
+        if quote.hers and self._since_reaction % 9 == 0:
             target = event.reply_to_id or event.message_id
             emoji = random.choice(yura_extras.REACTIONS)
             if await self.runtime.sender.react(event.chat_id, target, emoji):
@@ -561,7 +667,11 @@ class PersonaReplies:
                 self._group_window.setdefault(event.chat_id, []).append(now)
                 return
         await self._answer(
-            event, chat_id=event.chat_id, picture=picture, quoted=quoted, is_private=False
+            event,
+            chat_id=event.chat_id,
+            picture=picture,
+            quoted=quote.text,
+            is_private=False,
         )
         self._group_last[event.chat_id] = now
         self._group_window.setdefault(event.chat_id, []).append(now)
@@ -578,12 +688,14 @@ class PersonaReplies:
         is_private: bool,
     ) -> None:
         language = await self._language(event)
+        audience = await self._audience(event) if not is_private else None
         answer = await self.runtime.yura_chat.answer(
             event.text,
             chat_id=chat_id,
             language=language,
             picture=picture,
             quoted=quoted,
+            audience=audience,
         )
         self.logger.info(
             "yura: answering '%s' in %s%s",
@@ -610,19 +722,19 @@ class PersonaReplies:
         sender = self.runtime.sender
         if source != "model":
             result = await sender.send(chat_id, html, reply_to=reply_to)
-            self._note_own(chat_id, getattr(getattr(result, "message", None), "id", None))
+            await self._note_own(chat_id, getattr(getattr(result, "message", None), "id", None))
             return
         try:
             placeholder = await sender.send(chat_id, self.TYPING, reply_to=reply_to)
         except Exception:  # noqa: BLE001 - fall back to one clean message
             result = await sender.send(chat_id, html, reply_to=reply_to)
-            self._note_own(chat_id, getattr(getattr(result, "message", None), "id", None))
+            await self._note_own(chat_id, getattr(getattr(result, "message", None), "id", None))
             return
         message = getattr(placeholder, "message", None)
         message_id = getattr(message, "id", None)
         if getattr(placeholder, "dry_run", False) or message_id is None:
             return
-        self._note_own(chat_id, message_id)
+        await self._note_own(chat_id, message_id)
         try:
             await sender.edit(chat_id, message_id, html)
         except Exception as exc:  # noqa: BLE001 - the placeholder must not be the answer
@@ -643,6 +755,26 @@ class PersonaReplies:
             return html
         return f"{html}\n\n<i>{mood_line(hour)}</i>"
 
+    async def quote_for(self, event: NormalizedEvent) -> str:
+        """The text being replied to, for callers outside this class."""
+        return (await self._quote(event)).text
+
+    async def room_for(self, event: NormalizedEvent) -> Any:
+        """Who is talking and what about, for callers outside this class."""
+        if getattr(event, "is_private", False):
+            return None
+        return await self._audience(event)
+
+    async def _audience(self, event: NormalizedEvent) -> Any:
+        """Who is talking and what is being talked about, for a group turn."""
+        try:
+            return await build_context(
+                self.runtime, event, own_ids=set(await self._own_bucket(event.chat_id))
+            )
+        except Exception as exc:  # noqa: BLE001 - context is a bonus, never a blocker
+            self.logger.warning("yura: could not read the room: %s", exc)
+            return None
+
     async def _picture(self, event: NormalizedEvent) -> Picture | None:
         """The image the owner attached, if there is one worth looking at."""
         if event.media_type not in IMAGE_MEDIA_TYPES:
@@ -652,25 +784,26 @@ class PersonaReplies:
             return None
         return await download_picture(self.runtime.client, message)
 
-    async def _quoted_chain(self, event: NormalizedEvent, depth: int = 3) -> tuple[str, bool]:
-        """What is being replied to, up to ``depth`` levels, and whether it is hers.
+    async def _quote(self, event: NormalizedEvent, depth: int = 3) -> Quote:
+        """What is being replied to, whether she wrote it, and whether it is ours.
 
         One level answers "why?" about a single message. Three levels answer it
         about a thread: the model sees the shape of the conversation instead of
         the last line of it.
         """
         if not event.is_reply:
-            return "", False
+            return Quote()
         message = event.raw
         getter = getattr(message, "get_reply_message", None)
         if getter is None:
-            return "", False
+            return Quote()
         try:
             replied = await getter()
         except Exception:  # noqa: BLE001 - a deleted target is not an error
-            return "", False
+            return Quote()
         lines: list[str] = []
         hers = False
+        from_account = False
         current = replied
         for _ in range(max(1, depth)):
             if current is None:
@@ -678,16 +811,17 @@ class PersonaReplies:
             text = " ".join(str(getattr(current, "raw_text", "") or "").split())
             sender = getattr(current, "sender_id", None)
             out = bool(getattr(current, "out", False))
-            from_this_account = out or (
+            ours = out or (
                 sender is not None and self.self_id is not None and sender == self.self_id
             )
-            # Only quote something from this account: a third party's message
-            # must not be folded into a prompt by being pointed at.
-            if not from_this_account:
+            if _ is not None and not ours:
+                # Only quote something from this account: a third party's message
+                # must not be folded into a prompt by being pointed at.
                 break
+            from_account = from_account or ours
             # ...and "hers" means she wrote it, which in a group is only knowable
             # from the id she sent or the shape of her own lines.
-            mine = self._is_own(event.chat_id, getattr(current, "id", None), text)
+            mine = await self._is_own(event.chat_id, getattr(current, "id", None), text)
             hers = hers or mine
             if text:
                 lines.append(text[:400])
@@ -701,9 +835,9 @@ class PersonaReplies:
             except Exception:  # noqa: BLE001
                 break
         if not lines:
-            return "", hers
+            return Quote(hers=hers, from_account=from_account)
         # Oldest first reads like a thread; the model answers the newest.
-        return "\n".join(reversed(lines)), hers
+        return Quote(text="\n".join(reversed(lines)), hers=hers, from_account=from_account)
 
     async def _language(self, event: NormalizedEvent) -> str:
         if event.language in {"en", "fa"}:

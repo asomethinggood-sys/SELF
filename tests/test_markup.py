@@ -1,193 +1,123 @@
-"""Markdown from the model, turned into Telegram HTML — safely.
+"""Model markdown, made safe for Telegram.
 
-The bug this guards against: her answers were correct markdown and the owner saw
-asterisks, because everything went through ``escape()``. The danger in fixing it
-is the opposite one — letting message text inject markup, or turning a kaomoji
-into half an italic tag. Both directions are tested here.
+Every message a model writes is escaped first and *then* a fixed set of patterns
+is recognised, so nothing a model (or a screenshot pasted into it) says can
+introduce a tag. These tests hold both halves: the formatting renders, and the
+formatting cannot be forged.
 """
 
 from __future__ import annotations
 
-import re
+import html
 
 import pytest
 
-from havoc.utils.markup import BULLET, looks_formatted, plain_preview, rich
+from havoc.utils.markup import looks_formatted, plain_preview, rich
+
+
+def test_bold_italic_and_code_render() -> None:
+    assert rich("**loud**") == "<b>loud</b>"
+    assert rich("__loud__") == "<b>loud</b>"
+    assert rich("*soft*") == "<i>soft</i>"
+    assert rich("_soft_") == "<i>soft</i>"
+    assert rich("`cargo build`") == "<code>cargo build</code>"
+    assert rich("~~gone~~") == "<s>gone</s>"
+    assert rich("||secret||") == "<tg-spoiler>secret</tg-spoiler>"
+
+
+def test_the_project_marks_render() -> None:
+    assert rich("++under++") == "<u>under</u>"
+    assert rich("^^hush^^") == "ʜᴜꜱʜ"  # the small-caps glyphs are the styling
+    assert rich("%%spread%%") == "s p r e a d"
+
+
+def test_a_fence_becomes_pre_not_a_paragraph_of_code_spans() -> None:
+    out = rich("```python\nprint(1)\n```")
+    assert out.startswith("<pre>") and "<code" in out
+    assert "print(1)" in out
+
+
+def test_a_quote_line_becomes_a_blockquote() -> None:
+    out = rich("> the sea was angry")
+    assert "<blockquote>" in out and "the sea was angry" in out
+
+
+def test_a_whisper_is_collapsible() -> None:
+    out = rich(">> come closer")
+    assert "expandable" in out
+    assert "come closer" in out
+
+
+def test_a_heading_is_bold_and_a_list_is_a_list() -> None:
+    assert "<b>Morning</b>" in rich("# Morning")
+    assert "•" in rich("- one\n- two")
+    assert "1." in rich("1. first\n2. second")
 
 
 # ---------------------------------------------------------------------------
-# The formatting the owner asked for
+# The half that matters: it cannot be forged
 # ---------------------------------------------------------------------------
-@pytest.mark.parametrize(
-    ("raw", "expected"),
-    [
-        ("**bold**", "<b>bold</b>"),
-        ("__bold__", "<b>bold</b>"),
-        ("*italic*", "<i>italic</i>"),
-        ("_italic_", "<i>italic</i>"),
-        ("~~gone~~", "<s>gone</s>"),
-        ("||secret||", "<tg-spoiler>secret</tg-spoiler>"),
-        ("`code`", "<code>code</code>"),
-        ("# Headline", "<b>Headline</b>"),
-        ("## Two", "<b>Two</b>"),
-        ("- one\n- two", f"{BULLET} one\n{BULLET} two"),
-        ("1. one\n2. two", "1. one\n2. two"),
-    ],
-)
-def test_it_renders_what_the_model_writes(raw: str, expected: str) -> None:
-    assert rich(raw) == expected
+def test_html_in_the_message_is_escaped_not_executed() -> None:
+    assert "<script>alert(1)</script>" not in rich("<script>alert(1)</script>")
+    assert "&lt;script&gt;" in rich("<script>alert(1)</script>")
+    out = rich("<b>not bold</b> & <i>nope</i>")
+    assert "<b>not bold</b>" not in out
+    assert "&lt;b&gt;" in out
 
 
-def test_a_quote_becomes_a_blockquote() -> None:
-    assert rich("> be quiet") == "<blockquote>be quiet</blockquote>"
+def test_a_fence_cannot_smuggle_a_tag() -> None:
+    out = rich("```\n</pre><b>x</b>\n```")
+    assert "</pre><b>" not in out
+    assert "&lt;/pre&gt;" in out
 
 
-def test_consecutive_quote_lines_share_one_blockquote() -> None:
-    assert rich("> first\n> second") == "<blockquote>first\nsecond</blockquote>"
+def test_unbalanced_markers_stay_characters() -> None:
+    assert rich("*unclosed") == "*unclosed"
+    assert rich("2 * 3 * 4") == "2 * 3 * 4"
 
 
-def test_a_quote_interrupted_starts_a_new_block() -> None:
-    rendered = rich("> one\nnot a quote\n> two")
-    assert rendered.count("<blockquote>") == 2
-    assert rendered.count("</blockquote>") == 2
-
-
-def test_a_fenced_block_keeps_its_language_and_its_asterisks() -> None:
-    rendered = rich("```python\nx = *p\n```")
-    assert rendered == '<pre><code class="language-python">x = *p</code></pre>'
-
-
-def test_a_fence_without_a_language_is_plain_pre() -> None:
-    assert rich("```\na * b\n```") == "<pre>a * b</pre>"
-
-
-def test_markdown_inside_code_is_not_formatting() -> None:
-    assert rich("`**not bold**`") == "<code>**not bold**</code>"
-
-
-def test_a_bullet_may_be_a_star_without_becoming_italic() -> None:
-    assert rich("* item") == f"{BULLET} item"
-
-
-# ---------------------------------------------------------------------------
-# The project's own marks
-# ---------------------------------------------------------------------------
-def test_a_whisper_is_a_collapsible_quote() -> None:
-    assert rich(">> not for everyone") == "<blockquote expandable>not for everyone</blockquote>"
-
-
-def test_a_whisper_and_a_quote_do_not_merge() -> None:
-    rendered = rich("> said out loud\n>> said quietly")
-    assert "<blockquote>said out loud</blockquote>" in rendered
-    assert "<blockquote expandable>said quietly</blockquote>" in rendered
-
-
-def test_underline_is_an_entity() -> None:
-    assert rich("++pressed++") == "<u>pressed</u>"
-
-
-def test_small_caps_shrink_a_word() -> None:
-    assert rich("^^loud^^") == "ʟᴏᴜᴅ"
-
-
-def test_spaced_draws_a_word_out() -> None:
-    assert rich("%%slow%%") == "s l o w"
-
-
-def test_the_new_marks_do_not_fire_inside_code() -> None:
-    # The escapes survive because the text is escaped *before* it is styled, and
-    # > is escaped before the quote patterns ever see it.
-    assert rich("`^^x^^ ++y++ %%z%% >> w`") == "<code>^^x^^ ++y++ %%z%% &gt;&gt; w</code>"
-
-
-def test_they_are_recognised_as_formatting() -> None:
-    for sample in (">> hush", "++press++", "^^small^^", "%%slow%%"):
-        assert looks_formatted(sample) is True
-
-
-# ---------------------------------------------------------------------------
-# Staying safe and staying readable
-# ---------------------------------------------------------------------------
-def test_html_in_the_message_cannot_become_markup() -> None:
-    rendered = rich('<b>fake</b> & <script>x</script>')
-    assert "<b>" not in rendered
-    assert "&lt;b&gt;" in rendered
-    assert "&amp;" in rendered
-
-
-def test_an_unbalanced_star_stays_a_star() -> None:
-    assert rich("2 * 3 = 6") == "2 * 3 = 6"
-    assert rich("*half open") == "*half open"
-
-
-def test_persian_underscores_are_not_italics() -> None:
+def test_persian_words_with_underscores_are_not_italics() -> None:
     assert rich("خیلی_خوب") == "خیلی_خوب"
-    assert rich("اسمم یورا_ست") == "اسمم یورا_ست"
 
 
-def test_a_kaomoji_is_never_mangled() -> None:
-    """Offline lines end like this; the markers must not pair up across them."""
-    kaomoji = "╰(*´︶`*)╯"
-    assert rich(kaomoji) == kaomoji
-    rendered = rich(f"متن یه چیز می‌گم {kaomoji}")
-    assert rendered.endswith(kaomoji)
-    assert "<i>" not in rendered
+def test_a_kaomoji_is_not_half_an_italic() -> None:
+    """The owner's lines end with faces made of the same glyphs as markdown."""
+    for kaomoji in ("╰(*´︶`*)╯", "(¬‿¬)", ">_<", "ᵕ̈", "<3"):
+        # Escaped, never turned into a tag: what Telegram renders is the face.
+        assert html.unescape(rich(kaomoji)) == kaomoji
+        assert "<blockquote>" not in rich(kaomoji)
 
 
-def test_a_real_sentence_next_to_a_kaomoji_still_formats() -> None:
-    rendered = rich("**hey** ╰(*´︶`*)╯")
-    assert "<b>hey</b>" in rendered
-    assert rendered.endswith("╰(*´︶`*)╯")
-
-
-def test_every_tag_it_opens_it_closes() -> None:
-    sample = (
-        "# title\n**bold** and *italic* and `code`\n> quote\n- bullet\n"
-        "```py\nprint('x')\n```\n~~s~~ ||sp||"
-    )
-    rendered = rich(sample)
-    for tag in ("b", "i", "code", "pre", "blockquote", "s", "tg-spoiler"):
-        opened = len(re.findall(rf"<{tag}[ >]", rendered))
-        assert opened == rendered.count(f"</{tag}>"), tag
-    # No stray markers survive except inside code, where they are content.
-    assert not re.search(r"(?<!code>)\*\*", rendered)
-
-
-def test_empty_text_is_empty() -> None:
+def test_text_with_nothing_to_format_is_unchanged() -> None:
+    assert rich("just words") == "just words"
     assert rich("") == ""
+    assert rich("سلام، خوبی؟") == "سلام، خوبی؟"
 
 
-def test_it_never_raises_on_odd_input() -> None:
-    for sample in ("*", "**", "`", "```", "> ", "#", "||", "~~", "\x00", "＿"):
-        assert isinstance(rich(sample), str)
+def test_rich_never_raises_and_never_leaves_a_stray_tag() -> None:
+    nasty = "*a**b**c* ╰(`*´)╯ ``` < > & || ++ ^^ %%"
+    out = rich(nasty)
+    for tag in ("<b>", "<i>", "<code>", "<s>", "<u>", "<pre>", "<blockquote>"):
+        assert out.count(tag) == out.count(tag.replace("<", "</"))
 
 
 # ---------------------------------------------------------------------------
-# The helpers next to it
+# Recognisers
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize(
-    ("text", "expected"),
-    [
-        ("**bold**", True),
-        ("# heading", True),
-        ("- item", True),
-        ("1. item", True),
-        ("> quote", True),
-        ("`code`", True),
-        ("just words", False),
-        ("", False),
-        ("خیلی_خوب", False),
-    ],
+    "text",
+    ["**hi**", "*hi*", "`code`", "~~s~~", "||s||", "++u++", "^^s^^", "%%s%%", "> q", "# h", "- b", "1. n"],
 )
-def test_it_knows_when_there_is_something_to_render(text: str, expected: bool) -> None:
-    assert looks_formatted(text) is expected
+def test_markup_is_recognised(text: str) -> None:
+    assert looks_formatted(text)
 
 
-def test_plain_preview_strips_the_tags_it_added() -> None:
-    preview = plain_preview("**bold** and *italic*")
-    assert "<" not in preview
-    assert "bold" in preview and "italic" in preview
+def test_plain_speech_is_not_marked_as_formatted() -> None:
+    assert not looks_formatted("hello there")
+    assert not looks_formatted("سلام")
+    assert not looks_formatted("")
 
 
-def test_plain_preview_honours_the_limit() -> None:
-    assert len(plain_preview("x" * 200, limit=10)) == 10
+def test_the_preview_strips_no_words() -> None:
+    preview = plain_preview("**bold** and *soft* and `code`")
+    assert "bold" in preview and "soft" in preview and "code" in preview

@@ -76,7 +76,7 @@ async def _replies(runtime):
     replies._group_last.clear()
     replies._group_window.clear()
     # 600 is the message she sent: reality is that her own process knows the id.
-    replies._note_own(GROUP, 600)
+    await replies._note_own(GROUP, 600)
     return replies, client
 
 

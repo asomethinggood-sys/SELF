@@ -293,6 +293,58 @@ def quoted_prompt(quoted: str, language: str = "en", question: str = "") -> str:
     return f"{head}\n{question}".strip() if question else head
 
 
+def audience_prompt(
+    *,
+    language: str = "en",
+    chat_title: str = "",
+    speaker: str = "",
+    is_owner: bool = False,
+    is_group: bool = False,
+    transcript: tuple[str, ...] = (),
+) -> str:
+    """Who is talking, and what was being talked about.
+
+    Without this a model in a group has one anonymous message and a memory full
+    of the owner: it answers the owner's friend as if they were the owner, and
+    it cannot tell what "this" refers to in "what do you think about this".
+    """
+    if language == "fa":
+        lines = ["## الان کی داری حرف می‌زنی"]
+        if is_group:
+            room = f"در گروه «{chat_title}»" if chat_title else "در یک گروه"
+            lines.append(f"- {room} هستی، نه در چت خصوصی او.")
+        if speaker:
+            who = "خودِ صاحب چت" if is_owner else f"{speaker} (صاحب چت نیست)"
+            lines.append(f"- آخرین پیام از {who} است. جواب همان کسی را بده که نوشته.")
+        if transcript:
+            lines.append("- چیزهایی که همین الان در این چت گفته شده (از قدیم به جدید):")
+            lines.extend(transcript)
+            lines.append(
+                "- «این» و «اون» و «نظرش چیه» به همین چیزها برمی‌گردد، نه به حدس."
+            )
+        return "\n".join(lines)
+
+    lines = ["## who you are talking to right now"]
+    if is_group:
+        room = f'in the group "{chat_title}"' if chat_title else "in a group"
+        lines.append(f"- you are {room}, not in their private chat.")
+    if speaker:
+        who = (
+            "the owner of this account"
+            if is_owner
+            else f"{speaker} — a member of this chat, NOT the owner"
+        )
+        lines.append(f"- the last message is from {who}. Answer that person, in their name.")
+    if transcript:
+        lines.append("- what has just been said here, oldest first:")
+        lines.extend(transcript)
+        lines.append(
+            '- "this", "that" and "what do you think" point at those lines: read them '
+            "before answering, and never guess what they refer to."
+        )
+    return "\n".join(lines)
+
+
 def caption_prompt(previous: str, language: str = "en") -> str:
     """Ask for a second, different look at the same picture."""
     previous = " ".join(str(previous).split())[:600]
