@@ -249,7 +249,10 @@ async def run() -> dict[str, object]:
         echo = {
             # Measured on what actually reaches the chat: the echo filter runs on
             # the reply path, so the question is whether *its output* is clean.
-            "ok": incoming not in stripped and not stripped.startswith((">", "«")),
+            # Opening with ">" is no longer a failure by itself: a whisper in her
+            # own voice is exactly what the prompt asks for. What must not survive
+            # is *their* words, which is the check that matters.
+            "ok": incoming not in stripped and not stripped.lstrip().startswith("«"),
             "answer": _head(answer, 300),
             "copy_of_the_message": incoming in stripped,
             "copied_before_the_filter": incoming in answer,
