@@ -7,16 +7,17 @@
     "bookmarks": 1,
     "chat_settings": 1,
     "features": 17,
-    "jobs": 676,
+    "jobs": 706,
     "language_prefs": 1,
-    "profile_history": 675,
+    "profile_history": 705,
     "profile_snapshots": 3,
     "schema_migrations": 6,
-    "settings": 26,
+    "settings": 27,
     "sqlite_sequence": 6,
-    "usage_stats": 19,
-    "yura_history": 82,
-    "yura_memory": 17
+    "usage_stats": 20,
+    "yura_history": 98,
+    "yura_memory": 17,
+    "yura_people": 7
   },
   "tables": {
     "aliases": 0,
@@ -29,37 +30,37 @@
     "diagnostics": 0,
     "features": 17,
     "interactive_sessions": 0,
-    "jobs": 676,
+    "jobs": 706,
     "language_prefs": 1,
     "notes": 0,
     "plugins": 0,
-    "profile_history": 675,
+    "profile_history": 705,
     "profile_presets": 0,
     "profile_snapshots": 3,
     "reaction_rules": 0,
     "reminders": 0,
     "schedules": 0,
     "schema_migrations": 6,
-    "settings": 26,
+    "settings": 27,
     "sqlite_sequence": 6,
     "templates": 0,
     "triggers": 0,
-    "usage_stats": 19,
+    "usage_stats": 20,
     "watches": 0,
-    "yura_history": 82,
+    "yura_history": 98,
     "yura_lessons": 0,
     "yura_memory": 17,
-    "yura_people": 0
+    "yura_people": 7
   },
   "restored_from": {
     "cache_hit": "false",
-    "run_id": "41054720054"
+    "run_id": "41058563956"
   },
-  "boot_log_lines": 27,
+  "boot_log_lines": 28,
   "boot_log_tail": [
-    "2026-10-30T11:06:38+00:00 run=41045595679 boots=25 db=462848B",
     "2026-10-30T12:16:45+00:00 run=41054028684 boots=26 db=499712B",
-    "2026-10-30T12:22:28+00:00 run=41054720054 boots=27 db=503808B"
+    "2026-10-30T12:22:28+00:00 run=41054720054 boots=27 db=503808B",
+    "2026-10-30T12:52:58+00:00 run=41058563956 boots=28 db=548864B"
   ],
-  "boots": 27
+  "boots": 28
 }
