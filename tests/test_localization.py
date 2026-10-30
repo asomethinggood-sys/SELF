@@ -175,5 +175,5 @@ def test_a_catalog_may_say_the_word_language(locales: LocaleManager) -> None:
 
 
 def test_interpolation_reports_a_missing_placeholder(locales: LocaleManager) -> None:
-    with pytest.raises(Exception):
+    with pytest.raises(LocaleFormatError):
         locales.interpolate("Hello {missing}", "probe", "en", {})

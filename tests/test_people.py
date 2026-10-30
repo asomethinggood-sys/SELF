@@ -471,3 +471,49 @@ async def test_a_stranger_in_a_dm_still_gets_nothing(runtime) -> None:
     await runtime.persona_replies.on_dm_chat(_dm(runtime, "hey yura"))
     assert runtime.ai.calls == []
     assert runtime.persona_replies.last_skip == "dm_not_allowed"
+
+
+async def test_his_line_in_a_dm_answers_when_her_name_is_in_it(runtime) -> None:
+    """The bug he reported: she did not answer in DMs when he called her.
+
+    In a one-to-one chat with somebody else his own message arrives as outgoing,
+    and the self-chat handler refused it (`not_own_chat`) while the stranger
+    handler refused it too. Now his side is read: her name anywhere in the line,
+    or a reply to one of her messages, is a call — and nothing else is.
+    """
+    await _enable(runtime, reply="hi both of you.")
+    await runtime.persona_replies.on_dm_chat(_owner_dm(runtime, "hey, can you say hi, yura?"))
+    assert runtime.ai.calls, "she ignored a DM that named her"
+    assert runtime.client.sent, "nothing was delivered into the DM"
+    assert runtime.client.sent[-1].chat_id == FRIEND
+
+
+async def test_his_ordinary_dm_line_is_left_alone(runtime) -> None:
+    await _enable(runtime)
+    await runtime.persona_replies.on_dm_chat(_owner_dm(runtime, "ok, see you at nine"))
+    assert runtime.ai.calls == []
+    assert runtime.persona_replies.last_skip == "not_addressed"
+
+
+async def test_a_dm_reply_to_her_message_is_answered(runtime) -> None:
+    await _enable(runtime, reply="as you wish.")
+    await runtime.persona_replies._note_own(FRIEND, 77)
+    hers = FakeMessage(id=77, chat_id=FRIEND, sender_id=OWNER, text="i said what i said", out=True)
+    message = FakeMessage(
+        id=972, chat_id=FRIEND, sender_id=OWNER, text="and then?", out=True,
+        is_private=True, is_group=False, reply=hers,
+    )
+    message.sender = OWNER_USER
+    await runtime.persona_replies.on_dm_chat(
+        normalize_message(message, self_id=OWNER, prefix=".", event_type=EventType.OUTGOING)
+    )
+    assert runtime.ai.calls, "a reply to her own message in a DM was ignored"
+
+
+async def test_the_same_dm_is_not_answered_twice_for_one_line(runtime) -> None:
+    """One line in, one answer out — even with two subscribers looking at it."""
+    await _enable(runtime, reply="once.")
+    event = _owner_dm(runtime, "yura, you there?")
+    await runtime.persona_replies.on_group_message(event)
+    await runtime.persona_replies.on_self_message(event)
+    assert len(runtime.ai.calls) == 1
