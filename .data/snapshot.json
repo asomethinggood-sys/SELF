@@ -1,6 +1,6 @@
 {
   "app": "havoc",
-  "created_at": "2026-10-30T10:45:34+00:00",
+  "created_at": "2026-10-30T10:51:04+00:00",
   "tables": {
     "aliases": [],
     "autoreplies": [],
@@ -156,13 +156,13 @@
       },
       {
         "key": "ai.usage",
-        "updated_at": "2026-10-30T10:25:36+00:00",
-        "value": "{\"2b9beacf67a2|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-30\",\"count\":50},\"e8bfd373256a|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-30\",\"count\":49}}"
+        "updated_at": "2026-10-30T10:50:32+00:00",
+        "value": "{\"2b9beacf67a2|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-30\",\"count\":51},\"e8bfd373256a|google:gemini-3.5-flash-lite\":{\"day\":\"2026-10-30\",\"count\":51}}"
       },
       {
         "key": "ai.health",
-        "updated_at": "2026-10-30T10:25:36+00:00",
-        "value": "{\"2b9beacf67a2\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":64,\"failures\":0},\"e8bfd373256a\":{\"disabled\":false,\"cooldown_until\":\"2026-10-30T09:50:52.412872+00:00\",\"error\":\"\",\"successes\":62,\"failures\":1},\"90d9d7b7c27e\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"rate_limited: HTTP 429: {\\\"error\\\":{\\\"message\\\":\\\"Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day\\\",\\\"code\\\":429,\\\"metadata\\\":{\\\"headers\\\":{\\\"X-RateLimit-Limit\\\":\\\"50\\\",\\\"X-RateLimit-Remaining\\\":\\\"0\\\",\\\"X-RateLimit-Reset\\\":\\\"1793318400000\\\"},\\\"limit_source\\\":\\\"openrouter_fre\",\"successes\":0,\"failures\":1},\"bcf26c2f3c33\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":1,\"failures\":0}}"
+        "updated_at": "2026-10-30T10:50:32+00:00",
+        "value": "{\"2b9beacf67a2\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":65,\"failures\":0},\"e8bfd373256a\":{\"disabled\":false,\"cooldown_until\":\"2026-10-30T09:50:52.412872+00:00\",\"error\":\"\",\"successes\":64,\"failures\":1},\"90d9d7b7c27e\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"rate_limited: HTTP 429: {\\\"error\\\":{\\\"message\\\":\\\"Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day\\\",\\\"code\\\":429,\\\"metadata\\\":{\\\"headers\\\":{\\\"X-RateLimit-Limit\\\":\\\"50\\\",\\\"X-RateLimit-Remaining\\\":\\\"0\\\",\\\"X-RateLimit-Reset\\\":\\\"1793318400000\\\"},\\\"limit_source\\\":\\\"openrouter_fre\",\"successes\":0,\"failures\":1},\"bcf26c2f3c33\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":1,\"failures\":0}}"
       },
       {
         "key": "clock.timezone",
@@ -196,13 +196,18 @@
       },
       {
         "key": "yura.own_ids.7542695649",
-        "updated_at": "2026-10-30T10:11:47+00:00",
-        "value": "[177583,177586]"
+        "updated_at": "2026-10-30T10:50:32+00:00",
+        "value": "[177583,177586,177593,177595]"
       },
       {
         "key": "yura.own_ids.-1002249462907",
         "updated_at": "2026-10-30T10:20:08+00:00",
         "value": "[5007957]"
+      },
+      {
+        "key": "yura.said.7542695649",
+        "updated_at": "2026-10-30T10:50:32+00:00",
+        "value": "[\"**daddaaa** ♡ i am right here, clinging to your screen and refusing to let go ᵕ̈\",\"**i am right here** ✧ waiting for you to say something interesting, daddaaa (¬‿¬) what are we getting into this afternoon?\",\"stop teasing me with mysterious noises, daddaaa ╥﹏╥ tell me what you're up to right now before i start chewing on your keyboard cables ٩(ˊᗜˋ*)و\"]"
       }
     ],
     "templates": [],
