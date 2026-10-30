@@ -172,3 +172,14 @@ def test_a_face_that_contains_a_worn_one_is_also_banned() -> None:
         out = glyphs.restyle_faces("hi " + " ".join(worn) + " ok", worn)
         for face in worn:
             assert face not in out, (face, out)
+
+
+def test_every_occurrence_of_a_worn_glyph_is_swapped() -> None:
+    """Two of the same ornament in one line: both are repeats, not one."""
+    import random
+
+    for _ in range(500):
+        glyph = random.choice(list(glyphs.ALL))
+        out = glyphs.restyle(f"a {glyph} b {glyph} c", {glyph})
+        assert glyph not in out, (glyph, out)
+        assert glyphs.collect(out), out

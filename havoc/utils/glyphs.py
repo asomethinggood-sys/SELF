@@ -347,8 +347,10 @@ def restyle(text: str, used: set[str] | None = None) -> str:
         # from every one already worn; taking it is the same proof ``next_face``
         # gives, with a wider box.
         chars[index] = replacement
+        # ``char`` stays in ``taken``: discarding it was how a second occurrence of
+        # the same ornament could be "swapped" for itself a moment later, which is
+        # the repeat this function exists to prevent.
         taken.add(replacement)
-        taken.discard(char)
     return "".join(chars)
 
 
