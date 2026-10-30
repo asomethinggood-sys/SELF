@@ -1,0 +1,103 @@
+name: Restart
+
+# Hard restart: stop whatever is running, then start clean.
+#
+# The normal path never needs this — a run queues its successor before it starts
+# and the supervisor refills an empty queue. This exists for the case a queue
+# cannot fix: a run that is stuck in front of the concurrency group. The group
+# admits one running and one pending run, and GitHub cancels the *older pending*
+# one whenever a third arrives — so a long, wedged run in front can keep a fresh
+# push from ever starting.
+#
+# It does exactly what the name says, in order:
+#   1. cancel every run of the bot workflow that is in progress or queued,
+#   2. wait until GitHub agrees none are left,
+#   3. dispatch one fresh run.
+#
+# Trigger it from the Actions tab, or by pushing to this file.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/restart.yml"
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: havoc-restart
+  cancel-in-progress: false
+
+jobs:
+  restart:
+    name: stop, then start
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Cancel every live run of the bot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          live='queued in_progress requested waiting pending accepted'
+          ids=$(curl -sS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
+            | python -c "
+          import json, sys
+          runs = json.load(sys.stdin).get('workflow_runs') or []
+          live = {'queued', 'in_progress', 'requested', 'waiting', 'pending', 'accepted'}
+          print(' '.join(str(r['id']) for r in runs
+                         if r.get('name') == 'Auth and run' and str(r.get('status')) in live))
+          ")
+          echo "live runs: ${ids:-none}"
+          for id in $ids; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/runs/${id}/force-cancel")
+            echo "cancel ${id}: HTTP ${code}"
+          done
+
+      - name: Wait for the group to be free
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          for attempt in $(seq 1 30); do
+            left=$(curl -sS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
+              | python -c "
+          import json, sys
+          runs = json.load(sys.stdin).get('workflow_runs') or []
+          live = {'queued', 'in_progress', 'requested', 'waiting', 'pending', 'accepted'}
+          print(sum(1 for r in runs if r.get('name') == 'Auth and run' and str(r.get('status')) in live))
+          ")
+            echo "attempt ${attempt}: ${left} still live"
+            [ "$left" = "0" ] && exit 0
+            sleep 10
+          done
+          echo "::warning::Some runs did not stop; dispatching anyway."
+
+      - name: Start a fresh run
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          # Dispatched directly rather than through scripts/handover.py: that
+          # script deliberately refuses when a run is alive or queued, which is
+          # the right rule for a chain and the wrong one for a restart.
+          code=$(curl -sS -o dispatch.json -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/auth-and-run.yml/dispatches" \
+            -d "{\"ref\":\"${GITHUB_REF_NAME}\"}")
+          echo "dispatch: HTTP ${code}"
+          cat dispatch.json 2>/dev/null || true
+          [ "$code" = "204" ]
+          {
+            echo "### Restart"
+            echo ""
+            echo "Cancelled whatever was live and dispatched a fresh run on \`${GITHUB_REF_NAME}\` (HTTP ${code})."
+          } >> "$GITHUB_STEP_SUMMARY"

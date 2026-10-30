@@ -205,3 +205,29 @@ def test_every_step_that_asks_github_about_runs_has_a_token() -> None:
         env = step.get("env") or {}
         assert "GITHUB_TOKEN" in env, step.get("name")
         assert env["GITHUB_TOKEN"] == "${{ secrets.GITHUB_TOKEN }}", step.get("name")
+
+
+def test_restart_can_actually_clear_a_wedged_run() -> None:
+    """A stuck run in front of the concurrency group is a case a queue cannot fix."""
+    data = _load("restart.yml")
+    job = data["jobs"]["restart"]
+    assert data["permissions"]["actions"] == "write"
+    steps = {step.get("name"): step for step in job["steps"]}
+    cancel = steps["Cancel every live run of the bot"]["run"]
+    assert "force-cancel" in cancel
+    assert "waiting" in cancel and "in_progress" in cancel
+    # It waits for the group to be free before dispatching, or the new run just
+    # queues behind the corpse it was meant to replace.
+    assert "Wait for the group to be free" in steps
+    start = steps["Start a fresh run"]["run"]
+    assert "auth-and-run.yml/dispatches" in start
+    assert 'ref\"' in start or "${GITHUB_REF_NAME}" in start
+
+
+def test_restart_does_not_use_the_refusing_chain_helper() -> None:
+    """handover.py deliberately refuses when something is alive; a restart must not."""
+    steps = _load("restart.yml")["jobs"]["restart"]["steps"]
+    start = next(step["run"] for step in steps if step.get("name") == "Start a fresh run")
+    # The comment may mention it; the code must not call it.
+    code = "\n".join(line for line in start.splitlines() if not line.strip().startswith("#"))
+    assert "handover.py" not in code
