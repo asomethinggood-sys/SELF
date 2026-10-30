@@ -29,7 +29,7 @@ from .services.ai_provider import AIError
 from .services.rate_limiter import RateLimited
 from .services.sender import SendError
 from .services.translation_provider import TranslationError
-from .utils.formatting import bold, code, escape
+from .utils.formatting import code, escape
 from .utils.parsing import ParsedCommand, ParseError, demote_subcommand
 from .utils.time import TimeParseError
 from .utils.validation import ValidationError
@@ -108,10 +108,6 @@ class Command:
     def usage_key(self) -> str:
         return f"cmd.{self.name}.usage"
 
-    @property
-    def all_names(self) -> tuple[str, ...]:
-        return (self.name, *self.aliases)
-
 
 @dataclass
 class CommandContext:
@@ -170,11 +166,6 @@ class CommandContext:
     def has_flag(self, name: str) -> bool:
         return self.parsed.has_flag(name)
 
-    def require_args(self, count: int, hint_key: str = "errors.missing_argument") -> tuple[str, ...]:
-        if len(self.args) < count:
-            usage = self.usage_text()
-            raise CommandError(hint_key, usage=usage)
-        return tuple(self.args[:count])
 
     def usage_text(self) -> str:
         usage = self.t(self.command.usage_key, default="") or self.command.usage
@@ -187,9 +178,6 @@ class CommandContext:
         kwargs.setdefault("dry_run", False)
         return await self.runtime.sender.respond(self.event, text, reply=reply, **kwargs)
 
-    async def reply_error(self, text: str, **kwargs: Any) -> Any:
-        header = self.t("common.error_title")
-        return await self.reply(f"{bold(header)}\n{text}", **kwargs)
 
     async def reply_ok(self, text: str, **kwargs: Any) -> Any:
         return await self.runtime.sender.respond(self.event, f"{self.t('common.ok')} {text}", **kwargs)

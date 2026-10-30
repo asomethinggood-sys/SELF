@@ -81,3 +81,33 @@ Rules of restraint, because a wrong action is worse than a missing one:
 ## Version
 
 `Y.U.R.A 1.7 Open beta` — from `havoc/version.py`, which is the only place it lives.
+
+### Dead code, removed rather than tolerated
+
+Twenty-three functions and properties were defined and never once called — not by
+the package, not by a test, not by the scripts, not by a document. They were the
+residue of two refactors: a storage layer that grew better callers, and a
+command helper layer that stopped using its own helpers.
+
+Gone: `RedactionFilter.add_secret`, `Command.all_names`, `CommandContext.reply_error`,
+`CommandContext.require_args`, `RateLimiter.check_cooldown`, `RateLimiter.check_outbound`
+(a non-blocking twin of `acquire_outbound`, which is the one the sender calls),
+`Store.delete_profile_snapshot`, `Store.get_diagnostic`, `Store.set_diagnostic`,
+`Store.next_schedules`, `Store.next_reminders`, `feature_on`, `ActionCard.has_card`,
+`AIResponse.is_text`, `Person.is_rude`, `PersonBook.set_relation`, `LanguageGuess.is_confident`,
+`IncomingEvent.is_media`, `Scheduler.next_due`, `LocaleManager.report_missing`,
+`validation.validate_int`.
+
+Two were kept and put to work instead, because deleting them would have hidden a
+real gap:
+
+* `LocaleManager.find_placeholders` now checks that a translation carries exactly
+  the placeholders English does. A dropped `{name}` is not a formatting error — it
+  renders, silently missing the name. An extra one raises at render time, inside a
+  handler, which is the "something went wrong" with no explanation.
+* `HavocClient.is_authorized` is what `authorize()` asks now, so a failed session
+  check is reported the same way in every path.
+
+`scripts/audit_live.py` fails on an orphan from this commit on: `dead code ok ·
+orphans 0`, gated in CI. A helper nobody calls is a promise nobody keeps, and the
+sweep is only permanent if the day a new one appears is a red build.

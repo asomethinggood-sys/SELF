@@ -55,10 +55,6 @@ class RateLimiter:
     def cooldown_remaining(self, key: str, seconds: float) -> float:
         return self._cooldowns.remaining(key, seconds)
 
-    def check_cooldown(self, key: str, seconds: float) -> None:
-        remaining = self.cooldown_remaining(key, seconds)
-        if remaining > 0:
-            raise RateLimited(remaining, scope=key)
 
     def touch(self, key: str) -> None:
         self._cooldowns.touch(key)
@@ -71,10 +67,6 @@ class RateLimiter:
     # ------------------------------------------------------------------
     # Outbound window
     # ------------------------------------------------------------------
-    def check_outbound(self) -> None:
-        assert self._outbound is not None
-        if not self._outbound.try_acquire():
-            raise RateLimited(self._outbound.retry_after(), scope="outbound")
 
     async def acquire_outbound(self, timeout: float = 30.0) -> None:
         """Wait for a slot in the outbound window (bounded wait)."""
@@ -138,5 +130,3 @@ class FloodGuard:
         self.last_wait = seconds
         self.limiter.note_flood_wait(seconds)
         return seconds
-
-

@@ -28,10 +28,6 @@ class ValidationError(ValueError):
         super().__init__(f"{code}: {params}" if params else code)
 
 
-
-
-
-
 def validate_template_name(value: str) -> str:
     name = (value or "").strip().lower().replace(" ", "_")
     if not re.fullmatch(rf"[a-z0-9_\-\u0600-\u06FF]{{1,{TEMPLATE_NAME_LIMIT}}}", name):
@@ -64,22 +60,6 @@ def validate_profile_bio(value: str) -> str:
     return bio
 
 
-def validate_int(value: Any, *, minimum: int | None = None, maximum: int | None = None, field: str = "value") -> int:
-    try:
-        number = int(str(value).strip())
-    except (TypeError, ValueError) as exc:
-        raise ValidationError("errors.not_a_number", field=field) from exc
-    if minimum is not None and number < minimum:
-        raise ValidationError("errors.too_small", field=field, minimum=minimum)
-    if maximum is not None and number > maximum:
-        raise ValidationError("errors.too_large", field=field, maximum=maximum)
-    return number
-
-
-
-
-
-
 def validate_chat_id(value: Any) -> int:
     try:
         chat_id = int(str(value).strip())
@@ -94,8 +74,6 @@ def validate_chat_id(value: Any) -> int:
 class TimeRange:
     start_hhmm: str
     end_hhmm: str
-
-
 
 
 #: ``(a+)+`` and friends backtrack catastrophically on ordinary input.
@@ -143,10 +121,6 @@ def validate_timezone(value: str) -> str:
     except (ZoneInfoNotFoundError, ValueError) as exc:
         raise ValidationError("errors.invalid_timezone", value=name) from exc
     return name
-
-
-
-
 
 
 def validate_url(value: str) -> str:

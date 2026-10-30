@@ -140,9 +140,6 @@ class ActionResult:
     title: str = ""
     lines: tuple[str, ...] = ()
 
-    @property
-    def has_card(self) -> bool:
-        return bool(self.title or self.lines)
 
     def as_observation(self) -> str:
         body = self.note or self.detail or "done"

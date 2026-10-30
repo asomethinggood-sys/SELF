@@ -416,9 +416,9 @@ class TelegramService:
         return value
 
     async def authorize(self, *, interactive: bool = True) -> ClientInfo:
-        client = await self.connect()
-        if await client.is_user_authorized():
-            self.me = await client.get_me()
+        # Asked through ``is_authorized`` so a failed session check is reported
+        # the same way everywhere, and ``self.me`` is filled in exactly once.
+        if await self.is_authorized():
             self.logger.info("session authorized as @%s (id=%s)", getattr(self.me, "username", None), getattr(self.me, "id", None))
             return self.info()
 

@@ -127,9 +127,6 @@ class Person:
         """What to call them in a prompt."""
         return self.name or f"the person with id {self.user_id}"
 
-    @property
-    def is_rude(self) -> bool:
-        return self.tone == "rude"
 
     def line(self) -> str:
         """One line for a list command."""
@@ -277,15 +274,6 @@ class PersonBook:
         )
         return True
 
-    async def set_relation(self, user_id: int | None, relation: str) -> bool:
-        if user_id is None:
-            return False
-        await self.touch(user_id)
-        await self.db.execute(
-            "UPDATE yura_people SET relation = ?, updated_at = ? WHERE user_id = ?",
-            (str(relation)[:80], iso(utc_now()), int(user_id)),
-        )
-        return True
 
     async def set_tone(self, user_id: int | None, tone: str) -> bool:
         if user_id is None or tone not in TONES:

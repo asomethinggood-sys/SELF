@@ -142,10 +142,6 @@ class LocaleManager:
     def extra_keys(self, language: str) -> set[str]:
         return self.keys(language) - self.keys(FALLBACK_LANGUAGE)
 
-    def report_missing(self) -> dict[str, list[str]]:
-        return {
-            lang: sorted(self.missing_keys(lang)) for lang in self.languages if lang != FALLBACK_LANGUAGE
-        }
 
     def add_catalog(self, language: str, data: Mapping[str, Any]) -> None:
         """Register additional strings (used by the plugin API)."""
@@ -278,6 +274,24 @@ class LocaleManager:
                     self._check_template(template, key, language)
                 except LocaleFormatError as exc:
                     problems.append(str(exc))
+        # A translation that drops a placeholder is not a formatting error — it
+        # renders, just without the name, the count, the time. The only way to see
+        # it is to compare the sets, so that is what happens here. An *extra*
+        # placeholder is worse: it raises at render time, inside a handler.
+        for language in self.languages:
+            if language == FALLBACK_LANGUAGE:
+                continue
+            for key in sorted(self.keys(language) & self.keys(FALLBACK_LANGUAGE)):
+                expected = self.find_placeholders(key, FALLBACK_LANGUAGE)
+                actual = self.find_placeholders(key, language)
+                if expected == actual:
+                    continue
+                parts = []
+                if expected - actual:
+                    parts.append("missing " + ", ".join(sorted(expected - actual)))
+                if actual - expected:
+                    parts.append("unexpected " + ", ".join(sorted(actual - expected)))
+                problems.append(f"{language}: {key} placeholders differ ({'; '.join(parts)})")
         return problems
 
     def _check_template(self, template: str, key: str, language: str) -> None:
@@ -291,7 +305,7 @@ class LocaleManager:
             raise LocaleFormatError(key, f"positional placeholder in {language} template")
 
     def find_placeholders(self, key: str, language: str = FALLBACK_LANGUAGE) -> set[str]:
-        """Placeholders used by ``key`` — exported for the ``.selfcheck`` command."""
+        """Placeholders used by ``key`` in ``language``."""
         template = self.raw(key, language)
         return {f[1].split(".")[0].split("[")[0] for f in string.Formatter().parse(template) if f[1]}
 

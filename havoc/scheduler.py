@@ -492,8 +492,6 @@ class Scheduler:
         items.sort(key=lambda item: item["when"] or "")
         return items[:limit]
 
-    async def next_due(self, limit: int = 5) -> list[dict[str, Any]]:
-        return (await self.pending(limit=limit))[:limit]
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -509,5 +507,4 @@ class Scheduler:
             "tick_interval": self.tick_interval,
             "missed_policy": self.missed_policy,
         }
-
 

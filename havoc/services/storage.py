@@ -113,8 +113,6 @@ def _as_bool(raw: Any, default: bool = False) -> bool:
     return str(raw).strip().lower() in {"1", "true", "yes", "on"}
 
 
-
-
 class Store:
     """High-level data access used by all features."""
 
@@ -358,11 +356,6 @@ class Store:
             (iso(now), limit),
         )
 
-    async def next_schedules(self, now: datetime, limit: int = 5) -> list[Row]:
-        return await self.db.fetch_all(
-            "SELECT * FROM schedules WHERE enabled = 1 AND run_at > ? ORDER BY run_at LIMIT ?",
-            (iso(now), limit),
-        )
 
     async def get_schedule(self, schedule_id: int) -> Row | None:
         return await self.db.fetch_one("SELECT * FROM schedules WHERE id = ?", (schedule_id,))
@@ -468,11 +461,6 @@ class Store:
             (iso(now), limit),
         )
 
-    async def next_reminders(self, now: datetime, limit: int = 5) -> list[Row]:
-        return await self.db.fetch_all(
-            "SELECT * FROM reminders WHERE status = 'pending' AND remind_at > ? ORDER BY remind_at LIMIT ?",
-            (iso(now), limit),
-        )
 
     async def complete_reminder(self, reminder_id: int, *, next_at: datetime | None = None, slot: str | None = None) -> bool:
         if next_at is None:
@@ -762,18 +750,6 @@ class Store:
     async def usage_stats(self) -> list[Row]:
         return await self.db.fetch_all("SELECT * FROM usage_stats ORDER BY feature, counter")
 
-    async def set_diagnostic(self, key: str, value: Any) -> None:
-        await self.db.execute(
-            """
-            INSERT INTO diagnostics(key, value, updated_at) VALUES(?, ?, ?)
-            ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-            """,
-            (key, _encode(value), iso(utc_now())),
-        )
-
-    async def get_diagnostic(self, key: str, default: Any = None) -> Any:
-        row = await self.db.fetch_one("SELECT value FROM diagnostics WHERE key = ?", (key,))
-        return default if row is None else _decode(row["value"], default)
 
     # ------------------------------------------------------------------
     # Profile snapshots / presets / history
@@ -791,8 +767,6 @@ class Store:
         row = await self.db.fetch_one("SELECT value FROM profile_snapshots WHERE field = ?", (field,))
         return row["value"] if row else None
 
-    async def delete_profile_snapshot(self, field: str) -> None:
-        await self.db.execute("DELETE FROM profile_snapshots WHERE field = ?", (field,))
 
     async def add_profile_preset(
         self,

@@ -65,10 +65,6 @@ def section(title: str, body: str) -> str:
     return f"{bold(title)}\n{body}"
 
 
-
-
-
-
 def fmt_time(iso_value: str | None, tz: str, language: str) -> str:
     moment = parse_iso(iso_value)
     if moment is None:
@@ -78,8 +74,6 @@ def fmt_time(iso_value: str | None, tz: str, language: str) -> str:
 
 def snippet(text: str, limit: int = 60) -> str:
     return escape(truncate(" ".join(text.split()), limit))
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -95,12 +89,6 @@ async def chat_language(ctx: CommandContext) -> str:
         chat_id=ctx.chat_id,
         sender_id=getattr(ctx.event, "sender_id", None),
     )
-
-
-async def feature_on(ctx: CommandContext, name: str) -> bool:
-    return await ctx.runtime.feature_manager.is_enabled(name)
-
-
 
 
 async def resolve_target(ctx: CommandContext, raw: str) -> tuple[int | None, Any | None, str | None]:
@@ -157,31 +145,11 @@ def paginate(items: Sequence[Any], page: int, per_page: int = 10) -> tuple[list[
     return list(items[start : start + per_page]), total_pages
 
 
-
-
-
-
-
-
-
-
-
-
 def parse_page_arg(raw: str | None) -> int:
     try:
         return max(1, int(str(raw).strip()))
     except (TypeError, ValueError):
         return 1
-
-
-
-
-
-
-
-
-
-
 
 
 def chat_link(entity: Any) -> str | None:
@@ -214,5 +182,4 @@ def human_duration(seconds: int | None) -> str:
     if hours:
         return f"{hours}:{minutes:02d}:{secs:02d}"
     return f"{minutes}:{secs:02d}"
-
 

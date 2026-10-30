@@ -44,9 +44,6 @@ class AIMessage:
     role: str
     content: Any
 
-    @property
-    def is_text(self) -> bool:
-        return isinstance(self.content, str)
 
     @property
     def text(self) -> str:
@@ -388,7 +385,5 @@ def _content_of_message(message: object) -> str:
     # A whitespace-only answer is an empty answer: a free model that returns
     # "\n\n" must fall through to the next candidate, not reach the chat.
     return content.strip() if isinstance(content, str) else ""
-
-
 
 

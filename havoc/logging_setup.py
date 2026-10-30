@@ -30,9 +30,6 @@ class RedactionFilter(logging.Filter):
         super().__init__()
         self.secrets = [secret for secret in secrets if secret]
 
-    def add_secret(self, secret: str | None) -> None:
-        if secret and secret not in self.secrets:
-            self.secrets.append(secret)
 
     def filter(self, record: logging.LogRecord) -> bool:
         try:
@@ -129,5 +126,4 @@ def recent_errors(log_dir: Path | str = "logs", limit: int = 5) -> list[str]:
         return []
     errors = [line.strip() for line in lines if "| ERROR" in line or "| CRITICAL" in line]
     return errors[-limit:]
-
 

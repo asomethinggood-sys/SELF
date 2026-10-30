@@ -101,9 +101,6 @@ class NormalizedEvent:
     raw: Any = field(default=None, repr=False)
     extra: dict[str, Any] = field(default_factory=dict)
 
-    @property
-    def is_media(self) -> bool:
-        return self.media_type in MEDIA_TYPES
 
     @property
     def language_estimate(self) -> LanguageEstimate:
@@ -472,10 +469,6 @@ class EventEngine:
                 for sub in self.subscriptions
             ],
         }
-
-
-
-
 
 
 def now_event(event_type: EventType, *, chat_id: int = 0, **extra: Any) -> NormalizedEvent:

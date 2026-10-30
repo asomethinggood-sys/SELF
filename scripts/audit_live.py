@@ -310,7 +310,10 @@ def _dead_code(root: Path) -> dict[str, Any]:
             if re.search(r"except\s*:", line):
                 bare_excepts.append({"file": str(path.relative_to(root)), "line": index})
     return {
-        "ok": not todos and not bare_excepts,
+        # Orphans count as rot now: a helper nobody calls is a promise nobody
+        # keeps. The sweep that emptied this list is only permanent if it fails
+        # the day a new one appears.
+        "ok": not todos and not bare_excepts and not orphans,
         "orphans": orphans,
         "todos": todos,
         "bare_excepts": bare_excepts,
@@ -429,6 +432,8 @@ async def main() -> int:
             print(f"  ✗ locale missing (en): {entry}")
         for entry in record["locales"]["missing_fa"][:10]:
             print(f"  ✗ locale missing (fa): {entry}")
+        for entry in record["dead_code"]["orphans"][:15]:
+            print(f"  ✗ unreferenced: {entry['file']} :: {entry['function']}")
         for entry in record["sql"]["broken"][:10]:
             print(f"  ✗ {entry['file']}: {entry['sql']} — {entry['error']}")
         for entry in record["actions"]["broken"][:10]:

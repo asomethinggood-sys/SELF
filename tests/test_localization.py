@@ -12,6 +12,7 @@ from havoc.localization import (
     digits_for,
     normalize_language_code,
 )
+from havoc.version import VERSION
 
 
 @pytest.fixture(scope="module")
@@ -35,11 +36,11 @@ def test_validate_reports_no_problems(locales: LocaleManager) -> None:
 
 
 def test_translation_and_fallback(locales: LocaleManager) -> None:
-    assert "Y.U.R.A" in locales.t("about.title", "en", version="1.6", stage="Open beta")
-    farsi = locales.t("about.title", "fa", version="1.6", stage="Open beta")
-    assert "Y.U.R.A" in farsi and "1.6" in farsi
+    assert "Y.U.R.A" in locales.t("about.title", "en", version=VERSION, stage="Open beta")
+    farsi = locales.t("about.title", "fa", version=VERSION, stage="Open beta")
+    assert "Y.U.R.A" in farsi and VERSION in farsi
     # unknown language falls back to English rather than raising
-    assert "Y.U.R.A" in locales.t("about.title", "de", version="1.6", stage="Open beta")
+    assert "Y.U.R.A" in locales.t("about.title", "de", version=VERSION, stage="Open beta")
 
 
 def test_missing_key_raises_or_defaults(locales: LocaleManager) -> None:
@@ -104,3 +105,21 @@ def test_persian_strings_contain_no_arabic_letter_variants(locales: LocaleManage
     """Quality gate: Persian catalogs must not use Arabic ي/ك."""
     offenders = [key for key in locales.keys("fa") if "ي" in locales.raw(key, "fa") or "ك" in locales.raw(key, "fa")]
     assert offenders == []
+
+
+def test_a_translation_that_drops_a_placeholder_is_reported() -> None:
+    """The name is not a formatting error when it is simply gone."""
+    manager = LocaleManager(DEFAULT_LOCALE_DIR)
+    manager.add_catalog("fa", {"greeting": "سلام!"})
+    manager.add_catalog("en", {"greeting": "hello {name}"})
+    problems = manager.validate()
+    assert any("greeting" in problem and "missing name" in problem for problem in problems)
+
+
+def test_a_translation_with_an_extra_placeholder_is_reported() -> None:
+    """Worse than missing: an extra one raises at render time, inside a handler."""
+    manager = LocaleManager(DEFAULT_LOCALE_DIR)
+    manager.add_catalog("fa", {"bye": "خداحافظ {name}"})
+    manager.add_catalog("en", {"bye": "goodbye"})
+    problems = manager.validate()
+    assert any("bye" in problem and "unexpected name" in problem for problem in problems)

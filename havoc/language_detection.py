@@ -76,9 +76,6 @@ class LanguageEstimate:
     mixed: bool = False
     reason: str = ""
 
-    @property
-    def is_confident(self) -> bool:
-        return self.confidence >= CONFIDENCE_FLOOR and self.language != "unknown"
 
     def resolve(self, fallback: str = "en") -> str:
         """Return a usable language code, applying ``fallback`` when unsure."""
