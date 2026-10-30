@@ -227,6 +227,22 @@ def fresh_faces(*, avoid: set[str] | None = None, count: int = 3) -> list[str]:
     return random.sample(pool, k=min(count, len(pool)))
 
 
+def next_face(*, avoid: set[str] | None = None) -> str:
+    """The first face that shares no character run with anything in ``avoid``.
+
+    Deterministic on purpose. A *swap* — the one thing that fires when she repeats
+    herself — must be guaranteed to actually differ, and "random.choice from the
+    allowed pool" is only guaranteed when the pool filter is perfect. Picking the
+    first allowed candidate is a proof, not a hope; variety in ordinary answers
+    comes from the brief and the model, not from this function.
+    """
+    taken = set(avoid or ())
+    for face in FACES:
+        if not _overlaps(face, taken):
+            return face
+    return FACES[0]
+
+
 def signature(*, avoid: set[str] | None = None) -> str:
     """One fresh ornament for this message, and it is hers to open with."""
     return fresh(avoid=avoid, role="open", count=1)[0]
@@ -241,7 +257,7 @@ def restyle_faces(text: str, used: set[str] | None = None) -> str:
     for face in used:
         if face not in body:
             continue
-        replacement = fresh_faces(avoid=taken, count=1)[0]
+        replacement = next_face(avoid=taken)
         body = body.replace(face, replacement)
         # Both stay in ``taken``: a face used twice in one answer must not be
         # swapped for a second copy of the same replacement.
@@ -323,11 +339,15 @@ def restyle(text: str, used: set[str] | None = None) -> str:
             continue
         if not _standalone(body, index):
             continue
-        candidates = fresh(avoid=taken, role=_role_for(_OWNER[char]), count=1)
+        candidates = fresh(avoid=taken, role=_role_for(_OWNER[char]), count=8)
         if not candidates:
             continue
-        chars[index] = candidates[0]
-        taken.add(candidates[0])
+        replacement = candidates[0]
+        # ``fresh`` is a shuffled pool, so the first entry is a different glyph
+        # from every one already worn; taking it is the same proof ``next_face``
+        # gives, with a wider box.
+        chars[index] = replacement
+        taken.add(replacement)
         taken.discard(char)
     return "".join(chars)
 
