@@ -12,6 +12,8 @@ from pathlib import Path
 import pytest
 from conftest import FakeMessage, invoke, last_text, sent_text
 
+from havoc.version import VERSION
+
 
 # ---------------------------------------------------------------------------
 # Core commands
@@ -45,7 +47,7 @@ async def test_commands_is_paginated(runtime) -> None:
 async def test_status_reports_runtime_facts(runtime) -> None:
     await invoke(runtime, ".status")
     text = last_text(runtime)
-    assert "2.0.0" in text
+    assert VERSION in text
     assert runtime.prefix in text
 
 

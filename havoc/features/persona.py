@@ -33,7 +33,7 @@ from ..services import yura_chat as yura_chat_module
 from ..services.context import build as build_context
 from ..services.vision import IMAGE_MEDIA_TYPES, Picture, looks_like_picture
 from ..services.vision import download as download_picture
-from ..utils.formatting import bold, escape, strip_html
+from ..utils.formatting import escape, strip_html
 from ..utils.markup import rich
 from ..utils.mood import mood_line
 from ..utils.security import redact_text
@@ -740,15 +740,18 @@ async def _agent_command(ctx: CommandContext, action: str, words: list[str]) -> 
         return
     if action in {"tools", "abilities"}:
         rows = [
-            ctx.t(
-                "actions.tool_row",
-                name=tool.name,
-                args=", ".join(tool.properties) or "-",
-                summary=tool.summary,
-            )
+            ui.fact_line("▲", f"{tool.name}({', '.join(tool.properties) or '-'}) — {tool.summary}")
             for tool in layer.offered()
         ]
-        await ctx.reply("\n".join([bold(ctx.t("actions.tools_header")), *map(escape, rows)]))
+        await ctx.reply(
+            ui.card(
+                ctx.t("actions.tools_header").lstrip("⟡ ").strip(),
+                (),
+                icon="⟡",
+            )
+            + "\n"
+            + "\n".join(rows)
+        )
         return
     word = (words[0].lower() if words else "").strip()
     if not word:
@@ -796,21 +799,30 @@ async def _actions_command(ctx: CommandContext, words: list[str]) -> None:
     if not rows:
         await ctx.reply(ctx.t("actions.empty"))
         return
-    lines = [bold(ctx.t("actions.header"))]
-    for row in rows:
-        when = str(row.get("created_at", ""))[11:16]
-        lines.append(
-            escape(
-                ctx.t(
-                    "actions.row",
-                    id=row.get("id", "—"),
-                    tool=row.get("tool", "?"),
-                    status=row.get("status", "?"),
-                    when=when,
-                )
-            )
+    when = str(rows[0].get("created_at", ""))[11:16] if rows else ""
+    body = [
+        ui.fact_line(
+            "◇",
+            ctx.t(
+                "actions.row",
+                id=row.get("id", "—"),
+                tool=row.get("tool", "?"),
+                status=row.get("status", "?"),
+                when=str(row.get("created_at", ""))[11:16],
+            ),
         )
-    await ctx.reply("\n".join(lines))
+        for row in rows
+    ]
+    await ctx.reply(
+        ui.card(
+            ctx.t("actions.header").lstrip("⟡ ").strip(),
+            (),
+            icon="⟡",
+            footer=when,
+        )
+        + "\n"
+        + "\n".join(body)
+    )
 
 
 #: Her sent message ids, per chat, persisted so a restart does not erase the fact

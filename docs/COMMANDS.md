@@ -9,7 +9,7 @@ account other than the logged-in user.
 `.` in the usage column stands for the active prefix (default `.`).
 
 
-Total: **72 commands**.
+Total: **73 commands**.
 
 
 ## Ai
@@ -91,6 +91,7 @@ Total: **72 commands**.
 | `.config` | Show the effective configuration with secrets redacted _(owner only)._ | `.config` | `.پیکربندی` |
 | `.export` | Export selected application data as a JSON file _(owner only; changes state)._ | `.export <bookmarks|notes|settings|reminders|templates|rules|all>` | `.خروجی` |
 | `.labels` | Label this chat locally _(owner only; changes state)._ | `.labels [list|add|remove]` | `.label`, `.برچسب‌ها` |
+| `.owner` | Who owns her: the only accounts that can change her mind _(owner only; changes state)._ | `.owner [list | add @handle | remove <id>]` | — |
 | `.plugins` | List and manage local plugins _(owner only; changes state)._ | `.plugins [list|reload|enable|disable]` | `.افزونه‌ها` |
 | `.prefix` | Change the command prefix _(owner only; changes state; asks for confirmation)._ | `.prefix <new|reset>` | `.پیشوند` |
 | `.quick` | Manage quick actions that run a command _(owner only; changes state)._ | `.quick [list|add|remove|run] <name>` | `.میان‌بر` |

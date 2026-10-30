@@ -41,6 +41,7 @@ from .services.translation_provider import build_translation_provider
 from .services.yura_chat import YuraChat
 from .utils.security import redact_text
 from .utils.time import utc_now
+from .version import VERSION
 
 
 class RuntimeError_(Exception):
@@ -99,6 +100,9 @@ class Runtime:
         locales = LocaleManager().load()
         limiter = RateLimiter(outbound_limit=config.outbound_rate_limit)
         permissions = Permissions(config, store)
+        # Whatever was resolved at the last login, so the first message needs no
+        # network call to know who the owner is.
+        await permissions.load()
 
         # Several keys across several providers, rotated with persisted budgets
         # and health. The router duck-types AIProvider, so every feature that
@@ -238,6 +242,28 @@ class Runtime:
         if telegram is not None and getattr(telegram, "me", None) is not None:
             self.permissions.set_self_id(getattr(telegram.me, "id", None))
 
+    async def adopt_owners(self) -> dict[str, int]:
+        """Resolve the configured handles to ids. Called once, after login.
+
+        Until this succeeds the account itself is still the owner, so the bot is
+        never *locked out* by a failed lookup — it is only less sure who else is
+        allowed to touch it.
+        """
+        try:
+            found = await self.permissions.resolve_handles(self.client)
+        except Exception as exc:  # noqa: BLE001 - a lookup must never stop a boot
+            self.logger.warning("owner lookup failed: %s", exc)
+            return {}
+        if found:
+            names = ", ".join(f"@{handle}" for handle in found)
+            self.logger.info("yura: owner(s) resolved — %s", names)
+        unresolved = [h for h in self.permissions.handles if h not in found]
+        if unresolved:
+            self.logger.warning(
+                "yura: could not resolve owner handle(s): %s", ", ".join("@" + h for h in unresolved)
+            )
+        return found
+
     # ------------------------------------------------------------------
     # Localization
     # ------------------------------------------------------------------
@@ -344,7 +370,7 @@ class Runtime:
             failed = [record for record in records if not record.loaded]
             if failed:
                 self.logger.warning("%s plugin(s) failed to load", len(failed))
-        await self.event_engine.emit(now_event(EventType.STARTUP, extra={"version": "2.0.0"}))
+        await self.event_engine.emit(now_event(EventType.STARTUP, extra={"version": VERSION}))
 
     async def shutdown(self) -> None:
         self.logger.info("shutting down")

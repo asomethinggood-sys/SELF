@@ -117,12 +117,24 @@ class ToolCall:
 
 @dataclass(frozen=True)
 class ActionResult:
-    """What a tool did, and what the model should be told about it."""
+    """What a tool did, what the model is told, and what the owner sees.
 
-    ok: bool
+    ``note`` is for the model (machine-ish is fine: "#1 at 14:33 UTC"). ``title``
+    and ``lines`` are for the card under her answer — already localized by the
+    tool, because a tool knows the words for what it just did and the display
+    layer only knows how to draw them.
+    """
+
+    ok: bool = True
     note: str = ""
     detail: str = ""
     kind: str = "ok"
+    title: str = ""
+    lines: tuple[str, ...] = ()
+
+    @property
+    def has_card(self) -> bool:
+        return bool(self.title or self.lines)
 
     def as_observation(self) -> str:
         body = self.note or self.detail or "done"
@@ -258,6 +270,8 @@ class Outcome:
     tool: str = ""
     note: str = ""
     token: str = ""
+    #: What the card says: a localized title and its italic lines.
+    card: tuple[str, tuple[str, ...]] = ("", ())
 
     @property
     def ok(self) -> bool:
@@ -369,6 +383,14 @@ class ActionLayer:
     # ------------------------------------------------------------------
     async def execute(self, call: ToolCall, turn: Turn) -> Outcome:
         """Check, record, run, record. The only way anything happens."""
+        # The owner's hands. Not "anyone in the room the owner is also in": a
+        # stranger who talks to her may talk, and may not make her *do* anything.
+        if not turn.is_owner:
+            await self._audit(turn, self.get(call.name) or Tool(
+                name=call.name[:40] or "unknown", summary="", properties={},
+                run=_noop, scope="read",
+            ), call, decision="refused", status="refused", error="not the owner")
+            return Outcome("refused", tool=call.name, note="not the owner")
         tool = self.get(call.name)
         if tool is None:
             return Outcome("failed", tool=call.name, note=f"there is no tool called {call.name}")
@@ -418,7 +440,10 @@ class ActionLayer:
         if result.ok:
             turn.done.append(tool.name)
         return Outcome(
-            "done" if result.ok else "failed", tool=tool.name, note=result.as_observation()
+            "done" if result.ok else "failed",
+            tool=tool.name,
+            note=result.as_observation(),
+            card=(result.title, tuple(result.lines)),
         )
 
     async def _count_outcome(self, tool: Tool, *, ok: bool) -> None:
@@ -448,6 +473,7 @@ class ActionLayer:
             "chat_id": turn.chat_id,
             "actor_id": turn.actor_id,
             "language": turn.language,
+            "is_owner": bool(turn.is_owner),
             "expires_at": (utc_now() + CONFIRM_WINDOW).isoformat(),
         }
         try:
@@ -496,6 +522,8 @@ class ActionLayer:
             chat_id=chat_id,
             actor_id=int(record.get("actor_id", 0) or 0),
             language=str(record.get("language", "en") or "en"),
+            # Who asked is who was asked; the yes itself is already owner-only.
+            is_owner=bool(record.get("is_owner", True)),
             approved={tool.name},
         )
         return await self.execute(ToolCall(tool.name, dict(record.get("args") or {})), turn)
@@ -570,6 +598,11 @@ class ActionLayer:
         except Exception:  # noqa: BLE001
             return []
         return [dict(row) for row in rows]
+
+
+async def _noop(turn: Turn, args: Mapping[str, Any]) -> ActionResult:  # pragma: no cover
+    """Placeholder handler for an audit row about a tool that does not exist."""
+    return ActionResult(False, detail="nothing ran", kind="refused")
 
 
 # ---------------------------------------------------------------------------

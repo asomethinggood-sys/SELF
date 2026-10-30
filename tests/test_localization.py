@@ -35,11 +35,11 @@ def test_validate_reports_no_problems(locales: LocaleManager) -> None:
 
 
 def test_translation_and_fallback(locales: LocaleManager) -> None:
-    assert "Yura" in locales.t("about.title", "en", version="2.0.0")
-    farsi = locales.t("about.title", "fa", version="2.0.0")
-    assert "یورا" in farsi
+    assert "Y.U.R.A" in locales.t("about.title", "en", version="1.6", stage="Open beta")
+    farsi = locales.t("about.title", "fa", version="1.6", stage="Open beta")
+    assert "Y.U.R.A" in farsi and "1.6" in farsi
     # unknown language falls back to English rather than raising
-    assert "Yura" in locales.t("about.title", "de", version="2.0.0")
+    assert "Y.U.R.A" in locales.t("about.title", "de", version="1.6", stage="Open beta")
 
 
 def test_missing_key_raises_or_defaults(locales: LocaleManager) -> None:

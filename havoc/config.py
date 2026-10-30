@@ -81,6 +81,18 @@ def _parse_int(raw: str | None) -> tuple[int | None, bool]:
         return None, False
 
 
+def _split_handles(value: str | None) -> tuple[str, ...]:
+    """``@a, b`` → ``("a", "b")``. A handle is stored without its @, lowercased."""
+    if not value:
+        return ()
+    out = []
+    for part in re.split(r"[,\s]+", value):
+        handle = part.strip().lstrip("@").lower()
+        if handle:
+            out.append(handle)
+    return tuple(dict.fromkeys(out))
+
+
 def _split_ids(raw: str | None) -> tuple[int, ...]:
     if not raw:
         return ()
@@ -186,6 +198,11 @@ class Config:
     #: Where the committed credentials live. Several keys, several providers: the
     #: file is base64 so a public repository's push protection accepts it.
     ai_keys_path: str = ".auth/ai-keys.json"
+    #: Owners named the way a person names themselves. A username is the only
+    #: handle that is stable, human-readable and safe to commit; the numeric id
+    #: behind it is resolved once at login and stored in the database, so nothing
+    #: has to be re-read from Telegram on every message.
+    owner_usernames: tuple[str, ...] = ("edited_by_nyx",)
     translate_provider: str = "none"
     libretranslate_url: str = ""
     libretranslate_api_key: str = field(default="", repr=False)
@@ -250,6 +267,15 @@ class Config:
         if self.translate_provider == "libretranslate":
             return bool(self.libretranslate_url)
         return True
+
+    def __post_init__(self) -> None:
+        # A handle is written by a human: "@Edited_By_Nyx", " edited_by_nyx ".
+        # Normalise here so the env loader and a directly built Config agree.
+        # ``object.__setattr__`` because Config is frozen: this is normalisation,
+        # not a change of meaning.
+        object.__setattr__(
+            self, "owner_usernames", _split_handles(",".join(self.owner_usernames or ()))
+        )
 
     def redacted(self) -> dict[str, object]:
         """A dict safe to log or show in diagnostics."""
@@ -463,6 +489,7 @@ def load_config(
         default_language=(raw("DEFAULT_LANGUAGE") or "en").lower(),
         timezone=raw("TIMEZONE") or "Asia/Tehran",
         owner_ids=_split_ids(env.get("OWNER_IDS")),
+        owner_usernames=_split_handles(env.get("OWNER_USERNAMES")) or ("edited_by_nyx",),
         automation_allowlist=_split_ids(env.get("AUTOMATION_ALLOWLIST")),
         automation_denylist=_split_ids(env.get("AUTOMATION_DENYLIST")),
         dry_run=bool_of("DRY_RUN", False),

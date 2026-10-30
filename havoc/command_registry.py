@@ -374,9 +374,13 @@ class CommandRegistry:
     ) -> list[str]:
         """The help index, as one string per message, split between categories."""
         locales.enabled_features = {name for name, on in (features or {}).items() if on}
-        header = ui.title(
+        # The index opens like every other screen: a mark, the name, then a drawn
+        # line. One screen that looks designed and forty that look dumped is worse
+        # than neither, so the header is the same shape as an action card.
+        heading = ui.title(
             "❥", locales.t("help.header", language, prefix=prefix).replace("— prefix", ui.DOT + " prefix")
         )
+        header = f"{heading}\n{ui.drawn_rule(locales.t('help.index', language), glyph=ui.mark())}"
         sections: list[str] = []
         for category, commands in self.by_category().items():
             icon = ui.CATEGORY_ICONS.get(category, "◇")
@@ -402,7 +406,8 @@ class CommandRegistry:
             else:
                 current.append(section)
         current.append(footer)
-        chunks.append("\n\n".join(current))
+        # The signature: one glyph, on the last screen only.
+        chunks.append("\n\n".join(current) + "\n" + ui.end_mark())
         return chunks
 
     def help_text(

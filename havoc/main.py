@@ -130,6 +130,9 @@ async def command_run(args: argparse.Namespace) -> int:
         return EXIT_CONFIG
     runtime.attach_client(telegram, telegram.client, info)
     runtime.permissions.set_self_id(info.user_id)
+    # One lookup, at login: the handles in the config become ids that every later
+    # message checks against, with no network on the hot path.
+    await runtime.adopt_owners()
     runtime.health.mark_connected()
 
     from .handlers import SystemEventBridge

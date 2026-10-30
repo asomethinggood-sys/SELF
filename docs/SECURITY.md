@@ -65,6 +65,22 @@ is a bot-only feature.
 There is no `send_message` tool. She already speaks, and a tool that can address
 an arbitrary chat is a spam cannon with a personality.
 
+## Who is allowed to touch her
+
+Ownership is a short list and it is the whole gate:
+
+* `OWNER_USERNAMES` (default `edited_by_nyx`) — handles, resolved to ids once at
+  login via `get_entity`, then stored in `owner.resolved` so no message ever waits
+  on a network call to decide who is speaking;
+* `OWNER_IDS` — ids, for anyone who would rather not depend on a lookup;
+* the logged-in account — always, so a failed lookup cannot lock the owner out.
+
+Only an owner can run a command, change a setting, change *who* the owner is
+(`.owner add|remove`), or make her use a hand. A guest may talk to her — that is
+the product — and gets her voice, the room's manners and a tone of their own. A
+guest's turn never even carries the tool catalogue, so there is nothing to talk
+her into.
+
 ## Telegram-side hardening
 
 - Use a session file that lives outside any synced folder.

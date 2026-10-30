@@ -16,6 +16,7 @@ Feature area: 30 (message formatting toolkit), 63 (Persian display).
 
 from __future__ import annotations
 
+from collections import deque
 from collections.abc import Iterable, Sequence
 
 from .utils.formatting import bold, code, escape, italic, pre, quote
@@ -184,3 +185,108 @@ def code_block(lines: Iterable[str]) -> str:
 def numbered(options: Sequence[str], *, start: int = 1) -> str:
     """A menu: ``1 · Yura's voice`` so a reply of ``1`` is an obvious answer."""
     return "\n".join(f"{code(str(index))} {italic(DOT)} {option}" for index, option in enumerate(options, start))
+
+
+# ---------------------------------------------------------------------------
+# The immersive card
+# ---------------------------------------------------------------------------
+#: The line the owner asked for: a drawn rule made of Arabic tatweel, the one
+#: character that renders as a clean horizontal stroke in every client — Latin
+#: box-drawing characters look thin on Android and disappear on some fonts.
+RULE_CHAR = "ـ"
+#: Glyphs that sit *in* the rule, and glyphs that close a card. Kept apart from the
+#: kaomoji box: these are typographic, not faces.
+RULE_GLYPHS: tuple[str, ...] = ("◈", "❖", "⟡", "✦", "✧", "❦", "⌁", "⟐", "◉", "❈", "⊹", "⌘")
+CLOSING_GLYPHS: tuple[str, ...] = (
+    "☾", "✧", "❧", "◗", "⁘", "⌬", "❈", "⟡", "⸙", "◈", "⊹", "❖", "᯽", "✶",
+)
+#: Recently used, so two cards in a row never open on the same mark. Two windows,
+#: not one: a closing glyph must not be able to "spend" a rule mark, or a short
+#: run of cards starts repeating long before the pools are exhausted.
+_recent_rules: deque[str] = deque(maxlen=8)
+_recent_ends: deque[str] = deque(maxlen=8)
+
+
+def _pick(pool: Sequence[str], *, avoid: Iterable[str] = (), recent: deque[str] | None = None) -> str:
+    """A glyph from ``pool`` that has not been used lately, else the oldest one."""
+    window = recent if recent is not None else _recent_rules
+    blocked = set(avoid) | set(window)
+    for candidate in pool:
+        if candidate not in blocked:
+            window.append(candidate)
+            return candidate
+    choice = window[0] if window else pool[0]
+    window.append(choice)
+    return choice
+
+
+def drawn_rule(line: str = "", *, width: int = 9, glyph: str = "") -> str:
+    """``ـــ⟡ـــ`` — a drawn line, optionally with a mark in the middle.
+
+    ``line`` (a word or two) is printed *after* the rule in bold, which is the
+    shape the owner drew: the mark, the rule, the name of the thing.
+    """
+    mark = glyph or _pick(RULE_GLYPHS)
+    drawn = f"{RULE_CHAR * width}{mark}{RULE_CHAR * width}"
+    if not line:
+        return bold(drawn)
+    return f"{bold(drawn)}  {bold(line)}"
+
+
+def mark() -> str:
+    """A fresh rule mark, for a header drawn outside :func:`card`."""
+    return _pick(RULE_GLYPHS, recent=_recent_rules)
+
+
+def end_mark() -> str:
+    """A fresh closing glyph, for the last line of a screen."""
+    return _pick(CLOSING_GLYPHS, recent=_recent_ends)
+
+
+def closing(glyph: str = "") -> str:
+    """The one-glyph signature at the bottom of a card."""
+    return escape(glyph or _pick(CLOSING_GLYPHS, recent=_recent_ends))
+
+
+def card(
+    title: str,
+    lines: Sequence[str] = (),
+    *,
+    icon: str = "◈",
+    glyph: str = "",
+    end: str = "",
+    footer: str = "",
+) -> str:
+    """A designed action card: mark, bold title, drawn rule, italic facts, signature.
+
+    The shape, exactly as asked for:
+
+    ``◈ **Tool called**``
+    ``ـــ⟡ـــ``
+    ``*Reminder set for 30 minutes*``
+    ``*You'll be reminded in the same chat*``
+    ``☾``
+
+    Every part is escaped here, so callers pass words, not markup. The rule mark
+    and the closing glyph are different on every card — that is the whole point of
+    a signature: it should look like it was drawn for this one message.
+    """
+    mark = glyph or _pick(RULE_GLYPHS, recent=_recent_rules)
+    body = [f"{escape(icon)} {bold(title)}" if icon else bold(title)]
+    body.append(drawn_rule(width=9, glyph=mark))
+    body.extend(italic(line) for line in lines if str(line).strip())
+    tail = closing(end)
+    body.append(tail)
+    if footer:
+        body.append(footer_block(footer))
+    return "\n".join(body)
+
+
+def footer_block(text: object) -> str:
+    """A quieter closing note, indented by a mark rather than another paragraph."""
+    return f"<blockquote>{italic(text)}</blockquote>"
+
+
+def fact_line(label: str, value: object) -> str:
+    """``⏱ 30 minutes`` — an italic label and a plain value, for card bodies."""
+    return f"{italic(label + ' ' + DOT)} {escape(value)}"

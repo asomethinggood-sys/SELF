@@ -33,11 +33,11 @@ import zlib
 from datetime import UTC, datetime
 from pathlib import Path
 
-from havoc import persona
+from havoc import persona, ui
 from havoc.config import load_config
 from havoc.persona import picture_prompt, system_prompt
-from havoc.services import translation_provider, tts
-from havoc.services.actions import ActionLayer, Turn
+from havoc.services import self_console, translation_provider, tts
+from havoc.services.actions import ActionLayer, ToolCall, Turn
 from havoc.services.agent import Agent
 from havoc.services.ai_provider import AIError, AIMessage, AIProvider
 from havoc.services.ai_router import AIRouter
@@ -334,6 +334,48 @@ async def run() -> dict[str, object]:
                 }
             )
 
+        # The card: what a person actually sees under an answer that did something.
+        cards: list[dict[str, object]] = []
+        for outcome in step.outcomes:
+            if outcome.status == "done" and outcome.card[0]:
+                drawn = ui.card(outcome.card[0], outcome.card[1])
+                cards.append(
+                    {
+                        "title": outcome.card[0],
+                        "text": drawn,
+                        "has_rule": "ـ" in drawn,
+                        "italic": "<i>" in drawn,
+                        "ends_on_a_glyph": drawn.splitlines()[-1] in ui.CLOSING_GLYPHS
+                        or any(drawn.splitlines()[-1].endswith(g) for g in ui.CLOSING_GLYPHS)
+                        or drawn.splitlines()[-2] in ui.CLOSING_GLYPHS,
+                    }
+                )
+        hands["card"] = cards
+
+        # Her own console: does she know what exists, and does a command she runs
+        # come back with something a person would see?
+        listing = self_console.catalogue(scratch, "en")
+        hands["command_catalogue"] = {
+            "lines": len(listing.splitlines()),
+            "mentions_fal": ".fal" in listing,
+            "mentions_clock": ".clock" in listing,
+            "blocks_owner_changes": ".owner" not in listing and ".key" not in listing,
+        }
+        commands: list[dict[str, object]] = []
+        for line in ("about", "fal page 166", "clock on -- timezone Asia/Tehran"):
+            reply = await self_console.run(
+                scratch, line, chat_id=1, sender_id=1, language="en"
+            )
+            commands.append(
+                {"line": line, "ok": reply.ok, "kind": reply.kind, "said": _head(reply.note, 120)}
+            )
+        hands["commands"] = commands
+
+        # The gate: a guest's turn is refused before anything runs.
+        guest = Turn(chat_id=1, actor_id=999, language="en", is_owner=False)
+        refused = await layer.execute(ToolCall("recall", {"about": "anything"}), guest)
+        hands["guest_refused"] = refused.status
+
         # The voice, with hands available. If the catalogue made her terse, this
         # number drops and the probe says so.
         plain = await provider.converse(
@@ -357,9 +399,23 @@ async def run() -> dict[str, object]:
             (step.waiting is not None and hands.get("reminders_stored", 0) >= 1)
             or "remind" in [name for name in step.did]
         )
+        card_ok = any(
+            card["has_rule"] and card["italic"] and card["ends_on_a_glyph"]
+            for card in hands.get("card", [])
+        )
+        console = hands.get("command_catalogue", {})
+        console_ok = bool(
+            console.get("mentions_fal")
+            and console.get("mentions_clock")
+            and console.get("blocks_owner_changes")
+            and any(entry["ok"] for entry in hands.get("commands", []) if entry["line"] == "about")
+        )
         hands["ok"] = bool(
             layer.tools
             and worked
+            and card_ok
+            and console_ok
+            and hands.get("guest_refused") == "refused"
             and int(hands["voice_chars"]) >= 400
             and hands["voice_glyphs"] >= 1
             and hands["voice_laid_out"]
@@ -553,6 +609,16 @@ def main() -> int:
             print(f"  asked first?    {part['asked_first']} · {part.get('after_yes')}")
             print(f"  reminders:      {part.get('reminders_stored')} · audit: {part.get('audit_rows')}")
             print(f"  she said:       {part.get('said')}")
+        if part.get("card"):
+            for card in part["card"]:
+                print(f"  card:           {card['title']}")
+                for line in str(card["text"]).splitlines():
+                    print(f"    | {line}")
+        if part.get("command_catalogue"):
+            print(f"  console:        {part['command_catalogue']}")
+            for entry in part.get("commands", []):
+                print(f"    {entry['line']} → {entry['ok']} · {entry['said']}")
+            print(f"  guest refused?  {part.get('guest_refused')}")
         if part.get("voice_chars"):
             print(f"  voice with hands: {part['voice_chars']} chars · glyphs {part['voice_glyphs']}")
         if part.get("model"):

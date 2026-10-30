@@ -100,7 +100,7 @@ def test_money_and_identity_are_refused_before_they_can_run() -> None:
 async def test_a_read_runs_without_asking(runtime) -> None:
     log: list = []
     layer = _layer(runtime, _tool(calls=log))
-    outcome = await layer.execute(ToolCall("peek", {"what": "x"}), Turn(chat_id=1))
+    outcome = await layer.execute(ToolCall("peek", {"what": "x"}), Turn(chat_id=1, is_owner=True))
     assert outcome.status == "done"
     assert log == [("peek", {"what": "x"})]
 
@@ -108,7 +108,7 @@ async def test_a_read_runs_without_asking(runtime) -> None:
 async def test_a_write_asks_once_and_then_remembers(runtime) -> None:
     log: list = []
     layer = _layer(runtime, _tool("note", scope="write", calls=log))
-    turn = Turn(chat_id=7)
+    turn = Turn(chat_id=7, is_owner=True)
 
     first = await layer.execute(ToolCall("note", {"what": "a"}), turn)
     assert first.status == "needs_confirm"
@@ -117,7 +117,7 @@ async def test_a_write_asks_once_and_then_remembers(runtime) -> None:
     approved = await layer.resolve(7, approve=True)
     assert approved.status == "done" and log == [("note", {"what": "a"})]
 
-    second = await layer.execute(ToolCall("note", {"what": "b"}), Turn(chat_id=7))
+    second = await layer.execute(ToolCall("note", {"what": "b"}), Turn(chat_id=7, is_owner=True))
     assert second.status == "done"
     assert len(log) == 2, "a tool approved once is approved"
 
@@ -125,11 +125,11 @@ async def test_a_write_asks_once_and_then_remembers(runtime) -> None:
 async def test_a_delete_asks_every_single_time(runtime) -> None:
     log: list = []
     layer = _layer(runtime, _tool("wipe", scope="delete", risk="medium", calls=log))
-    await layer.execute(ToolCall("wipe", {"what": "a"}), Turn(chat_id=9))
+    await layer.execute(ToolCall("wipe", {"what": "a"}), Turn(chat_id=9, is_owner=True))
     await layer.resolve(9, approve=True)
     assert len(log) == 1
 
-    again = await layer.execute(ToolCall("wipe", {"what": "b"}), Turn(chat_id=9))
+    again = await layer.execute(ToolCall("wipe", {"what": "b"}), Turn(chat_id=9, is_owner=True))
     assert again.status == "needs_confirm", "deleting is never silent, not even twice"
     assert len(log) == 1
 
@@ -137,7 +137,7 @@ async def test_a_delete_asks_every_single_time(runtime) -> None:
 async def test_no_means_no(runtime) -> None:
     log: list = []
     layer = _layer(runtime, _tool("note", scope="write", calls=log))
-    await layer.execute(ToolCall("note", {"what": "a"}), Turn(chat_id=3))
+    await layer.execute(ToolCall("note", {"what": "a"}), Turn(chat_id=3, is_owner=True))
     outcome = await layer.resolve(3, approve=False)
     assert outcome.status == "refused"
     assert log == []
@@ -146,7 +146,7 @@ async def test_no_means_no(runtime) -> None:
 
 async def test_a_question_goes_stale(runtime) -> None:
     layer = _layer(runtime, _tool("note", scope="write"))
-    await layer.execute(ToolCall("note", {"what": "a"}), Turn(chat_id=4))
+    await layer.execute(ToolCall("note", {"what": "a"}), Turn(chat_id=4, is_owner=True))
     record = await layer.pending(4)
     assert record is not None
     # Age it: the two-minute window is a window, not a suggestion.
@@ -158,7 +158,7 @@ async def test_a_question_goes_stale(runtime) -> None:
 
 async def test_an_unknown_tool_is_refused_by_name(runtime) -> None:
     layer = _layer(runtime)
-    outcome = await layer.execute(ToolCall("launch_missiles", {}), Turn(chat_id=1))
+    outcome = await layer.execute(ToolCall("launch_missiles", {}), Turn(chat_id=1, is_owner=True))
     assert outcome.status == "failed"
     assert "no tool" in outcome.note
 
@@ -166,7 +166,7 @@ async def test_an_unknown_tool_is_refused_by_name(runtime) -> None:
 async def test_the_same_call_twice_stops_the_loop(runtime) -> None:
     log: list = []
     layer = _layer(runtime, _tool(calls=log))
-    turn = Turn(chat_id=5)
+    turn = Turn(chat_id=5, is_owner=True)
     call = ToolCall("peek", {"what": "x"})
     assert (await layer.execute(call, turn)).status == "done"
     assert (await layer.execute(call, turn)).status == "done"
@@ -178,7 +178,7 @@ async def test_the_same_call_twice_stops_the_loop(runtime) -> None:
 async def test_four_calls_a_turn_and_no_more(runtime) -> None:
     log: list = []
     layer = _layer(runtime, _tool(calls=log))
-    turn = Turn(chat_id=6)
+    turn = Turn(chat_id=6, is_owner=True)
     for index in range(MAX_CALLS_PER_TURN):
         assert (await layer.execute(ToolCall("peek", {"what": str(index)}), turn)).status == "done"
     stopped = await layer.execute(ToolCall("peek", {"what": "one more"}), turn)
@@ -197,14 +197,14 @@ async def test_the_hourly_valve_counts_rows_not_memory(runtime) -> None:
             "UPDATE yura_actions SET created_at = ? WHERE tool = ?",
             ("2999-01-01T00:00:00+00:00", f"t{index}"),
         )
-    outcome = await layer.execute(ToolCall("peek", {"what": "x"}), Turn(chat_id=1))
+    outcome = await layer.execute(ToolCall("peek", {"what": "x"}), Turn(chat_id=1, is_owner=True))
     assert outcome.status == "blocked"
     assert "hour" in outcome.note
 
 
 async def test_every_attempt_is_written_down(runtime) -> None:
     layer = _layer(runtime, _tool("note", scope="write"))
-    await layer.execute(ToolCall("note", {"what": "a"}), Turn(chat_id=11, actor_id=42))
+    await layer.execute(ToolCall("note", {"what": "a"}), Turn(chat_id=11, actor_id=42, is_owner=True))
     rows = await layer.recent(11)
     assert rows and rows[0]["tool"] == "note"
     assert rows[0]["decision"] == "asked"
@@ -275,7 +275,7 @@ async def test_no_tool_means_no_second_request(runtime) -> None:
     provider = ScriptedProvider("just a normal answer")
     layer = _layer(runtime)
     step = await Agent(layer).run(
-        provider, [AIMessage("user", "hi")], turn=Turn(chat_id=1), max_tokens=100
+        provider, [AIMessage("user", "hi")], turn=Turn(chat_id=1, is_owner=True), max_tokens=100
     )
     assert step.used is False
     assert step.text == "just a normal answer"
@@ -290,7 +290,7 @@ async def test_a_tool_runs_then_she_answers(runtime) -> None:
     )
     layer = _layer(runtime, _tool(calls=log))
     step = await Agent(layer).run(
-        provider, [AIMessage("user", "what about the bridge")], turn=Turn(chat_id=1), max_tokens=100
+        provider, [AIMessage("user", "what about the bridge")], turn=Turn(chat_id=1, is_owner=True), max_tokens=100
     )
     assert log == [("peek", {"what": "the bridge"})]
     assert step.text == "found it, daddaaa."
@@ -309,7 +309,7 @@ async def test_a_write_stops_at_the_question(runtime) -> None:
     )
     layer = _layer(runtime, _tool("note", scope="write", calls=log))
     step = await Agent(layer).run(
-        provider, [AIMessage("user", "remember a")], turn=Turn(chat_id=2), max_tokens=100
+        provider, [AIMessage("user", "remember a")], turn=Turn(chat_id=2, is_owner=True), max_tokens=100
     )
     assert step.waiting is not None
     assert log == []
@@ -346,7 +346,10 @@ async def test_a_tool_turn_carries_a_receipt(runtime) -> None:
     runtime.ai = ToolProvider()
     answer = await runtime.yura_chat.answer("what do you know about sara", chat_id=100)
     assert "she is the one with the boat" in answer.text
-    assert "recall" in answer.text, answer.text
+    # The card under her words: bold title, drawn rule, italic facts, a glyph.
+    assert "Looked up" in answer.text, answer.text
+    assert "ـ" in answer.text
+    assert "<i>" in answer.text
 
 
 async def test_hands_can_be_switched_off(runtime) -> None:
@@ -396,7 +399,7 @@ def test_the_real_toolbox_is_the_promised_one(runtime) -> None:
 async def test_the_layer_refuses_a_money_tool_even_if_one_is_registered(runtime) -> None:
     calls: list = []
     runtime.actions.register(_tool("buy", scope="money", calls=calls))
-    outcome = await runtime.actions.execute(ToolCall("buy", {"what": "a car"}), Turn(chat_id=1))
+    outcome = await runtime.actions.execute(ToolCall("buy", {"what": "a car"}), Turn(chat_id=1, is_owner=True))
     assert outcome.status == "refused"
     assert calls == []
 
@@ -407,3 +410,30 @@ def test_a_tool_reply_block_is_not_a_json_lesson() -> None:
         'sure.\n\n```tool\n' + json.dumps({"tool": "remind", "args": {"when": "1h", "what": "x"}}) + "\n```"
     )
     assert calls and clean == "sure."
+
+
+async def test_a_stranger_cannot_make_her_do_anything(runtime) -> None:
+    """Talking to her is a conversation. Making her act is not."""
+    log: list = []
+    layer = _layer(runtime, _tool(calls=log), _tool("note", scope="write", calls=log))
+    stranger = Turn(chat_id=1, actor_id=999, is_owner=False)
+    for call in (ToolCall("peek", {"what": "x"}), ToolCall("note", {"what": "y"})):
+        outcome = await layer.execute(call, stranger)
+        assert outcome.status == "refused", call.name
+    assert log == []
+    rows = await layer.recent(1)
+    assert rows and all(row["decision"] == "refused" for row in rows)
+
+
+async def test_a_stranger_is_never_even_told_the_hands_exist(runtime) -> None:
+    from test_picture_reply import StubProvider
+
+    class ToolProvider(StubProvider):
+        async def converse(self, messages, *, max_tokens: int = 400, temperature: float = 0.85) -> str:
+            self.calls.append(list(messages))
+            return "whatever"
+
+    runtime.ai = ToolProvider()
+    await runtime.yura_chat.answer("do the thing", chat_id=100, is_owner=False)
+    system = runtime.ai.calls[0][0].content
+    assert "## hands" not in system

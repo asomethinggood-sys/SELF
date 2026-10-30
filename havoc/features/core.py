@@ -15,7 +15,7 @@ from .. import ui
 from ..command_registry import Command, CommandContext, CommandError
 from ..localization import normalize_language_code
 from ..utils.formatting import bold, code, escape, key_value_block, pre
-from ..version import VERSION
+from ..version import STAGE, VERSION
 
 
 # ---------------------------------------------------------------------------
@@ -339,13 +339,66 @@ async def cmd_about(ctx: CommandContext) -> None:
     await ctx.reply(
         "\n\n".join(
             [
-                ui.title("❥", ctx.t("about.title", version=VERSION)),
+                ui.title("❥", ctx.t("about.title", version=VERSION, stage=STAGE)),
                 ui.note(ctx.t("about.summary")),
                 ui.panel(f"{ui.bold(k)} {ui.note(ui.DOT)} {escape(v)}" for k, v in facts),
                 ui.footer(ctx.t("about.license")),
             ]
         )
     )
+
+
+async def cmd_owner(ctx: CommandContext) -> None:
+    """Who owns her. Only an owner can change this, which is the point of it."""
+    prefix = ctx.runtime.prefix
+    permissions = ctx.runtime.permissions
+    action = (ctx.sub or "").lower() or ("list" if not ctx.args else ctx.args[0].lower())
+    words = list(ctx.args)
+    if action in {"add", "allow", "grant"}:
+        handle = next((word for word in words if word.startswith("@") or word.lower() != action), "")
+        handle = handle.lstrip("@").lower()
+        if not handle:
+            await ctx.reply(ctx.t("owner.usage", prefix=prefix))
+            return
+        entity = None
+        try:
+            if ctx.runtime.client is not None:
+                entity = await ctx.runtime.client.get_entity(f"@{handle}")
+        except Exception:  # noqa: BLE001 - an unknown handle is a message, not a crash
+            entity = None
+        user_id = getattr(entity, "id", None)
+        if user_id is None:
+            await ctx.reply(ctx.t("owner.unknown"))
+            return
+        permissions.add_id(int(user_id), handle=handle)
+        await permissions.save()
+        await ctx.reply(ctx.t("owner.added", id=user_id))
+        return
+    if action in {"remove", "revoke", "del", "delete"}:
+        target = next((word for word in words if word.lower() != action), "")
+        removed = False
+        if target.lstrip("-").isdigit():
+            removed = permissions.remove_id(int(target))
+        elif target:
+            resolved = permissions.owner_ids
+            for user_id in list(resolved):
+                if str(user_id) == target:
+                    removed = permissions.remove_id(user_id)
+        if removed:
+            await permissions.save()
+            await ctx.reply(ctx.t("owner.removed", id=escape(target)))
+        else:
+            await ctx.reply(ctx.t("owner.usage", prefix=prefix))
+        return
+    rows = []
+    for user_id in sorted(permissions.owner_ids):
+        note = ctx.t("owner.you") if user_id == permissions.self_id else ctx.t("owner.id_note")
+        for handle, resolved in getattr(permissions, "handles_resolved", {}).items():
+            if resolved == user_id:
+                note = f"@{handle} · " + ctx.t("owner.handle_note")
+        rows.append(ui.fact_line("◇", f"{user_id} · {note}"))
+    body = "\n".join(rows) if rows else ui.note(ctx.t("owner.none"))
+    await ctx.reply(ui.card(ctx.t("owner.header").lstrip("⟡ ").strip(), (), icon="⟡") + "\n" + body)
 
 
 async def cmd_id(ctx: CommandContext) -> None:
@@ -403,6 +456,14 @@ async def cmd_dryrun(ctx: CommandContext) -> None:
 def register(runtime: Any) -> None:
     runtime.registry.register_many(
         [
+            Command(
+                "owner",
+                cmd_owner,
+                category="management",
+                usage="[list | add @handle | remove <id>]",
+                subcommands=("list", "add", "allow", "remove", "revoke", "who"),
+                changes_state=True,
+            ),
             Command("help", cmd_help, category="core", aliases=("?",), usage="[command]", examples=("help", "help remind")),
             Command("commands", cmd_commands, category="core", usage="[page]"),
             Command("status", cmd_status, category="core"),

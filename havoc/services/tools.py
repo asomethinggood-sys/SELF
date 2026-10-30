@@ -19,9 +19,18 @@ from typing import Any
 
 from ..utils.time import TimeParseError, format_datetime, parse_when, utc_now
 from .actions import ActionResult, Tool, Turn
+from .self_console import run as run_command
 from .translation_provider import TranslationError
 
 __all__ = ["build_tools"]
+
+
+def _t(runtime: Any, turn: Turn, key: str, **variables: Any) -> str:
+    """A localized card phrase, never a crash if a locale is stripped."""
+    try:
+        return str(runtime.t(key, turn.language, **variables))
+    except Exception:  # noqa: BLE001 - a missing key must not silence a card
+        return ""
 
 
 def build_tools(runtime: Any) -> list[Tool]:
@@ -37,11 +46,31 @@ def build_tools(runtime: Any) -> list[Tool]:
             words = [word for word in about.lower().split() if len(word) > 2]
             hits = [line for line in lines if any(word in line.lower() for word in words)]
             if not hits:
-                return ActionResult(True, note=f"nothing stored about {about}")
-            return ActionResult(True, note=" | ".join(hits[:6]))
+                return ActionResult(
+                    True,
+                    note=f"nothing stored about {about}",
+                    title=_t(runtime, turn, "actions.card_looked_up", what=about),
+                    lines=(_t(runtime, turn, "actions.card_nothing_kept"),),
+                )
+            return ActionResult(
+                True,
+                note=" | ".join(hits[:6]),
+                title=_t(runtime, turn, "actions.card_looked_up", what=about),
+                lines=tuple(hit[:160] for hit in hits[:3]),
+            )
         if not lines:
-            return ActionResult(True, note="nothing stored yet")
-        return ActionResult(True, note=" | ".join(lines[:12]))
+            return ActionResult(
+                True,
+                note="nothing stored yet",
+                title=_t(runtime, turn, "actions.card_looked_up", what="memory"),
+                lines=(_t(runtime, turn, "actions.card_nothing_kept"),),
+            )
+        return ActionResult(
+            True,
+            note=" | ".join(lines[:12]),
+            title=_t(runtime, turn, "actions.card_looked_up", what="memory"),
+            lines=tuple(line[:160] for line in lines[:3]),
+        )
 
     tools.append(
         Tool(
@@ -69,7 +98,12 @@ def build_tools(runtime: Any) -> list[Tool]:
         except Exception as exc:  # noqa: BLE001 - a search that fails is a sentence
             return ActionResult(False, detail=f"search failed: {type(exc).__name__}", kind="search")
         if not messages:
-            return ActionResult(True, note=f"no messages in this chat match {query!r}")
+            return ActionResult(
+            True,
+            note=f"no messages in this chat match {query!r}",
+            title=_t(runtime, turn, "actions.card_searched", what=query),
+            lines=(_t(runtime, turn, "actions.card_nothing_found"),),
+        )
         rows = []
         for message in messages:
             text = " ".join(str(getattr(message, "message", "") or getattr(message, "text", "")).split())
@@ -78,7 +112,12 @@ def build_tools(runtime: Any) -> list[Tool]:
             rows.append(text[:180])
         if not rows:
             return ActionResult(True, note="only empty messages matched")
-        return ActionResult(True, note=" ⏎ ".join(rows))
+        return ActionResult(
+            True,
+            note=" ⏎ ".join(rows),
+            title=_t(runtime, turn, "actions.card_searched", what=query),
+            lines=tuple(rows[:3]),
+        )
 
     tools.append(
         Tool(
@@ -104,7 +143,12 @@ def build_tools(runtime: Any) -> list[Tool]:
             result = await translator.translate(text, to)
         except TranslationError as exc:
             return ActionResult(False, detail=f"could not translate: {exc.kind}", kind=exc.kind)
-        return ActionResult(True, note=f"{to}: {result.text[:900]}")
+        return ActionResult(
+            True,
+            note=f"{to}: {result.text[:900]}",
+            title=_t(runtime, turn, "actions.card_translated", to=to.upper()),
+            lines=(result.text[:300],),
+        )
 
     tools.append(
         Tool(
@@ -123,8 +167,18 @@ def build_tools(runtime: Any) -> list[Tool]:
             return ActionResult(False, detail="nothing to remember", kind="bad_args")
         stored = await runtime.memory.remember(turn.chat_id, fact, kind="fact")
         if not stored:
-            return ActionResult(True, note="already known")
-        return ActionResult(True, note="kept")
+            return ActionResult(
+                True,
+                note="already known",
+                title=_t(runtime, turn, "actions.card_remembered"),
+                lines=(_t(runtime, turn, "actions.card_already_kept"),),
+            )
+        return ActionResult(
+            True,
+            note="kept",
+            title=_t(runtime, turn, "actions.card_remembered"),
+            lines=(fact[:240],),
+        )
 
     tools.append(
         Tool(
@@ -141,8 +195,18 @@ def build_tools(runtime: Any) -> list[Tool]:
         query = args.get("about", "").strip()
         removed = await runtime.memory.forget_matching(turn.chat_id, query)
         if not removed:
-            return ActionResult(True, note=f"nothing matched {query!r}")
-        return ActionResult(True, note=f"removed {removed}")
+            return ActionResult(
+                True,
+                note=f"nothing matched {query!r}",
+                title=_t(runtime, turn, "actions.card_forgotten"),
+                lines=(_t(runtime, turn, "actions.card_nothing_found"),),
+            )
+        return ActionResult(
+            True,
+            note=f"removed {removed}",
+            title=_t(runtime, turn, "actions.card_forgotten"),
+            lines=(query[:240],),
+        )
 
     tools.append(
         Tool(
@@ -174,9 +238,12 @@ def build_tools(runtime: Any) -> list[Tool]:
             created_by=turn.actor_id or None,
             meta={"language": turn.language, "source": "action"},
         )
+        human = format_datetime(when, tz, turn.language)
         return ActionResult(
             True,
-            note=f"#{reminder_id} at {format_datetime(when, tz, turn.language)}",
+            note=f"#{reminder_id} at {human}",
+            title=_t(runtime, turn, "actions.card_reminder", when=human),
+            lines=(_t(runtime, turn, "actions.card_reminder_note"),),
         )
 
     tools.append(
@@ -190,6 +257,47 @@ def build_tools(runtime: Any) -> list[Tool]:
             required=("when", "what"),
             run=remind,
             scope="write",
+        )
+    )
+
+    async def command(turn: Turn, args: dict[str, str]) -> ActionResult:
+        """Any of her own commands, dispatched exactly as if he had typed it."""
+        line = " ".join(
+            part for part in (args.get("command", ""), args.get("args", "")) if part
+        ).strip()
+        result = await run_command(
+            runtime,
+            line,
+            chat_id=turn.chat_id,
+            sender_id=turn.actor_id or 0,
+            message_id=turn.message_id,
+            language=turn.language,
+        )
+        if not result.ok and result.kind in {"blocked", "unknown"}:
+            return ActionResult(False, detail=result.note, kind=result.kind)
+        return ActionResult(
+            result.ok,
+            note=result.note,
+            detail="" if result.ok else result.note,
+            title=_t(runtime, turn, "actions.card_ran_command", command=line[:80]),
+            lines=(result.note[:240],) if result.note else (),
+        )
+
+    tools.append(
+        Tool(
+            name="command",
+            summary=(
+                "run one of her own commands for him (everything in .help): "
+                "'fal page 166', 'clock on -- timezone Asia/Tehran', 'remind 30m call mom'"
+            ),
+            properties={
+                "command": "the command name without the prefix, e.g. fal",
+                "args": "the rest of the line, exactly as he would type it",
+            },
+            required=("command",),
+            run=command,
+            scope="write",
+            risk="medium",
         )
     )
 

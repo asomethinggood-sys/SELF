@@ -31,7 +31,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
 def test_version_prints_versions(env, capsys) -> None:
     assert cli_main.cli(["version"]) == cli_main.EXIT_OK
     out = capsys.readouterr().out
-    assert "Yura 2.0.0" in out
+    assert "Y.U.R.A 1.6" in out
     assert "Telethon installed" in out
 
 

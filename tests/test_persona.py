@@ -66,7 +66,7 @@ def test_the_bot_is_called_yura_in_both_languages() -> None:
 async def test_the_name_reaches_user_facing_text(runtime) -> None:
     await invoke(runtime, ".about")
     text = last_text(runtime)
-    assert "Yura" in text and "HAVOC" not in text
+    assert "Y.U.R.A" in text and "HAVOC" not in text
 
 
 # ---------------------------------------------------------------------------

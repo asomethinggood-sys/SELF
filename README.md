@@ -387,6 +387,15 @@ live account from this environment.
 
 ### Working with limits you should know about
 
+- **She is Y.U.R.A 1.6 Open beta**, and she knows her own console: every command
+  in `.help`, with its usage, is in her prompt, and she can run any of them for
+  you through one gated tool — "yura, fal page 166" is the `.fal` you already
+  have, not a second version of it. Answers that do something are drawn: a mark,
+  a bold title, a ruled line, italic facts and one closing glyph, changing every
+  time.
+- **One owner, in settings.** `OWNER_USERNAMES=edited_by_nyx` (the default) is
+  resolved to an id once at login and remembered. Only an owner can command her,
+  change her or make her act; everyone else can talk to her and nothing more.
 - **She has hands, not a free pass.** A message that needs a lookup, a
   translation, a stored fact or a reminder is answered by her *doing* it: reads
   run freely, writes ask once, deletes ask every time, and money or identity are

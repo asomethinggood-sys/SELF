@@ -53,6 +53,9 @@ class AgentStep:
     outcomes: list[Outcome] = field(default_factory=list)
     #: The question waiting for a yes/no, if the loop stopped for one.
     waiting: Outcome | None = None
+    #: ``(title, lines)`` for each tool that actually ran — the card under her
+    #: answer is built from these, so what she says and what was done agree.
+    cards: list[tuple[str, tuple[str, ...]]] = field(default_factory=list)
 
     @property
     def did(self) -> list[str]:
@@ -113,7 +116,12 @@ class Agent:
             text, calls = await self._ask(provider, messages, max_tokens=max_tokens)
             if not calls:
                 break
-        return AgentStep(text=text, used=True, outcomes=outcomes)
+        return AgentStep(
+            text=text,
+            used=True,
+            outcomes=outcomes,
+            cards=[o.card for o in outcomes if o.status == "done" and o.card[0]],
+        )
 
     async def _ask(
         self, provider: AIProvider, messages: list[AIMessage], *, max_tokens: int

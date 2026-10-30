@@ -29,13 +29,14 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from .. import persona
+from .. import persona, ui
 from ..utils import glyphs
 from ..utils.security import injection_notice, looks_like_injection
 from ..utils.time import to_local, utc_now
 from .actions import ActionLayer, Turn
 from .agent import Agent
 from .ai_provider import AIError, AIMessage, AIProvider
+from .self_console import catalogue as command_catalogue
 
 #: Extensions a generated file may have. All text: nothing can be executed by
 #: opening a `.sh` in a chat, but refusing binaries keeps the surface tiny.
@@ -152,6 +153,8 @@ class YuraChat:
         self.broken: tuple[str, ...] = ()
         #: Tools this turn actually used, for the receipt line under the answer.
         self._receipts: list[str] = []
+        #: The cards of the tools that ran, drawn under her answer.
+        self._cards: list[tuple[str, tuple[str, ...]]] = []
         #: The last tool turn, so ``.yura actions`` can point at it.
         self.last_turn: Turn | None = None
 
@@ -229,6 +232,16 @@ class YuraChat:
             greeting=greeting,
             hour=hour,
         )
+        # Whose account this is, spelled out: her own name for him and the ids the
+        # permission layer actually checks, so recognition and authority agree.
+        owner_block = persona.owner_prompt(
+            language=language,
+            names=(owner_name,) if owner_name else (),
+            ids=tuple(sorted(getattr(self.runtime.permissions, "owner_ids", set())))[:4],
+            handle=(getattr(self.runtime.config, "owner_usernames", ()) or ("",))[0],
+        )
+        if owner_block:
+            system = f"{system}\n\n{owner_block}"
         messages = [AIMessage("system", system)]
         for role, content in await self.memory.history(chat_id):
             messages.append(AIMessage(role, content))
@@ -288,6 +301,7 @@ class YuraChat:
         # offline bank is written for the owner, and calling a stranger
         # "daddaaa" would be both wrong and a leak.
         self._receipts = []
+        self._cards = []
         fallback = self._fallback(chat_id, language, tone=tone, is_owner=owner)
         if not prompt and picture is None:
             return Answer(fallback)
@@ -352,8 +366,15 @@ class YuraChat:
         # the answer *looks*, and a tool block after it would win.
         hands = ""
         layer = self.agent_layer
-        if layer is not None and layer.tools and await self.agent_enabled():
+        # Only the owner's turns are told that hands exist. A stranger gets her
+        # voice and the room's manners; they do not get a manual.
+        if layer is not None and layer.tools and owner and await self.agent_enabled():
             hands = layer.catalogue(language)
+            # ...and what those hands can pull: her own command line, so "yura fal
+            # page 166" needs no special-case code, only knowing that fal exists.
+            listing = command_catalogue(self.runtime, language)
+            if listing:
+                hands = f"{hands}\n\n{listing}"
         ornaments = persona.ornament_prompt(language, used=worn, faces=worn_faces)
         if hands:
             block = f"{block}\n\n{hands}" if block else hands
@@ -402,6 +423,7 @@ class YuraChat:
                 )
                 if step is not None and step.did:
                     self._receipts = step.did
+                    self._cards = list(getattr(step, "cards", ()))
             except AIError as exc:
                 self.last_error = f"{exc.kind}: {exc}"
                 self.logger.warning("yura: provider failed (%s)", exc.kind)
@@ -443,10 +465,10 @@ class YuraChat:
             worn=worn if source == "model" else set(),
             worn_faces=worn_faces if source == "model" else set(),
         )
-        if answer.text and self._receipts:
-            # A receipt, not a status report: what she did, and when she was asked
-            # to do it. Only appears on a turn where something actually happened —
-            # an ordinary answer is byte-for-byte what it was before this feature.
+        if answer.text and (self._cards or self._receipts):
+            # A card, not a status report: what she did, drawn under her words.
+            # Only appears on a turn where something actually happened — an
+            # ordinary answer is byte-for-byte what it was before hands existed.
             answer.text = self._with_receipt(answer.text, language)
         if not answer.text and not answer.files:
             answer.text = fallback
@@ -465,7 +487,15 @@ class YuraChat:
         )
 
     def _receipt(self, language: str) -> str:
-        """One italic line: what ran, and the minute the request came in."""
+        """The card under her answer: what ran, and the minute it was asked for."""
+        if self._cards:
+            title, lines = self._cards[0]
+            return ui.card(
+                title or self._tool_title(language),
+                lines,
+                icon="◈",
+                footer=self._stamp(language),
+            )
         if not self._receipts:
             return ""
         did = " · ".join(dict.fromkeys(self._receipts))
@@ -478,6 +508,22 @@ class YuraChat:
             return str(self.runtime.t("actions.receipt", language, did=did, when=stamp)).strip()
         except Exception:  # pragma: no cover - no locales in a stripped runtime
             return f"⌁ {did} · {stamp}".strip()
+
+    def _tool_title(self, language: str) -> str:
+        try:
+            return str(self.runtime.t("actions.card_title", language))
+        except Exception:  # pragma: no cover
+            return "Tool called"
+
+    def _stamp(self, language: str) -> str:
+        try:
+            when = to_local(utc_now(), self.runtime.config.timezone).strftime("%H:%M")
+        except Exception:  # pragma: no cover
+            when = ""
+        try:
+            return str(self.runtime.t("actions.card_footer", language, when=when))
+        except Exception:  # pragma: no cover
+            return f"asked at {when}"
 
     def _with_receipt(self, text: str, language: str) -> str:
         line = self._receipt(language)
@@ -500,7 +546,7 @@ class YuraChat:
         the turn goes down the old path, untouched.
         """
         agent = self.agent
-        if agent is None or not await self.agent_enabled():
+        if agent is None or not owner or not await self.agent_enabled():
             return None
         actor = getattr(person, "user_id", None) or getattr(who, "user_id", None) or 0
         turn = Turn(
@@ -531,16 +577,17 @@ class YuraChat:
         except Exception:  # pragma: no cover
             prefix = "."
         try:
-            text = str(
-                self.runtime.t(
-                    "actions.confirm",
-                    language,
-                    what=detail or tool,
-                    prefix=prefix,
-                )
+            text = ui.card(
+                str(self.runtime.t("actions.card_confirm_title", language)),
+                [
+                    str(self.runtime.t("actions.card_confirm_what", language, what=detail or tool)),
+                    str(self.runtime.t("actions.card_confirm_how", language, prefix=prefix)),
+                ],
+                icon="◈",
+                footer=str(self.runtime.t("actions.card_confirm_window", language)),
             )
         except Exception:  # pragma: no cover
-            text = f"may i? ({detail}) — {prefix}yura yes / {prefix}yura no"
+            text = f"may I? ({detail}) — {prefix}yura yes / {prefix}yura no"
         self.turns += 1
         return Answer(text=text, source="action")
 
