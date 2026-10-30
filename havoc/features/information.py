@@ -45,11 +45,15 @@ async def cmd_search(ctx: CommandContext) -> None:
     runtime = ctx.runtime
     if runtime.client is None:
         raise CommandError("errors.not_connected")
-    query = " ".join(arg for arg in ctx.args if not arg.startswith("--")).strip()
+    raw_query = " ".join(arg for arg in ctx.args if not arg.startswith("--")).strip()
+    # ``.search rent in @sara`` reads the way people write it; ``--chat`` stays
+    # for scripts. Either way the words before ``in`` are the query.
+    query, _, inline_chat = raw_query.partition(" in ")
+    query = query.strip()
     if not query:
         raise CommandError("errors.missing_argument", usage=ctx.usage_text())
     limit = min(50, max(1, int(ctx.flag("limit") or 10)))
-    chat_arg = ctx.flag("chat")
+    chat_arg = ctx.flag("chat") or inline_chat.strip()
     entity: Any = None
     if chat_arg:
         chat_id, entity, error = await resolve_target(ctx, chat_arg)

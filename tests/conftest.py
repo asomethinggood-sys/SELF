@@ -151,6 +151,15 @@ class FakeClient:
         self.unpinned: list[tuple[Any, Any]] = []
         self.raw_requests: list[Any] = []
         self.uploads: list[Any] = []
+        #: Canned answers for raw requests, keyed by request class name. A test
+        #: that needs Telegram to *return* something fills this in; anything not
+        #: listed comes back as ``None``, which is what a bare fake should say.
+        self.responses: dict[str, Any] = {}
+        self.kicked: list[tuple[Any, Any]] = []
+        self.permissions: list[tuple[Any, Any, dict[str, Any]]] = []
+        self.admins: list[tuple[Any, Any, dict[str, Any]]] = []
+        self.left: list[Any] = []
+        self.input_peers: list[Any] = []
         self.dialogs: list[Any] = []
         self.history: list[FakeMessage] = []
         self._next_id = 1000
@@ -203,7 +212,8 @@ class FakeClient:
     async def get_messages(self, entity: Any = None, **kwargs: Any) -> list[FakeMessage]:
         if kwargs.get("ids") is not None:
             return []
-        return list(self.history)
+        limit = kwargs.get("limit")
+        return list(self.history[: int(limit)] if limit else self.history)
 
     def iter_messages(self, entity: Any = None, **kwargs: Any) -> Any:
         async def generator():
@@ -229,13 +239,36 @@ class FakeClient:
         self.uploads.append(file)
         return FakeUpload(str(file))
 
+    async def get_input_entity(self, value: Any) -> Any:
+        self.input_peers.append(value)
+        return FakeInput(value)
+
+    async def kick_participant(self, chat: Any, user: Any, **kwargs: Any) -> None:
+        self.kicked.append((chat, user))
+
+    async def edit_permissions(self, chat: Any, user: Any = None, **kwargs: Any) -> None:
+        self.permissions.append((chat, user, kwargs))
+
+    async def edit_admin(self, chat: Any, user: Any, **kwargs: Any) -> None:
+        self.admins.append((chat, user, kwargs))
+
+    async def delete_dialog(self, chat: Any) -> None:
+        self.left.append(chat)
+
     async def __call__(self, request: Any) -> Any:
         self.raw_requests.append(request)
-        return None
+        return self.responses.get(type(request).__name__)
 
     @property
     def is_connected(self) -> bool:
         return True
+
+
+class FakeInput:
+    """Stands in for an ``InputPeer`` — enough for a request to be built."""
+
+    def __init__(self, value: Any) -> None:
+        self.value = value
 
 
 class FakeUpload:

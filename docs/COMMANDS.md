@@ -9,7 +9,7 @@ account other than the logged-in user.
 `.` in the usage column stands for the active prefix (default `.`).
 
 
-Total: **117 commands**.
+Total: **133 commands**.
 
 
 ## Account
@@ -18,6 +18,20 @@ Total: **117 commands**.
 | --- | --- | --- | --- |
 | `.endsession` | Sign one of those devices out _(owner only; changes state; asks for confirmation)._ | `.endsession <number from .sessions>` | — |
 | `.sessions` | Every device signed into this account _(owner only)._ | `.sessions` | `.devices` |
+
+## Admin
+
+| Command | Description | Usage | Aliases |
+| --- | --- | --- | --- |
+| `.ban` | Remove someone and keep them out _(owner only; changes state; asks for confirmation)._ | `.ban <person>` | — |
+| `.demote` | Take admin rights away _(owner only; changes state; asks for confirmation)._ | `.demote <person>` | — |
+| `.kick` | Remove someone from the group; they may come back _(owner only; changes state; asks for confirmation)._ | `.kick <person>` | — |
+| `.leave` | Leave a group, this one or the one you name _(owner only; changes state; asks for confirmation)._ | `.leave [chat]` | — |
+| `.promote` | Make someone an admin with exactly the rights you name _(owner only; changes state; asks for confirmation)._ | `.promote <person> [--delete] [--pin] [--invite] [--ban] [--manage]` | — |
+| `.setdesc` | Rewrite the group description _(owner only; changes state)._ | `.setdesc <text>` | `.setabout` |
+| `.settitle` | Rename the group you are standing in _(owner only; changes state)._ | `.settitle <text>` | `.retitle` |
+| `.slowmode` | Throttle how often people may post _(owner only; changes state)._ | `.slowmode <30s|5m|off>` | — |
+| `.unban` | Let a banned person back in _(owner only; changes state)._ | `.unban <person>` | — |
 
 ## Ai
 
@@ -174,6 +188,16 @@ Total: **117 commands**.
 | `.suggest` | Draft reply options for the replied message _(owner only)._ | `.suggest [tone]` | `.reply`, `.draft`, `.پیشنهاد` |
 | `.template` | Save and send message templates _(owner only; changes state)._ | `.template [list|add|show|send|delete]` | `.قالب` |
 
+## People
+
+| Command | Description | Usage | Aliases |
+| --- | --- | --- | --- |
+| `.block` | Stop someone being able to reach this account _(owner only; changes state; asks for confirmation)._ | `.block <chat>` | — |
+| `.blocklist` | Who is blocked right now _(owner only)._ | `.blocklist` | `.blocked` |
+| `.contact` | Add a number to the address book _(owner only; changes state)._ | `.contact <phone> <name>` | `.addcontact` |
+| `.contacts` | His address book, as Telegram has it _(owner only)._ | `.contacts [query] [--limit n]` | `.addressbook` |
+| `.unblock` | Undo a block _(owner only; changes state; asks for confirmation)._ | `.unblock <chat>` | — |
+
 ## Persona
 
 | Command | Description | Usage | Aliases |
@@ -203,6 +227,13 @@ Total: **117 commands**.
 | `.plan` | Timelines: one sentence, many moments _(owner only; changes state)._ | `.plan [list|stop [word]|add <sentence>]` | `.timeline` |
 | `.send` | Send a message — repeated, hidden behind a spoiler, self-destructing, later, or written by her _(owner only; changes state)._ | `.send <to> <text> [--repeat N] [--every 30s] [--spoiler] [--silent] [--delete-after 10s] [--at 21:00] [--compose] [--dry]` | `.say`, `.msg`, `.message` |
 | `.unsend` | Delete a message by its outbox number _(owner only; changes state)._ | `.unsend <outbox id>` | — |
+
+## Read
+
+| Command | Description | Usage | Aliases |
+| --- | --- | --- | --- |
+| `.diary` | Read the Saved Messages notepad, newest first _(owner only)._ | `.diary [count]` | `.savedmsgs`, `.tgnotes` |
+| `.mentions` | Where someone wrote his name _(owner only)._ | `.mentions [count]` | `.whereami` |
 
 ## Scheduling & time
 

@@ -985,27 +985,62 @@ Fifteen lines. If any one of them silently does nothing, 1.8 is not done.
 
 ## 14. Appendix A — command inventory
 
-The current dot surface. ✓ ships in this branch, ✚ is still to build.
+The dot surface as it stands in this branch. Every line here is registered in
+`havoc/registry` at boot and covered by `scripts/audit_live.py` (403 command
+cases, 0 broken). ✚ marks the families still deferred (see §2.3).
 
 ```
-core      .help .commands .ping .status .diagnostics .selfcheck .version✚
-          .id .stop .features .feature .enable .disable .settings .config
-          .prefix .plugins .owner .backup .export .dryrun .lang .quick .alias
+core      .help .commands .ping .status .diagnostics .selfcheck .version
+          .about .abilities .diagnose .repair .why .news .features .feature
+          .enable .disable .settings .config .prefix .plugins .owner .backup
+          .export .dryrun .lang .quick .alias .id .stop
 text      .translate .transform .normalize .rtl .digits .textstats .summarize
-          .calc .convert-time .time .search
+          .calc .convert-time .time .persianize .search
 content   .fal .poem .quote .random .joke .roast .pic .coin .fight
-memory    .note .notes✚ .bookmark .saved .saved send✚ .remember✚ .forget✚
-chats     .chats .chatinfo .chatsettings .labels .media .group✚ .folder✚
-          .mute✚ .unread✚ .mentions✚ .who✚ .people✚ .ignore✓ .mute-person✓
-profile   .profile .bio .clock .preset .away .counter
+memory    .remember .forget .memories .recall .note .bookmark .saved
+messages  .reply .forward .copy .edit .delete .pin .unpin
+sending   .send .say .broadcast .outbox .unsend .emoji .plan
+inbox     .inbox .unread .read .whois .people
+read      .diary .mentions
+chats     .chats .chatinfo .chatsettings .labels .media .groups .members
+          .invite .join .folder .mute .unmute
+admin     .settitle .setdesc .slowmode .kick .ban .unban .promote .demote
+          .leave
+people    .contacts .contact .block .unblock .blocklist
+profile   .profile .bio .clock .preset .away .counter .username .photo
+media     .poll .geo
+account   .sessions .endsession .privacy✚ .2fa✚
 time      .remind .reminders .tasks .schedule .scheduled .agenda .quiet-hours
-          .plan✓ .plans✓ .timeline✓
 social    .autoreply .trigger .rules .detect .react .watch .template .suggest
-sending   .send✓ .say✓ .broadcast✓ .outbox✓ .unsend✓ .emoji✓ .reply✚ .forward✚
-          .copy✚ .edit✚ .delete✚ .pin✚ .react✚
-account   .sessions✚ .privacy✚ .2fa✚ .contact✚ .block✚
+        .ignore
 yura      .yura .ai
 ```
+
+**What this branch added on top of 1.7** (commit `9830445`, `1aaeb5b`):
+
+* **message verbs** — `.reply .forward .copy .edit .delete .pin .unpin`, each
+  operating on the message he replied to, each honest about whose message it is;
+* **the inbox** — `.inbox .unread .read .whois .people`: names, counts and times,
+  never strangers' bodies unless he asks for `--raw`;
+* **groups** — `.groups .members .invite .join .folder .mute .unmute` and session
+  control (`.sessions .endsession`);
+* **her own health** — `.diagnose .repair .why .news .version`, reading the event
+  log, the write-ahead log and the run history;
+* **memory** — `.remember .forget .memories .recall`, with ids and honest
+  "nothing matched";
+* **identity** — `.username` (Telegram's own rule quoted on refusal), `.photo`
+  (reply to a picture, size-checked, confirm-gated), `.abilities` (counted from
+  the live registry);
+* **things that are not words** — `.poll` (a real `InputMediaPoll`), `.geo` (a
+  range-checked point), all serialised before they are queued;
+* **reading** — `.diary` (Saved Messages), `.mentions` (the mention filter),
+  and `.search … in <chat>`;
+* **people** — `.contacts .contact .block .unblock .blocklist`;
+* **running a group** — `.settitle .setdesc .slowmode .kick .ban .unban
+  .promote .demote .leave`, with `.promote` granting only the rights he names.
+
+Every one of these also has plain-language routes in `havoc/services/intent.py`
+("remember that…", "who did i block", "rename this group to…", "slow mode 5m").
 
 ---
 

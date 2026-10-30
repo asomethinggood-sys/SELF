@@ -118,10 +118,20 @@ def test_a_translation_names_the_language() -> None:
         ("who are you", "about"),
         ("show me my reminders", "reminders"),
         ("tell me a joke", "joke"),
+        ("who is in my contacts", "contacts"),
+        ("who did i block", "blocklist"),
+        ("what is in my saved messages", "diary"),
+        ("leave this group", "leave"),
     ),
 )
 def test_a_lookup_that_asks_for_something_is_understood(text: str, line: str) -> None:
     assert _lines(text) == (line,)
+
+
+def test_renaming_and_slow_mode_carry_their_arguments() -> None:
+    assert _lines("rename this group to Night Shift") == ("settitle Night Shift",)
+    assert _lines("slow mode 5m") == ("slowmode 5m",)
+    assert _lines("slowmode off") == ("slowmode off",)
 
 
 def test_a_search_stays_a_search() -> None:

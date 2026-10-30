@@ -771,6 +771,34 @@ _ABILITIES_ASK = re.compile(
     r"|list\s+your\s+(?:abilities|skills)|what\s+are\s+you\s+capable\s+of)\s*[?!.]*$",
     re.I,
 )
+_CONTACTS_ASK = re.compile(
+    r"^(?:who(?:'s|\s+is|\s+are)\s+in\s+my\s+contacts|my\s+contacts"
+    r"|show\s+(?:me\s+)?(?:my\s+)?contacts|list\s+(?:my\s+)?contacts)\s*[?!.]*$",
+    re.I,
+)
+_BLOCKED_ASK = re.compile(
+    r"^(?:who\s+(?:is|did\s+i)\s+block(?:ed)?|who(?:'s|\s+is)\s+blocked"
+    r"|show\s+(?:me\s+)?(?:the\s+)?block\s?list|my\s+block\s?list)\s*[?!.]*$",
+    re.I,
+)
+_DIARY_ASK = re.compile(
+    r"^(?:what(?:'s|\s+is)\s+in\s+my\s+saved\s+messages"
+    r"|read\s+(?:my\s+)?saved\s+messages|show\s+(?:me\s+)?(?:my\s+)?saved\s+messages)\s*[?!.]*$",
+    re.I,
+)
+_LEAVE_ASK = re.compile(
+    r"^(?:please\s+)?(?:leave|exit|quit)\s+(?:this|the)\s+(?:group|chat|channel)\s*[?!.]*$",
+    re.I,
+)
+_RENAME_ASK = re.compile(
+    r"^(?:please\s+)?(?:rename|retitle)\s+(?:this|the)\s+(?:group|chat|channel)\s+"
+    r"(?:to\s+)?(?P<title>.+)$",
+    re.I,
+)
+_SLOWMODE_ASK = re.compile(
+    r"^(?:set\s+)?slow\s?mode\s+(?P<value>off|\d+\s*(?:s|sec|m|min|h|hour)?)\s*[?!.]*$",
+    re.I,
+)
 _VERSION_ASK = re.compile(
     r"^(?:what|which)\s+version\s+are\s+you(?:\s+running)?\s*[?!.]*$", re.I
 )
@@ -823,6 +851,11 @@ def _surface(text: str) -> Intent | None:
         if who:
             return Intent(lines=(f"read {who}",), label="inbox", detail=f"read · {who}")
 
+    # "who is in my contacts" is not "who is <somebody>": the address book is
+    # asked for before the whois route can read the phrase as a name.
+    if _CONTACTS_ASK.match(folded):
+        return Intent(lines=("contacts",), label="people", detail="contacts")
+
     match = _WHOIS_ASK.match(original)
     if match:
         who = match.group("who").strip(" .,!?")
@@ -860,6 +893,26 @@ def _surface(text: str) -> Intent | None:
 
     if _ABILITIES_ASK.match(folded):
         return Intent(lines=("abilities",), label="self", detail="abilities")
+
+    if _BLOCKED_ASK.match(folded):
+        return Intent(lines=("blocklist",), label="people", detail="blocklist")
+
+    if _DIARY_ASK.match(folded):
+        return Intent(lines=("diary",), label="read", detail="saved messages")
+
+    if _LEAVE_ASK.match(folded):
+        return Intent(lines=("leave",), label="group", detail="leave")
+
+    match = _RENAME_ASK.match(original)
+    if match:
+        title = match.group("title").strip(" .,!?")
+        if title:
+            return Intent(lines=(f"settitle {title}",), label="group", detail=f"rename · {title[:40]}")
+
+    match = _SLOWMODE_ASK.match(original)
+    if match:
+        value = " ".join(match.group("value").split())
+        return Intent(lines=(f"slowmode {value}",), label="group", detail=f"slowmode · {value}")
 
     if _DOCTOR_ASK.match(folded):
         return Intent(lines=("diagnose",), label="self", detail="diagnose")

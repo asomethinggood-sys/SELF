@@ -255,3 +255,133 @@ class TelegramExtras:
         from telethon.tl.functions.account import ResetAuthorizationRequest
 
         await self._call(ResetAuthorizationRequest, hash=int(session_hash))
+
+    # ------------------------------------------------------------------
+    # Contacts and blocking
+    # ------------------------------------------------------------------
+    async def _input_peer(self, chat_id: Any) -> Any:
+        client = self.client
+        getter = getattr(client, "get_input_entity", None)
+        if getter is None:
+            raise ExtrasError("this build cannot address a chat", kind="offline")
+        try:
+            return await getter(chat_id)
+        except Exception as exc:  # noqa: BLE001
+            raise ExtrasError(redact_text(str(exc))[:200], kind="refused") from exc
+
+    async def contacts(self, limit: int = 500) -> list[dict[str, Any]]:
+        """The address book, as Telegram has it."""
+        from telethon.tl.functions.contacts import GetContactsRequest
+
+        result = await self._call(GetContactsRequest, hash=0)
+        users = getattr(result, "users", None) or []
+        rows: list[dict[str, Any]] = []
+        for user in users:
+            rows.append(
+                {
+                    "id": getattr(user, "id", None),
+                    "name": _name(user),
+                    "username": getattr(user, "username", None) or "",
+                    "phone": getattr(user, "phone", None) or "",
+                }
+            )
+        return rows[: max(1, int(limit))]
+
+    async def import_contact(
+        self, phone: str, first_name: str, last_name: str = ""
+    ) -> list[dict[str, Any]]:
+        """Add a number to the address book, the way a phone does it."""
+        from telethon.tl.functions.contacts import ImportContactsRequest
+        from telethon.tl.types import InputPhoneContact
+
+        result = await self._call(
+            ImportContactsRequest,
+            contacts=[
+                InputPhoneContact(
+                    client_id=0, phone=str(phone), first_name=str(first_name), last_name=str(last_name)
+                )
+            ],
+        )
+        users = getattr(result, "users", None) or []
+        return [
+            {
+                "id": getattr(user, "id", None),
+                "name": _name(user),
+                "username": getattr(user, "username", None) or "",
+            }
+            for user in users
+        ]
+
+    async def block(self, chat_id: Any, *, blocked: bool = True) -> None:
+        """Block or unblock one peer; reversible, and named in the answer."""
+        from telethon.tl.functions.contacts import BlockRequest, UnblockRequest
+
+        peer = await self._input_peer(chat_id)
+        if blocked:
+            await self._call(BlockRequest, id=peer)
+        else:
+            await self._call(UnblockRequest, id=peer)
+
+    async def blocked(self, limit: int = 100) -> list[dict[str, Any]]:
+        from telethon.tl.functions.contacts import GetBlockedRequest
+
+        result = await self._call(GetBlockedRequest, offset=0, limit=max(1, int(limit)))
+        users = getattr(result, "users", None) or []
+        return [
+            {
+                "id": getattr(user, "id", None),
+                "name": _name(user),
+                "username": getattr(user, "username", None) or "",
+            }
+            for user in users
+        ]
+
+    # ------------------------------------------------------------------
+    # Group administration
+    # ------------------------------------------------------------------
+    async def set_title(self, chat_id: Any, title: str) -> None:
+        from telethon.tl.functions.channels import EditTitleRequest
+
+        peer = await self._input_peer(chat_id)
+        await self._call(EditTitleRequest, channel=peer, title=str(title)[:128])
+
+    async def set_about(self, chat_id: Any, about: str) -> None:
+        """The description.
+
+        Current Telethon uses ``messages.EditChatAboutRequest`` for both groups
+        and channels; older layers had a separate ``channels.EditAboutRequest``,
+        so that is tried when the first class is missing.
+        """
+        peer = await self._input_peer(chat_id)
+        text = str(about)[:255]
+        try:
+            from telethon.tl.functions.messages import EditChatAboutRequest
+        except ImportError:
+            EditChatAboutRequest = None  # noqa: N806 - older Telethon
+        if EditChatAboutRequest is not None:
+            await self._call(EditChatAboutRequest, peer=peer, about=text)
+            return
+        try:
+            from telethon.tl.functions.channels import EditAboutRequest
+        except ImportError as exc:
+            raise ExtrasError("this Telegram library cannot change a description", kind="unsupported") from exc
+        await self._call(EditAboutRequest, channel=peer, about=text)
+
+    async def slowmode(self, chat_id: Any, seconds: int) -> int:
+        from telethon.tl.functions.channels import ToggleSlowModeRequest
+
+        peer = await self._input_peer(chat_id)
+        wanted = max(0, min(int(seconds), 86400))
+        await self._call(ToggleSlowModeRequest, channel=peer, seconds=wanted)
+        return wanted
+
+    async def leave(self, chat_id: Any) -> None:
+        client = self.client
+        deleter = getattr(client, "delete_dialog", None)
+        if deleter is None:
+            raise ExtrasError("this build cannot leave a chat", kind="offline")
+        peer = await self._input_peer(chat_id)
+        try:
+            await deleter(peer)
+        except Exception as exc:  # noqa: BLE001
+            raise ExtrasError(redact_text(str(exc))[:200], kind="refused") from exc
