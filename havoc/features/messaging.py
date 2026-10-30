@@ -102,6 +102,14 @@ async def cmd_autoreply(ctx: CommandContext) -> None:
         elif ctx.has_flag("group"):
             audience = "group"
         validate_message_body(response)
+        existing = [
+            row
+            for row in await store.list_autoreplies()
+            if row["enabled"] and row["match_type"] == match_type and row["pattern"] == pattern and row["response"] == response
+        ]
+        if existing:
+            await ctx.reply(ctx.t("autoreply.unchanged", id=existing[0]["id"], prefix=ctx.runtime.prefix))
+            return
         rule_id = await store.add_autoreply(
             pattern,
             response,

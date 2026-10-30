@@ -74,3 +74,30 @@ async def test_no_pattern_is_needed_when_the_scope_is_the_trigger(runtime) -> No
     row = await _rule(runtime)
     assert row["pattern"] == "*"
     assert row["response"] == "he's not here"
+
+
+async def test_a_new_standing_instruction_replaces_the_old_one(runtime) -> None:
+    """"If anyone messages me say X" then "…say Y" is a correction, not two rules
+    that both fire and race."""
+    await _rule(runtime, "autoreply add --type any --private => first answer")
+    await _rule(runtime, "autoreply add --type any --private => second answer")
+    rows = await runtime.store.list_autoreplies()
+    enabled = [row for row in rows if row["enabled"]]
+    assert len(enabled) == 1
+    assert enabled[0]["response"] == "second answer"
+    assert len(rows) == 2, "the superseded rule should be kept, disabled, for the record"
+
+
+async def test_adding_the_same_rule_twice_changes_nothing(runtime) -> None:
+    await _rule(runtime, "autoreply add --type any --private => same words")
+    result = await console(
+        runtime,
+        "autoreply add --type any --private => same words",
+        chat_id=100,
+        sender_id=7542695649,
+        language="en",
+        is_private=True,
+    )
+    assert result.ok
+    rows = await runtime.store.list_autoreplies()
+    assert len(rows) == 1

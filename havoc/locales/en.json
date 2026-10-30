@@ -1027,5 +1027,6 @@
   "help.legend_off": "× is switched off — `{prefix}enable <command>` brings it back",
   "autoreply.scope_private": "DMs only",
   "autoreply.scope_group": "groups only",
-  "autoreply.scope_any": "anywhere"
+  "autoreply.scope_any": "anywhere",
+  "autoreply.unchanged": "That rule already exists (#{id}). Nothing changed — {prefix}autoreply list shows it."
 }

@@ -1027,5 +1027,6 @@
   "help.legend_off": "× خاموش است — با `{prefix}enable <command>` برمی‌گردد",
   "autoreply.scope_private": "فقط خصوصی",
   "autoreply.scope_group": "فقط گروه",
-  "autoreply.scope_any": "همه‌جا"
+  "autoreply.scope_any": "همه‌جا",
+  "autoreply.unchanged": "این قانون از قبل هست (#{id}). چیزی عوض نشد — {prefix}autoreply list نشانش می‌دهد."
 }

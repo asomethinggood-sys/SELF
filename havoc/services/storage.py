@@ -280,6 +280,15 @@ class Store:
     ) -> int:
         if scope not in {"any", "private", "group"}:
             raise ValueError(f"unknown autoreply scope: {scope!r}")
+        if match_type == "any":
+            # A standing instruction replaces the one it supersedes. "If anyone
+            # messages me say X" then "…say Y" is a correction, not two rules that
+            # both fire and race — the newest wins, and the old one is disabled
+            # rather than deleted so `.autoreply list` still shows what changed.
+            await self.db.execute(
+                "UPDATE autoreplies SET enabled = 0 WHERE match_type = 'any' AND scope = ? AND enabled = 1",
+                (scope,),
+            )
         return await self.db.insert(
             """
             INSERT INTO autoreplies(pattern, match_type, response, language, scope_chat_id, cooldown, enabled, scope, created_at)
