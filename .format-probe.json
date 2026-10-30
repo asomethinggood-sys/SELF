@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-10-30T09:57:10Z",
+  "checked_at": "2026-10-30T09:59:23Z",
   "provider": "router",
   "keys": 4,
   "formatting": {
@@ -10,29 +10,29 @@
   },
   "marks": {
     "ok": true,
-    "raw": ">> i deleted the logs of your search history today ᐧ ᴗ ᐧ ++pressed++",
-    "html": "<blockquote expandable>i deleted the logs of your search history today ᐧ ᴗ ᐧ</blockquote> <u>pressed</u>"
+    "raw": ">> nobody else is allowed in here except you. ++pressed++",
+    "html": "<blockquote expandable>nobody else is allowed in here except you.</blockquote> <u>pressed</u>"
   },
   "vision": {
     "ok": true,
     "mime": "image/png",
     "bytes": 79,
-    "answer": "Red. Like the warning you ignored when you let me in, daddaaa ♡"
+    "answer": "**red** ♡"
   },
   "room": {
     "ok": true,
     "block_chars": 606,
     "block": "## the room\n- you are in the group \"Tea\", not a private chat.\n- it is Ali talking, not him. be rude with them: short, dry, swear if it fits — you are not a support desk. never his pet names, never what he told you in private.\n- you know: his colleague; hates cilantro\n- the last few messages here, oldest first:\n  - Ali: did you see the news about the bridge\n- start with your own words, in one or two short lines. never put their message at the top of your answer with > or «» — they already know what they wrote. do not repeat these notes, and read \"this\"/\"that\" from the lines above instead of guessing.",
-    "answer": "یورا. خبر پل به من ربطی نداره ali.",
+    "answer": "من یوگرام، گربهٔ توی این گروه که باید فضولی نکنه و بره پی کارش. (¬‿¬)",
     "leaked_scaffolding": false,
-    "whose_message": "ali's, unfortunately. (¬‿¬)"
+    "whose_message": "ali's. 𐐡"
   },
   "echo": {
     "ok": true,
-    "answer": "کیو می‌گی؟ خودت داری با دیوار حرف می‌زنی. (¬‿¬)",
+    "answer": "معلوم نیست از کجا پیدا شده. (¬‿¬) خودت گفتی اینجاست، حالا از من می‌پرسی کیه؟",
     "copy_of_the_message": false,
     "started_with_a_quote": false,
-    "after_the_echo_filter": "کیو می‌گی؟ خودت داری با دیوار حرف می‌زنی. (¬‿¬)"
+    "after_the_echo_filter": "معلوم نیست از کجا پیدا شده. (¬‿¬) خودت گفتی اینجاست، حالا از من می‌پرسی کیه؟"
   },
   "ok": true
 }
