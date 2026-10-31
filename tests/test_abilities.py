@@ -346,3 +346,88 @@ def test_a_reaction_named_by_a_word() -> None:
     # Talking *about* reacting is not ordering it.
     assert intent_module.detect("واکنش") is None
     assert intent_module.detect("i love how you react to my jokes") is None
+
+
+# ---------------------------------------------------------------------------
+# The Persian orders that used to fall through to a shrug
+# ---------------------------------------------------------------------------
+def test_a_persian_name_change_reaches_the_profile() -> None:
+    for sentence in (
+        "نامش رو عوض کن بذار لیانا",
+        "اسم من رو بذار لیانا",
+        "اسممو بذار لیانا",
+    ):
+        found = intent_module.detect(sentence)
+        assert found is not None, sentence
+        assert found.lines == ("profile name لیانا",), sentence
+
+
+def test_a_persian_bio_change_reaches_the_bio() -> None:
+    assert intent_module.detect("بیو رو عوض کن بنویس سلام دنیا").lines == ("bio set سلام دنیا",)
+    assert intent_module.detect("بیو بذار سلام").lines == ("bio set سلام",)
+
+
+def test_leaving_and_moderating_in_persian() -> None:
+    assert intent_module.detect("از این گروه برو").lines == ("leave --yes",)
+    # No name named: the person is whoever he replied to, and the command reads
+    # the reply rather than asking him to retype a handle.
+    assert intent_module.detect("این شخص رو بن کن").lines == ("ban --yes",)
+    assert intent_module.detect("اینو بن کن @sara").lines == ("ban @sara --yes",)
+    assert intent_module.detect("بیرونش کن").lines == ("kick --yes",)
+
+
+def test_a_persian_mute_is_a_window_not_an_error() -> None:
+    assert intent_module.detect("ساکت شو").lines == ("quiet-hours on 4h",)
+    assert intent_module.detect("ساکت شو ۲ ساعت").lines == ("quiet-hours on 2 ساعت",)
+    assert intent_module.detect("ساکت نباش").lines == ("quiet-hours off",)
+
+
+def test_a_persian_reminder_with_a_clock_time() -> None:
+    found = intent_module.detect("یادم بنداز ساعت ۵ شیر بخرم")
+    assert found is not None
+    assert found.lines == ("remind 05:00 شیر بخرم",)
+    assert intent_module.detect("یادم بنداز ساعت 5 عصر زنگ بزن").lines == ("remind 17:00 زنگ بزن",)
+
+
+def test_a_persian_repeat_carries_its_count() -> None:
+    assert intent_module.detect("من دختر خوبم رو ۱۰۰ بار بگو").lines == (
+        "send --here من دختر خوبم --repeat 100",
+    )
+    assert intent_module.detect("بگو من دختر خوبم ۱۰۰ بار").lines == (
+        "send --here من دختر خوبم --repeat 100",
+    )
+    assert intent_module.detect("۱۰ بار بگو سلام").lines == ("send --here سلام --repeat 10",)
+
+
+async def test_quiet_hours_accepts_a_span_and_a_bare_on(runtime) -> None:
+    first = await invoke(runtime, ".quiet-hours on 4h", chat_id=OWNER)
+    assert "–" in first[0].text or "Quiet hours on" in first[0].text
+    assert await runtime.permissions.quiet_hours_config(None) is not None
+    await invoke(runtime, ".quiet-hours off", chat_id=OWNER)
+    second = await invoke(runtime, ".quiet-hours on", chat_id=OWNER)
+    config = await runtime.permissions.quiet_hours_config(None)
+    assert config is not None and config["start"] == "23:00" and config["end"] == "07:00"
+    assert "Quiet hours on" in second[0].text
+
+
+async def test_a_persian_reminder_is_really_stored(runtime) -> None:
+    await _respond(runtime, "remind 05:00 شیر بخرم", chat_id=OWNER)
+    rows = await runtime.db.fetch_all("SELECT text, remind_at FROM reminders")
+    assert [row["text"] for row in rows] == ["شیر بخرم"]
+
+
+# ---------------------------------------------------------------------------
+# The toolbox covers the sticker she already knew how to send
+# ---------------------------------------------------------------------------
+def test_the_toolbox_has_a_sticker_hand(runtime) -> None:
+    assert "send_sticker" in {tool.name for tool in build_tools(runtime)}
+
+
+async def test_the_sticker_tool_goes_through_the_real_command(runtime) -> None:
+    tool = _tool(runtime, "send_sticker")
+    assert "sticker" in tool.summary
+    turn = Turn(chat_id=GROUP, actor_id=OWNER, language="en", is_owner=True)
+    result = await tool.run(turn, {"emoji": "قلب"})
+    # No installed packs in a test account: the honest answer is "no sticker",
+    # never a crash and never a silent nothing.
+    assert result.ok or result.detail

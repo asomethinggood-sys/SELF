@@ -614,8 +614,13 @@ _FA_LEAVE = re.compile(
     r"^(?:از\s*)?(?:این\s*|همین\s*)?(?:گروه|چت|گروه\s*و\s*چت|اینجا)\s*(?:رو|را)?\s*"
     r"(?:برو|ترک\s*کن|خارج\s*شو|بیا\s*بیرون)$"
 )
-_FA_QUIET = re.compile(r"^(?:ساکت|خفه|هیس)(?:\s*شو|\s*باش)?$")
-#: "این شخص رو بن کن" and "اینو بن کن @sara" are one order in two orders of words.
+#: "ساکت شو", "ساکت شو ۲ ساعت", "دو ساعت ساکت شو" — a mute with an optional span.
+_FA_QUIET = re.compile(
+    r"^(?:(?:برای|تا|به\s*مدت)\s*)?(?P<span>\d+\s*(?:ثانیه|دقیقه|ساعت|روز))?\s*"
+    r"(?:ساکت|خفه|هیس)(?:\s*باش)?\s*(?:شو|باش|باشه)?\s*"
+    r"(?:(?:برای|تا|به\s*مدت)\s*)?(?P<span2>\d+\s*(?:ثانیه|دقیقه|ساعت|روز))?\s*$"
+)
+_FA_LOUD = re.compile(r"^(?:دیگه\s*)?(?:ساکت\s*نباش|حرف\s*بزن|صدا\s*تو\s*بلند\s*کن)\s*$")
 _FA_BAN = re.compile(
     r"^(?:(?:این|اون|همین|همون)(?:و|ش)?\s*)?(?:شخص|یارو|آدم|کاربر|بچه|فرد|طرف)?\s*"
     r"(?:رو|را)?\s*(?P<who>@[\w.]+)?\s*(?:رو|را)?\s*(?:بن|بلاک)\s*کن\s*(?P<who2>@[\w.]+)?$"
@@ -760,8 +765,15 @@ def _actions(text: str) -> Intent | None:
     if _FA_LEAVE.match(folded):
         return Intent(lines=("leave --yes",), label="leave", detail="leave this chat")
 
-    if _FA_QUIET.match(folded):
-        return Intent(lines=("quiet-hours on",), label="quiet-hours", detail="quiet hours on")
+    match = _FA_QUIET.match(folded)
+    if match:
+        span = (match.group("span") or match.group("span2") or "").strip()
+        line = f"quiet-hours on {span}".strip() if span else "quiet-hours on 4h"
+        return Intent(lines=(line,), label="quiet-hours", detail="quiet hours on")
+
+    match = _FA_LOUD.match(folded)
+    if match:
+        return Intent(lines=("quiet-hours off",), label="quiet-hours", detail="quiet hours off")
 
     match = _FA_BAN.match(folded)
     if match:

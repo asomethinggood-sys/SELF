@@ -10,8 +10,9 @@ Feature areas: 51, 52, 55, 56, 57, 58, 59, 60.
 from __future__ import annotations
 
 import re
-from datetime import timedelta
+from datetime import UTC, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from .. import ui
 from ..command_registry import Command, CommandContext, CommandError
@@ -317,6 +318,35 @@ async def cmd_tasks(ctx: CommandContext) -> None:
 # ---------------------------------------------------------------------------
 # Quiet hours
 # ---------------------------------------------------------------------------
+_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹", "0123456789")
+_SPAN = re.compile(
+    # "4h", "for 4 hours", "تا ۴ ساعت" — and the Persian unit-first "ساعت ۴".
+    r"^\s*(?:(?:for|next|تا|به\s*مدت)\s*)?"
+    r"(?:(?P<amount>\d+(?:\.\d+)?)\s*(?P<unit>s|sec|secs|second|seconds|m|min|mins|minute|minutes|"
+    r"h|hour|hours|d|day|days|ثانیه|دقیقه|ساعت|روز)"
+    r"|(?P<unit2>ساعت|دقیقه|روز|ثانیه)\s*(?P<amount2>\d+(?:\.\d+)?))\s*$",
+    re.I,
+)
+_SPAN_UNITS = {
+    "s": 1, "sec": 1, "secs": 1, "second": 1, "seconds": 1, "ثانیه": 1,
+    "m": 60, "min": 60, "mins": 60, "minute": 60, "minutes": 60, "دقیقه": 60,
+    "h": 3600, "hour": 3600, "hours": 3600, "ساعت": 3600,
+    "d": 86400, "day": 86400, "days": 86400, "روز": 86400,
+}
+
+
+def _span(text: str) -> tuple[int, str]:
+    """``4h`` → ``(14400, '4h')``; anything else is not a span."""
+    raw = " ".join(str(text or "").translate(_DIGITS).split())
+    match = _SPAN.match(raw)
+    if not match:
+        return 0, ""
+    unit = (match.group("unit") or match.group("unit2") or "").lower()
+    amount = match.group("amount") or match.group("amount2") or "0"
+    seconds = int(float(amount) * _SPAN_UNITS.get(unit, 0))
+    return (seconds, raw) if 60 <= seconds <= 366 * 86400 else (0, "")
+
+
 async def cmd_quiet_hours(ctx: CommandContext) -> None:
     action = (ctx.sub or "status").lower()
     scope_chat = ctx.has_flag("chat")
@@ -325,10 +355,32 @@ async def cmd_quiet_hours(ctx: CommandContext) -> None:
             await ctx.store.delete_chat_setting(ctx.chat_id, "quiet_hours")
         else:
             await ctx.store.delete_setting("quiet_hours")
-        await ctx.reply(ctx.t("quiet.cleared"))
+        await ctx.reply(
+            ui.card(
+                ctx.t("quiet.off_title"),
+                [ctx.t("quiet.off_line")],
+                footer=ctx.t("quiet.scope_chat" if scope_chat else "quiet.scope_global"),
+            )
+        )
         return
     if action in {"on", "set"}:
         start, end = ctx.arg(0), ctx.arg(1)
+        # "ساکت شو", "be quiet for four hours": a window measured from now,
+        # because that is the sentence he actually says. The span can arrive in
+        # one word ("4h") or two ("2 ساعت"), because the parser splits on spaces.
+        if start:
+            seconds, _ = _span(start)
+            if not seconds:
+                seconds, _ = _span(f"{start} {end}".strip())
+            if seconds:
+                tz = tz_for(ctx)
+                begin = utc_now().astimezone(ZoneInfo(tz) if tz else UTC)
+                finish = begin + timedelta(seconds=seconds)
+                start, end = begin.strftime("%H:%M"), finish.strftime("%H:%M")
+        if not start and not end:
+            # "quiet hours on" with no window means the night, which is what the
+            # sentence has always meant. An error here was a dead end.
+            start, end = "23:00", "07:00"
         if not start or not end:
             raise CommandError("errors.missing_argument", usage=ctx.usage_text())
         try:
@@ -341,12 +393,26 @@ async def cmd_quiet_hours(ctx: CommandContext) -> None:
             await ctx.store.set_chat_setting(ctx.chat_id, "quiet_hours", payload)
         else:
             await ctx.store.set_setting("quiet_hours", payload)
-        await ctx.reply(ctx.t("quiet.set", start=escape(start), end=escape(end), scope=ctx.t("quiet.scope_chat" if scope_chat else "quiet.scope_global")))
+        await ctx.reply(
+            ui.card(
+                ctx.t("quiet.set_title"),
+                [
+                    ctx.t("quiet.set_line", start=start, end=end),
+                    ctx.t("quiet.scope_line", scope=ctx.t("quiet.scope_chat" if scope_chat else "quiet.scope_global")),
+                ],
+                footer=escape(payload["timezone"]),
+            )
+        )
         return
     config = await ctx.runtime.permissions.quiet_hours_config(ctx.chat_id if scope_chat else None)
     active = await ctx.runtime.permissions.in_quiet_hours(ctx.chat_id)
     if not config:
-        await ctx.reply(ctx.t("quiet.status_off", prefix=ctx.runtime.prefix))
+        await ctx.reply(
+            ui.card(
+                ctx.t("quiet.header"),
+                [ctx.t("quiet.status_off", prefix=ctx.runtime.prefix)],
+            )
+        )
         return
     await ctx.reply(
         "\n".join(

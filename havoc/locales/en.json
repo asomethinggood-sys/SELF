@@ -1510,5 +1510,12 @@
   "stickers.more": "say it again for another one",
   "cmd.sticker.description": "Send a sticker from the account's own packs — by emoji or by a word for it",
   "cmd.sticker.usage": "<emoji|word> [--to chat] [--silent] [--first] [--reply]",
-  "chats.empty_all": "No chats came back from Telegram — the list is empty."
+  "chats.empty_all": "No chats came back from Telegram — the list is empty.",
+  "quiet.set_title": "Quiet hours on",
+  "quiet.set_line": "Silent from {start} to {end}",
+  "quiet.scope_line": "Scope: {scope}",
+  "quiet.off_title": "Quiet hours off",
+  "quiet.off_line": "Sound is back — she answers again.",
+  "actions.card_sticker": "Sticker · {what}",
+  "actions.card_sticker_line": "picked from her own packs"
 }

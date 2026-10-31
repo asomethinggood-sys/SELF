@@ -1510,5 +1510,12 @@
   "stickers.more": "دوباره بگو تا یکی دیگر بیاید",
   "cmd.sticker.description": "فرستادن استیکر از پک‌های خود حساب — با ایموجی یا با کلمه‌ای که همان معنی را می‌دهد",
   "cmd.sticker.usage": "<ایموجی یا کلمه> [--to چت] [--silent] [--first] [--reply]",
-  "chats.empty_all": "تلگرام هیچ گفت‌وگویی برنگرداند — فهرست خالی است."
+  "chats.empty_all": "تلگرام هیچ گفت‌وگویی برنگرداند — فهرست خالی است.",
+  "quiet.set_title": "ساعت سکوت روشن",
+  "quiet.set_line": "از {start} تا {end} ساکت",
+  "quiet.scope_line": "محدوده: {scope}",
+  "quiet.off_title": "ساعت سکوت خاموش",
+  "quiet.off_line": "صدا برگشت — دوباره جواب می‌دهد.",
+  "actions.card_sticker": "استیکر · {what}",
+  "actions.card_sticker_line": "از پک‌های خودش برداشت"
 }

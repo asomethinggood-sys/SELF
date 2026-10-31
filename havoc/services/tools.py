@@ -346,6 +346,44 @@ def build_tools(runtime: Any) -> list[Tool]:
             kind="failed",
         )
 
+    async def send_sticker(turn: Turn, args: dict[str, str]) -> ActionResult:
+        """A sticker that says what she means, from the packs already installed.
+
+        One implementation: this is `.sticker` with her voice on it, not a second
+        path that can disagree with what he would get by typing the command.
+        """
+        raw = (args.get("emoji") or "").strip()
+        if not raw:
+            return ActionResult(False, detail="a sticker needs an emoji or a word", kind="bad_args")
+        result = await run_command(
+            runtime,
+            f"sticker {raw}",
+            chat_id=turn.chat_id,
+            sender_id=turn.actor_id or 0,
+            message_id=turn.message_id,
+            language=turn.language,
+            reply_to=turn.reply_to,
+        )
+        if not result.ok:
+            return ActionResult(False, detail=result.note or "no sticker matched", kind="send")
+        return ActionResult(
+            True,
+            note=f"sticker sent for {raw}",
+            title=_t(runtime, turn, "actions.card_sticker", what=raw[:40]),
+            lines=tuple(_t(runtime, turn, "actions.card_sticker_line"),),
+        )
+
+    tools.append(
+        Tool(
+            name="send_sticker",
+            summary="send a sticker that matches a feeling, emoji or word ('heart', '🥺')",
+            properties={"emoji": "one emoji or a feeling word"},
+            required=("emoji",),
+            run=send_sticker,
+            scope="write",
+        )
+    )
+
     tools.append(
         Tool(
             name="command",
