@@ -1521,5 +1521,7 @@
   "schedule.card_title": "زمان‌بندی · #{id}",
   "schedule.card_when": "ارسال: {when}",
   "schedule.card_relative": "یعنی {relative}",
-  "schedule.card_chat": "در چت {chat}"
+  "schedule.card_chat": "در چت {chat}",
+  "chats.title": "گفت‌وگوها",
+  "note.title": "یادداشت‌ها"
 }

@@ -14,6 +14,7 @@ import json
 from datetime import datetime
 from typing import Any
 
+from .. import ui
 from ..command_registry import Command, CommandContext, CommandError
 from ..utils.formatting import bold, code, escape, key_value_block, pre
 from ..utils.parsing import paginate
@@ -97,16 +98,23 @@ async def cmd_chats(ctx: CommandContext) -> None:
     if not matches:
         # An unfiltered list that came back empty has no query to put in quotes:
         # "no chats matched «»" is the sentence that produced.
-        if query:
-            await ctx.reply(ctx.t("chats.empty", query=escape(query)))
-        else:
-            await ctx.reply(ctx.t("chats.empty_all"))
+        line = ctx.t("chats.empty", query=query) if query else ctx.t("chats.empty_all")
+        await ctx.reply(ui.card(ctx.t("chats.title"), [line], icon="✉"))
         return
-    lines = [bold(ctx.t("chats.header", count=len(matches)))]
+    # A list is a card: a bold title, a drawn rule, the rows, and a footer that
+    # says what the number means. "No chats" is the same card with one line.
+    rows = []
     for name, chat_id, username in matches[:25]:
-        label = f"{escape(name)}" + (f" (@{escape(username)})" if username else "")
-        lines.append(f"• {label} — {code(chat_id)}")
-    await ctx.reply("\n".join(lines))
+        label = name + (f" (@{username})" if username else "")
+        rows.append(f"{label} — {chat_id}")
+    await ctx.reply(
+        ui.card(
+            ctx.t("chats.title"),
+            rows,
+            icon="✉",
+            footer=ctx.t("chats.header", count=len(matches)),
+        )
+    )
 
 
 async def cmd_chatinfo(ctx: CommandContext) -> None:
@@ -247,12 +255,18 @@ async def cmd_note(ctx: CommandContext) -> None:
     if action in {"list", "ls"}:
         rows = await store.list_notes(limit=100)
         if not rows:
-            await ctx.reply(ctx.t("note.empty", prefix=ctx.runtime.prefix))
+            await ctx.reply(
+                ui.card(ctx.t("note.title"), [ctx.t("note.empty", prefix=ctx.runtime.prefix)], icon="✎")
+            )
             return
-        lines = [bold(ctx.t("note.header", count=len(rows)))]
-        for row in rows:
-            lines.append(f"#{row['id']} {escape(truncate(row['title'] or row['body'], 60))}")
-        await ctx.reply("\n".join(lines))
+        await ctx.reply(
+            ui.card(
+                ctx.t("note.title"),
+                [f"#{row['id']} {truncate(row['title'] or row['body'], 60)}" for row in rows[:25]],
+                icon="✎",
+                footer=ctx.t("note.header", count=len(rows)),
+            )
+        )
         return
     if action in {"search", "find"}:
         query = " ".join(ctx.args).strip()

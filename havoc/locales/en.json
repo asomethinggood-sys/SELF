@@ -1521,5 +1521,7 @@
   "schedule.card_title": "Scheduled · #{id}",
   "schedule.card_when": "goes out {when}",
   "schedule.card_relative": "that is {relative}",
-  "schedule.card_chat": "in chat {chat}"
+  "schedule.card_chat": "in chat {chat}",
+  "chats.title": "Chats",
+  "note.title": "Notes"
 }
