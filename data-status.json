@@ -7,19 +7,20 @@
     "bookmarks": 1,
     "chat_settings": 1,
     "features": 17,
-    "jobs": 1853,
+    "jobs": 2184,
     "language_prefs": 1,
-    "profile_history": 1833,
+    "outbox": 143,
+    "profile_history": 2029,
     "profile_snapshots": 3,
     "reminders": 7,
     "schema_migrations": 9,
-    "settings": 37,
-    "sqlite_sequence": 8,
-    "usage_stats": 29,
-    "yura_actions": 25,
+    "settings": 39,
+    "sqlite_sequence": 9,
+    "usage_stats": 38,
+    "yura_actions": 39,
     "yura_history": 100,
-    "yura_memory": 57,
-    "yura_people": 1
+    "yura_memory": 58,
+    "yura_people": 3
   },
   "tables": {
     "aliases": 0,
@@ -33,41 +34,41 @@
     "features": 17,
     "ignored": 0,
     "interactive_sessions": 0,
-    "jobs": 1853,
+    "jobs": 2184,
     "language_prefs": 1,
     "notes": 0,
-    "outbox": 0,
+    "outbox": 143,
     "plan_steps": 0,
     "plans": 0,
     "plugins": 0,
-    "profile_history": 1833,
+    "profile_history": 2029,
     "profile_presets": 0,
     "profile_snapshots": 3,
     "reaction_rules": 0,
     "reminders": 7,
     "schedules": 0,
     "schema_migrations": 9,
-    "settings": 37,
-    "sqlite_sequence": 8,
+    "settings": 39,
+    "sqlite_sequence": 9,
     "templates": 0,
     "triggers": 0,
-    "usage_stats": 29,
+    "usage_stats": 38,
     "watches": 0,
-    "yura_actions": 25,
+    "yura_actions": 39,
     "yura_history": 100,
     "yura_lessons": 0,
-    "yura_memory": 57,
-    "yura_people": 1
+    "yura_memory": 58,
+    "yura_people": 3
   },
   "restored_from": {
     "cache_hit": "false",
-    "run_id": "41162352041"
+    "run_id": "41199324627"
   },
   "boot_log_lines": 50,
   "boot_log_tail": [
-    "2026-10-30T21:18:37+00:00 run=41129993673 boots=62 db=868352B",
     "2026-10-31T02:59:12+00:00 run=41130036450 boots=63 db=929792B",
-    "2026-10-31T08:40:33+00:00 run=41162352041 boots=64 db=1032192B"
+    "2026-10-31T08:40:33+00:00 run=41162352041 boots=64 db=1032192B",
+    "2026-10-31T12:03:28+00:00 run=41199324627 boots=65 db=1187840B"
   ],
-  "boots": 64
+  "boots": 65
 }
