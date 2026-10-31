@@ -80,9 +80,23 @@ class _ConsoleMessage:
     is_group: bool = False
     media: Any = None
     reply_to_msg_id: Any = None
+    #: The account's own client, so a command can fetch the message he replied
+    #: to — "ban this person" is only answerable by looking at that message.
+    client: Any = None
 
     async def get_reply_message(self) -> Any:
-        return None
+        if not self.reply_to_msg_id or self.client is None:
+            return None
+        getter = getattr(self.client, "get_messages", None)
+        if getter is None:
+            return None
+        try:
+            found = await getter(self.chat_id, ids=int(self.reply_to_msg_id))
+        except Exception:  # noqa: BLE001 - a vanished message is not an error
+            return None
+        if isinstance(found, (list, tuple)):
+            found = found[0] if found else None
+        return found
 
 
 class _CapturingSender:
@@ -275,6 +289,7 @@ async def run(
         is_private=bool(is_private),
         is_group=not is_private,
         reply_to_msg_id=int(reply_to) if reply_to else None,
+        client=runtime.client,
     )
     from ..command_registry import Dispatcher
 

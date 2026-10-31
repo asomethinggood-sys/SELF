@@ -313,6 +313,9 @@ def build_tools(runtime: Any) -> list[Tool]:
                 sender_id=turn.actor_id or 0,
                 message_id=turn.message_id,
                 language=turn.language,
+                # "react to it", "delete that": the console is the hand, and the
+                # message he replied to is what "it" means.
+                reply_to=turn.reply_to,
             )
             if not result.ok and result.kind in {"blocked", "unknown"}:
                 return ActionResult(False, detail=result.note, kind=result.kind)

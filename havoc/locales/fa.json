@@ -1104,8 +1104,8 @@
   "inbox.empty": "فهرست گفتگوها خالی برگشت.",
   "inbox.header": "⟡ پیام‌های تو · {count}",
   "inbox.unread_mark": "خوانده‌نشده",
-  "inbox.unread_total": "◦ در کل {total} خوانده‌نشده",
-  "inbox.hint": "{prefix}read <نام> می‌گوید چه گفته شد، {prefix}unread نشان می‌دهد چه چیزی منتظر است",
+  "inbox.unread_total": "◦ {total} خوانده‌نشده در همه‌جا",
+  "inbox.hint": "{prefix}read <نام> — آخرین حرف‌هایش را می‌خوانم · {prefix}unread — چه چیزی منتظر توست",
   "inbox.nothing_unread": "چیزی منتظر نیست.",
   "inbox.unread_header": "⟡ منتظر · {count} گفتگو",
   "inbox.you": "تو",
@@ -1509,5 +1509,6 @@
   "stickers.pool": "هم‌معنی",
   "stickers.more": "دوباره بگو تا یکی دیگر بیاید",
   "cmd.sticker.description": "فرستادن استیکر از پک‌های خود حساب — با ایموجی یا با کلمه‌ای که همان معنی را می‌دهد",
-  "cmd.sticker.usage": "<ایموجی یا کلمه> [--to چت] [--silent] [--first] [--reply]"
+  "cmd.sticker.usage": "<ایموجی یا کلمه> [--to چت] [--silent] [--first] [--reply]",
+  "chats.empty_all": "تلگرام هیچ گفت‌وگویی برنگرداند — فهرست خالی است."
 }

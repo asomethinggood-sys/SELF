@@ -95,7 +95,12 @@ async def cmd_chats(ctx: CommandContext) -> None:
         if not query or query in name.lower() or query in str(username).lower():
             matches.append((name or username or str(dialog.id), dialog.id, username))
     if not matches:
-        await ctx.reply(ctx.t("chats.empty", query=escape(query)))
+        # An unfiltered list that came back empty has no query to put in quotes:
+        # "no chats matched «»" is the sentence that produced.
+        if query:
+            await ctx.reply(ctx.t("chats.empty", query=escape(query)))
+        else:
+            await ctx.reply(ctx.t("chats.empty_all"))
         return
     lines = [bold(ctx.t("chats.header", count=len(matches)))]
     for name, chat_id, username in matches[:25]:

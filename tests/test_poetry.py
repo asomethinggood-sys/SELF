@@ -342,7 +342,9 @@ def test_poetry_and_roasts_are_registered_features() -> None:
 
     names = {feature.name for feature in builtin_features()}
     assert {"poetry", "roasts"} <= names
-    assert DEFAULT_FEATURES["poetry"] is False
+    # Poetry ships *on*: an offline fortune or verse is content, not automation,
+    # and "the feature is disabled" is not an answer to "یورا فال بگیر".
+    assert DEFAULT_FEATURES["poetry"] is True
     assert DEFAULT_FEATURES["roasts"] is False
     assert set(FEATURE_GROUPS["fun"]) == {"poetry", "roasts"}
 

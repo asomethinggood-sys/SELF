@@ -337,7 +337,9 @@ async def _quiet_value(menu: Menu, language: str, chat_id: int | None = None) ->
     config = await menu.runtime.permissions.quiet_hours_config(None)
     if not config:
         return menu.runtime.t("settings.state_off", language)
-    return f"{escape(str(config.get('start', '—')))} → {escape(str(config.get('end', '—')))}"
+    # Plain text: the card escapes values itself, and escaping twice is how
+    # "&lt;i&gt;" ended up on his screen.
+    return f"{config.get('start', '—')} → {config.get('end', '—')}"
 
 
 async def _ai_value(menu: Menu, language: str, chat_id: int | None = None) -> str:
@@ -354,7 +356,7 @@ async def _ai_value(menu: Menu, language: str, chat_id: int | None = None) -> st
     label = spec.label if spec is not None else menu.runtime.t("settings.ai_auto", language)
     keys = len(credentials) if credentials is not None else 1
     count = menu.runtime.t("settings.ai_keys_n", language, count=keys)
-    return f"{escape(label)} {ui.note('·')} {ui.note(escape(count))}"
+    return f"{label} · {count}"
 
 
 def _feature_value(name: str) -> Callable[[Menu, str, int | None], Awaitable[str]]:

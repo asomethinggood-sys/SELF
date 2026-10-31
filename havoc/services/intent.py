@@ -350,6 +350,24 @@ def _reminder(text: str) -> Intent | None:
         return None
     seconds, _ = _duration(folded)
     if not seconds:
+        # "یادم بنداز ساعت ۵ شیر بخرم" names a clock time, not a countdown. The
+        # command's own parser knows `HH:MM`; all that is missing is the shape.
+        clock = _FA_CLOCK_TIME.search(folded)
+        if clock:
+            what = folded[clock.end() :].strip(" .,!؟?؛;:کهرا")
+            what = re.sub(r"^(?:که|را|رو)\s+", "", what).strip() or "reminder"
+            hour = int(clock.group("hour"))
+            minute = int(clock.group("minute") or 0)
+            if clock.group("evening") and hour < 12:
+                hour += 12
+            if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                return None
+            stamp = f"{hour:02d}:{minute:02d}"
+            return Intent(
+                lines=(f"remind {stamp} {what}",),
+                label="remind",
+                detail=f"remind · {stamp}",
+            )
         return None
     # What to be reminded about: everything after the trigger, with the timing
     # phrase taken out. "remind me to drink water in 35 minutes" is about water;
@@ -579,6 +597,34 @@ _AWAY_OFF = re.compile(
     r"^(?:i(?:'m|\s+am)\s+(?:back|here|home)|turn\s+off\s+away|away\s+off|stop\s+away"
     r"|stop\s+tell\w*\s+(?:them|people|everyone)\s+i(?:'m|\s+am)\s+(?:away|out))\s*[.!]*$"
 )
+#: Persian orders use the same verbs in a different order: "نامش رو عوض کن بذار
+#: لیانا", "بیو رو عوض کن بنویس …". The verb pair is the trigger, the tail is the
+#: value — never the other way round.
+_FA_NAME = re.compile(
+    r"^(?:اسم|نام)(?:\s+من)?(?:ش|مو|م|تو|ت)?(?:\s*(?:رو|را))?\s*"
+    r"(?:رو\s*)?(?:عوض\s*کن|تغییر\s*بده|عوض|تغییر|بذار|بزار|بذارش|کن)\s*"
+    r"(?:بذار|بزار|به|روی|:)?\s*(?P<name>.+)$"
+)
+_FA_BIO = re.compile(
+    r"^(?:بیو|بیوی|بیوگرافی|بایو)(?:\s*(?:رو|را))?\s*"
+    r"(?:عوض\s*کن|تغییر\s*بده|عوض|تغییر|بنویس|بذار|بزار|کن)\s*"
+    r"(?:بنویس|بذار|بزار|که|:)?\s*(?P<bio>.+)$"
+)
+_FA_LEAVE = re.compile(
+    r"^(?:از\s*)?(?:این\s*|همین\s*)?(?:گروه|چت|گروه\s*و\s*چت|اینجا)\s*(?:رو|را)?\s*"
+    r"(?:برو|ترک\s*کن|خارج\s*شو|بیا\s*بیرون)$"
+)
+_FA_QUIET = re.compile(r"^(?:ساکت|خفه|هیس)(?:\s*شو|\s*باش)?$")
+#: "این شخص رو بن کن" and "اینو بن کن @sara" are one order in two orders of words.
+_FA_BAN = re.compile(
+    r"^(?:(?:این|اون|همین|همون)(?:و|ش)?\s*)?(?:شخص|یارو|آدم|کاربر|بچه|فرد|طرف)?\s*"
+    r"(?:رو|را)?\s*(?P<who>@[\w.]+)?\s*(?:رو|را)?\s*(?:بن|بلاک)\s*کن\s*(?P<who2>@[\w.]+)?$"
+)
+_FA_KICK = re.compile(
+    r"^(?:(?:این|اون|همین|همون)(?:و|ش)?\s*)?(?:شخص|یارو|آدم|کاربر|بچه|فرد|طرف)?\s*"
+    r"(?:رو|را)?\s*(?P<who>@[\w.]+)?\s*(?:رو|را)?\s*"
+    r"(?:بیرون(?:ش|شون)?|اخراج(?:ش|شون)?|حذف(?:ش|شون)?)\s*کن\s*(?P<who2>@[\w.]+)?$"
+)
 _NAME_CHANGE = re.compile(
     r"^(?:(?:can|could|would)\s+you\s+)?(?:change|set|make|put|update)\s+"
     r"(?:my|the)\s+(?:profile\s+|telegram\s+)?(?:display\s+)?name(?:\s+(?:to|as))?\s+(?P<name>.+?)\s*[.!]*$"
@@ -697,6 +743,44 @@ def _actions(text: str) -> Intent | None:
         body = _clean_body(match.group("bio"))
         if body and body not in _NOISE:
             return Intent(lines=(f"bio set {body}",), label="profile", detail="bio")
+
+    # ---- the same orders in Persian, in the word orders people type them ----
+    match = _FA_NAME.match(folded)
+    if match:
+        name = _clean_body(match.group("name"))
+        if name and name not in _NOISE and len(name) <= 40:
+            return Intent(lines=(f"profile name {name}",), label="profile", detail=f"name → {name}")
+
+    match = _FA_BIO.match(folded)
+    if match:
+        body = _clean_body(match.group("bio"))
+        if body and body not in _NOISE:
+            return Intent(lines=(f"bio set {body}",), label="profile", detail="bio")
+
+    if _FA_LEAVE.match(folded):
+        return Intent(lines=("leave --yes",), label="leave", detail="leave this chat")
+
+    if _FA_QUIET.match(folded):
+        return Intent(lines=("quiet-hours on",), label="quiet-hours", detail="quiet hours on")
+
+    match = _FA_BAN.match(folded)
+    if match:
+        who = _clean_body(match.group("who") or match.group("who2") or "")
+        # No name means the message he replied to: the command reads the reply.
+        return Intent(
+            lines=((f"ban {who} --yes" if who else "ban --yes"),),
+            label="ban",
+            detail=f"ban {who}" if who else "ban · the replied-to person",
+        )
+
+    match = _FA_KICK.match(folded)
+    if match:
+        who = _clean_body(match.group("who") or match.group("who2") or "")
+        return Intent(
+            lines=((f"kick {who} --yes" if who else "kick --yes"),),
+            label="kick",
+            detail=f"kick {who}" if who else "kick · the replied-to person",
+        )
     return None
 
 
@@ -1132,6 +1216,21 @@ _REPEAT_AFTER_SAY = re.compile(
     r"\s*[.!]*$",
     re.I,
 )
+#: The Persian burst: "«من دختر خوبم» رو ۱۰۰ بار بگو", "۱۰ تا پیام جدا بفرست".
+#: The count comes after the words, and the room is named with "تو این گروه".
+_REPEAT_FA = re.compile(
+    # "«من دختر خوبم» رو ۱۰۰ بار بگو" — and "۱۰ بار بگو سلام".
+    r"^(?:(?P<body1>.+?)\s*(?:رو|را)?\s*)?"
+    r"(?<!\d)(?P<count1>\d{1,3}|صد|دویست|سه|پنج|ده)\s*(?:بار|دفعه)\s*"
+    r"(?:جدا|پیوسته|پشت\s*سر\s*هم)?\s*(?:بگو|بفرست|بنویس|بزن)\s*(?P<body2>.+)?$"
+    # "۱۰ تا پیام جدا بفرست" — the count is the number of messages.
+    r"|^(?P<count3>\d{1,3}|ده|پنج|سه)\s*[تت]ا\s*پیام\s*(?:جدا|دیگر|مختلف)?\s*"
+    r"(?:بفرست|بگو|بنویس)\s*(?P<body4>.+?)?\s*$"
+    # "بگو من دختر خوبم ۱۰۰ بار"
+    r"|^(?:بگو|بفرست|بنویس)\s+(?P<body3>.+?)\s*(?:رو|را)?\s*"
+    r"(?<!\d)(?P<count2>\d{1,3}|صد|دویست|سه|پنج|ده)\s*(?:بار|دفعه)\s*$",
+    re.I,
+)
 _REPEAT_FIRST = re.compile(
     r"^(?:please\s+)?(?:repeat|send|say|post)\s+(?P<body>.+?)\s+"
     r"(?P<count>\d{1,3}|a couple of|three|five|ten|twice)\s+times?"
@@ -1167,6 +1266,8 @@ _REACT = re.compile(
 #: The Persian order has three word orders and one verb in common: the reaction
 #: word itself. Everything else in the sentence is noise, so the verb is the
 #: trigger and the remaining token is the reaction.
+#: The words that make "react" an *order* rather than a topic.
+_REACT_ORDER = re.compile(r"\b(?:react|reaction)\b|بده|بکن|\bکن\b|بذار|بگذار|بنداز", re.I)
 _REACT_FA_VERB = re.compile(
     r"(?:واکنش|ری\s*[-\u200c]?\s*اکشن|راکشن|ریакشن)", re.I
 )
@@ -1195,6 +1296,12 @@ _PLAN_STOP = re.compile(
     re.I,
 )
 _PLAN_ASK = re.compile(r"^(?:what'?s (?:planned|scheduled)|my plans|show (?:me )?the plans?)$", re.I)
+#: A clock time as people write it: "ساعت ۵", "ساعت 17:30", "at 9 am".
+_FA_CLOCK_TIME = re.compile(
+    r"(?:ساعت|at)\s*(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\s*"
+    r"(?P<evening>عصر|شب|pm)?",
+    re.I,
+)
 _TIMES = re.compile(r"\b(?P<count>\d{1,3}|a couple of|three|five|ten)\s+times\b", re.I)
 _SPOILER = re.compile(r"\b(?:with a |as a |in a )?spoiler\b|\bhidden\b", re.I)
 _SILENT = re.compile(r"\b(?:silently|quietly|without a sound|no notification)\b", re.I)
@@ -1381,12 +1488,19 @@ def _reach(text: str, *, allow_plan: bool = True) -> Intent | None:
 
     match = _REACT.match(original)
     if match and not re.match(r"^(?:react|reaction)\b\s*$", folded, re.I):
-        emoji = _reaction_from(match.group("emoji"))
+        # The same rule in English: "react to this" with no glyph gets the heart.
+        emoji = _reaction_from(match.group("emoji")) or (
+            "❤️" if _REACT_ORDER.search(folded) else ""
+        )
         if emoji:
             return Intent(lines=(f"emoji {emoji}",), label="react", detail=f"react {emoji}")
 
     if _REACT_FA_VERB.search(folded):
-        emoji = _fa_reaction(folded)
+        # "به این پیام واکنش بده" names no glyph. A heart is the answer that is
+        # never wrong, and doing nothing is the answer that always is.
+        emoji = _fa_reaction(folded) or (
+            "❤️" if _REACT_ORDER.search(folded) else ""
+        )
         if emoji:
             return Intent(lines=(f"emoji {emoji}",), label="react", detail=f"react {emoji}")
 
@@ -1432,6 +1546,32 @@ def _reach(text: str, *, allow_plan: bool = True) -> Intent | None:
             label="send",
             detail=f"send · {count}×",
         )
+
+    match = _REPEAT_FA.match(spoken_once)
+    if match:
+        body = _clean_body(
+            match.group("body1")
+            or match.group("body2")
+            or match.group("body3")
+            or match.group("body4")
+            or ""
+        )
+        count = _repeat_count(
+            (match.group("count1") or match.group("count2") or match.group("count3") or "")
+            .replace("صد", "100")
+            .replace("دویست", "200")
+            .replace("سه", "3")
+            .replace("پنج", "5")
+            .replace("ده", "10")
+        )
+        # "…تو این گروه" names the room, not the words being sent.
+        body = re.sub(r"\s*(?:تو|توی|در)\s*این\s*(?:گروه|چت|جا)\s*$", "", body).strip()
+        if body and count >= 2 and not body.isdigit():
+            return Intent(
+                lines=(f"send --here {body} --repeat {count}",),
+                label="send",
+                detail=f"send · {count}×",
+            )
 
     match = _SAY_INTO.match(original)
     if match:

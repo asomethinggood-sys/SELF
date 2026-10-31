@@ -1105,7 +1105,7 @@
   "inbox.header": "⟡ your messages · {count}",
   "inbox.unread_mark": "unread",
   "inbox.unread_total": "◦ {total} unread in all",
-  "inbox.hint": "{prefix}read <name> tells you what was said, {prefix}unread shows what is waiting",
+  "inbox.hint": "{prefix}read <name> to see what they last said · {prefix}unread for who is waiting",
   "inbox.nothing_unread": "nothing is waiting.",
   "inbox.unread_header": "⟡ waiting · {count} chats",
   "inbox.you": "you",
@@ -1509,5 +1509,6 @@
   "stickers.pool": "matching",
   "stickers.more": "say it again for another one",
   "cmd.sticker.description": "Send a sticker from the account's own packs — by emoji or by a word for it",
-  "cmd.sticker.usage": "<emoji|word> [--to chat] [--silent] [--first] [--reply]"
+  "cmd.sticker.usage": "<emoji|word> [--to chat] [--silent] [--first] [--reply]",
+  "chats.empty_all": "No chats came back from Telegram — the list is empty."
 }

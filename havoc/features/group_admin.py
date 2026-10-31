@@ -118,6 +118,22 @@ async def cmd_slowmode(ctx: CommandContext) -> None:
 async def _person(ctx: CommandContext) -> tuple[Any, str, int]:
     who = " ".join(ctx.args).strip()
     if not who:
+        # "این شخص رو بن کن" is a reply: the person being pointed at is the one
+        # whose message he answered, and asking him to retype their handle is
+        # asking him to do the work twice.
+        replied = await ctx.reply_message()
+        person = getattr(replied, "sender_id", None) or getattr(replied, "from_id", None)
+        if person is not None and int(person) not in {
+            int(getattr(ctx.runtime.permissions, "self_id", 0) or 0),
+            int(getattr(ctx.event, "sender_id", 0) or 0),
+        }:
+            label = str(person)
+            try:
+                resolved = await ctx.runtime.reach.resolve(str(person))
+                label = escape(getattr(resolved, "label", "") or str(person))
+            except Exception:  # noqa: BLE001 - the id alone is still honest
+                pass
+            return int(person), label, int(person)
         raise CommandError("admin.usage_person", prefix=ctx.runtime.prefix)
     target = await ctx.runtime.reach.resolve_or_raise(who)
     person = getattr(target, "id", None)

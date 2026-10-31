@@ -46,7 +46,10 @@ DEFAULT_FEATURES: dict[str, bool] = {
     # automation stays off until asked for. `.yura off` silences it.
     "persona": True,
     "media": False,
-    "poetry": False,
+    # On by default: offline, no network, no other person involved. He asked for
+    # a fortune in plain Persian and got "the feature is disabled" instead, which
+    # is not an answer. `.feature poetry off` still silences the whole family.
+    "poetry": True,
     "roasts": False,
 }
 

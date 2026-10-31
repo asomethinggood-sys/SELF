@@ -466,9 +466,16 @@ class YuraChat:
         # Whether anything actually happened. The model's block is the first route
         # and the sentence itself is the second: "turn off my live clock" must turn
         # the clock off even on a turn where the model only wrote a paragraph.
-        if owner and not did:
+        if owner:
+            # Always offer the sentence to the floor: a model that narrates instead
+            # of acting must not be the reason nothing happens. An intent whose work
+            # a tool already did is skipped inside.
             await self._run_intent(
-                spoken, chat_id=chat_id, language=language, reply_to=reply_to
+                spoken,
+                chat_id=chat_id,
+                language=language,
+                reply_to=reply_to,
+                already=tuple(did),
             )
         if reply is None:
             source = "offline"
@@ -526,8 +533,29 @@ class YuraChat:
             rendered=answer.rendered,
         )
 
+    #: A sentence's label, and the tools that would have done the same thing. When
+    #: the model already used one of them this turn, the floor stays out of the way
+    #: — but only for that label: "he is busy lil bro, and turn the clock off" is
+    #: two instructions, and one of them may have gone through a tool.
+    _SAME_AS: dict[str, tuple[str, ...]] = {
+        "react": ("react",),
+        "send": ("send_message",),
+        "plan": ("plan", "remind", "schedule"),
+        "remember": ("remember",),
+        "forget": ("forget",),
+        # `recall` is the hand that reads memory; the console's `.recall` is the
+        # same work done twice, and the second card pushed the real one off.
+        "lookup": ("recall", "command", "search"),
+    }
+
     async def _run_intent(
-        self, text: str, *, chat_id: int, language: str, reply_to: int | None = None
+        self,
+        text: str,
+        *,
+        chat_id: int,
+        language: str,
+        reply_to: int | None = None,
+        already: tuple[str, ...] = (),
     ) -> None:
         """Read the sentence as an instruction and *do* it.
 
@@ -548,6 +576,11 @@ class YuraChat:
             self.logger.warning("yura: could not read the sentence as an instruction: %s", exc)
             return
         if found is None:
+            return
+        done_by_tool = self._SAME_AS.get(found.label or "", ())
+        if any(name in already for name in done_by_tool):
+            # The hands already did this one. Doing it again is the duplicate
+            # message he photographed.
             return
         lines: list[str] = []
         ran_any = False
@@ -581,7 +614,9 @@ class YuraChat:
         if not lines and not ran_any:
             return
         title = self._intent_title(language, found.detail or found.label)
-        self._cards = [(title, tuple(lines[:6]))] + list(self._cards)
+        # Under the tool's own card, never over it: the hand did the work, the
+        # sentence is the footnote.
+        self._cards = list(self._cards) + [(title, tuple(lines[:6]))]
         self._intent_done.append(found.detail or found.label)
 
     @staticmethod

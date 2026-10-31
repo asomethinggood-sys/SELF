@@ -9,6 +9,7 @@ Feature areas: 51, 52, 55, 56, 57, 58, 59, 60.
 
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 from typing import Any
 
@@ -103,7 +104,18 @@ async def cmd_remind(ctx: CommandContext) -> None:
     except TimeParseError as exc:
         raise CommandError("errors.invalid_time", detail=escape(str(exc)), example="30m | tomorrow 09:00") from exc
     if when <= utc_now():
-        raise CommandError("errors.time_in_past", when=escape(format_datetime(when, tz, ctx.language)))
+        # A bare clock time that has already gone by is *tomorrow's* — nobody
+        # types "09:00" at eight in the evening meaning this morning.
+        bare = re.fullmatch(r"(?i)\s*(?:at\s*)?(\d{1,2}:\d{2})\s*", when_raw or "")
+        rolled = None
+        if bare:
+            try:
+                rolled = parse_when(f"tomorrow {bare.group(1)}", tz)
+            except TimeParseError:
+                rolled = None
+        if rolled is None or rolled <= utc_now():
+            raise CommandError("errors.time_in_past", when=escape(format_datetime(when, tz, ctx.language)))
+        when = rolled
 
     recurrence = parse_recurrence(ctx.flag("repeat") or ctx.flag("every") or None)
     if ctx.flag("repeat") and not recurrence:

@@ -339,4 +339,10 @@ def test_a_persian_dictated_message_in_both_word_orders() -> None:
 
 def test_a_reaction_named_by_a_word() -> None:
     assert intent_module.detect("react with a heart").lines == ("emoji ❤️",)
-    assert intent_module.detect("react to that") is None
+    # An order with no glyph named still reacts: "به این پیام واکنش بده" was the
+    # sentence that used to mean nothing at all. A heart is never wrong.
+    assert intent_module.detect("react to that").lines == ("emoji ❤️",)
+    assert intent_module.detect("به این پیام واکنش بده").lines == ("emoji ❤️",)
+    # Talking *about* reacting is not ordering it.
+    assert intent_module.detect("واکنش") is None
+    assert intent_module.detect("i love how you react to my jokes") is None
