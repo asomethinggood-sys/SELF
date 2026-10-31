@@ -299,6 +299,102 @@ def take_duration(clause: str) -> tuple[float | None, str]:
     return seconds, re.sub(r"\s+", " ", stripped).strip(" ,;،.")
 
 
+def plan_from_steps(
+    steps: str,
+    *,
+    runtime: Any = None,
+    now: datetime | None = None,
+    timezone: str | None = None,
+) -> tuple[Plan | None, str]:
+    """A timeline the *model* wrote, instead of one read from a sentence.
+
+    He says something the floor cannot parse ("بعد از ساعت هشت یه پیام به محمد
+    بده، نصف ساعت بعدشم پاکش کن"), the model understands it, and the model should
+    be able to say what it understood — not be forced back through a reader that
+    already failed. ``steps`` is a JSON array (or one step per line)::
+
+        [{"action": "send محمد سلام", "after": "2h"},
+         {"action": "unsend last", "after": "10m"}]
+
+    ``after``/``in`` is a wait from the previous step, ``at`` an absolute moment,
+    and a step with neither runs as soon as the one before it does. Returns
+    ``(plan, "")`` or ``(None, why-not)``.
+    """
+    import json as _json
+
+    raw = str(steps or "").strip()
+    if not raw:
+        return None, "no steps"
+    rows: list[Any]
+    try:
+        parsed = _json.loads(raw)
+        rows = parsed if isinstance(parsed, list) else [parsed]
+    except (ValueError, TypeError):
+        # A model that flattened the array into words: "after 2h action send …
+        # after 10m action unsend last". The tokens it chose are stable enough
+        # to split on, and anything else is one step per line.
+        text = raw.replace("\n", " ; ")
+        parts = [part for part in re.split(r"\s*;\s*|\s+(?=action\s)", text) if part.strip()]
+        rows = parts
+    current = now or utc_now()
+    plan = Plan(said=raw, label="")
+    offset = 0.0
+    for index, row in enumerate(rows):
+        if isinstance(row, str):
+            wait, body = take_delay(row)
+            body = body if wait is not None else row
+            if wait is not None:
+                offset += wait
+            body = re.sub(r"^\s*action\s+", "", body, flags=re.I).strip()
+            at_text = ""
+        elif isinstance(row, dict):
+            body = str(row.get("action") or row.get("line") or row.get("command") or "").strip()
+            at_text = str(row.get("at") or "").strip()
+            after = str(row.get("after") or row.get("in") or "").strip()
+            wait = None
+            if after:
+                wait = _any_wait(after)
+                if wait is None:
+                    return None, f"step {index + 1}: {after!r} is not a wait"
+        else:
+            return None, f"step {index + 1} is not an action"
+        if not body:
+            return None, f"step {index + 1} has no action"
+        name = body.split(maxsplit=1)[0]
+        if runtime is not None and runtime.registry.resolve(name) is None:
+            return None, f"{name!r} is not one of her commands"
+        if at_text:
+            from ..utils.time import TimeParseError, parse_when
+
+            try:
+                moment = parse_when(at_text, timezone or "UTC", now=current)
+            except TimeParseError:
+                return None, f"step {index + 1}: {at_text!r} is not a time"
+            offset = max(0.0, (moment - current).total_seconds())
+        elif isinstance(row, dict) and row.get("after"):
+            offset += float(wait or 0.0)
+        plan.add(body, current + timedelta(seconds=offset))
+    if plan.empty:
+        return None, "no steps"
+    # A label he can say to stop it: the first thing it does, never the JSON.
+    plan.label = label_for(plan.steps[0].action)
+    return plan, ""
+
+
+def _any_wait(text: str) -> float | None:
+    """A wait in any of the shapes he or a model writes it."""
+    seconds, rest = take_delay(text)
+    if seconds is not None:
+        return seconds
+    seconds, rest = take_bare_delay(text)
+    if seconds is not None:
+        return seconds
+    moment = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*([a-zA-Z]+|ثانیه|دقیقه|ساعت|روز|هفته)\s*", text)
+    if moment:
+        return _seconds_between(moment.group(1), moment.group(2))
+    return None
+
+
 def label_for(said: str) -> str:
     """A short name he can say to cancel it: the first thing it does."""
     words = [word for word in re.split(r"\s+", str(said or "").strip()) if word]
@@ -359,10 +455,16 @@ class PlanRunner:
             return
         if not await self.store.step_fired(step_id, status="done"):
             return  # another runner claimed it
-        await self._execute(str(step["action"]), plan_id=plan_id)
+        ok, why = await self._execute(str(step["action"]), plan_id=plan_id)
+        if not ok:
+            # A step that could not run must not look like one that did: the row
+            # carries the reason, and the plan is closed as failed at the end —
+            # but the *other* steps still run, because a fal does not depend on
+            # whether a message could be sent.
+            await self.store.step_failed(step_id, why or "the step failed")
         await self._close_if_done(plan_id)
 
-    async def _execute(self, action: str, *, plan_id: int) -> None:
+    async def _execute(self, action: str, *, plan_id: int) -> tuple[bool, str]:
         from .self_console import run as run_command
 
         self_id = int(getattr(self.runtime.permissions, "self_id", 0) or 0)
@@ -385,10 +487,23 @@ class PlanRunner:
             self.runtime.logger.warning(
                 "plan %s step %r failed: %s", plan_id, action, redact_text(reply.note)[:200]
             )
+            return False, str(getattr(reply, "note", "") or "the step failed")
+        return True, ""
 
     async def _close_if_done(self, plan_id: int) -> None:
         remaining = await self.store.pending_steps(plan_id)
-        if not remaining:
+        if remaining:
+            return
+        steps = await self.store.plan_steps(plan_id)
+        broken = [row for row in steps if str(row["status"]) == "failed"]
+        if broken:
+            # "every step ran" would be a lie about a plan with a broken step.
+            await self.store.close_plan(
+                plan_id,
+                "failed",
+                note=redact_text(str(broken[0]["note"]) or "a step failed")[:200],
+            )
+        else:
             await self.store.close_plan(plan_id, "done", note="every step ran")
 
     async def cancel(self, needle: str | None = None, *, newest: bool = True) -> dict[str, Any]:
@@ -647,5 +762,6 @@ __all__ = [
     "split_sequence",
     "take_bare_delay",
     "take_delay",
+    "plan_from_steps",
     "take_duration",
 ]

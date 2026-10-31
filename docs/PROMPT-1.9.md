@@ -150,7 +150,22 @@ The rules that make it work, in both languages:
 * a **named private chat** (`پیوی محمد`, `پیوی @ali`) resolves the way `send`
   resolves anything else, and says so plainly when there is no such person.
 
-**4.5 The model has the same hand.** `reply_rule` is a tool like `react` or
+**4.5 The model writes the timeline when it understood one.** `plan` takes either
+the sentence verbatim or the steps themselves:
+
+```json
+[{"action": "send محمد سلام", "after": "2h"},
+ {"action": "unsend last", "after": "10m"},
+ {"action": "fal"}]
+```
+
+So a paraphrase no pattern recognises — *"یه برنامه بچین: دو ساعت بعد به محمد سلام
+بده، ده دقیقه بعدش پیامتو پاک کن، بعدشم فال بگیر"* — is still carried out: the
+model names the moments, the scheduler owns them, and every action is a console
+line that could be typed by hand. A name that is not one of her commands is
+refused before anything is scheduled.
+
+**4.6 The model has the same hand.** `reply_rule` is a tool like `react` or
 `send_message`: a sentence no pattern recognises ("be distant with zero from
 here on") can still be carried out, because understanding it is the model's job
 and the rule is the console's. When both routes see the same instruction, the
@@ -175,5 +190,7 @@ Run each line through `scripts/try_message.py` (offline) and then live:
    four moments back, and the four steps really run at those moments.
 8. He answers one of her group messages four seconds after her last one → she
    answers. (The regression he reported.)
+9. `.plan show` after a chain: every step `done`, or the failed row carrying the
+   reason it could not run — "every step ran" is never printed over a broken one.
 
 `pytest -q` green. `scripts/audit_live.py` overall ok.

@@ -281,3 +281,121 @@ def test_an_english_chain_written_the_way_people_write_it() -> None:
     )
     assert _actions(plan) == ["policy ignore sara --for 2h", "send mohammad hello", "unsend last"]
     assert _offsets(plan) == [0, 7200, 7800]
+
+
+# ---------------------------------------------------------------------------
+# The model's own hand: a timeline it wrote, not one the floor read
+# ---------------------------------------------------------------------------
+def _plan_tool(runtime):
+    from havoc.services.tools import build_tools
+
+    return {tool.name: tool for tool in build_tools(runtime)}["plan"]
+
+
+async def test_the_model_can_write_the_steps_itself(runtime) -> None:
+    from havoc.services.actions import Turn
+
+    tool = _plan_tool(runtime)
+    steps = (
+        '[{"action": "send محمد سلام", "after": "2h"},'
+        ' {"action": "unsend last", "after": "10m"},'
+        ' {"action": "fal"}]'
+    )
+    result = await tool.run(Turn(chat_id=OWNER, actor_id=OWNER, language="en"), tool.validate({"steps": steps}))
+    assert result.ok, result.detail
+    plan = (await runtime.store.plans(1))[0]
+    rows = await runtime.store.plan_steps(int(plan["id"]))
+    assert [row["action"] for row in rows] == ["send محمد سلام", "unsend last", "fal"]
+    assert str(plan["label"]).startswith("send محمد")  # not the JSON
+
+
+async def test_a_model_step_that_is_not_a_command_is_refused(runtime) -> None:
+    from havoc.services.actions import Turn
+
+    tool = _plan_tool(runtime)
+    result = await tool.run(
+        Turn(chat_id=OWNER, actor_id=OWNER, language="en"),
+        tool.validate({"steps": '[{"action": "launch rocket", "after": "1m"}]'}),
+    )
+    assert not result.ok and "launch" in result.detail
+    assert await runtime.store.plans(5) == []
+
+
+async def test_a_flattened_step_list_still_reads(runtime) -> None:
+    """A model that sends an array of objects gets it flattened to words."""
+    from havoc.services.actions import Turn
+
+    tool = _plan_tool(runtime)
+    args = tool.validate(
+        {"steps": [{"action": "fal", "after": "1m"}, {"action": "unsend last", "after": "5m"}]}
+    )
+    result = await tool.run(Turn(chat_id=OWNER, actor_id=OWNER, language="en"), args)
+    assert result.ok, result.detail
+    assert result.note.endswith("2 steps")
+
+
+async def test_a_broken_step_is_recorded_and_the_rest_still_runs(runtime) -> None:
+    """A deletion with nothing to delete marks itself, and the fal still happens."""
+    await _wire(runtime)
+    reply = await run_console(
+        runtime, "plan do پیامتو پاک کن بعدش فال بگیر", chat_id=OWNER, sender_id=OWNER
+    )
+    assert reply.ok
+    plan_id = int((await runtime.store.plans(1))[0]["id"])
+    await _run_all(runtime, plan_id)
+
+    rows = await runtime.store.plan_steps(plan_id)
+    assert [row["status"] for row in rows] == ["failed", "done"]
+    assert rows[0]["note"]
+    plan = await runtime.store.plan(plan_id)
+    assert plan["status"] == "failed" and "delete" in str(plan["note"])
+
+
+# ---------------------------------------------------------------------------
+# Her own hand, on a sentence no reader knows
+# ---------------------------------------------------------------------------
+async def test_the_model_builds_a_chain_end_to_end(runtime) -> None:
+    """A paraphrase the floor cannot read becomes a real plan, from a tool call."""
+    import json as _json
+
+    class ChainCaller:
+        model = "chaincaller"
+        available = True
+
+        def __init__(self) -> None:
+            self.rounds = 0
+
+        async def converse_tools(self, messages, *, tools=None, max_tokens=400, temperature=0.85):
+            self.rounds += 1
+            if self.rounds == 1:
+                return "right, three things, on a clock.", [
+                    {
+                        "function": {
+                            "name": "plan",
+                            "arguments": {
+                                "steps": _json.dumps(
+                                    [
+                                        {"action": "send محمد سلام", "after": "2h"},
+                                        {"action": "unsend last", "after": "10m"},
+                                        {"action": "fal"},
+                                    ],
+                                    ensure_ascii=False,
+                                )
+                            },
+                        }
+                    }
+                ]
+            return "planned it — two hours to محمد, then the fal.", []
+
+    await _wire(runtime)
+    runtime.ai = ChainCaller()
+    answer = await runtime.yura_chat.answer(
+        "یه برنامه بچین: دو ساعت بعد به محمد سلام بده، ده دقیقه بعدش پیامتو پاک کن، بعدشم فال بگیر یورا",
+        chat_id=OWNER,
+        is_owner=True,
+    )
+    assert answer.text
+    plans = await runtime.store.plans(5)
+    assert len(plans) == 1, "a plan was made more than once"
+    steps = await runtime.store.plan_steps(int(plans[0]["id"]))
+    assert [row["action"] for row in steps] == ["send محمد سلام", "unsend last", "fal"]

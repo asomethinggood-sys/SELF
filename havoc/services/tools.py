@@ -450,15 +450,29 @@ def build_tools(runtime: Any) -> list[Tool]:
 
     async def plan_it(turn: Turn, args: dict[str, str]) -> ActionResult:
         sentence = (args.get("sentence") or args.get("text") or "").strip()
-        if not sentence:
-            return ActionResult(False, detail="a sentence is needed", kind="bad_args")
+        steps = (args.get("steps") or "").strip()
+        if not sentence and not steps:
+            return ActionResult(
+                False, detail="a sentence or a list of steps is needed", kind="bad_args"
+            )
         from . import intent as intent_module
-        from .plans import build_plan
+        from .plans import build_plan, plan_from_steps
 
-        plan = build_plan(sentence, intent=intent_module)
+        # Two ways to make a timeline, and the model may pick:
+        #  * the sentence, read by the same floor a typed order uses;
+        #  * the steps itself, when it understood something the floor did not.
+        plan = None
+        if steps:
+            plan, why = plan_from_steps(steps, runtime=runtime)
+            if plan is None:
+                return ActionResult(False, detail=why, kind="bad_args")
+        if plan is None:
+            plan = build_plan(sentence, intent=intent_module)
         if plan.empty:
             return ActionResult(False, detail="could not read that as a timeline", kind="failed")
-        result = await runtime.plans.create(plan, said=sentence, owner_id=turn.actor_id)
+        result = await runtime.plans.create(
+            plan, said=sentence or steps, owner_id=turn.actor_id
+        )
         return ActionResult(
             True,
             note=f"plan #{result['id']} with {result['steps']} steps",
@@ -560,9 +574,20 @@ def build_tools(runtime: Any) -> list[Tool]:
     tools.append(
         Tool(
             name="plan",
-            summary="turn a whole sequence with times into scheduled steps",
-            properties={"sentence": "the sentence he said, verbatim"},
-            required=("sentence",),
+            summary=(
+                "turn a whole sequence with times into scheduled steps — use it for any "
+                "sentence with 'then'/'بعد' in it, and for anything that must happen later: "
+                "a rule with a window, a message at a time, deleting that message after it"
+            ),
+            properties={
+                "sentence": "the sentence he said, verbatim (best: let the floor read it)",
+                "steps": (
+                    'a JSON array when you understood it better than the sentence reads: '
+                    '[{"action": "send محمد سلام", "after": "2h"}, '
+                    '{"action": "unsend last", "after": "10m"}] — "after"/"in" is a wait '
+                    'from the step before, "at" an absolute time'
+                ),
+            },
             run=plan_it,
             scope="write",
             risk="medium",

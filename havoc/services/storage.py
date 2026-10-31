@@ -403,6 +403,14 @@ class Store:
         )
         return bool(changed)
 
+    async def step_failed(self, step_id: int, note: str) -> bool:
+        """A claimed step that then went wrong says so, in the row he can read."""
+        changed = await self.db.execute(
+            "UPDATE plan_steps SET status = 'failed', note = ? WHERE id = ? AND status = 'done'",
+            (note[:300], int(step_id)),
+        )
+        return bool(changed)
+
     async def pending_steps(self, plan_id: int) -> list[Any]:
         return await self.db.fetch_all(
             "SELECT * FROM plan_steps WHERE plan_id = ? AND status = 'pending' ORDER BY idx",
