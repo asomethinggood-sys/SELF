@@ -9,7 +9,7 @@ account other than the logged-in user.
 `.` in the usage column stands for the active prefix (default `.`).
 
 
-Total: **143 commands**.
+Total: **144 commands**.
 
 
 ## Account
@@ -243,6 +243,7 @@ Total: **143 commands**.
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
 | `.diary` | Read the Saved Messages notepad, newest first _(owner only)._ | `.diary [count]` | `.savedmsgs`, `.tgnotes` |
+| `.exportchat` | Save a conversation as a text file and send it back here _(owner only)._ | `.exportchat <chat> [count] [--limit n]` | `.chatfile` |
 | `.mentions` | Where someone wrote his name _(owner only)._ | `.mentions [count]` | `.whereami` |
 
 ## Scheduling & time

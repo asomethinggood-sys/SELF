@@ -1001,7 +1001,7 @@ memory    .remember .forget .memories .recall .note .bookmark .saved
 messages  .reply .forward .copy .edit .delete .pin .unpin .clearhistory
 sending   .send .say .broadcast .outbox .unsend .emoji .plan
 inbox     .inbox .unread .read .whois .people
-read      .diary .mentions
+read      .diary .mentions .exportchat
 chats     .chats .chatinfo .chatsettings .labels .media .groups .members
           .invite .join .peek .folder .mute .unmute .draft .drafts .archive
           .unarchive .topics .topic
@@ -1040,6 +1040,9 @@ yura      .yura .ai
 * **people** — `.contacts .contact .block .unblock .blocklist`;
 * **running a group** — `.settitle .setdesc .slowmode .kick .ban .unban
   .promote .demote .leave`, with `.promote` granting only the rights he names;
+* **transcripts** — `.exportchat @sara 300` writes the conversation to a text
+  file (media as labels, never downloaded) and sends it back into the chat he
+  asked from;
 * **forum topics** — `.topics` lists them with unread counts, and
   `.topic new|close|open|pin|unpin|rename <id>` runs the thread itself; a group
   without forums answers with Telegram's own refusal, not a guess;

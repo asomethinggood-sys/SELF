@@ -416,7 +416,7 @@
   "errors.unexpected": "خطای غیرمنتظره ({detail}). جزئیات در فایل خطای محلی ثبت شد.",
   "errors.unknown_command": "فرمان «{name}» شناخته نشد. {prefix}help را امتحان کنید.",
   "errors.unknown_feature": "قابلیت «{name}» شناخته نشد. {prefix}features را ببینید.",
-  "export.done": "⟰ خروجی {kind} آماده شد ({rows} ردیف).",
+  "export.done": "⟡ رونوشت · {count} پیام",
   "fal.dry_run": "اجرای آزمایشی: فال شمارهٔ {id} همین حالا کشیده و فرستاده می‌شد.",
   "fal.empty": "دفتر فال خالی است — {detail}",
   "fal.meaning": "معنی",
@@ -1492,5 +1492,13 @@
   "cmd.topics.description": "موضوع‌های انجمن یک گروه، با تعداد خوانده‌نشده.",
   "cmd.topics.usage": "[گفتگو]",
   "cmd.topic.description": "یک موضوع انجمن را بساز، ببند، سنجاق کن یا نامش را عوض کن.",
-  "cmd.topic.usage": "[new <عنوان> | close <شماره> | open <شماره> | pin <شماره> | unpin <شماره> | rename <شماره> <عنوان>]"
+  "cmd.topic.usage": "[new <عنوان> | close <شماره> | open <شماره> | pin <شماره> | unpin <شماره> | rename <شماره> <عنوان>]",
+  "export.usage": "کدام گفتگو؟ {prefix}exportchat @sara 300",
+  "export.failed": "تلگرام آن گفتگو را نخواند — {detail}",
+  "export.empty": "{name} چیزی برای بیرون دادن ندارد.",
+  "export.too_big": "این بیش از {limit} مگابایت متن است — پیام کمتری بیرون بده.",
+  "export.send_failed": "فایل نوشته شد ولی فرستاده نشد — {detail}",
+  "export.where": "◦ {name} · {file} — فایل در همین گفتگوست",
+  "cmd.exportchat.description": "یک گفتگو را به فایل متنی تبدیل کن و همین‌جا بفرست.",
+  "cmd.exportchat.usage": "<گفتگو> [تعداد] [--limit n]"
 }

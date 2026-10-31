@@ -844,6 +844,11 @@ _NEW_TOPIC_ASK = re.compile(
     r"(?:called\s+|named\s+|titled\s+)?(?P<title>.+)$",
     re.I,
 )
+_EXPORT_ASK = re.compile(
+    r"^(?:please\s+)?(?:export|save|transcribe)\s+(?:the\s+)?(?:chat|conversation|history)"
+    r"\s+(?:with|of)\s+(?P<who>@[\w.]+|.+?)(?:\s+(?:to\s+a\s+file|as\s+a\s+file|file))?\s*[?!.]*$",
+    re.I,
+)
 _VERSION_ASK = re.compile(
     r"^(?:what|which)\s+version\s+are\s+you(?:\s+running)?\s*[?!.]*$", re.I
 )
@@ -938,6 +943,14 @@ def _surface(text: str) -> Intent | None:
 
     if _ABILITIES_ASK.match(folded):
         return Intent(lines=("abilities",), label="self", detail="abilities")
+
+    match = _EXPORT_ASK.match(original)
+    if match:
+        who = _who(match.group("who"))
+        if who:
+            return Intent(
+                lines=(f"exportchat {who}",), label="read", detail=f"export · {who}"
+            )
 
     if _TOPICS_ASK.match(folded):
         return Intent(lines=("topics",), label="chats", detail="topics")

@@ -128,6 +128,11 @@ def test_a_lookup_that_asks_for_something_is_understood(text: str, line: str) ->
     assert _lines(text) == (line,)
 
 
+def test_exporting_a_conversation_is_understood() -> None:
+    assert _lines("export the chat with @sara to a file") == ("exportchat @sara",)
+    assert _lines("save the conversation with @sara") == ("exportchat @sara",)
+
+
 def test_topics_are_understood() -> None:
     assert _lines("show the topics") == ("topics",)
     assert _lines("start a new topic called Night Shift") == ("topic new Night Shift",)

@@ -416,7 +416,7 @@
   "errors.unexpected": "Unexpected error ({detail}). Details are in the local error log.",
   "errors.unknown_command": "Unknown command “{name}”. Try {prefix}help.",
   "errors.unknown_feature": "Unknown feature “{name}”. See {prefix}features.",
-  "export.done": "⟰ Export of {kind} ready ({rows} rows).",
+  "export.done": "⟡ transcript · {count} messages",
   "fal.dry_run": "Dry run: reading #{id} would be drawn and sent as a picture now.",
   "fal.empty": "The divination book is empty — {detail}",
   "fal.meaning": "Meaning",
@@ -1492,5 +1492,13 @@
   "cmd.topics.description": "The forum topics of a group, with unread counts.",
   "cmd.topics.usage": "[chat]",
   "cmd.topic.description": "Start, close, pin or rename a forum topic.",
-  "cmd.topic.usage": "[new <title> | close <id> | open <id> | pin <id> | unpin <id> | rename <id> <title>]"
+  "cmd.topic.usage": "[new <title> | close <id> | open <id> | pin <id> | unpin <id> | rename <id> <title>]",
+  "export.usage": "which chat? {prefix}exportchat @sara 300",
+  "export.failed": "Telegram would not read that chat — {detail}",
+  "export.empty": "{name} has nothing to export.",
+  "export.too_big": "that is more than {limit} MB of text — export fewer messages.",
+  "export.send_failed": "the file was written but not sent — {detail}",
+  "export.where": "◦ {name} · {file} — the file is in this chat",
+  "cmd.exportchat.description": "Save a conversation as a text file and send it back here.",
+  "cmd.exportchat.usage": "<chat> [count] [--limit n]"
 }
