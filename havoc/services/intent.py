@@ -814,6 +814,15 @@ _SECURITY_ASK = re.compile(
     r"|show\s+(?:me\s+)?(?:my\s+)?security)\s*[?!.]*$",
     re.I,
 )
+_DRAFT_ASK = re.compile(
+    r"^(?:please\s+)?(?:write|save|leave|put)\s+a\s+draft\s+(?:to|for|in)\s+"
+    r"(?P<who>@[\w.]+|[\w][\w.@-]{0,30}?)(?:\s*:\s*|\s+(?:saying|that\s+says?)\s+)(?P<body>.+)$",
+    re.I,
+)
+_ARCHIVE_ASK = re.compile(
+    r"^(?:please\s+)?(?P<verb>archive|unarchive)\s+(?P<who>@[\w.]+|this\s+chat)$",
+    re.I,
+)
 _VERSION_ASK = re.compile(
     r"^(?:what|which)\s+version\s+are\s+you(?:\s+running)?\s*[?!.]*$", re.I
 )
@@ -908,6 +917,26 @@ def _surface(text: str) -> Intent | None:
 
     if _ABILITIES_ASK.match(folded):
         return Intent(lines=("abilities",), label="self", detail="abilities")
+
+    match = _DRAFT_ASK.match(original)
+    if match:
+        who = _who(match.group("who"))
+        body = match.group("body").strip(' .,!?')
+        if who and body:
+            return Intent(
+                lines=(f"draft {who} {body}",), label="chats", detail=f"draft · {who}"
+            )
+
+    match = _ARCHIVE_ASK.match(original)
+    if match:
+        verb = match.group("verb").lower()
+        who = match.group("who").strip()
+        if who.lower() in {"this chat", "this group"}:
+            who = ""  # the command falls back to the chat he is standing in
+        if who:
+            return Intent(
+                lines=(f"{verb} {who}",), label="chats", detail=f"{verb} · {who}"
+            )
 
     if _PRIVACY_ASK.match(folded):
         return Intent(lines=("privacy",), label="account", detail="privacy")
