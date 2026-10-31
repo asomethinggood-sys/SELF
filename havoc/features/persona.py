@@ -1230,12 +1230,11 @@ class PersonaReplies:
         return persona.is_own_line(text) or self.runtime.yura_chat.was_sent(chat_id, text)
 
     def _named(self, text: str) -> bool:
-        """True when the message says her name, in either spelling or alphabet."""
-        lowered = (text or "").lower()
-        for name in ("yura", "یورا", *identity.NAMES.values()):
-            if name and name.lower() in lowered:
-                return True
-        return False
+        """True when the message says her name, in any spelling or alphabet."""
+        # One list, in identity: "yura", "یورا", and the displayed "Y.U.R.A 1.9"
+        # are all the same name. A call that stopped working after a rename
+        # would be a rename that broke her.
+        return identity.answers_to(text)
 
     # -- the owner's own chat --------------------------------------------
     async def on_self_message(self, event: NormalizedEvent) -> None:

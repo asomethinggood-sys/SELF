@@ -46,7 +46,10 @@ def test_the_owner_is_told_that_she_is_awake(booted: dict[str, Any]) -> None:
     """The startup banner is a sentence, never a raw locale key."""
     banner = booted["said"]
     assert booted["owner_told"]
-    assert "1.7" in banner
+    from havoc.identity import DISPLAY_NAME
+
+    assert "Y.U.R.A 1.9" in banner
+    assert DISPLAY_NAME.split()[-1] in banner
     assert "{language}" not in banner
     assert "startup." not in banner, f"a locale key leaked into the banner: {banner!r}"
     assert "None" not in banner

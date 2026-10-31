@@ -1,6 +1,6 @@
-# Yura (یورا) — a bilingual personal Telegram userbot
+# Y.U.R.A 1.9 (یورا) — a bilingual personal Telegram userbot
 
-Yura runs on **your own Telegram account** through the MTProto client library
+Y.U.R.A 1.9 — Yura for short — runs on **your own Telegram account** through the MTProto client library
 [Telethon](https://docs.telethon.dev). It gives that account a command language,
 a persistent scheduler, a small local database of notes and bookmarks, a voice
 of its own, and a set of automation features that are **off until you switch

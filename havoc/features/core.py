@@ -11,7 +11,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from .. import ui
+from .. import identity, ui
 from ..command_registry import (
     Command,
     CommandContext,
@@ -114,7 +114,14 @@ async def cmd_status(ctx: CommandContext) -> None:
     await ctx.reply(
         "\n\n".join(
             [
-                ui.title("◫", ctx.t("status.header").replace("◫", "").strip()),
+                # The header names the release: "Y.U.R.A 1.9 status", in the
+                # language of the chat, from one list in identity.
+                ui.title(
+                    "◫",
+                    ctx.t("status.header", name=escape(identity.display(ctx.language)))
+                    .replace("◫", "")
+                    .strip(),
+                ),
                 ui.panel(f"{ui.bold(k)} {ui.note(ui.DOT)} {escape(v)}" for k, v in health),
                 ui.panel(f"{ui.bold(k)} {ui.note(ui.DOT)} {escape(v)}" for k, v in settings),
             ]

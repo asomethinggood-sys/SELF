@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from . import identity
 from .utils.security import redact_text
 from .utils.time import iso, utc_now
 
@@ -217,7 +218,7 @@ class TelegramService:
             self.config.api_id,
             self.config.api_hash,
             proxy=proxy,
-            device_model="Yura",
+            device_model=identity.display("en"),
             system_version="2.0",
             app_version="2.0.0",
             connection_retries=5,

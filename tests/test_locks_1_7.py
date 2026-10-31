@@ -106,7 +106,7 @@ def test_the_version_lives_in_one_place() -> None:
 
     assert havoc.__version__ == VERSION
     assert VERSION in label()
-    assert label() == "Y.U.R.A 1.7 Open beta"
+    assert label() == "Y.U.R.A 1.9 Open beta"
 
 
 # ---------------------------------------------------------------------------

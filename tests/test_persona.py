@@ -56,11 +56,21 @@ async def _enable(runtime) -> None:
 # Identity
 # ---------------------------------------------------------------------------
 def test_the_bot_is_called_yura_in_both_languages() -> None:
+    # Two names, and they are not the same one: the release on the profile, the
+    # spoken name in a sentence. Someone typing "yura" must still reach her.
     assert NAMES == {"en": "Yura", "fa": "یورا"}
-    assert display("en") == "Yura"
-    assert display("fa") == "یورا"
-    assert display("de").endswith("Yura")  # unknown falls back to English
+    assert display("en") == "Y.U.R.A 1.9"
+    assert display("fa") == "Y.U.R.A 1.9"
+    assert display("de") == "Y.U.R.A 1.9"  # one brand, whatever the language
     assert tagline("en") and tagline("fa") and tagline("en") != tagline("fa")
+
+
+def test_every_spelling_of_her_name_still_reaches_her() -> None:
+    from havoc.identity import answers_to
+
+    for said in ("yura, you there?", "یورا کجایی", "Y.U.R.A 1.9 are you up", "y.u.r.a hey"):
+        assert answers_to(said), said
+    assert not answers_to("the weather is fine")
 
 
 async def test_the_name_reaches_user_facing_text(runtime) -> None:
@@ -229,7 +239,7 @@ async def test_the_words_typed_win_over_the_chat_default(runtime) -> None:
 async def test_the_card_reports_state_and_memory(runtime) -> None:
     await invoke(runtime, ".yura status")
     text = last_text(runtime)
-    assert "Yura" in text
+    assert "Y.U.R.A 1.9" in text
     assert "off" in text.lower()
     assert "Memories" in text
 

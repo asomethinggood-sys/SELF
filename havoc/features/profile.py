@@ -20,6 +20,7 @@ import json
 import re
 from typing import Any
 
+from .. import identity
 from ..command_registry import Command, CommandContext, CommandError
 from ..utils.formatting import bold, code, escape, key_value_block, pre
 from ..utils.security import redact_text
@@ -598,7 +599,7 @@ async def cmd_profile(ctx: CommandContext) -> None:
         bio = await ctx.store.get_profile_snapshot("bio")
         if first is None and bio is None:
             raise CommandError("errors.no_snapshot")
-        await _apply_profile(ctx, first_name=first or "Yura", last_name=last, bio=bio or "", reason="restore")
+        await _apply_profile(ctx, first_name=first or identity.display("en"), last_name=last, bio=bio or "", reason="restore")
         await ctx.store.set_setting("clock.enabled", False)
         await ctx.store.set_setting("bio.rotation", False)
         await ctx.reply(ctx.t("profile.restored"))

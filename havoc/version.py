@@ -8,7 +8,7 @@ it, not what the schema calls it. ``SCHEMA``-style numbers live in
 
 from __future__ import annotations
 
-VERSION = "1.7"
+VERSION = "1.9"
 #: What users see. "HAVOC" is the codebase name and stays out of the chat.
 CODENAME = "Y.U.R.A"
 #: The word after the number on the about card. It is honest: the hands are new.
@@ -16,5 +16,5 @@ STAGE = "Open beta"
 
 
 def label() -> str:
-    """``Y.U.R.A 1.7 Open beta`` — one spelling, everywhere."""
+    """``Y.U.R.A 1.9 Open beta`` — one spelling, everywhere."""
     return f"{CODENAME} {VERSION} {STAGE}"

@@ -102,7 +102,8 @@ async def test_per_chat_language_override(runtime) -> None:
     await invoke(runtime, ".lang chat fa")
     await invoke(runtime, ".status", chat_id=200)
     # chat 200 has no override, so English remains
-    assert "Yura status" in last_text(runtime)
+    assert "status" in last_text(runtime)
+    assert "Y.U.R.A 1.9" in last_text(runtime)
     await invoke(runtime, ".status", chat_id=100)
     assert "وضعیت" in last_text(runtime)
 
@@ -590,9 +591,11 @@ async def test_chatsettings_roundtrip(runtime) -> None:
 
 
 async def test_alias_runs_command(runtime) -> None:
+    from havoc.identity import display
+
     await invoke(runtime, ".alias add st status")
     await invoke(runtime, ".st")
-    assert "Yura status" in last_text(runtime)
+    assert f"{display('en')} status" in last_text(runtime)
 
 
 async def test_alias_list_and_remove(runtime) -> None:

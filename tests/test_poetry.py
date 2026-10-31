@@ -462,12 +462,12 @@ async def test_quote_has_the_same_shape_as_a_poem(runtime) -> None:
     sent = await invoke(runtime, ".quote")
     body = sent[0].text
     assert body.startswith("<blockquote>")
-    assert body.rstrip().endswith("<i>— Yura</i>")
+    assert body.rstrip().endswith("<i>— Y.U.R.A 1.9</i>")
 
 
 async def test_quote_signs_itself_in_farsi_too(runtime) -> None:
     sent = await invoke(runtime, ".quote", language="fa")
-    assert sent[0].text.rstrip().endswith("<i>— یورا</i>")
+    assert sent[0].text.rstrip().endswith("<i>— Y.U.R.A 1.9</i>")
 
 
 async def test_joke_is_a_card(runtime) -> None:

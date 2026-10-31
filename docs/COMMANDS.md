@@ -213,7 +213,7 @@ Total: **146 commands**.
 
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
-| `.yura` | Yura herself: talk to her, or manage what she remembers _(owner only; changes state)._ | `.yura [on|off|status|memory|log|clear|‹anything›]` | `.person`, `.self`, `.یورا` |
+| `.yura` | Y.U.R.A 1.9 herself: talk to her, or manage what she remembers _(owner only; changes state)._ | `.yura [on|off|status|memory|log|clear|‹anything›]` | `.person`, `.self`, `.یورا` |
 
 ## Profile
 
