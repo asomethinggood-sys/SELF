@@ -724,9 +724,18 @@ _EDIT_TO = re.compile(
     re.I,
 )
 _DELETE_THAT = re.compile(
-    r"^(?:please\s+)?(?:delete|remove|unsend|take back)\s+(?:that|this|it)$", re.I
+    r"^(?:please\s+)?(?:delete|remove|unsend|take back)\s+(?:that|this|it)$"
+    # "این پیام رو پاک کن" — in all the word orders people actually type.
+    r"|^(?:این|اون|همین|همون)?\s*(?:پیام|پیامو|پیامش|پیامم)?\s*(?:رو|را)?\s*"
+    r"(?:پاک(?:ش)?\s*کن|حذف(?:ش)?\s*کن|پاک\s*کنی|بردار)$",
+    re.I,
 )
-_PIN_THAT = re.compile(r"^(?:please\s+)?pin\s+(?:that|this|it)$", re.I)
+_PIN_THAT = re.compile(
+    r"^(?:please\s+)?pin\s+(?:that|this|it)$"
+    r"|^(?:این|اون|همین)?\s*(?:پیام|پیامو|پیامش)?\s*(?:رو|را)?\s*"
+    r"(?:پین|سنجاق|سنجاقش)\s*کن$",
+    re.I,
+)
 _INBOX_ASK = re.compile(
     r"^(?:who'?s|who is|what'?s)\s+(?:in|on)\s+my\s+(?:messages|inbox|dms|chats)$"
     r"|^(?:my\s+)?(?:inbox|dms)$"
@@ -759,12 +768,14 @@ _WHY_ASK = re.compile(
 _NEWS_ASK = re.compile(r"^(?:what'?s\s+new|whats\s+new|changelog|what\s+changed)\s*[?!.]*$", re.I)
 _REMEMBER_ASK = re.compile(
     r"^(?:please\s+)?(?:remember|keep\s+in\s+mind|note\s+that|don'?t\s+forget)\s+"
-    r"(?:that\s+)?(?P<fact>.+)$",
+    r"(?:that\s+)?(?P<fact>.+)$"
+    r"|^(?:یادت\s*باشه|به\s*یاد\s*داشته\s*باش|یادداشت\s*کن)\s*(?:که\s*)?(?P<fact_fa>.+)$",
     re.I,
 )
 _FORGET_ASK = re.compile(
     r"^(?:please\s+)?(?:forget|drop)\s+(?:what\s+(?:i|you)\s+(?:said|know)\s+about\s+)?"
-    r"(?P<what>.+)$",
+    r"(?P<what>.+)$"
+    r"|^(?:فراموش\s*کن|یادت\s*نباشه|پاک\s*کن\s*از\s*حافظه)\s*(?:که\s*)?(?P<what_fa>.+)$",
     re.I,
 )
 _MEMORIES_ASK = re.compile(
@@ -932,13 +943,13 @@ def _surface(text: str) -> Intent | None:
 
     match = _REMEMBER_ASK.match(original)
     if match:
-        fact = match.group("fact").strip(" .,!?")
+        fact = (match.group("fact") or match.group("fact_fa") or "").strip(" .,!?")
         if fact and len(fact) > 3:
             return Intent(lines=(f"remember {fact}",), label="memory", detail="remember")
 
     match = _FORGET_ASK.match(original)
     if match:
-        what = match.group("what").strip(" .,!?")
+        what = (match.group("what") or match.group("what_fa") or "").strip(" .,!?")
         if what and len(what) > 1:
             return Intent(lines=(f"forget {what}",), label="memory", detail="forget")
 
@@ -1098,6 +1109,19 @@ _SAY_INTO = re.compile(
     r"\s*(?:,|and)?\s*(?:say|saying|write|put|post)?\s*(?P<body>.+)$",
     re.I,
 )
+#: "به سارا پیام بده که دیر می‌رسم" / "پیام بده به سارا دیر می‌رسم" — the Persian
+#: way of dictating a message, in both word orders.
+_SEND_FA = re.compile(
+    r"^(?:please\s+)?(?:به|برای)\s+(?P<who>@[\w.]+|[^\s،]+)\s*"
+    r"(?:پیام|پیامک|مسیج)\s*(?:بده|بفرست|بزن)\s*(?:که|با\s*متن|:)?\s*(?P<body>.+)$",
+    re.I,
+)
+_SEND_FA2 = re.compile(
+    r"^(?:please\s+)?(?:پیام|پیامک|مسیج)\s*(?:بده|بفرست|بزن)\s+"
+    r"(?:به|برای)\s+(?P<who>@[\w.]+|[^\s،]+)\s*(?:که|:)?\s*(?P<body>.+)$",
+    re.I,
+)
+
 #: "say I'm a good girl and repeat 100 times" — the count is the instruction, and
 #: the place is optional because "here" is where he is standing.
 _REPEAT_AFTER_SAY = re.compile(
@@ -1137,7 +1161,7 @@ _UNIGNORE = re.compile(
 _REACT = re.compile(
     r"^(?:please\s+)?(?:react|put a reaction|leave a reaction|add a reaction)\s*"
     r"(?:to (?:that|this|it|his message|her message|their message)\s*)?"
-    r"(?:with\s+|using\s+)?(?P<emoji>[^\s]+)",
+    r"(?:with\s+|using\s+)?(?P<emoji>.+)$",
     re.I,
 )
 #: The Persian order has three word orders and one verb in common: the reaction
@@ -1206,6 +1230,29 @@ def _repeat_count(raw: str) -> int:
         except ValueError:
             value = 0
     return max(0, min(int(value or 0), 500))
+
+
+def _reaction_from(raw: str) -> str:
+    """The glyph in "a heart", "❤️", "a strong thumbs up", or nothing.
+
+    A glyph wins over a word, and a word is looked up in the same table the
+    Persian orders use — "react with a heart" is not a different instruction.
+    """
+    text = str(raw or "").strip()
+    glyph = emoji_in(text)
+    if glyph:
+        return glyph
+    words = [word for word in re.split(r"[\s،,.!؟?]+", text.lower()) if word]
+    for word in words:
+        if word in {"a", "an", "the", "some", "aesthetic", "please", "with", "using"}:
+            continue
+        if word in _REACTION_WORDS:
+            return _REACTION_WORDS[word]
+    joined = " ".join(words)
+    for phrase, emoji in sorted(_REACTION_WORDS.items(), key=lambda item: -len(item[0])):
+        if phrase in joined:
+            return emoji
+    return ""
 
 
 def _fa_reaction(text: str) -> str:
@@ -1334,8 +1381,8 @@ def _reach(text: str, *, allow_plan: bool = True) -> Intent | None:
 
     match = _REACT.match(original)
     if match and not re.match(r"^(?:react|reaction)\b\s*$", folded, re.I):
-        emoji = match.group("emoji").strip(" .,!")
-        if emoji and len(emoji) <= 12 and emoji.lower() not in _NOISE:
+        emoji = _reaction_from(match.group("emoji"))
+        if emoji:
             return Intent(lines=(f"emoji {emoji}",), label="react", detail=f"react {emoji}")
 
     if _REACT_FA_VERB.search(folded):
@@ -1344,6 +1391,18 @@ def _reach(text: str, *, allow_plan: bool = True) -> Intent | None:
             return Intent(lines=(f"emoji {emoji}",), label="react", detail=f"react {emoji}")
 
     spoken_once = _lead(original)
+    for pattern in (_SEND_FA, _SEND_FA2):
+        match = pattern.match(spoken_once)
+        if not match:
+            continue
+        body = _clean_body(match.group("body"))
+        who = match.group("who").strip(" ،,.:؛")
+        if body and len(body) > 1 and who and body not in _NOISE:
+            return Intent(
+                lines=(f"send {who} {body}",),
+                label="send",
+                detail=f"send · {who}",
+            )
     for pattern in (_BURST, _REPEAT_AFTER_SAY, _REPEAT_FIRST):
         match = pattern.match(spoken_once)
         if not match:
@@ -1555,6 +1614,65 @@ _STICKER_FA = re.compile(
 )
 
 
+_QUIET_ASK = re.compile(r"(?:quiet\s*hours|ساعت\s*(?:های\s*)?سکوت|سکوت\s*ساعت)")
+_QUIET_ON = re.compile(
+    r"(?:روشن|فعال|بذار|تنظیم|از|on|enable|start|set)", re.I
+)
+_QUIET_OFF = re.compile(r"(?:خاموش|غیرفعال|بردار|لغو|off|disable|stop|cancel|clear)", re.I)
+
+
+def _quiet_hours(folded: str) -> Intent | None:
+    """"quiet hours" and "ساعت سکوت" are one feature, and it is not the clock."""
+    if not _QUIET_ASK.search(folded):
+        return None
+    if _QUIET_OFF.search(folded):
+        return Intent(lines=("quiet-hours off",), label="quiet", detail="quiet hours off")
+    if _QUIET_ON.search(folded):
+        return Intent(lines=("quiet-hours on",), label="quiet", detail="quiet hours on")
+    return Intent(lines=("quiet-hours status",), label="quiet", detail="quiet hours")
+
+
+#: "ساعت چنده؟" / "what time is it" — a question with a number for an answer.
+_TIME_ASK = re.compile(
+    r"^(?:ساعت\s*(?:چند(?:ه|ست)?|چند\s*شد|چیست)|چه\s*ساعتی(?:ه|ست)?)\s*[؟?!.]*$"
+    r"|^(?:what(?:'s|\s+is)?\s+the\s+time|what\s+time\s+is\s+it)\s*[?!.]*$",
+    re.I,
+)
+
+
+def _time_ask(folded: str) -> Intent | None:
+    if _TIME_ASK.match(_lead(folded)):
+        return Intent(lines=("time",), label="time", detail="time")
+    return None
+
+
+#: What she can do, in his words rather than the command list's.
+_CAPABILITY_ASK = re.compile(
+    r"^(?:چه\s*(?:کار(?:ها|هایی)?|بلدی)|چیکار\s*می\s*تونی\s*(?:بکنی|کنی)|"
+    r"چه\s*قابلیت(?:‌ها|هایی)?\s*(?:داری|هست)|"
+    r"what\s+can\s+you\s+do|what\s+do\s+you\s+do|list\s+(?:your\s+)?abilities)\s*[؟?!.]*$",
+    re.I,
+)
+
+
+def _capability_ask(folded: str) -> Intent | None:
+    if _CAPABILITY_ASK.match(_lead(folded)):
+        return Intent(lines=("help",), label="lookup", detail="help")
+    return None
+
+
+#: "برگرد" / "come back": she was turned off and he wants her talking again.
+_COME_BACK = re.compile(
+    r"^(?:برگرد|برگردی|برگرد به\s*حرف|come\s+back|be\s+back)\s*[.!؟?]*$", re.I
+)
+
+
+def _come_back(folded: str) -> Intent | None:
+    if _COME_BACK.match(_lead(folded)):
+        return Intent(lines=("yura on",), label="persona", detail="yura on")
+    return None
+
+
 def _sticker(text: str) -> Intent | None:
     """A sticker request, if that is what this is."""
     line = _lead(_clean(text))
@@ -1593,10 +1711,14 @@ def _misc(text: str) -> Intent | None:
         (r"^(?:quiet hours|ساعت سکوت)", "quiet-hours status"),
         # "فال بگیر" is the order; "فال" alone is the noun. Anchoring only the
         # noun is why she discussed a fortune instead of drawing one.
-        (r"^(?:fal(?:\s+(?:for\s+me|please))?|فال(?:\s*حافظ)?(?:\s*(?:بگیر|بنداز|بیار|بزن))?)\s*[.!؟?]*$", "fal"),
-        (r"^(?:poem|شعر(?:ی)?(?:\s*(?:بگو|بخوان|بخون|بگیر|بزن))?)\s*[.!؟?]*$", "poem"),
-        (r"^(?:joke|tell me a joke|لطیفه|جوک|یکی\s+بگو)\s*[.!؟?]*$", "joke"),
-        (r"^(?:quote|give me a quote|جمله(?:\s*(?:بگو|بزن|بخوان))?)\s*[.!؟?]*$", "quote"),
+        (r"^(?:(?:برام|برای\s*من|یه|یک)\s*)*(?:fal(?:\s+(?:for\s+me|please))?"
+         r"|فال(?:\s*حافظ)?(?:\s*(?:بگیر|بنداز|بیار|بزن|کن))?)\s*[.!؟?]*$", "fal"),
+        (r"^(?:(?:برام|برای\s*من|یه|یک)\s*)*(?:poem|شعر(?:ی)?"
+         r"(?:\s*(?:بگو|بخوان|بخون|بگیر|بزن))?)\s*[.!؟?]*$", "poem"),
+        (r"^(?:(?:برام|برای\s*من|یه|یک)\s*)*(?:joke|tell me a joke|لطیفه|جوک"
+         r"(?:\s*(?:بگو|بزن|تعریف\s*کن))?|یکی\s+بگو)\s*[.!؟?]*$", "joke"),
+        (r"^(?:(?:برام|برای\s*من|یه|یک)\s*)*(?:quote|give me a quote|جمله"
+         r"(?:\s*(?:بگو|بزن|بخوان))?)\s*[.!؟?]*$", "quote"),
         (r"^(?:say something in (?:persian|farsi|english)|حرف بزن)", "yura"),
     ]
     for pattern, line in rules:
@@ -1633,6 +1755,17 @@ def detect(
     surface = _surface(text)
     if surface is not None:
         return surface
+
+    # Quiet hours is a clock-shaped sentence that is not about the clock: "ساعت
+    # سکوت رو روشن کن" used to switch the live clock on, which is a different
+    # feature answering to a word inside another one's name.
+    quiet = _quiet_hours(folded)
+    if quiet is not None:
+        return quiet
+    for early in (_time_ask, _capability_ask, _come_back):
+        found = early(folded)
+        if found is not None:
+            return found
 
     # Clock is the one the owner says most, and it has its own subcommands. It is
     # also the one that must not misfire: "do you like the clock on my profile?"

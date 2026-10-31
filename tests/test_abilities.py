@@ -302,3 +302,41 @@ async def test_reacting_through_the_persona_path_hits_the_bubble_he_answered(run
     chat_id, message_id, emoji = runtime.client.reactions[-1]
     assert (chat_id, message_id) == (GROUP, 733)
     assert emoji == "❤️"
+
+
+# ---------------------------------------------------------------------------
+# The Persian orders he actually types, and the traps next to them
+# ---------------------------------------------------------------------------
+def test_quiet_hours_is_not_the_clock() -> None:
+    assert intent_module.detect("یورا ساعت سکوت رو روشن کن").lines == ("quiet-hours on",)
+    assert intent_module.detect("یورا ساعت رو روشن کن").lines == ("clock on",)
+
+
+def test_the_small_persian_questions() -> None:
+    assert intent_module.detect("یورا ساعت چنده").lines == ("time",)
+    assert intent_module.detect("یورا چیکار میتونی بکنی").lines == ("help",)
+    assert intent_module.detect("یورا برگرد").lines == ("yura on",)
+
+
+def test_the_persian_poetry_family_with_the_words_in_front() -> None:
+    assert intent_module.detect("یورا برام یک فال بگیر").lines == ("fal",)
+    assert intent_module.detect("یورا یه شعر بخون").lines == ("poem",)
+    assert intent_module.detect("یورا یه جوک بگو").lines == ("joke",)
+
+
+def test_persian_memory_and_message_verbs() -> None:
+    assert intent_module.detect("یورا یادت باشه من قهوه دوست دارم").lines == (
+        "remember من قهوه دوست دارم",
+    )
+    assert intent_module.detect("یورا این پیام رو پاک کن").lines == ("delete",)
+    assert intent_module.detect("این پیام رو پین کن").lines == ("pin",)
+
+
+def test_a_persian_dictated_message_in_both_word_orders() -> None:
+    assert intent_module.detect("به سارا پیام بده که دیر می‌رسم").lines == ("send سارا دیر می رسم",)
+    assert intent_module.detect("پیام بده به سارا دیر می‌رسم").lines == ("send سارا دیر می رسم",)
+
+
+def test_a_reaction_named_by_a_word() -> None:
+    assert intent_module.detect("react with a heart").lines == ("emoji ❤️",)
+    assert intent_module.detect("react to that") is None
