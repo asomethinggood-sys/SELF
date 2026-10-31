@@ -466,6 +466,24 @@ async def test_replying_to_her_message_in_a_dm_is_answered(runtime) -> None:
     assert runtime.ai.calls, "a reply to her own message was ignored in a DM"
 
 
+async def test_answering_her_twice_in_a_dm_is_answered_both_times(runtime) -> None:
+    """The 20-second DM valve is for strangers, not for his own conversation."""
+    await _enable(runtime, reply="as you wish.")
+    replies = runtime.persona_replies
+    await replies._note_own(FRIEND, 500)
+    hers = FakeMessage(id=500, chat_id=FRIEND, sender_id=OWNER, text="i said what i said", out=True)
+    for index, mid in enumerate((981, 982, 983)):
+        message = FakeMessage(
+            id=mid, chat_id=FRIEND, sender_id=OWNER, text="and then?", out=True,
+            is_private=True, is_group=False, reply=hers,
+        )
+        message.sender = OWNER_USER
+        event = normalize_message(message, self_id=OWNER, prefix=".", event_type=EventType.OUTGOING)
+        await replies.on_dm_chat(event)
+        assert replies.last_skip != "dm_cooldown", f"answer {index + 2} was throttled"
+    assert len(runtime.client.sent) >= 3
+
+
 async def test_a_stranger_in_a_dm_still_gets_nothing(runtime) -> None:
     await _enable(runtime)
     await runtime.persona_replies.on_dm_chat(_dm(runtime, "hey yura"))

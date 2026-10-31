@@ -238,7 +238,7 @@ Total: **146 commands**.
 | `.plan` | Timelines: one sentence, many moments _(owner only; changes state)._ | `.plan [list|stop [word]|add ‹sentence›]` | `.timeline` |
 | `.policy` | Who she answers, and how: silence, a normal answer, or a reaction instead _(owner only; changes state)._ | `.policy [list|ignore ‹who›|react ‹who› [emoji]|answer ‹who›|clear ‹who›] [--here]` | `.rules-say`, `.replies`, `.whom` |
 | `.send` | Send a message — repeated, hidden behind a spoiler, self-destructing, later, or written by her _(owner only; changes state)._ | `.send ‹to› ‹text› [--repeat N] [--every 30s] [--spoiler] [--silent] [--delete-after 10s] [--at 21:00] [--compose] [--dry]` | `.say`, `.msg`, `.message` |
-| `.unsend` | Delete a message by its outbox number _(owner only; changes state)._ | `.unsend <outbox id>` | — |
+| `.unsend` | Delete a message by its outbox number, or `last` for the one she sent here most recently _(owner only; changes state)._ | `.unsend <outbox id> or last` | — |
 
 ## Read
 

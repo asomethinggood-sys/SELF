@@ -231,22 +231,45 @@ async def test_a_group_photo_replied_to_her_is_looked_at(runtime) -> None:
 # ---------------------------------------------------------------------------
 # The flourish: sometimes a reaction instead of a line
 # ---------------------------------------------------------------------------
-async def test_every_ninth_reply_is_a_reaction_not_a_message(runtime) -> None:
+async def test_every_ninth_named_answer_is_a_reaction_not_a_message(runtime) -> None:
+    """A room that keeps saying her name gets a glyph sometimes, not a speech."""
     replies, client = await _replies(runtime)
     replies._since_reaction = 8
-    await replies.on_group_message(_incoming("nice", reply=_hers()))
+    await replies.on_group_message(_incoming("yura nice"))
     assert client.reactions, "no reaction was sent"
     assert client.sent == [], "she should have stayed quiet"
     assert replies.reacted == 1
 
 
-async def test_the_reaction_goes_to_the_message_it_answers(runtime) -> None:
+async def test_the_reaction_lands_in_the_room_it_happened(runtime) -> None:
     replies, client = await _replies(runtime)
     replies._since_reaction = 8
-    await replies.on_group_message(_incoming("yes", reply=_hers()))
+    await replies.on_group_message(_incoming("yura yes"))
     chat_id, message_id, emoji = client.reactions[0]
-    assert chat_id == GROUP and message_id == 600
+    # Not a reply to her, so there is nothing better than his own line to mark.
+    assert chat_id == GROUP and message_id == 601
     assert emoji
+
+
+async def test_a_reply_to_her_is_answered_even_inside_the_valve(runtime) -> None:
+    """He answers her, then answers her again four seconds later.
+
+    Both are answers to *her*, so both must arrive. This is the regression he
+    reported: the six-second group interval was capping a conversation he was
+    already having.
+    """
+    replies, client = await _replies(runtime)
+    await replies.on_group_message(_incoming("yura hi"))
+    assert client.sent
+    before = replies.group_answered
+    for index in range(3):
+        await replies.on_group_message(
+            _incoming(f"and this {index}", reply=_hers(), sender_id=42)
+        )
+        assert replies.group_answered == before + index + 1, (
+            "an answer to her own message was dropped"
+        )
+        assert replies.last_skip != "cooldown"
 
 
 # ---------------------------------------------------------------------------

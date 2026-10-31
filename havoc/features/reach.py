@@ -426,6 +426,40 @@ async def cmd_unsend(ctx: CommandContext) -> None:
     raw = (ctx.args[0] if ctx.args else "").strip()
     if not raw:
         raise CommandError("reach.usage_unsend", prefix=ctx.runtime.prefix)
+    if raw.lower() in {"last", "latest", "آخرین", "اخرین"} or ctx.has_flag("last"):
+        # "delete your message" — hers, in the chat it was sent in, with no id
+        # to give. A plan or an order typed from memory never has one.
+        # A plan's own send first: "… DM محمد و بعد ده دقیقه پیامتو پاک کن" means
+        # *that* message, not whatever this account last said anywhere.
+        plan_id = getattr(ctx.runtime, "current_plan_id", None)
+        rows = (
+            await ctx.runtime.store.outbox_for_plan(int(plan_id))
+            if plan_id
+            else await ctx.runtime.store.outbox(
+                20, chat_id=int(ctx.chat_id) if not ctx.has_flag("any") else None
+            )
+        )
+        row = next(
+            (
+                item
+                for item in rows
+                if str(item["kind"] or "") in {"text", "media", "file"}
+                and str(item["status"] or "") != "deleted"
+            ),
+            None,
+        )
+        if row is None:
+            raise CommandError("reach.nothing_to_unsend")
+        ok = await ctx.runtime.reach.delete(int(row["chat_id"]), int(row["message_id"] or 0))
+        if ok:
+            await ctx.runtime.store.mark_deleted(int(row["id"]), note="unsent (last)")
+        await ctx.reply(
+            ctx.t(
+                "reach.unsent_last" if ok else "reach.unsend_failed",
+                id=row["id"],
+            )
+        )
+        return
     row = await ctx.runtime.store.outbox_row(int(raw)) if raw.isdigit() else None
     if row is None:
         raise CommandError("reach.unknown_outbox", id=escape(raw))
@@ -845,8 +879,11 @@ def register(runtime: Any) -> None:
             "unsend",
             cmd_unsend,
             category="reach",
-            usage="<outbox id>",
-            description="Delete a message by its outbox number.",
+            usage="<outbox id> or last",
+            description=(
+                "Delete a message by its outbox number, or ``last`` for the one she "
+                "sent here most recently (a plan's own send when a plan is running)."
+            ),
             owner_only=True,
             changes_state=True,
         )

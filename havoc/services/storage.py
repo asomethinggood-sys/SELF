@@ -302,6 +302,13 @@ class Store:
             (int(chat_id), max(1, int(limit))),
         )
 
+    async def outbox_for_plan(self, plan_id: int, *, limit: int = 50) -> list[Any]:
+        """Every send a plan made, newest first — the trail a delete step walks."""
+        return await self.db.fetch_all(
+            "SELECT * FROM outbox WHERE plan_id = ? ORDER BY id DESC LIMIT ?",
+            (int(plan_id), max(1, int(limit))),
+        )
+
     async def outbox_row(self, row_id: int) -> Any:
         return await self.db.fetch_one("SELECT * FROM outbox WHERE id = ?", (int(row_id),))
 

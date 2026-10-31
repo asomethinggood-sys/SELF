@@ -43,18 +43,66 @@ _SEQUENCE_WORDS = (
     "and afterwards",
     "then",
     "next",
-    "بعد",
+    # Persian: "بعدش" and "و بعدش" are the everyday "and then". A bare "بعد"
+    # inside a word — "بعدش", "بعدی" — is not a connector, so the Persian
+    # alternatives require a word of their own.
+    "و بعدش",
+    "بعدش",
+    "و سپس",
     "سپس",
     "و بعد",
+    "بعد از آن",
 )
-#: "for ten minutes", "for 2h" — the shape that means "and undo it".
+#: The amount, in the words people actually use for short waits.
+_COUNT_WORDS = {
+    "یک": 1, "یه": 1, "دو": 2, "سه": 3, "چهار": 4, "پنج": 5, "شش": 6, "شیش": 6,
+    "هفت": 7, "هشت": 8, "نه": 9, "ده": 10, "یازده": 11, "دوازده": 12,
+    "پانزده": 15, "بیست": 20, "سی": 30, "چهل": 40, "پنجاه": 50, "شصت": 60,
+    "نیم": 0.5, "یک ربع": 0.25,
+}
+
+#: "for ten minutes", "for 2h", "برای دو ساعت" — the shape that means "and
+#: undo it". Persian puts the window where English does, between the verb's
+#: object and the verb, so the same shape works.
+_EN_WORDS = {
+    "a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11,
+    "twelve": 12, "fifteen": 15, "twenty": 20, "thirty": 30, "forty": 40,
+    "fifty": 50, "sixty": 60, "a couple of": 2, "a couple": 2, "half an": 0.5,
+    "half a": 0.5, "a half": 0.5, "quarter of an": 0.25,
+}
+_EN_AMOUNT = r"(?:\d+(?:\.\d+)?|" + "|".join(
+    sorted((re.escape(word) for word in _EN_WORDS), key=len, reverse=True)
+) + r")"
 _FOR_A_WHILE = re.compile(
-    r"\bfor\s+(?P<amount>\d+(?:\.\d+)?)\s*(?P<unit>s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hour|hours|d|day|days)\b",
+    rf"\bfor\s+(?P<amount>{_EN_AMOUNT})\s*(?P<unit>s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hour|hours|d|day|days)(?![a-z])"
+    r"|(?:^|\s)(?:برای|واسه|به\s*مدت|به\s*اندازهٔ?)\s*(?P<fa_amount>\d+|یک|یه|دو|سه|چهار|پنج|ده|بیست|نیم)\s*"
+    r"(?P<fa_unit>ثانیه|دقیقه|ساعت|روز|هفته)",
     re.I,
 )
-#: "after 3 minutes", "in 2 hours" — a delay before this step.
+_AMOUNT = r"(?:\d+(?:\.\d+)?|یک ربع|" + "|".join(_COUNT_WORDS) + r")"
+_UNIT = (
+    r"(?:s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hour|hours|d|day|days"
+    r"|ثانیه|دقیقه|ساعت|روز|هفته)"
+)
+#: "after 3 minutes", "in 2 hours", "بعد از دو ساعت" — a delay before this step.
 _DELAY = re.compile(
-    r"^(?:after|in|پس از|بعد از)\s+(?P<amount>\d+(?:\.\d+)?)\s*(?P<unit>s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hour|hours|d|day|days)\b",
+    rf"^(?:after|in|پس از|بعد از)\s+(?P<amount>{_AMOUNT})\s*(?P<unit>{_UNIT})(?![\wء-ي])",
+    re.I,
+)
+#: "ده دقیقه پیامتو پاک کن" — a bare wait at the head of a clause, which in
+#: Persian is how a *follow-up* step says "+10 minutes", and in English speech
+#: is "ten minutes later delete it".
+_BARE_DELAY = re.compile(
+    rf"^(?P<amount>{_AMOUNT})\s*(?P<unit>{_UNIT})\s*"
+    rf"(?:که\s+(?:تموم|گذشت|شد)(?:\s+(?:شد|بشه|باشه|بعد|دیگه))?"
+    rf"|بعد|دیگه|later|after that)?\s*(?P<rest>.+)$",
+    re.I,
+)
+#: "دو ساعت که تموم شد برو …" without the number being a bare clause head.
+_WHEN_DONE = re.compile(
+    rf"^(?P<amount>{_AMOUNT})\s*(?P<unit>{_UNIT})\s*که\s+"
+    rf"(?:تموم|گذشت|شد)(?:\s+(?:شد|بشه|باشه|بعد|دیگه))?\s*(?P<rest>.+)$",
     re.I,
 )
 _UNIT_SECONDS = {
@@ -62,6 +110,9 @@ _UNIT_SECONDS = {
     "m": 60.0, "min": 60.0, "mins": 60.0, "minute": 60.0, "minutes": 60.0,
     "h": 3600.0, "hour": 3600.0, "hours": 3600.0,
     "d": 86400.0, "day": 86400.0, "days": 86400.0,
+    # Persian units, because a plan he speaks is a plan he types.
+    "ثانیه": 1.0, "ثانیه‌ای": 1.0, "دقیقه": 60.0, "دقیقه‌ای": 60.0,
+    "ساعت": 3600.0, "ساعتی": 3600.0, "روز": 86400.0, "هفته": 604800.0,
 }
 
 
@@ -120,10 +171,26 @@ def split_sequence(said: str) -> list[str]:
     if not text:
         return []
     pattern = re.compile(
-        r"\s*(?:,|;|،)?\s*(?:" + "|".join(re.escape(word) for word in _SEQUENCE_WORDS) + r")\s*(?:,|;|،)?\s*",
+        r"\s*(?:,|;|،)?\s*(?:(?<![\u0600-\u06ff])(?:"
+        + "|".join(re.escape(word) for word in _SEQUENCE_WORDS)
+        + r")(?![\u0600-\u06ff]))\s*(?:,|;|،)?\s*",
         re.I,
     )
-    parts = [part.strip(" ,;،.") for part in pattern.split(text)]
+    # "… ignore her for two hours, two hours later DM محمد": a comma followed by
+    # a number-and-unit is a *new step*, not the continuation of the first one.
+    # Without this, the wait and everything after it stay glued to the rule and
+    # are read — and silently dropped — as part of it.
+    wait_split = re.compile(
+        rf"\s*[,،;]\s*(?={_AMOUNT}\s*{_UNIT})",
+        re.I,
+    )
+    text = "\x00".join(wait_split.split(text))
+    parts = [
+        piece
+        for part in pattern.split(text)
+        for piece in part.split("\x00")
+    ]
+    parts = [part.strip(" ,;،.") for part in parts]
     # "clock on and off again" is two instructions joined by "and", and so is
     # "set the reply and stop it". Only a verb on the right makes it a new clause:
     # "salt and pepper" is one thing, "turn it on and off" is two actions.
@@ -140,51 +207,96 @@ def split_sequence(said: str) -> list[str]:
     return [part for part in expanded if part]
 
 
+_FA_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+
+
+def _normalize_digits(text: str) -> str:
+    """Persian and Arabic-Indic digits are the same numbers, so read them."""
+    return str(text or "").translate(_FA_DIGITS)
+
+
+def _seconds_between(amount: str, unit: str) -> float | None:
+    """"2"/"hours" → 7200.0 — numbers as digits or as words, in either script."""
+    raw = re.sub(r"\s+", " ", _normalize_digits(str(amount or "").strip())).lower()
+    if raw in _COUNT_WORDS:
+        value = float(_COUNT_WORDS[raw])
+    elif raw in _EN_WORDS:
+        value = float(_EN_WORDS[raw])
+    else:
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return None
+    scale = _UNIT_SECONDS.get(str(unit or "").strip().lower())
+    if scale is None:
+        return None
+    return value * scale
+
+
 def take_delay(clause: str) -> tuple[float | None, str]:
     """"after 3 minutes turn it on" → (180.0, "turn it on")."""
-    match = _DELAY.match(str(clause or "").strip())
+    text = _normalize_digits(str(clause or "").strip())
+    match = _DELAY.match(text)
     if not match:
         return None, str(clause or "").strip()
-    unit = (match.group("unit") or "").lower()
-    try:
-        seconds = float(match.group("amount")) * _UNIT_SECONDS.get(unit, 1.0)
-    except (TypeError, ValueError):
-        return None, clause
-    return seconds, clause[match.end():].strip(" ,;،.")
+    seconds = _seconds_between(match.group("amount"), match.group("unit"))
+    if seconds is None:
+        return None, text
+    return seconds, text[match.end():].strip(" ,;،.")
+
+
+def take_bare_delay(clause: str) -> tuple[float | None, str]:
+    """"ده دقیقه پیامتو پاک کن" → (600.0, "پیامتو پاک کن").
+
+    A number-plus-unit at the head of a clause is a *wait* only when the rest of
+    the clause is an instruction in its own right. "دو ساعت خیلی زیاده" is a
+    sentence about two hours; it carries no order to run ten minutes later.
+    """
+    text = _normalize_digits(str(clause or "").strip())
+    match = _WHEN_DONE.match(text) or _BARE_DELAY.match(text)
+    if not match:
+        return None, str(clause or "").strip()
+    rest = (match.group("rest") or "").strip(" ,;،.")
+    seconds = _seconds_between(match.group("amount"), match.group("unit"))
+    if seconds is None or len(rest.split()) < 2:
+        return None, str(clause or "").strip()
+    return seconds, rest
 
 
 _TRAILING_DELAY = re.compile(
-    r"\b(?:after|in|پس از|بعد از)\s+(?P<amount>\d+(?:\.\d+)?)\s*"
-    r"(?P<unit>s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hour|hours|d|day|days)\s*$",
+    rf"\b(?:after|in|پس از|بعد از)\s+(?P<amount>{_EN_AMOUNT}|{_AMOUNT})\s*"
+    r"(?P<unit>s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hour|hours|d|day|days"
+    r"|ثانیه|دقیقه|ساعت|روز|هفته)\s*(?:دیگه|بعد)?\s*$",
     re.I,
 )
 
 
 def take_trailing_delay(clause: str) -> tuple[float | None, str]:
     """"clock off again after 3 minutes" → (180.0, "clock off again")."""
-    match = _TRAILING_DELAY.search(str(clause or ""))
+    text = _normalize_digits(str(clause or ""))
+    match = _TRAILING_DELAY.search(text)
     if not match:
         return None, str(clause or "").strip()
-    unit = (match.group("unit") or "").lower()
-    try:
-        seconds = float(match.group("amount")) * _UNIT_SECONDS.get(unit, 1.0)
-    except (TypeError, ValueError):
-        return None, clause
-    return seconds, clause[: match.start()].strip(" ,;،.")
+    seconds = _seconds_between(match.group("amount"), match.group("unit"))
+    if seconds is None:
+        return None, text
+    return seconds, text[: match.start()].strip(" ,;،.")
 
 
 def take_duration(clause: str) -> tuple[float | None, str]:
     """"turn the clock off for ten minutes" → (600.0, "turn the clock off")."""
-    match = _FOR_A_WHILE.search(str(clause or ""))
+    text = _normalize_digits(str(clause or ""))
+    match = _FOR_A_WHILE.search(text)
     if not match:
         return None, str(clause or "").strip()
-    unit = (match.group("unit") or "").lower()
-    try:
-        seconds = float(match.group("amount")) * _UNIT_SECONDS.get(unit, 1.0)
-    except (TypeError, ValueError):
-        return None, clause
-    stripped = (clause[: match.start()] + " " + clause[match.end():]).strip(" ,;،.")
-    return seconds, stripped
+    seconds = _seconds_between(
+        match.group("amount") or match.group("fa_amount"),
+        match.group("unit") or match.group("fa_unit"),
+    )
+    if seconds is None:
+        return None, text
+    stripped = (text[: match.start()] + " " + text[match.end():]).strip(" ,;،.")
+    return seconds, re.sub(r"\s+", " ", stripped).strip(" ,;،.")
 
 
 def label_for(said: str) -> str:
@@ -254,12 +366,21 @@ class PlanRunner:
         from .self_console import run as run_command
 
         self_id = int(getattr(self.runtime.permissions, "self_id", 0) or 0)
-        reply = await run_command(
-            self.runtime,
-            action,
-            chat_id=self_id or 0,
-            sender_id=self_id,
-        )
+        # Every send this step makes is stamped with the plan, so a later step
+        # that says "delete your message" can address the step's own bubble.
+        # Set for the duration of the step and cleared again: a stray value left
+        # on the runtime would mislabel every later message he sends by hand.
+        previous = getattr(self.runtime, "current_plan_id", None)
+        self.runtime.current_plan_id = int(plan_id)
+        try:
+            reply = await run_command(
+                self.runtime,
+                action,
+                chat_id=self_id or 0,
+                sender_id=self_id,
+            )
+        finally:
+            self.runtime.current_plan_id = previous
         if not reply.ok:
             self.runtime.logger.warning(
                 "plan %s step %r failed: %s", plan_id, action, redact_text(reply.note)[:200]
@@ -323,10 +444,18 @@ def _actions_for(clause: str, *, intent: Any, last_body: str = "") -> list[str]:
     """
     found = intent.detect(clause, allow_plan=False)
     if found is not None and getattr(found, "lines", None):
-        return [str(line).strip() for line in found.lines if str(line).strip()]
+        return [_plan_action(str(line).strip()) for line in found.lines if str(line).strip()]
     # Anaphora: "and off again" / "back on" carry no subject. It is the subject of
     # the clause before — "clock on and off again" is clock twice.
-    bare = re.fullmatch(r"(?:and\s+)?(on|off|back on|again on|again off|off again|on again)\b.*", clause.strip(), re.I)
+    # "then turn it on" / "then switch it off": the verb is present, the subject
+    # is not. It is the subject of the clause before — "clock off for ten
+    # minutes, then turn it on" is the clock, twice.
+    bare = re.fullmatch(
+        r"(?:and\s+)?(?:(?:turn|switch|put|set)\s+(?:it|that|this|them)?\s*(?:back\s+)?)?"
+        r"(on|off|back on|again on|again off|off again|on again)\b.*",
+        clause.strip(),
+        re.I,
+    )
     if bare and last_body:
         subject = _subject_of(last_body)
         if subject:
@@ -336,6 +465,18 @@ def _actions_for(clause: str, *, intent: Any, last_body: str = "") -> list[str]:
             if retried is not None and getattr(retried, "lines", None):
                 return [str(line).strip() for line in retried.lines if str(line).strip()]
     return []
+
+
+def _plan_action(line: str) -> str:
+    """One console line, corrected for the fact that it is running in a plan.
+
+    ``delete``/``edit`` aim at the message a *command* was a reply to. A plan
+    step has no reply — the scheduler fired it — so "delete it" in a timeline
+    means the bubble this plan just sent, which is ``unsend last``.
+    """
+    if line == "delete":
+        return "unsend last"
+    return line
 
 
 def _subject_of(clause: str) -> str:
@@ -376,20 +517,66 @@ def build_plan(
     plan = Plan(said=said, label=label_for(said))
     offset = 0.0
     last_body = ""
+    #: What the previous clause was *about* ("clock"), which is what "stop it"
+    #: and "turn it back on" mean when they carry no subject of their own.
+    last_subject = ""
+    #: The length of the window the previous clause opened ("for two hours").
+    #: When the next clause says "two hours later", it is anchored to the *end*
+    #: of that window, not to a second two hours after it.
+    settled: float | None = None
     seen: set[tuple[str, int]] = set()
     for clause in split_sequence(said):
         delay, body = take_delay(clause)
         if delay is not None:
             offset += delay
-        duration, body = take_duration(body)
+            settled = None
+        # A wait at the head of a *later* clause is relative to the step before
+        # it: "… ignore سارا for 2h, 2h later DM محمد" is +2h from the rule, not
+        # two hours after midnight. The first clause's own window ("for two
+        # hours") is a duration, and :func:`take_duration` reads that one.
+        # A wait at the head of a clause is measured from the step before it; on
+        # the first clause, "from now" is that same step. "دو ساعت دیگه به محمد
+        # پیام بده سلام" is a send scheduled two hours out.
+        waited, rest = take_bare_delay(body)
+        if waited is not None:
+            if settled is not None and abs(waited - settled) < 1.0:
+                settled = None  # already inside the window that just closed
+            else:
+                offset += waited
+            body = rest
         tail_delay, body = take_trailing_delay(body)
         if tail_delay is not None:
             offset += tail_delay
-        # "then stop it" means the thing the previous clause turned on.
-        stopper = re.fullmatch(r"(?:then\s+)?(?:stop|turn off|switch off|disable)\s+(?:it|that|them)", body.strip(), re.I)
+            settled = None
+        duration, stripped = take_duration(body)
+        if duration is not None:
+            settled = duration
+        # The line comes from the sentence *with* its window when the window is
+        # part of the order ("ignore سارا for two hours" is a two-hour rule, not
+        # a rule plus an undo), and from the sentence without it otherwise.
         lines = _actions_for(body, intent=intent, last_body=last_body)
-        if not lines and stopper and last_body:
-            inverse = _inverse(last_body, intent=intent)
+        if duration is not None:
+            # With the window taken out of the words, the same order reads as a
+            # clean line: "reply to every DM with X for 4 hours" must not send X
+            # followed by "for 4 hours".
+            clean = _actions_for(stripped, intent=intent, last_body=last_body)
+            # …unless the window *is* the order: a reply rule carries its own
+            # expiry, and stripping it would make a two-hour rule permanent.
+            if clean and not any("--for" in line for line in lines):
+                lines = clean
+                body = stripped
+        # "then stop it" means the thing the previous clause turned on.
+        stopper = re.fullmatch(
+            r"(?:then\s+)?(?:stop|turn off|switch off|disable)\s+(?:it|that|them)",
+            body.strip(),
+            re.I,
+        )
+        if not lines and stopper and (last_body or last_subject):
+            inverse = _inverse(last_body, intent=intent) if last_body else None
+            if inverse is None and last_subject:
+                # "stop it" after "turn it on": the verb was anaphoric, so undo
+                # the *subject*, not the sentence that carried no subject.
+                inverse = _inverse(f"{last_subject} on", intent=intent)
             lines = [inverse] if inverse else []
         if not lines:
             continue
@@ -401,6 +588,8 @@ def build_plan(
             seen.add(key)
             plan.add(action, moment)
         last_body = body
+        if _subject_of(body):
+            last_subject = _subject_of(body)
         if duration:
             inverse = _inverse(body, intent=intent)
             if inverse:
@@ -456,6 +645,7 @@ __all__ = [
     "build_plan",
     "label_for",
     "split_sequence",
+    "take_bare_delay",
     "take_delay",
     "take_duration",
 ]

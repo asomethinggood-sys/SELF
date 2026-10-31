@@ -987,9 +987,18 @@ class PersonaReplies:
         self._window = [stamp for stamp in self._window if stamp >= cutoff]
         return len(self._window) < MAX_PER_HOUR
 
-    def _group_budget_ok(self, chat_id: int, now: float) -> bool:
+    def _group_budget_ok(self, chat_id: int, now: float, *, urgent: bool = False) -> bool:
+        """May she speak in this room right now?
+
+        ``urgent`` is a reply aimed at one of her own messages. The six-second
+        interval exists so she does not answer the whole room at once; somebody
+        who answered *her* is not the room, so the interval is skipped for them.
+        The hourly cap still applies to everyone: it is the outer safety valve,
+        and a conversation that hits forty answers an hour needs a nap, not a
+        loophole.
+        """
         last = self._group_last.get(chat_id)
-        if last is not None and now - last < self.MIN_GROUP_INTERVAL:
+        if not urgent and last is not None and now - last < self.MIN_GROUP_INTERVAL:
             return False
         cutoff = now - 3600
         window = [stamp for stamp in self._group_window.get(chat_id, []) if stamp >= cutoff]
@@ -1253,7 +1262,10 @@ class PersonaReplies:
             self._skip(f"permission:{decision.code}")
             return
         now = time.monotonic()
-        if not self._budget_ok(now):
+        # A reply to her own line is a conversation she is already in the middle
+        # of: the two-second valve is for unsolicited answers, and applying it
+        # here is what made her go quiet the moment he answered her back.
+        if not quote.hers and not self._budget_ok(now):
             self._skip("cooldown")
             return
         await self._answer(
@@ -1330,13 +1342,21 @@ class PersonaReplies:
             self._skip(f"permission:{decision.code}", event)
             return
         now = time.monotonic()
-        if not self._group_budget_ok(event.chat_id, now):
+        # A reply to *her* is always answered, and always in words. The group
+        # budget exists so she does not broadcast at a room; a person who
+        # deliberately pointed at her message is not the room, and dropping them
+        # on a six-second timer — or swapping their answer for a heart, which the
+        # every-ninth rule used to do — reads as being ignored, the one thing he
+        # said must never happen.
+        if not self._group_budget_ok(event.chat_id, now, urgent=bool(quote.hers)):
             self._skip("cooldown", event)
             return
         # Every ninth group answer is a reaction instead of a line: a companion
-        # that always has something to say is a broadcaster.
+        # that always has something to say is a broadcaster — but only when the
+        # room merely *said her name*. When somebody points at her message, the
+        # turn is a conversation and a heart is not an answer.
         self._since_reaction += 1
-        if quote.hers and self._since_reaction % 9 == 0:
+        if not quote.hers and self._named(event.text) and self._since_reaction % 9 == 0:
             target = event.reply_to_id or event.message_id
             emoji = random.choice(yura_extras.REACTIONS)
             if await self.runtime.sender.react(event.chat_id, target, emoji):
@@ -1411,13 +1431,15 @@ class PersonaReplies:
             self._skip(f"permission:{decision.code}", event)
             return
         # The same hourly budget as answering a stranger: a chat with another
-        # person is not a place to flood, even when he is the one typing.
+        # person is not a place to flood, even when he is the one typing. A reply
+        # to her own message is a conversation, not flooding: 20 seconds of
+        # silence in the middle of one reads as a broken bot.
         now = time.monotonic()
         last = self._dm_last.get(event.chat_id)
         cutoff = now - 3600
         window = [stamp for stamp in self._dm_window.get(event.chat_id, []) if stamp >= cutoff]
         self._dm_window[event.chat_id] = window
-        if last is not None and now - last < self.MIN_DM_INTERVAL:
+        if last is not None and now - last < self.MIN_DM_INTERVAL and not quote.hers:
             self._skip("dm_cooldown", event)
             return
         if len(window) >= self.MAX_DM_PER_HOUR:

@@ -219,7 +219,10 @@ class Reach:
             alias = None
         if alias:
             raw = str(alias)
-            if re.fullmatch(r"-?\d{4,}", raw):
+            # An alias is his own explicit mapping, so a short id in it is a real
+            # id — only *typed* numbers need the four-digit guard above, because
+            # a person called "999" is a coincidence and an alias never is.
+            if re.fullmatch(r"-?\d+", raw):
                 return Target(id=int(raw), kind="unknown")
 
         entity = await self._entity(lowered)
@@ -466,6 +469,10 @@ class Reach:
             text=body,
             status="dry" if simulated else "sent",
             note=None if getattr(result, "ok", False) else str(getattr(result, "error", "") or ""),
+            # A send that a *plan* made is stamped with the plan, so a later
+            # "delete your message" step can find that exact bubble instead of
+            # guessing at whatever this account said most recently anywhere.
+            plan_id=getattr(self.runtime, "current_plan_id", None),
         )
         if not getattr(result, "ok", False):
             return {"ok": False, "error": str(getattr(result, "error", "") or "the send failed")}

@@ -357,7 +357,9 @@ async def test_the_notes_are_never_sent_but_the_real_line_survives(runtime) -> N
 async def test_the_bar_is_a_rare_flourish_in_a_group(runtime) -> None:
     """It is hers to send — every fifth answer, not under every third."""
     replies, client = await _runtime_with(runtime)
-    for index in range(10):
+    # Twelve calls, not ten: one in nine is answered with a reaction instead of
+    # a line, so ten calls are nine answers and only one of them is the fifth.
+    for index in range(12):
         replies._group_last.clear()
         replies._group_window.clear()
         await replies.on_group_message(_event(f"yura, you there? {index}"))

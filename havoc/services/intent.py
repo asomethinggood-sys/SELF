@@ -687,12 +687,15 @@ def _lead(text: str) -> str:
     """Drop the vocative: "yura, set …" is an instruction, not a sentence about her."""
     # Case-insensitive on purpose: "Yura, turn the clock off" is the same order as
     # "yura turn the clock off", and the capitalised one was not stripped.
-    return re.sub(
+    out = re.sub(
         r"^(?:hey\s+|ok\s+|okay\s+)?(?:yura|یورا|لیانا|leena)\b[ ,:؛-]*",
         "",
         text,
         flags=re.I,
     ).strip()
+    # "برو پیوی محمد بگو سلام" / "برو به محمد پیام بده" — the verb is "go", the
+    # instruction is underneath it.
+    return re.sub(r"^(?:برو|برین|برو\s+و)\s+(?=\S)", "", out).strip()
 
 
 def _clean_body(raw: str) -> str:
@@ -1032,8 +1035,86 @@ def _fa_when(text: str) -> tuple[str, str] | None:
     return None
 
 
+#: "سارا رو واسه دو ساعت ایگنور کن" — the English verb borrowed into Persian,
+#: with the window where Persian puts it.
+_FA_IGNORE_EN = re.compile(
+    r"^(?P<who>@[\w.]+|[^\s،]+)\s*(?:رو|را)?\s*"
+    r"(?:واسه|برای|تا|به\s*مدت)?\s*(?P<span>\d+|یک|دو|سه|چهار|پنج|ده|بیست)\s*"
+    r"(?P<unit>ثانیه|دقیقه|ساعت|روز|هفته)?\s*"
+    r"(?:ایگنور|ایگنوره|نادیده\s*بگیر|نادیده\s*گیر|نادیده\s*کن|بی\s*خیالش\s*شو)\s*کن?\s*$"
+    r"|^(?:از\s*)?(?P<who2>@[\w.]+|[^\s،]+)\s*(?:رو|را)?\s*"
+    r"(?:ایگنور|نادیده\s*بگیر|نادیده\s*گیر)\s*کن\s*$",
+)
+#: "برو پیوی محمد و بگو سلام" / "پیوی محمد بگو سلام" — a DM, named the way
+#: people name it: "پیوی" (private).
+_FA_DM_SAY = re.compile(
+    r"^(?:برو\s+)?(?:تو\s+)?(?:پیوی|پیام\s*خصوصی|دایرکت|دی\s*ام)\s*"
+    r"(?P<who>@[\w.]+|[^\s،]+)\s*(?:و|,|،)?\s*"
+    r"(?:بگو|بنویس|بفرست|پیام\s*بده\s*که|پیام\s*بده)\s*[:،]?\s*(?P<body>.+)$",
+)
+#: "پیامتو پاک کن" / "پیامت رو پاک کن" / "پیام خودتو حذف کن" — her own last
+#: line, not a message he replied to.
+_FA_DELETE_OWN = re.compile(
+    r"^(?:اون\s+)?(?:پیام|پست|مسج|مسیج)\s*"
+    r"(?:ت|تو|خودت|قبلی(?:ت)?|آخرین(?:ت)?|اخیر(?:ت)?|همین\s*الان)"
+    r"\s*(?:رو|را)?\s*(?:پاک|حذف|دیلیت)\s*کن(?:\s|$)",
+    re.I,
+)
+#: "بعد ده دقیقه …": a delay that follows the previous step, in Persian word order.
+_FA_STEP_DELAY = re.compile(
+    r"^(?:بعد|پس\s*از|بعد\s*از|با\s*فاصلهٔ?)\s*"
+    r"(?P<amount>\d+|یک|دو|سه|چهار|پنج|شش|هفت|هشت|نه|ده|پانزده|بیست|سی|نیم)\s*"
+    r"(?P<unit>ثانیه|دقیقه|ساعت|روز|هفته)\s+(?P<rest>.+)$"
+)
+_FA_SECONDS = {"ثانیه": 1, "دقیقه": 60, "ساعت": 3600, "روز": 86400, "هفته": 604800}
+
+
+def _fa_amount(raw: str) -> int:
+    text = str(raw or "").strip()
+    if text.isdigit():
+        return int(text)
+    return int(_WORD_NUMBERS.get(text, 0) or 0)
+
+
+def _fa_ignore_orders(folded: str) -> Intent | None:
+    match = _FA_IGNORE_EN.match(folded)
+    if not match:
+        return None
+    who = (match.group("who") or match.group("who2") or "").strip(" ،,.:؛")
+    if not who or who.lower() in _PRONOUN_PEOPLE:
+        return None
+    span = ""
+    amount = _fa_amount(match.group("span") or "")
+    unit = match.group("unit") or ""
+    if amount and unit:
+        span = f" --for {_human_wait(amount * _FA_SECONDS.get(unit, 0))}"
+    return Intent(
+        lines=(f"policy ignore {who}{span}",), label="policy", detail=f"ignore {who}"
+    )
+
+
+def _fa_dm_orders(folded: str) -> Intent | None:
+    match = _FA_DM_SAY.match(folded)
+    if not match:
+        return None
+    who = match.group("who").strip(" ،,.:؛")
+    body = _clean_body(match.group("body"))
+    if who and body and len(body) > 1:
+        return Intent(
+            lines=(f"send {who} {body}",), label="send", detail=f"send · {who}"
+        )
+    return None
+
+
 def _fa_orders(folded: str) -> Intent | None:
     """The Persian orders that name a real ability, in the words he types them."""
+    for reader in (_fa_ignore_orders, _fa_dm_orders):
+        found = reader(folded)
+        if found is not None:
+            return found
+    # Her own last line, deleted: "پیامتو پاک کن".
+    if _FA_DELETE_OWN.match(folded):
+        return Intent(lines=("unsend last",), label="msg", detail="delete her last message")
     # The clock is *her* clock (the live time on the profile), not the wall clock.
     if re.match(r"^ساعت(?:ت|ت\s*رو|ت\s*را|م|م\s*رو|ه)?\s*(?:رو|را)?\s*(?:روشن|برگردون|برگردان|فعال|نشون)\s*کن", folded):
         return Intent(lines=("clock on",), label="clock", detail="clock on")
@@ -1335,6 +1416,12 @@ _SEND_FA2 = re.compile(
     r"(?:به|برای)\s+(?P<who>@[\w.]+|[^\s،]+)\s*(?:که|:)?\s*(?P<body>.+)$",
     re.I,
 )
+#: "به محمد بگو سلام" — the same order, with the plainest verb there is.
+_SEND_FA3 = re.compile(
+    r"^(?:please\s+)?(?:به|برای)\s+(?P<who>@[\w.]+|[^\s،]+)\s*"
+    r"(?:بگو|بنویس|بفرست)\s*[:،]?\s*(?P<body>.+)$",
+    re.I,
+)
 
 #: "say I'm a good girl and repeat 100 times" — the count is the instruction, and
 #: the place is optional because "here" is where he is standing.
@@ -1417,6 +1504,19 @@ _IGNORE = re.compile(
     + r"$",
     re.I,
 )
+#: The same order, said the other ways people say it: "ignore sara", "stay away
+#: from sara", "leave sara alone", "be cold to sara", "stop answering sara".
+_IGNORE_ANY = re.compile(
+    r"^(?:please\s+)?(?:just\s+)?(?:"
+    r"ignore|skip|leave\s+alone|leave|stay\s+away\s+from|avoid|"
+    r"be\s+(?:distant|cold|short)\s+with|be\s+(?:distant|cold|short)\s+to|"
+    r"stop\s+(?:answering|replying\s+to|talking\s+to)|"
+    r"cut\s+off|ghost"
+    r")\s+(?P<who>@[\w.]+|[\w][\w\s.'-]{1,40}?)(?:\s+alone)?"
+    + _HERE_TAIL
+    + r"$",
+    re.I,
+)
 _UNIGNORE = re.compile(
     r"^(?:please\s+)?(?:talk|answer|reply|respond)\s+(?:to\s+)?(?P<who>@[\w.]+|[\w][\w\s.'-]{1,40}?)\s+again"
     + _HERE_TAIL
@@ -1426,6 +1526,12 @@ _UNIGNORE = re.compile(
 #: "him", "her", "این شخص" — the person is whoever the message he replied to
 #: belongs to. The command resolves it from the reply, because the sentence
 #: cannot know an id.
+#: The room itself, which is never somebody to ignore.
+_ROOM_WORDS = {
+    "this group", "the group", "group", "this chat", "the chat", "chat", "this room",
+    "the room", "room", "this channel", "the channel", "channel", "here",
+    "این گروه", "گروه", "این چت", "چت", "اینجا",
+}
 _PRONOUN_PEOPLE = {
     "him", "her", "them", "this person", "that person", "this guy", "that guy",
     "این", "اون", "این شخص", "اون شخص", "همین شخص", "ایشان", "این یارو",
@@ -1509,7 +1615,21 @@ _DELETE_AFTER = re.compile(
     r"(?P<amount>\d+(?:\.\d+)?)\s*(?P<unit>s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hour|hours)\b",
     re.I,
 )
-_SEQUENCE = re.compile(r"\b(?:and then|then|after that|afterwards|next)\b|\b(?:بعد|سپس)\b", re.I)
+#: "دو ساعت دیگه به محمد پیام بده سلام" — a clause that opens with a wait is for
+#: later, and "later" is a plan, not a send from this turn.
+_LEADING_WAIT = re.compile(
+    r"^\s*(?:\d+|یک|یه|دو|سه|چهار|پنج|شش|هفت|هشت|نه|ده|پانزده|بیست|سی|نیم)\s*"
+    r"(?:ثانیه|دقیقه|ساعت|روز|هفته|s|sec|seconds|m|min|minutes|h|hour|hours|d|day|days)\b",
+    re.I,
+)
+#: The words that make one sentence a *timeline*. Persian connectors need their
+#: own boundaries: ``\b`` is ASCII-only, so "بعدش" never matched "بعد" and a
+#: whole chain was read as a single order.
+_SEQUENCE = re.compile(
+    r"\b(?:and then|then|after that|afterwards|next|afterwards)\b"
+    r"|(?<![\u0600-\u06ff])(?:و\s+)?(?:بعدش|بعد|سپس)(?![\u0600-\u06ff])",
+    re.I,
+)
 _FOR_A_WHILE = re.compile(
     r"\bfor\s+\d+(?:\.\d+)?\s*(?:s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hour|hours)\b",
     re.I,
@@ -1634,7 +1754,9 @@ def _fa_reaction(text: str) -> str:
 #: peeled so the sentence underneath can be read: "جواب سارا رو بده از این به
 #: بعد" was a rule he could not write because of five extra words.
 _PERMANENT_TAILS = re.compile(
-    r"(?:[\s,،—-]*\b(?:from\s+now\s+on|from\s+now|starting\s+now|going\s+forward"
+    r"(?:[\s,،—-]*\b(?:from\s+here\s+on\s+out|from\s+here\s+on|from\s+here\s+out"
+    r"|from\s+now\s+on|from\s+now"
+    r"|starting\s+now|going\s+forward"
     r"|from\s+today|for\s+good|permanently|forever|always|all\s+the\s+time)\b"
     r"|[\s,،—-]*(?:از\s*این\s*به\s*بعد|از\s*الان\s*به\s*بعد|از\s*الان"
     r"|از\s*حالا(?:\s*به\s*بعد)?|از\s*اینجا\s*به\s*بعد|برای\s*همیشه|همیشه"
@@ -1732,7 +1854,12 @@ def _says_here(text: str) -> bool:
 _RULE_IGNORE_FA = re.compile(
     r"^(?:به\s+)?(?:(?:پیام(?:های|هاش|هایش|هاشون)?)\s*)?"
     r"(?P<who1>@[\w.]+|[^\s،]+)\s*(?:رو|را)?\s*(?:جواب|پاسخ)\s*(?:نده|نمی\s*ده|نمی\s*دهم)\s*$"
-    r"|^(?:جواب|پاسخ)\s+(?P<who2>@[\w.]+|[^\s،]+)\s*(?:رو|را)?\s*نده\s*$",
+    r"|^(?:جواب|پاسخ)\s+(?P<who2>@[\w.]+|[^\s،]+)\s*(?:رو|را)?\s*نده\s*$"
+    # "سارا رو بی‌خیال شو" / "از سارا بی‌خیال شو" / "بی‌خیال سارا شو"
+    r"|^(?:از\s+)?(?P<who3>@[\w.]+|[^\s،]+)\s*(?:رو|را)?\s*بی\s*خیال(?:ش)?\s*شو\s*$"
+    r"|^بی\s*خیال(?:ِ|\s+)?(?P<who4>@[\w.]+|[^\s،]+?)\s*شو\s*$"
+    # "ولش کن" with a name: "سارا رو ول کن"
+    r"|^(?:از\s+)?(?P<who5>@[\w.]+|[^\s،]+)\s*(?:رو|را)?\s*ول(?:ش)?\s*کن\s*$",
     re.I,
 )
 _RULE_ANSWER_FA = re.compile(
@@ -1771,7 +1898,14 @@ def _rule_react_order(text: str, *, window: str = "") -> Intent | None:
 
     match = _RULE_IGNORE_FA.match(said)
     if match:
-        who = (match.group("who1") or match.group("who2") or "").strip(" ،,.:؛")
+        who = (
+            match.group("who1")
+            or match.group("who2")
+            or match.group("who3")
+            or match.group("who4")
+            or match.group("who5")
+            or ""
+        ).strip(" ،,.:؛")
         if who and who.lower() not in _PRONOUN_PEOPLE:
             return Intent(
                 lines=(f"policy ignore {who}{window}",), label="policy", detail=f"ignore {who}"
@@ -1916,7 +2050,9 @@ def _reach(text: str, *, allow_plan: bool = True) -> Intent | None:
 
     # A timeline is read before anything else: "clock off for ten minutes, then on
     # and off again after three" must not be answered with one clock command.
-    if allow_plan and (_SEQUENCE.search(folded) or _FOR_A_WHILE.search(folded)):
+    if allow_plan and (
+        _SEQUENCE.search(folded) or _FOR_A_WHILE.search(folded) or _LEADING_WAIT.match(folded)
+    ):
         lines = _plan_lines(original)
         if lines:
             return Intent(lines=lines, label="plan", detail="timeline")
@@ -1928,7 +2064,10 @@ def _reach(text: str, *, allow_plan: bool = True) -> Intent | None:
     policy_said, policy_seconds = _policy_window(policy_said)
     window = _for_flag(policy_seconds)
 
-    match = _IGNORE.match(policy_said)
+    match = _IGNORE.match(policy_said) or _IGNORE_ANY.match(policy_said)
+    if match and _who(match.group("who")).lower() in _ROOM_WORDS:
+        # "leave this group" is not a rule about a person; the room is not a peer.
+        match = None
     if match:
         who = _who(match.group("who"))
         here = _says_here(policy_said)
@@ -2001,7 +2140,7 @@ def _reach(text: str, *, allow_plan: bool = True) -> Intent | None:
             return Intent(lines=(f"emoji {emoji}",), label="react", detail=f"react {emoji}")
 
     spoken_once = _lead(original)
-    for pattern in (_SEND_FA, _SEND_FA2):
+    for pattern in (_SEND_FA, _SEND_FA2, _SEND_FA3):
         match = pattern.match(spoken_once)
         if not match:
             continue
@@ -2161,7 +2300,14 @@ def _plan_lines(sentence: str) -> tuple[str, ...]:
     from .plans import build_plan
 
     plan = build_plan(sentence, intent=sys.modules[__name__])
-    if plan.empty or len(plan.steps) < 2:
+    if plan.empty:
+        return ()
+    # One step is a timeline only when it is *for later* — "دو ساعت دیگه به محمد
+    # پیام بده سلام" is a scheduled send, and the scheduler is the thing that can
+    # still be running in two hours.
+    from ..utils.time import utc_now as _now
+
+    if len(plan.steps) < 2 and plan.steps[0].at <= _now():
         return ()
     return (f"plan do {sentence}",)
 

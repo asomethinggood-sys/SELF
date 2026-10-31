@@ -79,6 +79,12 @@ person has ever written.
 **3.4 Reversible, and visible.** `list` shows every rule with its mode and scope.
 `clear` removes one. Nothing is hidden: `.why` names the rule that kept her quiet.
 
+**3.4a A reply to her is never refused.** When somebody points at one of her own
+messages — in a group, in a private chat, in Saved Messages — she answers, in
+words, whatever the budget says. The six-second group interval and the
+twenty-second DM interval exist so she does not broadcast at a room; a person who
+answered *her* is not the room. The hourly caps still hold for everyone.
+
 **3.5 Never guessed.** A rule is only set by a sentence that says so. "She didn't
 answer Sara" is not "never answer Sara".
 
@@ -118,7 +124,33 @@ of that message, not the word "him".
 **4.3 A rule beats every other rule**, including the reply-to-her path, the
 DM path, and the every-ninth-answer-is-a-reaction habit.
 
-**4.4 The model has the same hand.** `reply_rule` is a tool like `react` or
+**4.4 One sentence, many moments.** A sentence with "then" / "بعد" / "بعدش" in it
+is a *timeline*, not a pile of orders. Each clause is read by the same floor a
+single order uses, and every clause gets the moment its words say:
+
+```
+سارا رو واسه دو ساعت ایگنور کن، دو ساعت که تموم شد برو پیوی محمد
+و بگو سلام و بعد ده دقیقه پیامتو پاک کن بعدش فال بگیر
+  0:00  policy ignore سارا --for 2h
+  2:00  send محمد سلام
+  2:10  unsend last
+  2:10  fal
+```
+
+The rules that make it work, in both languages:
+
+* a **duration** (`for two hours`, `برای دو ساعت`) belongs to the order it sits
+  in — a rule keeps its own expiry, and a clock turns itself back on;
+* a **wait at the head of a later clause** (`دو ساعت که تموم شد`, `ده دقیقه …`,
+  `two hours later`) is measured from the step before it, and a wait that only
+  restates the window just closed is not counted twice;
+* a **delete of her own message** (`پیامتو پاک کن`, `delete your message`) is
+  `unsend last`, and inside a plan it deletes *that plan's* send — the outbox row
+  carries the plan id, so it can never reach outside the timeline;
+* a **named private chat** (`پیوی محمد`, `پیوی @ali`) resolves the way `send`
+  resolves anything else, and says so plainly when there is no such person.
+
+**4.5 The model has the same hand.** `reply_rule` is a tool like `react` or
 `send_message`: a sentence no pattern recognises ("be distant with zero from
 here on") can still be carried out, because understanding it is the model's job
 and the rule is the console's. When both routes see the same instruction, the
@@ -138,5 +170,10 @@ Run each line through `scripts/try_message.py` (offline) and then live:
 4. `یورا به سارا قلب بده` → Sara's next message gets ❤️ and no words.
 5. `یورا به سارا جواب بده` → Sara is normal again.
 6. `.rules list` shows exactly the rules that exist, with scope.
+7. `یورا سارا رو واسه دو ساعت ایگنور کن، دو ساعت که تموم شد برو پیوی محمد و بگو
+   سلام و بعد ده دقیقه پیامتو پاک کن بعدش فال بگیر` → **one** answer reading the
+   four moments back, and the four steps really run at those moments.
+8. He answers one of her group messages four seconds after her last one → she
+   answers. (The regression he reported.)
 
 `pytest -q` green. `scripts/audit_live.py` overall ok.
