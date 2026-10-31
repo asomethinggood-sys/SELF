@@ -9,7 +9,7 @@ account other than the logged-in user.
 `.` in the usage column stands for the active prefix (default `.`).
 
 
-Total: **135 commands**.
+Total: **139 commands**.
 
 
 ## Account
@@ -45,12 +45,16 @@ Total: **135 commands**.
 
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
+| `.archive` | Put a chat in the archive without deleting anything _(owner only; changes state)._ | `.archive <chat>` | — |
+| `.draft` | Write a message into a chat's input box without sending it _(owner only; changes state)._ | `.draft <chat> <text|off>` | `.drafts_put` |
+| `.drafts` | Every chat that is holding a draft _(owner only)._ | `.drafts` | — |
 | `.folder` | Your Telegram folders _(owner only)._ | `.folder [list]` | `.folders` |
 | `.groups` | Your groups, with member counts _(owner only)._ | `.groups [count]` | `.guilds` |
 | `.invite` | An invite link for a chat, revocable from Telegram _(owner only; changes state)._ | `.invite <chat>` | — |
 | `.join` | Join a chat by the link you were given _(owner only; changes state)._ | `.join <t.me link>` | — |
 | `.members` | Who is in a group, admins first _(owner only)._ | `.members <chat>` | — |
 | `.mute` | Silence a chat for a while, or forever _(owner only; changes state)._ | `.mute <chat> [1h|2d|forever]` | — |
+| `.unarchive` | Bring a chat back out of the archive _(owner only; changes state)._ | `.unarchive <chat>` | — |
 | `.unmute` | Let a chat be loud again _(owner only; changes state)._ | `.unmute <chat>` | — |
 
 ## Core

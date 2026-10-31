@@ -1003,7 +1003,7 @@ sending   .send .say .broadcast .outbox .unsend .emoji .plan
 inbox     .inbox .unread .read .whois .people
 read      .diary .mentions
 chats     .chats .chatinfo .chatsettings .labels .media .groups .members
-          .invite .join .folder .mute .unmute
+          .invite .join .folder .mute .unmute .draft .drafts .archive .unarchive
 admin     .settitle .setdesc .slowmode .kick .ban .unban .promote .demote
           .leave
 people    .contacts .contact .block .unblock .blocklist
@@ -1038,6 +1038,9 @@ yura      .yura .ai
 * **people** — `.contacts .contact .block .unblock .blocklist`;
 * **running a group** — `.settitle .setdesc .slowmode .kick .ban .unban
   .promote .demote .leave`, with `.promote` granting only the rights he names;
+* **drafts and the archive** — `.draft @sara running late` writes into her input
+  box and sends nothing (the promise is tested), `.drafts` lists what Telegram
+  holds, `.archive` / `.unarchive` move a chat without deleting a word;
 * **what others see** — `.privacy` reads every privacy setting that matters and
   `.security` reports whether the two-step lock is on. Both are **read-only**:
   the password state is read, never changed, and the hint is shown but never the

@@ -511,3 +511,54 @@ class TelegramExtras:
             "recovery": bool(getattr(result, "has_recovery", False)),
             "pending_reset": bool(getattr(result, "pending_reset_date", None)),
         }
+
+    # ------------------------------------------------------------------
+    # Drafts and the archive
+    # ------------------------------------------------------------------
+    async def save_draft(self, chat_id: Any, text: str) -> None:
+        """Put words in a chat's input box without sending them.
+
+        A draft is the safest way to hand him a sentence he may want to edit
+        first: nothing leaves the account, and Telegram shows it where he types.
+        """
+        from telethon.tl.functions.messages import SaveDraftRequest
+
+        peer = await self._input_peer(chat_id)
+        await self._call(SaveDraftRequest, peer=peer, message=str(text)[:4096])
+
+    async def clear_draft(self, chat_id: Any) -> None:
+        await self.save_draft(chat_id, "")
+
+    async def drafts(self) -> list[dict[str, Any]]:
+        """Every chat Telegram is holding a draft for."""
+        from telethon.tl.functions.messages import GetAllDraftsRequest
+
+        result = await self._call(GetAllDraftsRequest)
+        rows: list[dict[str, Any]] = []
+        for update in getattr(result, "updates", None) or []:
+            peer = getattr(update, "peer", None)
+            message = getattr(update, "message", None)
+            text = getattr(message, "message", "") or ""
+            if not text:
+                continue
+            rows.append(
+                {
+                    "id": getattr(peer, "user_id", None)
+                    or getattr(peer, "chat_id", None)
+                    or getattr(peer, "channel_id", None),
+                    "text": str(text),
+                    "date": getattr(message, "date", None),
+                }
+            )
+        return rows
+
+    async def set_archived(self, chat_id: Any, *, archived: bool = True) -> None:
+        """Move a chat into the Archive folder (1) or back to the main list (0)."""
+        from telethon.tl.functions.folders import EditPeerFoldersRequest
+        from telethon.tl.types import InputFolderPeer
+
+        peer = await self._input_peer(chat_id)
+        await self._call(
+            EditPeerFoldersRequest,
+            folder_peers=[InputFolderPeer(peer=peer, folder_id=1 if archived else 0)],
+        )

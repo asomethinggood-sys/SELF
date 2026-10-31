@@ -13,6 +13,7 @@ plugins → Telegram client → handlers.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -42,6 +43,9 @@ from .services.yura_chat import YuraChat
 from .utils.security import redact_text
 from .utils.time import utc_now
 from .version import VERSION
+
+#: A placeholder left unfilled after an interpolation failure.
+_PLACEHOLDER = re.compile(r"\{[^{}]*\}")
 
 
 class RuntimeError_(Exception):
@@ -292,7 +296,18 @@ class Runtime:
         except Exception as exc:  # noqa: BLE001 - interpolation bug
             self.logger.error("localization failure for %s: %s", key, exc)
             self.health.record_error("localization", exc)
+            # A raw key is machinery in his chat (non-negotiable 1.4). The
+            # template of *that* language, with the placeholders dropped, is
+            # still a sentence — a slightly empty one, never a key.
+            return self._template_without_placeholders(key, language)
+
+    def _template_without_placeholders(self, key: str, language: str) -> str:
+        """The sentence itself when a variable was missing — never the key."""
+        try:
+            template = self.locales.raw(key, normalize_language_code(language))
+        except Exception:  # noqa: BLE001 - nothing left to say
             return key
+        return _PLACEHOLDER.sub("", template).strip()
 
     async def resolve_language(
         self,
