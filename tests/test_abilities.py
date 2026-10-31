@@ -449,7 +449,7 @@ def test_a_time_is_however_many_words_it_takes() -> None:
 
 
 async def test_remind_takes_the_time_and_the_message_apart(runtime) -> None:
-    for line, body in (
+    for line, _body in (
         (".remind in 2 hours call mom", "call mom"),
         (".remind tomorrow 9am standup", "standup"),
         (".remind 30m water", "water"),
