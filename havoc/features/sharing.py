@@ -43,20 +43,39 @@ async def cmd_poll(ctx: CommandContext) -> None:
     extras = getattr(ctx.runtime, "tg", None)
     if extras is None:
         raise CommandError("share.failed", detail="this build cannot send a poll")
+    # A quiz names its answer by the number people see: 1 is the first option.
+    correct: int | None = None
+    if ctx.flag("correct").strip():
+        try:
+            correct = int(ctx.flag("correct").strip())
+        except ValueError as exc:
+            raise CommandError("share.bad_correct", value=escape(ctx.flag("correct"))) from exc
+    quiz = ctx.has_flag("quiz") or correct is not None
     try:
         # The poll is built and serialised by the service, so a bad one is caught
         # before anything is queued.
-        await extras.send_poll(ctx.chat_id, question, options)
+        await extras.send_poll(
+            ctx.chat_id,
+            question,
+            options,
+            quiz=quiz,
+            correct=correct,
+            multiple=ctx.has_flag("multiple"),
+            public=ctx.has_flag("public"),
+            closed=ctx.has_flag("closed"),
+        )
     except ExtrasError as exc:
         raise CommandError("share.failed", detail=escape(str(exc)[:180])) from exc
     await ctx.store.add_outbox(
         ctx.chat_id, text=question[:200], kind="poll", status="sent"
     )
+    kind = ctx.t("share.poll_quiz") if quiz else ctx.t("share.poll_plain")
     await ctx.reply(
         "\n".join(
             [
                 bold(ctx.t("share.poll_sent")),
                 ctx.t("share.poll_line", question=escape(truncate(question, 120)), count=len(options)),
+                kind + (f" · {ctx.t('share.poll_correct', number=correct)}" if quiz else ""),
             ]
         )
     )
@@ -91,10 +110,10 @@ def register(runtime: Any) -> None:
                 "poll",
                 cmd_poll,
                 category="media",
-                usage="<question> | <option> | <option>",
+                usage="<question> | <option> | <option> [--quiz --correct 2] [--multiple] [--public] [--closed]",
                 changes_state=True,
-                description="Post a real poll in this chat.",
-                examples=(".poll tea or coffee | tea | coffee",),
+                description="Post a real poll — or a quiz, with the number of the right answer.",
+                examples=(".poll tea or coffee | tea | coffee", ".poll fastest? | 3s | 5s --quiz --correct 2"),
             ),
             Command(
                 "geo",

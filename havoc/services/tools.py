@@ -502,8 +502,20 @@ def build_tools(runtime: Any) -> list[Tool]:
         extras = getattr(runtime, "tg", None)
         if extras is None:
             return ActionResult(False, detail="no Telegram connection", kind="offline")
+        correct: int | None = None
+        if (args.get("correct") or "").strip():
+            try:
+                correct = int((args.get("correct") or "").strip())
+            except ValueError:
+                return ActionResult(False, detail="correct must be the option number", kind="bad_args")
         try:
-            await extras.send_poll(turn.chat_id, question, options[:10])
+            await extras.send_poll(
+                turn.chat_id,
+                question,
+                options[:10],
+                quiz=bool(correct),
+                correct=correct,
+            )
         except Exception as exc:  # noqa: BLE001 - the refusal is the answer
             return ActionResult(False, detail=str(exc)[:200], kind="send")
         return ActionResult(
@@ -520,6 +532,7 @@ def build_tools(runtime: Any) -> list[Tool]:
             properties={
                 "question": "the question",
                 "options": "the choices, separated by | or ;",
+                "correct": "for a quiz, the number of the right option (optional)",
             },
             required=("question", "options"),
             run=send_poll,

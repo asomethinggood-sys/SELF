@@ -125,6 +125,8 @@ VALUE_FLAGS: frozenset[str] = frozenset(
         # without these, `.send @x hi --at 21:00` scheduled a send at the literal
         # time "true".
         "at", "delete_after", "ttl", "until", "from", "count", "each", "gap",
+        # ``.poll q | a | b --quiz --correct 2`` names an answer by number.
+        "correct",
     }
 )
 

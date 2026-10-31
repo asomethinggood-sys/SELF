@@ -1467,5 +1467,9 @@
   "groups.peek_request": "◦ joining needs an admin's approval",
   "groups.peek_join_hint": "◦ {prefix}join {link} to go in",
   "cmd.peek.description": "What is behind an invite link, before joining.",
-  "cmd.peek.usage": "<t.me link>"
+  "cmd.peek.usage": "<t.me link>",
+  "share.bad_correct": "“{value}” is not a number — say which option is right, counting from 1.",
+  "share.poll_quiz": "◦ a quiz",
+  "share.poll_plain": "◦ a plain poll",
+  "share.poll_correct": "correct answer · {number}"
 }

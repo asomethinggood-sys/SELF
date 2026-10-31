@@ -390,17 +390,39 @@ class TelegramExtras:
     # Things that are not a sentence: a poll, a place
     # ------------------------------------------------------------------
     @staticmethod
-    def poll_media(question: str, options: list[str]) -> Any:
+    def poll_media(
+        question: str,
+        options: list[str],
+        *,
+        quiz: bool = False,
+        correct: int | None = None,
+        multiple: bool = False,
+        public: bool = False,
+        closed: bool = False,
+    ) -> Any:
         """A poll Telegram will actually accept, serialised once to prove it.
 
         Telethon 1.4x wants ``TextWithEntities`` and a ``hash``; a plain string
         builds and then explodes inside the request. ``_bytes()`` is the same
         call the client makes, so a bad poll is caught here, before it is queued.
+
+        A quiz needs exactly one correct answer, counted from 1 the way a person
+        counts; anything else is refused before it reaches Telegram.
         """
         from telethon.tl.types import InputMediaPoll, Poll, PollAnswer, TextWithEntities
 
         if len(options) < 2:
             raise ExtrasError("a poll needs at least two options", kind="bad_args")
+        if quiz:
+            if len(options) > 10:
+                options = options[:10]
+            if correct is None:
+                raise ExtrasError("a quiz needs the number of the right answer", kind="bad_args")
+            if not 1 <= int(correct) <= len(options):
+                raise ExtrasError(
+                    f"there is no option {correct} — the quiz has {len(options)}", kind="bad_args"
+                )
+            multiple = False  # Telegram refuses a quiz with several answers
         poll = Poll(
             id=0,
             question=TextWithEntities(text=str(question)[:255], entities=[]),
@@ -412,11 +434,12 @@ class TelegramExtras:
                 for index, option in enumerate(options[:10])
             ],
             hash=0,
-            quiz=False,
-            public_voters=False,
-            multiple_choice=False,
+            quiz=bool(quiz),
+            public_voters=bool(public),
+            multiple_choice=bool(multiple),
+            closed=bool(closed),
         )
-        media = InputMediaPoll(poll=poll)
+        media = InputMediaPoll(poll=poll, correct_answers=[int(correct) - 1] if quiz else None)
         media._bytes()
         return media
 
@@ -440,8 +463,28 @@ class TelegramExtras:
         except Exception as exc:  # noqa: BLE001
             raise ExtrasError(redact_text(str(exc))[:300], kind="refused") from exc
 
-    async def send_poll(self, chat_id: Any, question: str, options: list[str]) -> Any:
-        return await self._send_media(chat_id, self.poll_media(question, options))
+    async def send_poll(
+        self,
+        chat_id: Any,
+        question: str,
+        options: list[str],
+        *,
+        quiz: bool = False,
+        correct: int | None = None,
+        multiple: bool = False,
+        public: bool = False,
+        closed: bool = False,
+    ) -> Any:
+        media = self.poll_media(
+            question,
+            options,
+            quiz=quiz,
+            correct=correct,
+            multiple=multiple,
+            public=public,
+            closed=closed,
+        )
+        return await self._send_media(chat_id, media)
 
     async def send_location(self, chat_id: Any, lat: float, lon: float) -> Any:
         return await self._send_media(chat_id, self.location_media(lat, lon))

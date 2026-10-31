@@ -1467,5 +1467,9 @@
   "groups.peek_request": "◦ ورود نیاز به تأیید ادمین دارد",
   "groups.peek_join_hint": "◦ {prefix}join {link} برای ورود",
   "cmd.peek.description": "پشت یک لینک دعوت چیست، پیش از پیوستن.",
-  "cmd.peek.usage": "<لینک t.me>"
+  "cmd.peek.usage": "<لینک t.me>",
+  "share.bad_correct": "«{value}» عدد نیست — بگو کدام گزینه درست است، از ۱ بشمار.",
+  "share.poll_quiz": "◦ یک آزمون",
+  "share.poll_plain": "◦ یک نظرسنجی ساده",
+  "share.poll_correct": "پاسخ درست · {number}"
 }

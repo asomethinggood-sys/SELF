@@ -111,3 +111,48 @@ async def test_sendfile_is_still_an_alias_of_pic(runtime) -> None:
 async def test_photo_belongs_to_her_face_not_to_file_sending(runtime) -> None:
     command = runtime.registry.resolve("photo")
     assert command is not None and command.name == "photo"
+
+
+# ---------------------------------------------------------------------------
+# Quizzes and the other poll shapes
+# ---------------------------------------------------------------------------
+async def test_a_quiz_carries_its_correct_answer(runtime) -> None:
+    sent = await invoke(runtime, ".poll fastest? | 3s | 5s --quiz --correct 2", chat_id=GROUP)
+    text = _said(sent)
+    assert "quiz" in text.lower()
+    assert "2" in text
+    poll = _media_requests(runtime)[-1]
+    assert poll.poll.quiz is True
+    assert poll.correct_answers == [1], "the second option, counted from zero"
+    assert poll._bytes()
+
+
+async def test_a_quiz_number_past_the_end_is_refused(runtime) -> None:
+    sent = await invoke(runtime, ".poll fastest? | 3s | 5s --quiz --correct 9", chat_id=GROUP)
+    assert "9" in _said(sent) or "option" in _said(sent).lower()
+    assert _media_requests(runtime) == []
+
+
+async def test_a_correct_flag_alone_makes_it_a_quiz(runtime) -> None:
+    await invoke(runtime, ".poll fastest? | 3s | 5s --correct 1", chat_id=GROUP)
+    poll = _media_requests(runtime)[-1]
+    assert poll.poll.quiz is True
+    assert poll.correct_answers == [0]
+
+
+async def test_multiple_choice_and_public_names_are_passed(runtime) -> None:
+    await invoke(runtime, ".poll pick any | a | b --multiple --public", chat_id=GROUP)
+    poll = _media_requests(runtime)[-1]
+    assert poll.poll.multiple_choice is True
+    assert poll.poll.public_voters is True
+
+
+async def test_closed_posts_a_closed_poll(runtime) -> None:
+    await invoke(runtime, ".poll done | a | b --closed", chat_id=GROUP)
+    assert _media_requests(runtime)[-1].poll.closed is True
+
+
+async def test_a_non_numeric_correct_is_refused_before_sending(runtime) -> None:
+    sent = await invoke(runtime, ".poll q | a | b --quiz --correct two", chat_id=GROUP)
+    assert "two" in _said(sent)
+    assert _media_requests(runtime) == []

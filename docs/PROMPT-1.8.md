@@ -1032,7 +1032,8 @@ yura      .yura .ai
 * **identity** — `.username` (Telegram's own rule quoted on refusal), `.photo`
   (reply to a picture, size-checked, confirm-gated), `.abilities` (counted from
   the live registry);
-* **things that are not words** — `.poll` (a real `InputMediaPoll`), `.geo` (a
+* **things that are not words** — `.poll` (a real `InputMediaPoll`, plain,
+  multiple-choice, public or a **quiz** with `--quiz --correct 2`), `.geo` (a
   range-checked point), all serialised before they are queued;
 * **reading** — `.diary` (Saved Messages), `.mentions` (the mention filter),
   and `.search … in <chat>`;
