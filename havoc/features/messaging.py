@@ -34,7 +34,7 @@ from ..utils.time import (
     utc_now,
 )
 from ..utils.validation import validate_message_body, validate_template_name
-from .helpers import fmt_time, reply_text, require_reply, resolve_target, tz_for
+from .helpers import fmt_time, reply_text, require_reply, resolve_target, split_when, tz_for
 
 MATCH_TYPES = ("contains", "exact", "startswith", "endswith", "regex", "any")
 AWAY_COOLDOWN = 900  # per person, 15 minutes
@@ -303,15 +303,10 @@ async def _template_values(ctx: CommandContext) -> dict[str, Any]:
 async def cmd_schedule(ctx: CommandContext) -> None:
     if not ctx.args:
         raise CommandError("errors.missing_argument", usage=ctx.usage_text())
-    when_raw = ctx.arg(0)
-    body = " ".join(ctx.args[1:]).strip()
-    if not body:
-        raise CommandError("errors.missing_argument", usage=ctx.usage_text())
     tz = tz_for(ctx)
-    try:
-        when = parse_when(when_raw, tz)
-    except TimeParseError as exc:
-        raise CommandError("errors.invalid_time", detail=escape(str(exc)), example="in 2h | 2026-11-01 09:00") from exc
+    # Same split as `.remind`: "in 2 hours", "tomorrow 9am" are one phrase, not
+    # one word, and the rest of the line is the message.
+    when, body, _raw = split_when(ctx, example="in 2h | 2026-11-01 09:00")
     if when <= utc_now():
         raise CommandError("errors.time_in_past", when=escape(format_datetime(when, tz, ctx.language)))
     recurrence = parse_recurrence(ctx.flag("repeat") or None)

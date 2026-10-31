@@ -437,6 +437,13 @@ _REMEMBER = re.compile(
 _REMEMBER_FA = re.compile(
     r"^(?:یادداشت کن|یادت باشه|به خاطر بسپار|یادم باشه)[:\s]*(?P<body>.{2,300})$"
 )
+_SAVE_TO_SAVED = re.compile(
+    r"^(?:save|keep|copy|forward|put|stash)\s+(?:this|that|it)\s+"
+    r"(?:to|in|into)\s+(?:my\s+|our\s+)?saved(?:\s+messages)?\s*[.!]*$"
+    r"|^(?:این|اون|اینو|اونو)\s*(?:رو|را)?\s*(?:توی|به|در)\s*"
+    r"(?:پیام\s*های\s*ذخیره\s*شده|ذخیره\s*ها|سیو\s*ها|saved)\s*(?:بفرست|بذار|ذخیره\s*کن)$",
+    re.I,
+)
 _TRANSLATE = re.compile(
     r"^(?:please\s+)?translate\s+(?P<body>.{2,300}?)\s+(?:to|into|به)\s+(?P<lang>[\w\u0600-\u06FF]+)\s*[.!?]*$",
     re.IGNORECASE,
@@ -453,6 +460,10 @@ _SEARCH = re.compile(
 def _knowledge(text: str) -> Intent | None:
     """Remembering, translating and searching: three named shapes, nothing guessed."""
     folded = _clean(text)
+    if _SAVE_TO_SAVED.match(folded):
+        # "save this to saved messages" used to become a *note*: the word "save"
+        # at the front of `_REMEMBER` ate it. What he asked for is a re-send.
+        return Intent(lines=("copy saved",), label="copy", detail="copy · saved messages")
     for pattern in (_REMEMBER, _REMEMBER_FA):
         match = pattern.match(folded)
         if match:
@@ -1164,7 +1175,7 @@ def _surface(text: str) -> Intent | None:
 # a sentence without an explicit "who" stays conversation.
 _SAY = re.compile(
     r"^(?:please\s+)?(?:can you\s+|could you\s+)?"
-    r"(?:message|text|dm|msg|ping)\s+(?P<who>@[\w.]+|saved messages|saved|me)"
+    r"(?:message|text|dm|msg|ping)\s+(?P<who>@[\w.]+|saved messages|saved|me|[a-z][\w.]{1,20})"
     r"\s*(?:,|and)?\s*(?:saying|say|that|to say|telling (?:him|her|them))?\s*(?P<body>.+)$",
     re.I,
 )
@@ -1849,6 +1860,36 @@ def _misc(text: str) -> Intent | None:
     the `.about` card in the middle of a conversation. A lookup needs to *ask*.
     """
     folded = _clean(text)
+    # "make a note milk" carries its own words, so it cannot be a fixed line.
+    note = re.match(r"^(?:make|add|write)\s+(?:a\s+)?note\s*[:\-]?\s*(?P<body>.{2,300})$", folded)
+    if note:
+        body = _clean_body(note.group("body"))
+        if body and body not in _NOISE:
+            return Intent(lines=(f"note add {body}",), label="note", detail=f"note · {body[:40]}")
+    # "cancel reminder 3"
+    cancel = re.match(
+        r"^(?:cancel|delete|remove|drop)\s+(?:the\s+)?(?:reminder|task)\s*#?(?P<id>\d{1,9})$",
+        folded,
+    )
+    if cancel:
+        return Intent(
+            lines=(f"reminders cancel {cancel.group('id')}",),
+            label="reminders",
+            detail=f"cancel reminder {cancel.group('id')}",
+        )
+    # "schedule hi at 9am" — the words and the time, in the order he says them.
+    scheduled = re.match(
+        r"^(?:schedule|post|send\s+later)\s+(?P<body>.{2,200}?)\s+(?:(?:at|for|on)\s+)?"
+        r"(?P<when>\d{1,2}(?::\d{2})?\s*(?:am|pm)?|tomorrow(?:\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?)\s*[.!]*$",
+        folded,
+    )
+    if scheduled:
+        when = re.sub(r"\s+", "", scheduled.group("when"))
+        return Intent(
+            lines=(f"schedule {when} {scheduled.group('body').strip()}",),
+            label="schedule",
+            detail=f"schedule · {when}",
+        )
     rules: list[tuple[str, str]] = [
         (r"^(?:what can you do|what do you do|list (?:your )?(?:commands|features)|show (?:me )?(?:the )?(?:commands|help)|help me|^help$|کمک|دستورها)", "help"),
         (r"^(?:who are you|what are you|what is your version|your version|tell me about (?:yourself|you)\b|کی هستی|ورژن)", "about"),
@@ -1872,6 +1913,16 @@ def _misc(text: str) -> Intent | None:
         (r"^(?:(?:برام|برای\s*من|یه|یک)\s*)*(?:quote|give me a quote|جمله"
          r"(?:\s*(?:بگو|بزن|بخوان))?)\s*[.!؟?]*$", "quote"),
         (r"^(?:say something in (?:persian|farsi|english)|حرف بزن)", "yura"),
+        # The ones the audit found falling through to a shrug.
+        (r"^(?:unpin)(?:\s+(?:this|that|it))?\s*[.!]*$", "unpin"),
+        (r"^(?:what'?s|what\s+is|anything)\s+unread\s*[.!?]*$|^(?:unread)$", "unread"),
+        (r"^(?:translate\s+(?:this|that|it)|ترجمه\s*کن|این\s*رو\s*ترجمه\s*کن)\s*[.!؟]*$", "translate"),
+        (r"^(?:summarize|summarise|خلاصه\s*کن)(?:\s+(?:this|the)\s+(?:chat|group|conversation))?\s*[.!؟]*$", "summarize"),
+        (r"^(?:show\s+(?:me\s+)?(?:my\s+)?chats|my\s+chats|list\s+(?:my\s+)?chats|چت\s*ها)$", "chats"),
+        (r"^(?:back\s*up\s+now|run\s+a\s+backup|make\s+a\s+backup|backup\s+now)\s*[.!]*$", "backup export"),
+        (r"^(?:ping|پینگ)\s*[.!]*$", "ping"),
+        (r"^(?:what'?s\s+the\s+date(?:\s+today)?|today'?s\s+date|امروز\s*(?:چندمه|چنده|چند\s*امه))\s*[.!؟]*$", "time"),
+        (r"^(?:bookmark\s+(?:this|that|it)|save\s+(?:this|that|it)\s+as\s+a\s+bookmark)\s*[.!]*$", "bookmark save"),
     ]
     for pattern, line in rules:
         if re.search(pattern, folded):

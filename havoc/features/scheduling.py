@@ -33,7 +33,8 @@ from ..utils.time import (
     utc_now,
     week_bounds,
 )
-from .helpers import parse_page_arg, tz_for
+from ..utils.validation import validate_message_body
+from .helpers import parse_page_arg, split_when, tz_for
 
 
 # ---------------------------------------------------------------------------
@@ -95,28 +96,17 @@ def _strip_tags(text: str) -> str:
 async def cmd_remind(ctx: CommandContext) -> None:
     if not ctx.args:
         raise CommandError("errors.missing_argument", usage=ctx.usage_text())
-    when_raw = ctx.arg(0)
-    body = " ".join(ctx.args[1:]).strip()
-    if not body:
+    if len(ctx.args) < 2:
+        # A time with nothing to be reminded about: say what the shape is rather
+        # than "unrecognised time" about something that parsed perfectly.
         raise CommandError("remind.usage_hint", prefix=ctx.runtime.prefix)
     tz = tz_for(ctx)
-    try:
-        when = parse_when(when_raw, tz)
-    except TimeParseError as exc:
-        raise CommandError("errors.invalid_time", detail=escape(str(exc)), example="30m | tomorrow 09:00") from exc
+    # "in 2 hours", "tomorrow 9am", "9am": the time is however many words it
+    # takes, and whatever is left is the thing to be reminded about.
+    when, body, _raw = split_when(ctx, example="30m | tomorrow 09:00")
+    body = validate_message_body(body, limit=2000)
     if when <= utc_now():
-        # A bare clock time that has already gone by is *tomorrow's* — nobody
-        # types "09:00" at eight in the evening meaning this morning.
-        bare = re.fullmatch(r"(?i)\s*(?:at\s*)?(\d{1,2}:\d{2})\s*", when_raw or "")
-        rolled = None
-        if bare:
-            try:
-                rolled = parse_when(f"tomorrow {bare.group(1)}", tz)
-            except TimeParseError:
-                rolled = None
-        if rolled is None or rolled <= utc_now():
-            raise CommandError("errors.time_in_past", when=escape(format_datetime(when, tz, ctx.language)))
-        when = rolled
+        raise CommandError("errors.time_in_past", when=escape(format_datetime(when, tz, ctx.language)))
 
     recurrence = parse_recurrence(ctx.flag("repeat") or ctx.flag("every") or None)
     if ctx.flag("repeat") and not recurrence:

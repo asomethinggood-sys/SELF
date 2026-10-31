@@ -171,6 +171,29 @@ _DATE_PATTERNS = (
 )
 
 
+#: "remind me friday", "شنبه": the weekday in both scripts, 0 = Monday.
+_WEEKDAYS = {
+    "monday": 0, "mon": 0, "دوشنبه": 0,
+    "tuesday": 1, "tue": 1, "tues": 1, "سه‌شنبه": 1, "سه شنبه": 1,
+    "wednesday": 2, "wed": 2, "چهارشنبه": 2,
+    "thursday": 3, "thu": 3, "thur": 3, "thurs": 3, "پنجشنبه": 3, "پنج‌شنبه": 3,
+    "friday": 4, "fri": 4, "جمعه": 4,
+    "saturday": 5, "sat": 5, "شنبه": 5,
+    "sunday": 6, "sun": 6, "یکشنبه": 6, "یک‌شنبه": 6,
+}
+
+
+def days_until_weekday(token: str, today: date) -> int | None:
+    """How many days ahead the next ``token`` weekday is; ``None`` if not one."""
+    index = _WEEKDAYS.get(token.strip().lower())
+    if index is None:
+        return None
+    ahead = (index - today.weekday()) % 7
+    # "friday" said on a Friday means *today*, unless the time has gone — the
+    # caller decides that, because only it knows the clock.
+    return ahead
+
+
 def parse_date(text: str) -> date:
     normalized = _normalize_digits(text.strip())
     for fmt, pattern in _DATE_PATTERNS:
@@ -214,6 +237,7 @@ def parse_local_datetime(
     target_date: date | None = None
     target_time: time | None = None
     matched = False
+    weekday_used = False
     for part in parts:
         if target_time is None:
             try:
@@ -222,6 +246,16 @@ def parse_local_datetime(
                 continue
             except TimeParseError:
                 pass
+        if target_date is None:
+            ahead = days_until_weekday(part, current.date() + timedelta(days=day_offset))
+            if ahead is not None:
+                # "friday at 18:30" is the next Friday, not today with a stray
+                # word in it. On the day itself the clock decides — see below.
+                target_date = current.date() + timedelta(days=day_offset + ahead)
+                weekday_used = True
+                day_offset = 0
+                matched = True
+                continue
         if target_date is None:
             try:
                 target_date = parse_date(part)
@@ -240,16 +274,47 @@ def parse_local_datetime(
 
     naive = datetime.combine(target_date, target_time)
     aware = naive.replace(tzinfo=zone)
+    if weekday_used and aware <= current:
+        # Said on the day itself, after the time has gone: next week's.
+        aware += timedelta(days=7)
     return to_utc(aware)
+
+
+_AMPM = re.compile(r"^(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\s*(?P<mark>am|pm)$", re.I)
+
+
+def spoken_when(text: str) -> str:
+    """The time as people say it, as the parser wants it.
+
+    ``in 2 hours`` → ``2h``, ``9am`` → ``09:00``, ``7:30 pm`` → ``19:30``. Both
+    spellings are what he types; neither used to parse, so a reminder he asked
+    for was answered with a syntax error.
+    """
+    folded = _normalize_digits(" ".join(str(text or "").strip().split())).lower()
+    folded = re.sub(r"^(?:in|after|within|بعد\s*از|تا)\s+", "", folded).strip()
+    match = _AMPM.match(folded)
+    if match:
+        hour = int(match.group("hour")) % 12
+        minute = int(match.group("minute") or 0)
+        if match.group("mark").lower() == "pm":
+            hour += 12
+        return f"{hour:02d}:{minute:02d}"
+    # "tomorrow 9am", "today 7:30 pm"
+    head, _, tail = folded.rpartition(" ")
+    tail_match = _AMPM.match(tail)
+    if head and tail_match:
+        return f"{head} {spoken_when(tail)}"
+    return folded
 
 
 def parse_when(text: str, tz_name: str | None = "UTC", *, now: datetime | None = None) -> datetime:
     """Parse either a relative duration (``30m``) or an absolute local time."""
     current = now or utc_now()
+    spoken = spoken_when(text)
     try:
-        return current + parse_duration(text)
+        return current + parse_duration(spoken)
     except TimeParseError:
-        return parse_local_datetime(text, tz_name, now=current)
+        return parse_local_datetime(spoken, tz_name, now=current)
 
 
 # ---------------------------------------------------------------------------

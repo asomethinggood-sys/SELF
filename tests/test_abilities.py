@@ -431,3 +431,43 @@ async def test_the_sticker_tool_goes_through_the_real_command(runtime) -> None:
     # No installed packs in a test account: the honest answer is "no sticker",
     # never a crash and never a silent nothing.
     assert result.ok or result.detail
+
+
+# ---------------------------------------------------------------------------
+# Times people actually say
+# ---------------------------------------------------------------------------
+def test_a_time_is_however_many_words_it_takes() -> None:
+    from havoc.utils.time import parse_when, spoken_when
+
+    assert spoken_when("9am") == "09:00"
+    assert spoken_when("7:30 pm") == "19:30"
+    assert spoken_when("in 2 hours") == "2 hours"
+    assert spoken_when("tomorrow 9am") == "tomorrow 09:00"
+    # A weekday means the next one, and on the day itself the clock decides.
+    friday = parse_when("friday at 18:30", "UTC")
+    assert friday.weekday() == 4
+
+
+async def test_remind_takes_the_time_and_the_message_apart(runtime) -> None:
+    for line, body in (
+        (".remind in 2 hours call mom", "call mom"),
+        (".remind tomorrow 9am standup", "standup"),
+        (".remind 30m water", "water"),
+    ):
+        sent = await invoke(runtime, line, chat_id=OWNER)
+        assert "Reminder set" in sent[0].text, (line, sent[0].text)
+    rows = await runtime.db.fetch_all("SELECT text FROM reminders ORDER BY id")
+    assert [row["text"] for row in rows] == ["call mom", "standup", "water"]
+
+
+async def test_schedule_takes_the_same_split(runtime) -> None:
+    sent = await invoke(runtime, ".schedule tomorrow 9am standup", chat_id=OWNER)
+    assert "scheduled" in sent[0].text.lower(), sent[0].text
+    rows = await runtime.db.fetch_all("SELECT text, run_at FROM schedules")
+    assert [row["text"] for row in rows] == ["standup"]
+    assert "09:00" in str(rows[0]["run_at"])
+
+
+async def test_a_time_alone_is_a_usage_hint_not_a_parse_error(runtime) -> None:
+    sent = await invoke(runtime, ".remind 30m", chat_id=OWNER)
+    assert "remind" in sent[0].text.lower()
