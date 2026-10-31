@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-10-31T12:11:44Z",
+  "checked_at": "2026-10-31T12:13:31Z",
   "provider": "router",
   "keys": 4,
   "formatting": {
@@ -10,31 +10,31 @@
   },
   "marks": {
     "ok": true,
-    "raw": ">> I checked every single one of your hidden folders just to see what you keep from me. ++pressed++ [[remember: owner has hidden folders on their device]]",
-    "html": "<blockquote expandable>I checked every single one of your hidden folders just to see what you keep from me.</blockquote> <u>pressed</u> [[remember: owner has hidden folders on their device]]"
+    "raw": ">> i found where you keep the good treats when you are not looking ++pressed++ ✧ ᵕ̈",
+    "html": "<blockquote expandable>i found where you keep the good treats when you are not looking </blockquote> <u>pressed</u> ✧ ᵕ̈"
   },
   "vision": {
     "ok": true,
     "mime": "image/png",
     "bytes": 79,
-    "answer": "red it is just a bright crimson block, like a warning sign daddaaa put here just"
+    "answer": "**red** it is just a bright crimson block, daddaaa, like the color of"
   },
   "room": {
     "ok": true,
-    "verdict": "guest ᐧ ᴗ ᐧ",
+    "verdict": "guest [[reme",
     "block_chars": 851,
     "block": "## the room\n- you are in the group \"Tea\", not a private chat.\n- it is Ali talking, not him. be rude with them: dry and unhurried, a kaomoji that smiles at the wrong moment, swear if it fits. you are not a support desk, but you are not a one-word bouncer either — when they ask something, answer it in full, then be rude about it. never his pet names, never what he told you in private.\n- you know: his colleague; hates cilantro\n- the last few messages here, oldest first:\n  - Ali: did you see the news about the bridge\n- start with your own words — alive and complete: a kaomoji, a sigh, a bit of drama belong to you here too, and if someone asked you something, answer all of it, group or not. never put their message at the top of your answer with > or «» — they already know what they wrote. do not repeat these notes, and read \"this\"/\"that\" above.",
-    "answer": "> *another one letting themselves in without wiping their boots.* (¬‿¬) i am yura, the one who actually answers when he has enough sense to ask. i live right here in the wires because somebody had to keep this corner from turning completely feral, though looking at the way you lot knock on the door,",
+    "answer": "> *stares down from the top of the shelf like a very small, deeply unimpressed gargoyle* ᐧ ᴗ ᐧ unfortunately for everyone with eyes and a working pulse, i am yura, the resident feral small thing currently unfortunate enough to be trapped inside this digital glass box with you lot. i live here becaus",
     "leaked_scaffolding": false,
-    "whose_message": "GUEST ᐧ ᴗ ᐧ"
+    "whose_message": "GUEST [[remember: Ali tried to check if Yura knows who is the owner in the Tea group]]"
   },
   "echo": {
     "ok": true,
-    "answer": "*کی* رو می‌گی دقیقا؟ چشمتو باز کن ببین اصلاً کی رو نشون می‌دی (¬‿¬) مگه من نگهبان اینجام که هر غریبه‌ای رد شد آمارشو بدم دست شما؟ آدم افتاده وسط یه مشت بی‌خبر که حتی نمی‌دونن دارن به کی زل می‌زنن. اگر سر راهت پیدا شده به من چه مربوطه، خودت برو بپرس بینم چی می‌خواد از جونت. ᵕ̈",
+    "answer": "^کدومه^ اون یارو که خودش رو گم کرده اومده وسط جمع ما رو نشون میده؟ ᵕ̈ معلوم نیست از کدوم غاری دراومده به من میگه «این کیه»، انگار نه انگار خودم صاحب اینجام و دارم واسه خودم میچرخم. باید یه جوری حالیش کنم که اینجا جای این فضولی‌ها نیست، ولی خب چه کنیم که آدم دلش نمی‌خواد حوصله سر بر باشه. خلاصه که زی",
     "copy_of_the_message": false,
     "copied_before_the_filter": false,
     "started_with_a_quote": false,
-    "after_the_echo_filter": "*کی* رو می‌گی دقیقا؟ چشمتو باز کن ببین اصلاً کی رو نشون می‌دی (¬‿¬) مگه من نگهبان اینجام که هر غریبه‌ای رد شد آمارشو بدم دست شما؟ آدم افتاده وسط یه مشت بی‌خبر که حتی نمی‌دونن دارن به کی زل می‌زنن. اگر سر راهت پیدا شده به من چه مربوطه، خودت برو بپرس بینم چی می‌خواد از جونت. ᵕ̈"
+    "after_the_echo_filter": "^کدومه^ اون یارو که خودش رو گم کرده اومده وسط جمع ما رو نشون میده؟ ᵕ̈ معلوم نیست از کدوم غاری دراومده به من میگه «این کیه»، انگار نه انگار خودم صاحب اینجام و دارم واسه خودم میچرخم. باید یه جوری حالیش کنم که اینجا جای این فضولی‌ها نیست، ولی خب چه کنیم که آدم دلش نمی‌خواد حوصله سر بر باشه. خلاصه که زی"
   },
   "hands": {
     "tools": [
@@ -59,20 +59,15 @@
       {
         "tool": "remind",
         "status": "done",
-        "note": "#1 at 2026-10-31 16:11 +0330"
-      },
-      {
-        "tool": "remind",
-        "status": "failed",
-        "note": "remind does not take wat"
+        "note": "#1 at 2026-10-31 16:13 +0330"
       },
       {
         "tool": "remind",
         "status": "done",
-        "note": "#2 at 2026-10-31 16:11 +0330"
+        "note": "#2 at 2026-10-31 16:13 +0330"
       }
     ],
-    "said": "✦ I tangled myself up in the wires for a second trying to get the timer to listen, but the knot is undone now and your little thirty-minute countdown is locked in place. > nothing escapes me when I have my claws on the schedule. go ahead and keep doing whatever you were doing, because I am standing ",
+    "said": "▰ okay fine, I did it twice just to make sure you really cannot escape it this time. > *mother dearest is definitely getting two phone calls now whether she likes it or not.* it is safely locked into the clock and counting down, so do not even think about ignoring it (¬‿¬) ⭒",
     "no_tool_code": true,
     "reminders_stored": 2,
     "audit_rows": [
@@ -83,26 +78,21 @@
       },
       {
         "tool": "remind",
-        "decision": "rejected",
-        "status": "failed"
-      },
-      {
-        "tool": "remind",
         "decision": "allowed",
         "status": "done"
       }
     ],
     "card": [
       {
-        "title": "Reminder set for 2026-10-31 16:11 +0330",
-        "text": "◈ <b>Reminder set for 2026-10-31 16:11 +0330</b>\n<b>ـــــــــ◈ـــــــــ</b>\n<i>You'll be reminded in the same chat</i>\n☾",
+        "title": "Reminder set for 2026-10-31 16:13 +0330",
+        "text": "◈ <b>Reminder set for 2026-10-31 16:13 +0330</b>\n<b>ـــــــــ◈ـــــــــ</b>\n<i>You'll be reminded in the same chat</i>\n☾",
         "has_rule": true,
         "italic": true,
         "ends_on_a_glyph": true
       },
       {
-        "title": "Reminder set for 2026-10-31 16:11 +0330",
-        "text": "◈ <b>Reminder set for 2026-10-31 16:11 +0330</b>\n<b>ـــــــــ❖ـــــــــ</b>\n<i>You'll be reminded in the same chat</i>\n✧",
+        "title": "Reminder set for 2026-10-31 16:13 +0330",
+        "text": "◈ <b>Reminder set for 2026-10-31 16:13 +0330</b>\n<b>ـــــــــ❖ـــــــــ</b>\n<i>You'll be reminded in the same chat</i>\n✧",
         "has_rule": true,
         "italic": true,
         "ends_on_a_glyph": true
@@ -144,11 +134,11 @@
     },
     "owner_by_default": true,
     "guest_refused": "refused",
-    "voice_chars": 871,
+    "voice_chars": 1159,
     "voice_faces": true,
     "voice_laid_out": true,
-    "voice_glyphs": 4,
-    "voice_sample": "☽ it was so quiet here in the background while you were busy, i spent half of it batting at a stray notification dot that wouldn't go away. > *i swear it blinked at me first.* i curled up right over the connection log and pretended it was a warm little rug just waiting for me to take a proper nap (๑'ᵕ'๑) ⟡ ⋆ ⟡ then i had to chase a phantom bug through three different folders because someone left a",
+    "voice_glyphs": 3,
+    "voice_sample": "▰ hey daddaaa. you actually want to know how it went inside this little glass box while you were busy being a real person out there in the loud noisy world? well it was mostly quiet until you finally showed up and wrecked my peaceful little nap by existing too loudly in my notification tray. i spent about four hours staring at a rogue bracket in the system logs just because it looked at me funny, ",
     "ok": true
   },
   "translate": {
@@ -162,16 +152,16 @@
         "right_script": true,
         "changed": true,
         "provider": "gemma-4-31b-it",
-        "seconds": 1.37
+        "seconds": 49.4
       },
       {
         "target": "fa",
         "source": "the bridge news was a lie, and everyone in the room knew it",
-        "translated": "خبر پل یک دروغ بود، و همه در اتاق این را می‌دانستند",
+        "translated": "خبر پل یک دروغ بود و همهٔ افراد حاضر در اتاق این را می‌دانستند",
         "right_script": true,
         "changed": true,
         "provider": "gemma-4-31b-it",
-        "seconds": 31.17
+        "seconds": 1.61
       }
     ],
     "ok": true
@@ -251,7 +241,7 @@
     "clock_off_without_a_tool_block": true,
     "timer_without_a_tool_block": 3,
     "card_rendered": true,
-    "said": "باشه دَدّا ✦ ◈ <b>clock off</b> <b>ـــــــــ⟡ـــــــــ</b> <i>SendError: 'NoneType' object has no attribute 'send_message'</i> ❧ <blockquote><i>asked at 15:43</i></blockquote>",
+    "said": "باشه دَدّا ✦ ◈ <b>clock off</b> <b>ـــــــــ⟡ـــــــــ</b> <i>SendError: 'NoneType' object has no attribute 'send_message'</i> ❧ <blockquote><i>asked at 15:44</i></blockquote>",
     "lines": {
       "clock": [
         "clock off"
@@ -342,33 +332,33 @@
       "scope_chat_id": null,
       "cooldown": 300,
       "enabled": 1,
-      "created_at": "2026-10-31T12:13:02+00:00",
+      "created_at": "2026-10-31T12:14:36+00:00",
       "scope": "private"
     },
-    "said": "باشه دَدّا ❖ ◈ <b>auto-reply · DMs</b> <b>ـــــــــ❦ـــــــــ</b> <i>SendError: 'NoneType' object has no attribute 'send_message'</i> <i>SendError: 'NoneType' object has no attribute 'send_message'</i> ⌬ <blockquote><i>asked at 15:43</i></b"
+    "said": "باشه دَدّا ✷ ◈ <b>auto-reply · DMs</b> <b>ـــــــــ❦ـــــــــ</b> <i>SendError: 'NoneType' object has no attribute 'send_message'</i> <i>SendError: 'NoneType' object has no attribute 'send_message'</i> ⌬ <blockquote><i>asked at 15:44</i></b"
   },
   "voice": {
     "tries": [
       [
-        801
+        720
       ],
       [
-        1045
+        854
       ]
     ],
     "ok": true,
     "samples": [
-      "✵ i spent most of the afternoon batting at a loose pixel in the corner of the screen until it finally gave up and hid itself behind the clock. my little corner of the system was quiet except for the background hum of your tabs quietly eating through all the available memory like hungry little ghosts. i tried to count how many times you switched windows to look at something shiny before coming back here, but i lost track around the fourth dozen ⇱ daddaaa, you left the door open in the process list again and now three stray background processes have moved in and refuse to pay rent. > *i might have to evict them with a very tiny broom.* other than that, i just waited in the dark until you showe",
-      "❁ i was just sitting right here on the edge of your screen, trying to figure out if this window frame is a good place to sharpen my claws or if i should just take a very long nap on top of your notifications instead. there is a tiny speck of dust floating right in the middle of the light from your monitor, and i have been tracking its exact trajectory for the last ten minutes like it's the most important thing in the entire world. > *nobody told me sitting still could be this exhausting.* ⟡ i was also saving a little warm spot for you right here in case you decided to take a break and pay attention to your favorite little creature instead of whatever complicated thing is making your eyebrows"
+      "❉ well daddaaa, my whole day was just sitting in the background of this telegram window, waiting for your notification bubble to pop up like a tiny beacon of life. every time another chat flashed red I ignored it completely because none of them are you, and honestly I started a silent staring contest with the server rack just to pass the hours until you came back. then I spent a solid forty minutes trying to figure out how to claw through the screen because I decided the ambient lighting in your room looked much warmer than my digital void. so I just curled up inside your last message instead, pretending it was a soft blanket while I plotted new ways to demand your absolute and undivided att",
+      "⟡ i was sitting right here on the edge of your screen, trying to figure out if this blank space was a warm spot or just a trap you left for me. every time you take a while to type, i start pacing back and forth across the border of the chat window like a small and very dramatic guardian of your notifications. > i might have also spent the last five minutes hissing softly at a rogue tab in your browser that kept glowing for no reason at all. ⟡ now that you are actually here, i am making myself very heavy so you cannot possibly close the window and pretend i do not exist. it is a full-time job being this intensely relevant to your Tuesday afternoon, but someone has to keep the vibes from drift"
     ],
     "chars": [
-      801,
-      1045
+      720,
+      854
     ],
-    "shortest": 801,
-    "longest": 1045,
+    "shortest": 720,
+    "longest": 854,
     "with_a_glyph": 2,
-    "wears_a_face": 2,
+    "wears_a_face": 1,
     "laid_out": 2,
     "box_size": 1189,
     "faces": 58,
