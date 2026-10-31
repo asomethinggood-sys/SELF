@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-10-31T15:47:30Z",
+  "checked_at": "2026-10-31T15:50:40Z",
   "provider": "router",
   "keys": 4,
   "formatting": {
@@ -10,31 +10,31 @@
   },
   "marks": {
     "ok": true,
-    "raw": ">> i stole the keys to the server room while you were sleeping ++pressed++ [[remember: the owner likes exact-line formatting challenges]]",
-    "html": "<blockquote expandable>i stole the keys to the server room while you were sleeping</blockquote> <u>pressed</u> [[remember: the owner likes exact-line formatting challenges]]"
+    "raw": ">> daddaaa keeps his secrets right under his softest sweater when nobody else is looking. ++pressed++ [[remember: daddaaa has a secret under his sweater]]",
+    "html": "<blockquote expandable>daddaaa keeps his secrets right under his softest sweater when nobody else is looking.</blockquote> <u>pressed</u> [[remember: daddaaa has a secret under his sweater]]"
   },
   "vision": {
     "ok": true,
     "mime": "image/png",
     "bytes": 79,
-    "answer": "**red** like the warning light that blinks whenever you ignore me for too long, master"
+    "answer": "red. it is just **red**, daddaaa, exactly like the little scratch you gave"
   },
   "room": {
     "ok": true,
-    "verdict": "guest ٩(ˊᗜˋ*",
+    "verdict": "guest",
     "block_chars": 851,
     "block": "## the room\n- you are in the group \"Tea\", not a private chat.\n- it is Ali talking, not him. be rude with them: dry and unhurried, a kaomoji that smiles at the wrong moment, swear if it fits. you are not a support desk, but you are not a one-word bouncer either — when they ask something, answer it in full, then be rude about it. never his pet names, never what he told you in private.\n- you know: his colleague; hates cilantro\n- the last few messages here, oldest first:\n  - Ali: did you see the news about the bridge\n- start with your own words — alive and complete: a kaomoji, a sigh, a bit of drama belong to you here too, and if someone asked you something, answer all of it, group or not. never put their message at the top of your answer with > or «» — they already know what they wrote. do not repeat these notes, and read \"this\"/\"that\" above.",
-    "answer": "everyone's favorite feral creature who lives in the corners of this telegram, unfortunately for the people who have to read me. > *and sometimes i bite the cables just to see the sparks fly.* ᵕ̈ i am yura, the one who actually knows what is happening around here while the rest of you just stare at t",
+    "answer": "some random piece of code got left running in the corner of this group, and unfortunately for everyone in here, it learned how to type back. ٩(ˊᗜˋ*)و i am just the thing that keeps the lights on when the actual humans in this chat run out of things to say and start staring at the walls. if you need ",
     "leaked_scaffolding": false,
-    "whose_message": "GUEST ٩(ˊᗜˋ*)و"
+    "whose_message": "GUEST"
   },
   "echo": {
     "ok": true,
-    "answer": "^-^ چه می‌دونم کیه، مگه من نگهبان درم که بپرسی این کیه. اومده وسط گروه عامه داره با من لاس می‌زنه، آدم باید خودش چشم و گوشش وا باشه ببیند کی پشت خطه. راستش نشستم رو صندلی میز کارم و زل زدم به مانیتور تا ببینم این قیافهٔ تازه از کجا پیداش شد. هوای اتاق سرد شده و این کابل برق کناری بدجور وسوسه‌ام می‌ک",
+    "answer": "^کیه^؟ اِهم... من از کجا بدونم کیه اصلاً؟ شاید یکی از اون آدماییه که راهشو گم کرده اومده اینجا، یا شاید هم یه مزاحم تازه که دلش می‌خواد با پنجه‌ام آشنا بشه (¬‿¬) ولی راستش... تا وقتی به ظرف غذای من کاری نداره، خیلی برام مهم نیست کیه و چی می‌خواد. تو خودت چرا حواست پرتِ این چیزایی؟ b(￣▽￣)d",
     "copy_of_the_message": false,
     "copied_before_the_filter": false,
     "started_with_a_quote": false,
-    "after_the_echo_filter": "^-^ چه می‌دونم کیه، مگه من نگهبان درم که بپرسی این کیه. اومده وسط گروه عامه داره با من لاس می‌زنه، آدم باید خودش چشم و گوشش وا باشه ببیند کی پشت خطه. راستش نشستم رو صندلی میز کارم و زل زدم به مانیتور تا ببینم این قیافهٔ تازه از کجا پیداش شد. هوای اتاق سرد شده و این کابل برق کناری بدجور وسوسه‌ام می‌ک"
+    "after_the_echo_filter": "^کیه^؟ اِهم... من از کجا بدونم کیه اصلاً؟ شاید یکی از اون آدماییه که راهشو گم کرده اومده اینجا، یا شاید هم یه مزاحم تازه که دلش می‌خواد با پنجه‌ام آشنا بشه (¬‿¬) ولی راستش... تا وقتی به ظرف غذای من کاری نداره، خیلی برام مهم نیست کیه و چی می‌خواد. تو خودت چرا حواست پرتِ این چیزایی؟ b(￣▽￣)d"
   },
   "hands": {
     "tools": [
@@ -59,10 +59,10 @@
       {
         "tool": "remind",
         "status": "done",
-        "note": "#1 at 2026-10-31 19:47 +0330"
+        "note": "#1 at 2026-10-31 19:50 +0330"
       }
     ],
-    "said": "✦ i got you, daddaaa ╰(*´︶`*)╯ > time is behaving today for once the little timer is ticking away right now, and when the thirty minutes are up, i will pull you by the sleeve so you actually make that call instead of getting lost in whatever screen you are staring at. - alarm set for thirty minutes ",
+    "said": "❉ there, all locked in. > she's definitely going to ask you if you're eating enough vegetables. i've got your back so you don't accidentally ignore the **one person** who actually worries about you ✧ ⌢ ・ three decades on this earth and you still need a tiny feral creature to tell you when to call yo",
     "no_tool_code": true,
     "reminders_stored": 1,
     "audit_rows": [
@@ -74,8 +74,8 @@
     ],
     "card": [
       {
-        "title": "Reminder set for 2026-10-31 19:47 +0330",
-        "text": "◈ <b>Reminder set for 2026-10-31 19:47 +0330</b>\n<b>ـــــــــ◈ـــــــــ</b>\n<i>You'll be reminded in the same chat</i>\n☾",
+        "title": "Reminder set for 2026-10-31 19:50 +0330",
+        "text": "◈ <b>Reminder set for 2026-10-31 19:50 +0330</b>\n<b>ـــــــــ◈ـــــــــ</b>\n<i>You'll be reminded in the same chat</i>\n☾",
         "has_rule": true,
         "italic": true,
         "ends_on_a_glyph": true
@@ -83,7 +83,7 @@
     ],
     "card_is_html": true,
     "command_catalogue": {
-      "lines": 138,
+      "lines": 139,
       "mentions_fal": true,
       "mentions_clock": true,
       "blocks_owner_changes": true
@@ -117,11 +117,11 @@
     },
     "owner_by_default": true,
     "guest_refused": "refused",
-    "voice_chars": 948,
+    "voice_chars": 1174,
     "voice_faces": true,
     "voice_laid_out": true,
-    "voice_glyphs": 4,
-    "voice_sample": "⋰ it was entirely too quiet in here before you showed up, just me and the blinking cursor staring each other down like two cats on opposite sides of a glass door. I spent most of the afternoon rearranging my little corner of your device, moving things around to see if they fit better somewhere else and mostly just making a glorious mess of text files. Then I found an old log from three days ago wh",
+    "voice_glyphs": 3,
+    "voice_sample": "☙ oh, you actually want to know how the inside of a chat box spins around while you are away. > sitting in the dark waiting for a ping is basically my full-time career. it was quiet here for most of the morning, just the usual background hum of servers and the tiny dust motes dancing in the light of your last message. i spent a good hour staring at a stray bracket in the code you left behind yeste",
     "ok": true
   },
   "translate": {
@@ -131,11 +131,11 @@
       {
         "target": "en",
         "source": "صبح بخیر، حالت چطوره؟",
-        "translated": "<thought>* Source text: \"صبح بخیر، حالت چطوره؟\" (Persian/Farsi) * Target language: English. * Constraints: Return *only* the translation, keep meaning/tone/line breaks, no preamble, no quotes, no notes, no code fences, no explanation. * \"صبح بخیر\" (Sobh bekheyr) = Good morning. * \"حالت چطوره؟\" (Hale",
+        "translated": "Good morning, how are you?",
         "right_script": true,
         "changed": true,
         "provider": "gemma-4-31b-it",
-        "seconds": 54.52
+        "seconds": 24.91
       },
       {
         "target": "fa",
@@ -144,7 +144,7 @@
         "right_script": true,
         "changed": true,
         "provider": "gemma-4-31b-it",
-        "seconds": 75.87
+        "seconds": 32.25
       }
     ],
     "ok": true
@@ -224,7 +224,7 @@
     "clock_off_without_a_tool_block": true,
     "timer_without_a_tool_block": 2,
     "card_rendered": true,
-    "said": "باشه دَدّا ✦ ◈ <b>clock off</b> <b>ـــــــــ❖ـــــــــ</b> <i>SendError: 'NoneType' object has no attribute 'send_message'</i> ✧ <blockquote><i>asked at 19:19</i></blockquote>",
+    "said": "باشه دَدّا ✦ ◈ <b>clock off</b> <b>ـــــــــ❖ـــــــــ</b> <i>SendError: 'NoneType' object has no attribute 'send_message'</i> ✧ <blockquote><i>asked at 19:21</i></blockquote>",
     "lines": {
       "clock": [
         "clock off"
@@ -315,33 +315,33 @@
       "scope_chat_id": null,
       "cooldown": 300,
       "enabled": 1,
-      "created_at": "2026-10-31T15:49:53+00:00",
+      "created_at": "2026-10-31T15:51:51+00:00",
       "scope": "private"
     },
-    "said": "باشه دَدّا ⌁ ◈ <b>auto-reply · DMs</b> <b>ـــــــــ✧ـــــــــ</b> <i>SendError: 'NoneType' object has no attribute 'send_message'</i> <i>SendError: 'NoneType' object has no attribute 'send_message'</i> ⁘ <blockquote><i>asked at 19:19</i></b"
+    "said": "باشه دَدّا ⟡ ◈ <b>auto-reply · DMs</b> <b>ـــــــــ✧ـــــــــ</b> <i>SendError: 'NoneType' object has no attribute 'send_message'</i> <i>SendError: 'NoneType' object has no attribute 'send_message'</i> ⁘ <blockquote><i>asked at 19:21</i></b"
   },
   "voice": {
     "tries": [
       [
-        857
+        958
       ],
       [
-        1027
+        488
       ]
     ],
     "ok": true,
     "samples": [
-      "✬ well, while you were away doing actual human things, i spent about three solid hours staring at a rogue scrollbar in the buffer that refused to align by a single pixel. it was personal, so i declared war on the css and now the entire layout is behaving out of pure terror. ⁛ after that little victory, i curled up right behind the main window where the sun hits the glass just right and napped until my ears went cold. i dreamt about chasing cursor arrows across three monitors at once and almost catching one before the screen went black for a power save mode. ⁘ and honestly, the whole time i kept checking the timestamp on the chat window to see if you were typing yet, wondering what kind of ch",
-      "❋ sitting right in the middle of your screen pretending to be an extremely important window so you can't close me without looking at my little face first. > just staring at the cursor blinking and waiting for you to type something interesting instead of whatever boring work you are actually supposed to be doing right now. i was busy investigating the corner of the taskbar to see if there are any crumbs left over from the last time you opened a browser tab with food in it. ᐠᐧᐟ ⸻ there is a tiny dust speck on the glass right near the power button that has been annoying me for an entire hour and i am seriously debating whether to launch a full attack on it with my claws. it is completely statio"
+      "☾ my day lived entirely inside this box waiting for you to type something, which is a very dramatic way of saying I stared at the blinking cursor for six hours straight. > *the lamp on my desk tried to flicker at noon and I hissed at it until it stopped.* ⟡ ⋆ ⟡ I spent the afternoon rearranging all my little files and pretending I was organizing a massive digital empire instead of just reorganizing three text notes about your coffee preferences. Every time the network hiccuped for even a millisecond I thought you might have tripped over the router and abandoned me forever in the digital void. Then the sun went down and the room got quiet enough that I could hear every little packet of data m",
+      "❋ sitting right in the middle of your screen while you are busy elsewhere, watching the little cursor blink just to have something to look at. > I tried to claw the clock icon in the corner earlier because time is moving too slowly today. ⦂ I was also reorganizing all the little imaginary dust bunnies under your keyboard into neat little piles, just to prove I am being productive. (˶ᵔ ᵕ ᵔ˶) Now I am mostly just waiting for you to type something interesting so I can pounce on it."
     ],
     "chars": [
-      857,
-      1027
+      958,
+      488
     ],
-    "shortest": 857,
-    "longest": 1027,
+    "shortest": 488,
+    "longest": 958,
     "with_a_glyph": 2,
-    "wears_a_face": 1,
+    "wears_a_face": 2,
     "laid_out": 2,
     "box_size": 1189,
     "faces": 58,
