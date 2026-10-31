@@ -1629,6 +1629,91 @@ def _fa_reaction(text: str) -> str:
     return ""
 
 
+#: "from now on", "از این به بعد", "for good" — a sentence that says *permanent*
+#: adds nothing to a rule, because a rule is permanent by default. They are
+#: peeled so the sentence underneath can be read: "جواب سارا رو بده از این به
+#: بعد" was a rule he could not write because of five extra words.
+_PERMANENT_TAILS = re.compile(
+    r"(?:[\s,،—-]*\b(?:from\s+now\s+on|from\s+now|starting\s+now|going\s+forward"
+    r"|from\s+today|for\s+good|permanently|forever|always|all\s+the\s+time)\b"
+    r"|[\s,،—-]*(?:از\s*این\s*به\s*بعد|از\s*الان\s*به\s*بعد|از\s*الان"
+    r"|از\s*حالا(?:\s*به\s*بعد)?|از\s*اینجا\s*به\s*بعد|برای\s*همیشه|همیشه"
+    r"|همش|دائما|مدام|دیگه))\s*[.!؟?]*$",
+    re.I,
+)
+#: A window on a rule: "for two hours", "برای دو ساعت", "تا فردا". A rule that
+#: lasts is a rule; one that lasts until he says otherwise is the default.
+_POLICY_WINDOW = re.compile(
+    r"(?:[\s,،—-]*(?:\b(?:for|next|the\s+next)\s+"
+    r"(?P<en>\d+(?:\.\d+)?|a|an|one|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty|thirty|forty|sixty|half)"
+    r"\s*(?P<enunit>seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?)"
+    r"|[\s,،—-]*(?:برای|تا|به\s*مدت)\s*"
+    r"(?P<fa>\d+|یک|دو|سه|چهار|پنج|شش|هفت|هشت|نه|ده|پانزده|بیست|سی|چهل|پنجاه|نیم)"
+    r"\s*(?P<faunit>ثانیه|دقیقه|ساعت|روز|هفته)))\s*[.!؟?]*$",
+    re.I,
+)
+_FA_UNITS = {"ثانیه": 1, "دقیقه": 60, "ساعت": 3600, "روز": 86400, "هفته": 604800}
+
+
+_PERMANENT_LEADS = re.compile(
+    r"^(?:\b(?:from\s+now\s+on|from\s+now|starting\s+now|going\s+forward)\b"
+    r"|(?:از\s*این\s*به\s*بعد|از\s*الان\s*به\s*بعد|از\s*الان|از\s*حالا)"
+    r"|(?:برای\s*همیشه|for\s+good|forever)"
+    r"(?:\s*,|\s*:)?)\s*",
+    re.I,
+)
+
+
+def _strip_permanent_hedges(text: str) -> str:
+    """"from now on", "از این به بعد": said about a rule, but the rule already is.
+
+    It can lead the sentence or trail it, and both are the same instruction as
+    the bare sentence underneath.
+    """
+    out = str(text or "").strip()
+    for _ in range(3):
+        peeled = _PERMANENT_TAILS.sub("", out).strip(" ,،.-—")
+        if peeled == out or not peeled:
+            break
+        out = peeled
+    for _ in range(2):
+        peeled = _PERMANENT_LEADS.sub("", out).strip(" ,،.-—")
+        if peeled == out or not peeled:
+            break
+        out = peeled
+    return out or str(text or "")
+
+
+def _policy_window(text: str) -> tuple[str, int | None]:
+    """``(the sentence without its time window, seconds)`` — or ``None``."""
+    match = _POLICY_WINDOW.search(text or "")
+    if not match:
+        return text, None
+    if match.group("en"):
+        amount = _WORD_NUMBERS.get(match.group("en").lower(), 0) or 0
+        if not amount:
+            try:
+                amount = float(match.group("en"))
+            except ValueError:
+                amount = 0
+        factor = _UNITS.get(match.group("enunit").lower()) or 0
+        seconds = int(float(amount or 0) * factor)
+    else:
+        raw = match.group("fa")
+        amount = _WORD_NUMBERS.get(raw, 0) or 0
+        if not amount:
+            amount = int(raw) if raw.isdigit() else 0
+        seconds = int(amount or 0) * _FA_UNITS.get(match.group("faunit"), 0)
+    cleaned = (text[: match.start()] + " " + text[match.end():]).strip(" ,،.-—")
+    if seconds <= 0:
+        return cleaned or text, None
+    return cleaned, max(30, min(seconds, 366 * 86400))
+
+
+def _for_flag(seconds: int | None) -> str:
+    return f" --for {_human_wait(seconds)}" if seconds else ""
+
+
 def _says_here(text: str) -> bool:
     """True when the sentence ties the instruction to the room it was said in."""
     return bool(
@@ -1652,7 +1737,10 @@ _RULE_IGNORE_FA = re.compile(
 )
 _RULE_ANSWER_FA = re.compile(
     r"^(?:به\s+)?(?:(?:پیام(?:های|هاش|هایش|هاشون)?)\s*)?"
-    r"(?P<who>@[\w.]+|[^\s،]+)\s*(?:رو|را)?\s*(?:جواب|پاسخ)\s*(?:بده|بدید|بدهید)\s*$",
+    r"(?P<who>@[\w.]+|[^\s،]+)\s*(?:رو|را)?\s*(?:جواب|پاسخ)\s*(?:بده|بدید|بدهید)\s*$"
+    # "جواب زیرو رو بده" — the verb comes first in this word order.
+    r"|^(?:جواب|پاسخ)\s+(?P<who3>@[\w.]+|[^\s،]+)\s*(?:رو|را)?\s*"
+    r"(?:بده|بدید|بدهید|بدین)\s*$",
     re.I,
 )
 _RULE_REACT_FA2 = re.compile(
@@ -1672,7 +1760,7 @@ _RULE_HEART_EN = re.compile(
     re.I,
 )
 
-def _rule_react_order(text: str) -> Intent | None:
+def _rule_react_order(text: str, *, window: str = "") -> Intent | None:
     """"react to sara with a heart" → a *rule*, not a reaction to one message.
 
     The difference is the target: "به پیامش قلب بده" points at a message, while
@@ -1685,18 +1773,42 @@ def _rule_react_order(text: str) -> Intent | None:
     if match:
         who = (match.group("who1") or match.group("who2") or "").strip(" ،,.:؛")
         if who and who.lower() not in _PRONOUN_PEOPLE:
-            return Intent(lines=(f"policy ignore {who}",), label="policy", detail=f"ignore {who}")
+            return Intent(
+                lines=(f"policy ignore {who}{window}",), label="policy", detail=f"ignore {who}"
+            )
     match = _RULE_ANSWER_FA.match(said)
     if match:
-        who = (match.group("who") or "").strip(" ،,.:؛")
+        who = (match.group("who") or match.group("who3") or "").strip(" ،,.:؛")
         if who and who.lower() not in _PRONOUN_PEOPLE:
-            return Intent(lines=(f"policy answer {who}",), label="policy", detail=f"answer {who}")
+            return Intent(
+                lines=(f"policy answer {who}{window}",), label="policy", detail=f"answer {who}"
+            )
 
     match = _RULE_HEART_EN.match(said)
     if match:
         who = (match.group("who") or "").strip()
         if who and who.lower() not in _PRONOUN_PEOPLE:
-            return Intent(lines=(f"policy react {who} ❤️",), label="policy", detail=f"react to {who}")
+            return Intent(
+                lines=(f"policy react {who} ❤️{window}",), label="policy", detail=f"react to {who}"
+            )
+
+    # "answer sara with a sticker", "just send sara stickers"
+    sticker_rule = re.match(
+        r"^(?:please\s+)?(?:just\s+)?(?:answer|respond\s+to|reply\s+to|send)\s+"
+        r"(?P<who>@[\w.]+|[A-Za-z][\w-]*)"
+        r"(?:'s)?(?:\s+(?:messages?|lines?|texts?|replies))?\s+"
+        r"(?:(?:with|using)\s+)?(?:(?:a|an|some|only)\s+)?stickers?\s*[.!]*$",
+        said,
+        re.I,
+    )
+    if sticker_rule:
+        who = (sticker_rule.group("who") or "").strip()
+        if who and who.lower() not in _PRONOUN_PEOPLE:
+            return Intent(
+                lines=(f"policy sticker {who} ❤️{window}",),
+                label="policy",
+                detail=f"sticker to {who}",
+            )
 
     match = _RULE_REACT_EN.match(said)
     if match:
@@ -1726,10 +1838,11 @@ def _rule_react_order(text: str) -> Intent | None:
             and re.search(r"قلب|ری\s*[-\u200c]?\s*اکشن|ایموجی|واکنش|استیکر", said)
         ):
             emoji = reaction_glyph(said) or "❤️"
+            mode = "sticker" if re.search(r"استیکر|sticker", said, re.I) else "react"
             return Intent(
-                lines=(f"policy react {who} {emoji}",),
+                lines=(f"policy {mode} {who} {emoji}{window}",),
                 label="policy",
-                detail=f"react to {who}",
+                detail=f"{mode} to {who}",
             )
     return None
 
@@ -1808,40 +1921,51 @@ def _reach(text: str, *, allow_plan: bool = True) -> Intent | None:
         if lines:
             return Intent(lines=lines, label="plan", detail="timeline")
 
-    match = _IGNORE.match(original)
+    # A rule may carry a tail that is not part of the rule: "…از این به بعد"
+    # (permanent, which is the default) and "…for two hours" (a window). Both
+    # are read off the end first, so the sentence underneath can be matched.
+    policy_said = _strip_permanent_hedges(original)
+    policy_said, policy_seconds = _policy_window(policy_said)
+    window = _for_flag(policy_seconds)
+
+    match = _IGNORE.match(policy_said)
     if match:
         who = _who(match.group("who"))
-        here = _says_here(original)
+        here = _says_here(policy_said)
         if who and who.lower() in _PRONOUN_PEOPLE:
             # "don't answer him": the id comes from the message he replied to.
-            line = "policy ignore --reply" + (" --here" if here else "")
+            line = "policy ignore --reply" + (" --here" if here else "") + window
             return Intent(lines=(line,), label="ignore", detail="ignore the person he replied to")
         if who and here:
             return Intent(
-                lines=(f"policy ignore {who} --here",),
+                lines=(f"policy ignore {who} --here{window}",),
                 label="ignore",
                 detail=f"ignore {who} here",
             )
         if who:
-            return Intent(lines=(f"ignore on {who}",), label="ignore", detail=f"ignore {who}")
+            return Intent(
+                lines=(f"policy ignore {who}{window}",), label="ignore", detail=f"ignore {who}"
+            )
 
-    match = _UNIGNORE.match(original)
+    match = _UNIGNORE.match(policy_said)
     if match:
         who = _who(match.group("who") or match.group("who2") or "")
-        here = _says_here(original)
+        here = _says_here(policy_said)
         if who and who.lower() in _PRONOUN_PEOPLE:
-            line = "policy answer --reply" + (" --here" if here else "")
+            line = "policy answer --reply" + (" --here" if here else "") + window
             return Intent(lines=(line,), label="ignore", detail="answer him again")
         if who and here:
             return Intent(
-                lines=(f"policy answer {who} --here",),
+                lines=(f"policy answer {who} --here{window}",),
                 label="ignore",
                 detail=f"answer {who} here",
             )
         if who:
-            return Intent(lines=(f"ignore off {who}",), label="ignore", detail=f"unignore {who}")
+            return Intent(
+                lines=(f"policy answer {who}{window}",), label="ignore", detail=f"unignore {who}"
+            )
 
-    rule_react = _rule_react_order(original)
+    rule_react = _rule_react_order(policy_said, window=window)
     if rule_react is not None:
         return rule_react
 
@@ -2311,7 +2435,32 @@ def detect(
     commands: set[str] | frozenset[str] = frozenset(),
     allow_plan: bool = True,
 ) -> Intent | None:
-    """Read ``text`` as an instruction, or return ``None`` for conversation."""
+    """Read ``text`` as an instruction, or return ``None`` for conversation.
+
+    Two passes, and the second one is the reason a rule he said one way works
+    and the same rule with "از این به بعد" on the end did not: a sentence that
+    says *permanent* is the plain sentence underneath it. Only when the first
+    pass finds nothing is the hedge peeled and the sentence read again — a tail
+    that mattered ("ساعت سکوت رو برای همیشه روشن کن") is still read first.
+    """
+    found = _detect(
+        text, features=features, commands=commands, allow_plan=allow_plan
+    )
+    if found is not None:
+        return found
+    peeled = _strip_permanent_hedges(text)
+    if peeled and peeled != str(text or "").strip():
+        return _detect(peeled, features=features, commands=commands, allow_plan=allow_plan)
+    return None
+
+
+def _detect(
+    text: str,
+    *,
+    features: set[str] | frozenset[str] = frozenset(),
+    commands: set[str] | frozenset[str] = frozenset(),
+    allow_plan: bool = True,
+) -> Intent | None:
     folded = _clean(text)
     if not folded or len(folded) > 400:
         return None

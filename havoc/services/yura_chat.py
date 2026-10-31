@@ -580,6 +580,8 @@ class YuraChat:
         "plan": ("plan", "remind", "schedule"),
         "remember": ("remember",),
         "forget": ("forget",),
+        # The rule she set with a tool is the same rule the sentence would write.
+        "policy": ("reply_rule",),
         # `recall` is the hand that reads memory; the console's `.recall` is the
         # same work done twice, and the second card pushed the real one off.
         "lookup": ("recall", "command", "search"),

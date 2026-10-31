@@ -18,6 +18,7 @@ Feature areas: 21, 22, 28, 29, 31-40, 50, 57, 59, 75, 84, 96, 97.
 
 from __future__ import annotations
 
+import random
 import re
 import time
 from dataclasses import dataclass, field
@@ -155,6 +156,13 @@ class Automations:
             self.state.skipped += 1
             return
 
+        # The reins come first. A rule he wrote about one person ("don't answer
+        # him", "just heart him") is about *answering*, and every feature below
+        # answers: an auto-reply that keeps talking to somebody he silenced would
+        # make the rule a decoration.
+        if await self._rule_gate(event):
+            return
+
         await self._autoreply(event)
         await self._away(event)
         await self._watches(event)
@@ -260,6 +268,47 @@ class Automations:
     # ------------------------------------------------------------------
     # Auto-replies
     # ------------------------------------------------------------------
+    async def _rule_gate(self, event: NormalizedEvent) -> bool:
+        """``True`` when a rule about this person already answered for her.
+
+        ``ignore`` stops every automatic answerer dead — no auto-reply text, no
+        away message, no trigger, no watcher. ``react`` and ``sticker`` take the
+        place of all of them: one glyph instead of a paragraph.
+        """
+        speaker = getattr(event, "sender_id", None)
+        if speaker is None or self.runtime.permissions.is_owner(speaker):
+            return False
+        try:
+            rule = await self.runtime.store.person_rule(speaker, event.chat_id)
+        except Exception:  # noqa: BLE001 - a rule table is not a lockout
+            return False
+        if rule is None:
+            return False
+        mode = str(rule["mode"] or "")
+        if mode == "ignore":
+            self.state.skipped += 1
+            return True
+        if mode == "answer":
+            return False
+        target = getattr(event, "message_id", None)
+        if not target:
+            return mode != "answer"
+        emoji = str(rule["emoji"] or "") or "❤️"
+        try:
+            if mode == "react":
+                await self.runtime.sender.react(event.chat_id, int(target), emoji)
+            elif mode == "sticker":
+                from .stickers import _documents, _wanted
+
+                documents = await _documents(self.runtime.client, _wanted(emoji) or emoji)
+                if documents:
+                    await self.runtime.sender.send_media(
+                        event.chat_id, random.choice(documents), reply_to=target
+                    )
+        except Exception as exc:  # noqa: BLE001 - a sticker is not worth an answer
+            self.logger.warning("automation: rule action failed (%s)", exc)
+        return True
+
     async def _autoreply(self, event: NormalizedEvent) -> None:
         if not event.text or not await self._allowed(event, "autoreply"):
             return

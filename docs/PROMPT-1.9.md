@@ -57,11 +57,16 @@ one line. A turn may be quiet only when the deed itself spoke.
 
 **3.1 A rule per person.** A rule says what she does with one person's messages:
 
-| mode     | what she does                                                   |
-|----------|-----------------------------------------------------------------|
-| `answer` | the default: answer them like anyone else                        |
-| `ignore` | never answer — no model call, no words, no tokens                |
-| `react`  | no answer; a reaction with their emoji, on the message they sent |
+| mode      | what she does                                                   |
+|-----------|-----------------------------------------------------------------|
+| `answer`  | the default: answer them like anyone else                        |
+| `ignore`  | never answer — no model call, no words, no tokens                |
+| `react`   | no answer; a reaction with their emoji, on the message they sent |
+| `sticker` | no words; one sticker from her own packs                         |
+
+Every mode also covers the *other* answerers: auto-replies, away messages,
+triggers, watchers and keyword reactions. A rule that only silenced her voice
+while an auto-reply kept talking would be a decoration.
 
 **3.2 Scope.** A rule may be global or tied to one chat (`--here`), so "in this
 group, don't answer him" does not silence him everywhere. A chat rule beats a
@@ -76,6 +81,14 @@ person has ever written.
 
 **3.5 Never guessed.** A rule is only set by a sentence that says so. "She didn't
 answer Sara" is not "never answer Sara".
+
+**3.6 A window.** `--for 2h` / "for two hours" / "برای دو ساعت" makes the rule
+temporary. It ends on the clock, not on his memory of writing it.
+
+**3.7 Tails are not part of the rule.** "از این به بعد", "from now on", "for
+good" say *permanent*, which is the default, so the sentence underneath is read
+as if they were not there — that was the difference between a rule he could write
+and one where she only answered "oh alright".
 
 *Where it lives:* `migrations.py` (`reply_rules`), `services/storage.py`,
 `features/reach.py` (`.rules`), `features/persona.py` (the three gates),
@@ -104,6 +117,12 @@ of that message, not the word "him".
 
 **4.3 A rule beats every other rule**, including the reply-to-her path, the
 DM path, and the every-ninth-answer-is-a-reaction habit.
+
+**4.4 The model has the same hand.** `reply_rule` is a tool like `react` or
+`send_message`: a sentence no pattern recognises ("be distant with zero from
+here on") can still be carried out, because understanding it is the model's job
+and the rule is the console's. When both routes see the same instruction, the
+tool wins and the sentence floor stands down — one deed, one message.
 
 ---
 

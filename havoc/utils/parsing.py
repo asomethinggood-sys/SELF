@@ -127,6 +127,9 @@ VALUE_FLAGS: frozenset[str] = frozenset(
         "at", "delete_after", "ttl", "until", "from", "count", "each", "gap",
         # ``.poll q | a | b --quiz --correct 2`` names an answer by number.
         "correct",
+        # A rule's lifespan: ``.policy ignore sara --for 2h``. Without this the
+        # word "for" became a boolean and the lifespan landed in the name.
+        "for",
     }
 )
 

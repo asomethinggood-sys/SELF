@@ -1544,5 +1544,10 @@
   "policy.usage_add": "Add --here to keep it to this chat.",
   "policy.header": "⟡ who I answer · {count}",
   "cmd.policy.usage": "[list|ignore ‹who›|react ‹who› [emoji]|answer ‹who›|clear ‹who›] [--here]",
-  "cmd.policy.description": "Who she answers, and how: silence, a normal answer, or a reaction instead."
+  "cmd.policy.description": "Who she answers, and how: silence, a normal answer, or a reaction instead.",
+  "policy.stickered": "{name} gets a sticker ({emoji}) instead of words.",
+  "policy.for_a_while": "for the next {when}",
+  "policy.until": "until {when}",
+  "actions.card_rule": "The rule about {what}",
+  "actions.card_rule_line": "written down, and it can be taken back"
 }

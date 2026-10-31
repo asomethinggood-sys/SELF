@@ -404,7 +404,7 @@ class Store:
 
     # -- who she answers, and how ---------------------------------------
     #: The three ways she can treat one person's messages.
-    MODES = ("answer", "ignore", "react")
+    MODES = ("answer", "ignore", "react", "sticker")
 
     async def set_person_rule(
         self,
@@ -414,20 +414,27 @@ class Store:
         chat_id: int = 0,
         emoji: str = "",
         name: str = "",
+        seconds: int | None = None,
     ) -> None:
-        """Write one rule. ``chat_id=0`` is everywhere; a real id is that room."""
+        """Write one rule. ``chat_id=0`` is everywhere; a real id is that room.
+
+        ``seconds`` makes it temporary: "don't answer him for two hours" ends on
+        the clock instead of waiting for him to remember it.
+        """
         if mode not in self.MODES:
             raise ValueError(f"unknown reply mode {mode!r}")
+        expires = iso(utc_now() + timedelta(seconds=int(seconds))) if seconds else None
         await self.db.execute(
             """
-            INSERT INTO reply_rules(user_id, chat_id, mode, emoji, name, created_at)
-            VALUES(?, ?, ?, ?, ?, ?)
+            INSERT INTO reply_rules(user_id, chat_id, mode, emoji, name, created_at, expires_at)
+            VALUES(?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id, chat_id) DO UPDATE SET
                 mode = excluded.mode,
                 emoji = excluded.emoji,
+                expires_at = excluded.expires_at,
                 name = CASE WHEN excluded.name = '' THEN reply_rules.name ELSE excluded.name END
             """,
-            (int(user_id), int(chat_id or 0), mode, emoji[:16], name[:120], iso(utc_now())),
+            (int(user_id), int(chat_id or 0), mode, emoji[:16], name[:120], iso(utc_now()), expires),
         )
 
     async def clear_person_rule(self, user_id: int, chat_id: int | None = None) -> int:
@@ -447,7 +454,9 @@ class Store:
         """The rule that governs this person *here*, or ``None``.
 
         A rule written for this chat beats a global one, because the specific
-        instruction he gave while standing in the room is the one he meant.
+        instruction he gave while standing in the room is the one he meant. A
+        rule whose window has closed is not a rule any more: it is dropped here,
+        on the way past, so nothing has to sweep the table on a timer.
         """
         if user_id is None:
             return None
@@ -456,12 +465,29 @@ class Store:
                 "SELECT * FROM reply_rules WHERE user_id = ? AND chat_id = ?",
                 (int(user_id), int(chat_id)),
             )
+            row = await self._live(row)
             if row is not None:
                 return row
         row = await self.db.fetch_one(
             "SELECT * FROM reply_rules WHERE user_id = ? AND chat_id = 0", (int(user_id),)
         )
-        return row
+        return await self._live(row)
+
+    async def _live(self, row: Any) -> Any:
+        """``row`` if its window has not closed, ``None`` (and a delete) if it has."""
+        if row is None:
+            return None
+        expires = row["expires_at"] if "expires_at" in row.keys() else None
+        if not expires:
+            return row
+        when = parse_iso(str(expires))
+        if when is None or when > utc_now():
+            return row
+        await self.db.execute(
+            "DELETE FROM reply_rules WHERE user_id = ? AND chat_id = ?",
+            (int(row["user_id"]), int(row["chat_id"])),
+        )
+        return None
 
     async def person_rules(self) -> list[Any]:
         return await self.db.fetch_all(

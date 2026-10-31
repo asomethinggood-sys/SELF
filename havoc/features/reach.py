@@ -554,9 +554,10 @@ async def cmd_ignore(ctx: CommandContext) -> None:
 _RULE_MODES = {
     "ignore": "ignore", "off": "ignore", "mute": "ignore", "never": "ignore", "silent": "ignore",
     "react": "react", "heart": "react", "emoji": "react", "reaction": "react",
+    "sticker": "sticker", "stickers": "sticker",
     "answer": "answer", "on": "answer", "allow": "answer", "normal": "answer", "back": "answer",
 }
-_MODE_GLYPH = {"ignore": "⨯", "react": "❤", "answer": "✓"}
+_MODE_GLYPH = {"ignore": "⨯", "react": "❤", "sticker": "☺", "answer": "✓"}
 
 
 async def cmd_rules(ctx: CommandContext) -> None:
@@ -576,6 +577,11 @@ async def cmd_rules(ctx: CommandContext) -> None:
             raise CommandError("policy.unknown", name=escape(" ".join(ctx.args)))
         scope = _scope_of(ctx)
         removed = await ctx.runtime.store.clear_person_rule(found[0], scope)
+        if not removed and not scope:
+            # A rule written for one room is still a rule about this person:
+            # "undo the rule about Sara" must find it without him remembering
+            # that he said it while standing in that room.
+            removed = await ctx.runtime.store.clear_person_rule(found[0], None)
         if not removed:
             raise CommandError("policy.none", name=escape(found[1]))
         await ctx.reply(
@@ -591,7 +597,7 @@ async def cmd_rules(ctx: CommandContext) -> None:
         raise CommandError("policy.usage", prefix=ctx.runtime.prefix)
     raw = " ".join(ctx.args)
     emoji = ""
-    if mode == "react":
+    if mode in {"react", "sticker"}:
         # ".policy react sara heart" — the glyph is the last word, not part of
         # the name. Only the tail is peeled, so a person actually called "Heart"
         # is still reachable as the whole argument.
@@ -613,12 +619,19 @@ async def cmd_rules(ctx: CommandContext) -> None:
     if found[0] == owner:
         raise CommandError("policy.self")
     scope = _scope_of(ctx)
-    await ctx.runtime.store.set_person_rule(found[0], mode, chat_id=scope, emoji=emoji, name=found[1])
+    seconds = _window_of(ctx)
+    await ctx.runtime.store.set_person_rule(
+        found[0], mode, chat_id=scope, emoji=emoji, name=found[1], seconds=seconds
+    )
     where = ctx.t("policy.everywhere") if not scope else ctx.t("policy.this_chat")
+    if seconds:
+        where = f"{where} · {ctx.t('policy.for_a_while', when=escape(_window_words(seconds)))}"
     if mode == "ignore":
         title = ctx.t("policy.ignored", name=escape(found[1]))
     elif mode == "react":
         title = ctx.t("policy.reacted", name=escape(found[1]), emoji=escape(emoji))
+    elif mode == "sticker":
+        title = ctx.t("policy.stickered", name=escape(found[1]), emoji=escape(emoji))
     else:
         title = ctx.t("policy.answered", name=escape(found[1]))
     await ctx.reply(
@@ -629,6 +642,28 @@ async def cmd_rules(ctx: CommandContext) -> None:
             footer=ctx.t("policy.undo", prefix=ctx.runtime.prefix),
         )
     )
+
+
+def _window_words(seconds: int) -> str:
+    """``7200`` → "2h": the same units the command was typed in."""
+    if seconds % 86400 == 0:
+        return f"{seconds // 86400}d"
+    if seconds % 3600 == 0:
+        return f"{seconds // 3600}h"
+    if seconds % 60 == 0:
+        return f"{seconds // 60}m"
+    return f"{seconds}s"
+
+
+def _window_of(ctx: CommandContext) -> int | None:
+    """``--for 2h``: a rule that ends on the clock instead of on his memory."""
+    raw = (ctx.flag("for") or "").strip()
+    if not raw:
+        return None
+    seconds = reach_module.parse_duration(raw)
+    if not seconds:
+        raise CommandError("errors.not_a_number", field="for")
+    return max(30, int(seconds))
 
 
 def _scope_of(ctx: CommandContext) -> int:
@@ -673,6 +708,9 @@ async def _rules_list(ctx: CommandContext) -> None:
         who = str(row["name"] or row["user_id"])
         scope = ctx.t("policy.everywhere") if not int(row["chat_id"] or 0) else f"#{row['chat_id']}"
         emoji = f" {row['emoji']}" if str(row["emoji"] or "") else ""
+        expires = row["expires_at"] if "expires_at" in row.keys() else None
+        if expires:
+            scope = f"{scope} · {ctx.t('policy.until', when=escape(str(expires)[:16].replace('T', ' ')))}"
         lines.append(f"{glyph} {who}{emoji} · {scope}")
     await ctx.reply(
         ui.card(
@@ -765,11 +803,14 @@ def register(runtime: Any) -> None:
             cmd_rules,
             category="reach",
             aliases=("rules-say", "replies", "whom"),
-            usage="[list|ignore ‹who›|react ‹who› [emoji]|answer ‹who›|clear ‹who›] [--here]",
+            usage=(
+                "[list|ignore ‹who›|react ‹who› [emoji]|sticker ‹who› [emoji]|answer ‹who›"
+                "|clear ‹who›] [--here] [--for 2h]"
+            ),
             description="Who she answers, and how: silence, answer, or a reaction instead.",
             owner_only=True,
             changes_state=True,
-            subcommands=("list", "ignore", "react", "answer", "clear", "remove"),
+            subcommands=("list", "ignore", "react", "sticker", "answer", "clear", "remove"),
         )
     )
     runtime.registry.register(

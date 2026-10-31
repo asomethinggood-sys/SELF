@@ -1544,5 +1544,10 @@
   "policy.usage_add": "برای محدود کردن به همین چت، --here را اضافه کن.",
   "policy.header": "⟡ به کی جواب می‌دهم · {count}",
   "cmd.policy.usage": "[list|ignore ‹نام›|react ‹نام› [ایموجی]|answer ‹نام›|clear ‹نام›] [--here]",
-  "cmd.policy.description": "به کی جواب می‌دهد و چطور: سکوت، جواب معمولی، یا واکنش به‌جای حرف."
+  "cmd.policy.description": "به کی جواب می‌دهد و چطور: سکوت، جواب معمولی، یا واکنش به‌جای حرف.",
+  "policy.stickered": "به {name} به‌جای حرف، استیکر ({emoji}) می‌دهم.",
+  "policy.for_a_while": "برای {when} آینده",
+  "policy.until": "تا {when}",
+  "actions.card_rule": "قانون دربارهٔ {what}",
+  "actions.card_rule_line": "نوشته شد و می‌شود پسش گرفت"
 }

@@ -702,4 +702,77 @@ def build_tools(runtime: Any) -> list[Tool]:
         )
     )
 
+    async def reply_rule(turn: Turn, args: dict[str, str]) -> ActionResult:
+        """One instruction about a person: answer, ignore, react, sticker.
+
+        This is `.policy` with her voice on it. It exists so the sentence does
+        not have to be recognised by a regex first: a model that understood
+        "از این به بعد جواب زیرو رو بده" can carry it out itself, which is what
+        "she should have access to everything" means.
+        """
+        mode = (args.get("mode") or "").strip().lower()
+        who = (args.get("who") or "").strip()
+        emoji = (args.get("emoji") or "").strip()
+        window = (args.get("for") or "").strip()
+        here = str(args.get("here") or "").strip().lower() in {"1", "true", "yes", "on"}
+        if mode in {"off", "mute", "silence", "never"}:
+            mode = "ignore"
+        if mode in {"on", "allow", "normal", "back"}:
+            mode = "answer"
+        if mode in {"heart", "reaction", "emoji"}:
+            mode = "react"
+        if mode not in {"ignore", "react", "sticker", "answer"}:
+            return ActionResult(False, detail="mode is answer, ignore, react or sticker", kind="bad_args")
+        if not who and mode != "answer":
+            return ActionResult(False, detail="a name, a handle or an id is needed", kind="bad_args")
+        line = f"policy {mode}"
+        if who:
+            line += f" {who}"
+        if mode in {"react", "sticker"}:
+            line += f" {emoji or '❤️'}"
+        if here:
+            line += " --here"
+        if window:
+            line += f" --for {window}"
+        result = await run_command(
+            runtime,
+            line,
+            chat_id=turn.chat_id,
+            sender_id=turn.actor_id or 0,
+            message_id=turn.message_id,
+            language=turn.language,
+            reply_to=turn.reply_to,
+        )
+        if not result.ok:
+            return ActionResult(False, detail=result.note or "the rule was not written", kind="failed")
+        said = " ".join(str(item) for item in (result.said or [])).strip()
+        return ActionResult(
+            True,
+            note=said[:300] or f"rule set: {line}",
+            title=_t(runtime, turn, "actions.card_rule", what=(who or "him")[:40]),
+            lines=tuple(said.splitlines()[:3]),
+        )
+
+    tools.append(
+        Tool(
+            name="reply_rule",
+            summary=(
+                "say who she answers and how: 'from now on answer Ziro', "
+                "'don't answer Sara', 'just heart Sara's messages', "
+                "'ignore him in this group for two hours'"
+            ),
+            properties={
+                "mode": "answer | ignore | react | sticker",
+                "who": "a name, a handle or a user id; empty means him (the replied-to message)",
+                "emoji": "for react/sticker: one emoji or a word like 'heart'",
+                "here": "true to keep the rule in this chat only",
+                "for": "a lifespan like 2h or 30m (optional)",
+            },
+            required=("mode",),
+            run=reply_rule,
+            scope="write",
+            risk="medium",
+        )
+    )
+
     return tools

@@ -165,10 +165,10 @@ async def test_a_rule_for_this_chat_only(runtime) -> None:
 @pytest.mark.parametrize(
     ("text", "line"),
     (
-        ("don't answer sara", "ignore on sara"),
+        ("don't answer sara", "policy ignore sara"),
         ("don't answer sara in this group", "policy ignore sara --here"),
         ("don't answer him here", "policy ignore --reply --here"),
-        ("answer sara again", "ignore off sara"),
+        ("answer sara again", "policy answer sara"),
         ("react to sara with a heart", "policy react sara ❤️"),
         ("just heart sara's messages", "policy react sara ❤️"),
         ("react to sara's messages with fire", "policy react sara 🔥"),
@@ -196,3 +196,160 @@ def test_the_sentence_writes_the_rule(text: str, line: str) -> None:
 def test_a_near_miss_is_not_a_rule(text: str) -> None:
     found = detect(text)
     assert found is None or not found.lines[0].startswith("policy")
+
+
+# ---------------------------------------------------------------------------
+# Two words on the end used to break the whole sentence
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("text", "line"),
+    (
+        # His exact complaint: without the tail it worked, with it she "just talked".
+        ("یورا جواب زیرو رو بده از این به بعد", "policy answer زیرو"),
+        ("یورا جواب زیرو رو بده", "policy answer زیرو"),
+        ("از این به بعد جواب زیرو رو نده", "policy ignore زیرو"),
+        ("don't answer sara from now on", "policy ignore sara"),
+        ("answer sara again, from now on", "policy answer sara"),
+        ("heart sara from now on", "policy react sara ❤️"),
+        # A leading "for good" is the same sentence too.
+        ("for good don't answer sara", "policy ignore sara"),
+    ),
+)
+def test_a_permanent_tail_is_not_part_of_the_rule(text: str, line: str) -> None:
+    found = detect(text)
+    assert found is not None and found.lines[0] == line
+
+
+def test_a_leading_forever_still_means_the_plain_sentence() -> None:
+    assert detect("برای همیشه ساکت شو").lines == ("yura off",)
+
+
+# ---------------------------------------------------------------------------
+# A rule with a lifespan ends by itself
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("text", "line"),
+    (
+        ("don't answer sara for two hours", "policy ignore sara --for 2h"),
+        ("جواب سارا رو نده برای دو ساعت", "policy ignore سارا --for 2h"),
+        ("به سارا قلب بده برای یک ساعت", "policy react سارا ❤️ --for 1h"),
+    ),
+)
+def test_a_window_is_read_as_a_lifespan(text: str, line: str) -> None:
+    assert detect(text).lines[0] == line
+
+
+async def test_a_temporary_rule_stops_being_a_rule(runtime) -> None:
+    await runtime.store.set_person_rule(SARA, "ignore", name="Sara", seconds=-60)
+    # Already past its window: the row is gone on the way past.
+    assert await runtime.store.person_rule(SARA, None) is None
+    assert await runtime.store.person_rules() == []
+
+
+async def test_the_window_reaches_the_store(runtime) -> None:
+    await invoke(runtime, f".policy ignore {SARA} --for 2h", chat_id=OWNER)
+    rule = await runtime.store.person_rule(SARA, None)
+    assert rule["mode"] == "ignore" and rule["expires_at"]
+
+
+# ---------------------------------------------------------------------------
+# Per person: a sticker instead of words
+# ---------------------------------------------------------------------------
+def test_the_sentence_asks_for_a_sticker_rule() -> None:
+    assert detect("به سارا استیکر بده").lines == ("policy sticker سارا ❤️",)
+    assert detect("answer sara with a sticker").lines == ("policy sticker sara ❤️",)
+
+
+async def test_sticker_mode_never_answers_in_words(runtime) -> None:
+    await _persona_on(runtime)
+    await runtime.store.set_person_rule(SARA, "sticker", emoji="❤️", name="Sara")
+    before = len(runtime.client.sent)
+    await incoming(
+        runtime, FakeMessage(id=9, chat_id=GROUP, sender_id=SARA, text="yura hi", is_group=True)
+    )
+    assert _said(runtime, before) == []
+
+
+# ---------------------------------------------------------------------------
+# The model has the same reins in its hands
+# ---------------------------------------------------------------------------
+async def test_the_model_can_write_a_rule(runtime) -> None:
+    from havoc.services.actions import Turn
+    from havoc.services.tools import build_tools
+
+    tools = {tool.name: tool for tool in build_tools(runtime)}
+    assert "reply_rule" in tools
+    turn = Turn(chat_id=GROUP, actor_id=OWNER, language="en", is_owner=True)
+    result = await tools["reply_rule"].run(turn, {"mode": "ignore", "who": str(SARA), "for": "2h"})
+    assert result.ok, result.detail
+    rule = await runtime.store.person_rule(SARA, GROUP)
+    assert rule["mode"] == "ignore" and rule["expires_at"]
+
+
+async def test_the_model_cannot_silence_him(runtime) -> None:
+    """The tool reaches the same command, which refuses this already."""
+    from havoc.services.tools import build_tools
+
+    tools = {tool.name: tool for tool in build_tools(runtime)}
+    from havoc.services.actions import Turn
+
+    turn = Turn(chat_id=GROUP, actor_id=OWNER, language="en", is_owner=True)
+    result = await tools["reply_rule"].run(turn, {"mode": "ignore", "who": str(OWNER)})
+    assert "silence you" in (result.note or "") or not result.ok
+
+
+# ---------------------------------------------------------------------------
+# The reins cover every automatic answerer, not only her voice
+# ---------------------------------------------------------------------------
+async def test_an_auto_reply_obeys_the_rule(runtime) -> None:
+    await runtime.store.add_autoreply("*", "he is busy", match_type="any", scope="any")
+    await runtime.store.set_feature("autoreply", True)
+    await runtime.feature_manager.refresh()
+    friend = 555
+    before = len(runtime.client.sent)
+    await incoming(runtime, FakeMessage(id=20, chat_id=friend, sender_id=friend, text="hi", is_private=True))
+    assert _said(runtime, before) == ["he is busy"]
+
+    await runtime.store.set_person_rule(friend, "ignore", name="Bob")
+    before = len(runtime.client.sent)
+    await incoming(
+        runtime, FakeMessage(id=21, chat_id=friend, sender_id=friend, text="hi again", is_private=True)
+    )
+    assert _said(runtime, before) == [], "an ignored person got an auto-reply"
+
+    await runtime.store.set_person_rule(friend, "react", emoji="🔥", name="Bob")
+    before = len(runtime.client.sent)
+    await incoming(
+        runtime, FakeMessage(id=22, chat_id=friend, sender_id=friend, text="hi thrice", is_private=True)
+    )
+    assert _said(runtime, before) == []
+    assert runtime.client.reactions[-1] == (friend, 22, "🔥")
+
+
+async def test_a_model_tool_call_writes_the_rule_end_to_end(runtime) -> None:
+    """The other half of "she should have access to everything".
+
+    The sentence is deliberately one no rule recognises ("be distant with
+    zero from here on"): the model understood it, called `reply_rule`, and the
+    rule exists — no regex had to know the words.
+    """
+    class ToolCaller:
+        model = "toolcaller"
+        available = True
+
+        def __init__(self) -> None:
+            self.rounds = 0
+
+        async def converse_tools(self, messages, *, tools=None, max_tokens: int = 400, temperature: float = 0.85):
+            self.rounds += 1
+            if self.rounds == 1:
+                return "okay, i'll leave zero alone", [
+                    {"function": {"name": "reply_rule", "arguments": {"mode": "ignore", "who": str(SARA)}}}
+                ]
+            return "done — zero gets nothing from me now.", []
+
+    runtime.ai = ToolCaller()
+    answer = await runtime.yura_chat.answer("be distant with zero from here on", chat_id=GROUP, is_owner=True)
+    rule = await runtime.store.person_rule(SARA, GROUP)
+    assert rule is not None and rule["mode"] == "ignore"
+    assert "done" in answer.text or "okay" in answer.text

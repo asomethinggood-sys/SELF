@@ -1041,7 +1041,42 @@ class PersonaReplies:
                 return True
             self._skip("rule:react_failed", event)
             return True
+        if mode == "sticker":
+            sent = await self._sticker_for(event, str(rule["emoji"] or "") or "❤️")
+            if sent:
+                self.reacted += 1
+                return True
+            # No pack matched: silence is still the rule he wrote.
+            self._skip("rule:sticker_missing", event)
+            return True
         return False
+
+    async def _sticker_for(self, event: NormalizedEvent, what: str) -> bool:
+        """One sticker from her own packs, aimed at the message they sent.
+
+        Reuses the installer the `.sticker` command uses, so a rule and a
+        command can never disagree about which pack exists.
+        """
+        try:
+            from .stickers import _documents, _wanted  # local: the packs are optional
+
+            documents = await _documents(self.runtime.client, _wanted(what) or what)
+        except Exception as exc:  # noqa: BLE001 - a missing pack is not an error
+            self.logger.warning("yura: no sticker pack (%s)", exc)
+            return False
+        if not documents:
+            return False
+        pick = random.choice(documents)
+        try:
+            await self.runtime.sender.send_media(
+                event.chat_id,
+                pick,
+                reply_to=getattr(event, "message_id", None),
+            )
+        except Exception as exc:  # noqa: BLE001 - a sticker is not worth an answer
+            self.logger.warning("yura: sticker send failed (%s)", exc)
+            return False
+        return True
 
     def _skip(self, reason: str, event: NormalizedEvent | None = None) -> None:
         """Note that a message went unanswered, and why.

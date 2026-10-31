@@ -547,6 +547,17 @@ MIGRATION_10_REPLY_RULES = Migration(
     ),
 )
 
+MIGRATION_11_RULE_WINDOWS = Migration(
+    version=11,
+    name="rule_windows",
+    statements=(
+        # A rule that lasts: "don't answer him for two hours" is a different
+        # instruction from "don't answer him", and it has to end by itself —
+        # otherwise the only way back is remembering that it exists.
+        "ALTER TABLE reply_rules ADD COLUMN expires_at TEXT",
+    ),
+)
+
 MIGRATIONS: tuple[Migration, ...] = (
     MIGRATION_1_FOUNDATION,
     MIGRATION_2_TIMESTAMPS,
@@ -558,6 +569,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     MIGRATION_8_AUTOREPLY_SCOPE,
     MIGRATION_9_TOOLBOX,
     MIGRATION_10_REPLY_RULES,
+    MIGRATION_11_RULE_WINDOWS,
 )
 
 LATEST_VERSION = max(m.version for m in MIGRATIONS)

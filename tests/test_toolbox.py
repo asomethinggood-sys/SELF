@@ -244,8 +244,10 @@ async def test_a_cancelled_plan_does_not_fire(runtime) -> None:
         ("send @sara surprise with a spoiler", "send @sara surprise --spoiler"),
         ("react with ❤", "emoji ❤"),
         ("write to @sara and wish her a happy birthday", "send @sara wish her a happy birthday --compose"),
-        ("don't talk to @ali", "ignore on @ali"),
-        ("talk to ali again", "ignore off ali"),
+        # Every rule is written through `.policy` now: it is the same instruction,
+        # and it can carry a lifespan or a room that the old binary could not.
+        ("don't talk to @ali", "policy ignore @ali"),
+        ("talk to ali again", "policy answer ali"),
     ),
 )
 def test_the_toolbox_sentences(sentence: str, expected: str) -> None:
