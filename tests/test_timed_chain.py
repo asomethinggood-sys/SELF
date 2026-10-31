@@ -331,7 +331,7 @@ async def test_a_flattened_step_list_still_reads(runtime) -> None:
     )
     result = await tool.run(Turn(chat_id=OWNER, actor_id=OWNER, language="en"), args)
     assert result.ok, result.detail
-    assert result.note.endswith("2 steps")
+    assert result.note.startswith("plan #") and "2 steps" in result.note
 
 
 async def test_a_broken_step_is_recorded_and_the_rest_still_runs(runtime) -> None:

@@ -389,7 +389,9 @@ def build_tools(runtime: Any) -> list[Tool]:
             name="command",
             summary=(
                 "run one of her own commands for him (everything in .help): "
-                "'fal page 166', 'clock on -- timezone Asia/Tehran', 'remind 30m call mom'"
+                "'fal page 166', 'clock on -- timezone Asia/Tehran', 'remind 30m call mom', "
+                "'unsend last' (delete the message she just sent), 'delete' (the one he "
+                "replied to), 'policy ignore sara --for 2h', 'send --here hi'"
             ),
             properties={
                 "command": "the command name without the prefix, e.g. fal",
@@ -476,11 +478,18 @@ def build_tools(runtime: Any) -> list[Tool]:
             owner_id=turn.actor_id,
             chat_id=int(turn.chat_id or 0) or None,
         )
+        # The card says the moments in his own zone and language — an ISO stamp
+        # with a T in it is a database row, not a plan he can read back.
+        tz = getattr(runtime.config, "timezone", None)
+        when = [
+            f"{format_datetime(step.at, tz, turn.language)} · {step.action}"
+            for step in plan.steps
+        ]
         return ActionResult(
             True,
-            note=f"plan #{result['id']} with {result['steps']} steps",
+            note=f"plan #{result['id']} with {result['steps']} steps: " + "; ".join(when[:12]),
             title=_t(runtime, turn, "plan.header", count=1),
-            lines=tuple(plan.describe()),
+            lines=tuple(when),
         )
 
     async def react_to(turn: Turn, args: dict[str, str]) -> ActionResult:
