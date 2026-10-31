@@ -686,6 +686,6 @@ def register(runtime: Any) -> None:
             Command("schedule", cmd_schedule, category="messaging", usage="<when> <text> [--to chat] [--repeat daily]", changes_state=True),
             Command("scheduled", cmd_scheduled, category="messaging", usage="[list|cancel|reschedule]", changes_state=True, subcommands=('list', 'ls', 'cancel', 'delete', 'rm', 'reschedule', 'move')),
             Command("fight", cmd_fight, category="fun", usage="[style|intensity|instant|stop|send|styles]", requires_reply=False, changes_state=True, subcommands=("send", "styles", "help", "stop", "instant", "repeat", "repeated", "loop", "nonstop", "every", "low", "medium", "high", "intense", "unhinged", "ملایم", "متوسط", "شدید", "سنگین", "دیوانه", "blunt", "brutal", "clever", "direct", "dramatic", "dry", "fun", "harsh", "playful", "sarcasm", "sarcastic", "savage", "smart", "احساسی", "بازیگوش", "بی‌رحم", "خشن", "خشک", "دراماتیک", "رک", "زیرکانه", "شوخ", "صریح", "طعنه", "هوشمند", "وحشی", "کنایه")),
-            Command("suggest", cmd_suggest, category="messaging", aliases=("reply", "draft"), usage="[tone]", requires_reply=False, subcommands=('friendly', 'formal', 'funny', 'supportive', 'direct')),
+            Command("suggest", cmd_suggest, category="messaging", aliases=("suggest_reply", "suggest_draft"), usage="[tone]", requires_reply=False, subcommands=('friendly', 'formal', 'funny', 'supportive', 'direct')),
         ]
     )

@@ -196,7 +196,7 @@ Total: **146 commands**.
 | `.away` | Set an away message for private chats _(owner only; changes state)._ | `.away [on ‹text›|off|status]` | `.دورباش` |
 | `.schedule` | Schedule a message for later _(owner only; changes state)._ | `.schedule ‹when› ‹text› [--to chat] [--repeat daily]` | `.زمان‌بندی` |
 | `.scheduled` | Manage scheduled messages _(owner only; changes state)._ | `.scheduled [list|cancel|reschedule]` | `.زمان‌بندی‌ها` |
-| `.suggest` | Draft reply options for the replied message _(owner only)._ | `.suggest [tone]` | `.reply`, `.draft`, `.پیشنهاد` |
+| `.suggest` | Draft reply options for the replied message _(owner only)._ | `.suggest [tone]` | `.suggest_reply`, `.suggest_draft`, `.پیشنهاد` |
 | `.template` | Save and send message templates _(owner only; changes state)._ | `.template [list|add|show|send|delete]` | `.قالب` |
 
 ## People

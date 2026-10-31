@@ -16,9 +16,10 @@ import html
 import pytest
 from conftest import last_text
 
+from havoc import ui
 from havoc.services.actions import Turn
 from havoc.services.tools import build_tools
-from havoc.utils.formatting import bold, code, escape, italic, prepare
+from havoc.utils.formatting import bold, code, escape, italic, prepare, repair_html
 from havoc.utils.markup import rescue_inline, rich
 
 
@@ -176,3 +177,26 @@ async def test_a_tool_card_escapes_what_the_model_wrote(runtime) -> None:
     rendered = ui.card(result.title, tuple(result.lines))
     assert "<b>Sara" not in rendered
     assert "&lt;b&gt;Sara" in rendered
+
+
+def test_a_kaomoji_beside_a_tag_does_not_eat_the_tag() -> None:
+    """``>_<`` is a face; it is not the opening of the card's ``<b>``.
+
+    The stray-``<`` sweep used to read from the kaomoji's ``<`` to the next ``>``
+    — the card's own opening tag — and escape that whole span, leaving the real
+    ``</b>`` unbalanced. Telegram then rejected the message.
+    """
+    html = ui.card("30m · call mom", ["call mom"])
+    message = f"i am small >_<\n\n{html}"
+
+    body = prepare(message)[0]
+    assert "<b>" in body
+    assert body.count("<b>") == body.count("</b>")
+    assert "&lt;b&gt;" not in body
+    assert body.startswith("i am small >_&lt;")
+
+
+def test_a_stray_less_than_is_a_character_not_a_tag() -> None:
+    assert repair_html("2 < 3") == "2 &lt; 3"
+    assert repair_html("<b>ok</b>") == "<b>ok</b>"
+    assert repair_html("use <name> here") == "use &lt;name&gt; here"

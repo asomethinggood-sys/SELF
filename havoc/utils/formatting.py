@@ -128,7 +128,7 @@ def prepare(text: str, *, limit: int = MAX_MESSAGE_LENGTH) -> list[str]:
 
 _MANY_BLANK_LINES = re.compile(r"\n{3,}")
 
-_HTML_TAG_RE = re.compile(r"<[^>]{1,64}>")
+_HTML_TAG_RE = re.compile(r"<[^<>]{1,64}>")
 
 #: Every tag Telegram's HTML parser actually knows. Anything else in angle
 #: brackets is **text** — and Telegram either rejects the message or, worse,
@@ -141,6 +141,8 @@ _ALLOWED_TAGS = frozenset(
     }
 )
 _TAG_SHAPE = re.compile(r"^</?([a-zA-Z][a-zA-Z0-9-]*)(\s[^<>]*)?/?>$")
+#: A ``<`` that does not open a tag: a kaomoji's, or an arithmetic sign.
+_LONE_LT = re.compile(r"<(?!/?[a-zA-Z][a-zA-Z0-9-]*(?:\s[^<>]*)?/?>)")
 
 
 def repair_html(text: str) -> str:
@@ -161,7 +163,12 @@ def repair_html(text: str) -> str:
             return tag
         return html.escape(tag, quote=False)
 
-    return _HTML_TAG_RE.sub(fix, text)
+    body = _HTML_TAG_RE.sub(fix, text)
+    # Whatever ``<`` is left either opens a tag we kept or opens nothing at all.
+    # A kaomoji (``>_<``) right before a card used to be read *together with* the
+    # card's first ``<b>`` as one broken tag, so the opening tag was escaped and
+    # the closing ``</b>`` was not: Telegram then refused the whole message.
+    return _LONE_LT.sub("&lt;", body)
 
 
 def strip_html(text: str) -> str:

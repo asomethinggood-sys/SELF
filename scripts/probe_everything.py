@@ -784,6 +784,159 @@ async def probe_sentences(_runtime: Any = None) -> list[dict[str, Any]]:
     return results
 
 
+
+async def probe_surfaces(runtime: Any) -> list[dict[str, Any]]:
+    """The ways into a command, not only its own name.
+
+    An alias that resolves to the wrong command, a ``.help <name>`` that knows
+    nothing about it, or a menu that advertises a command the registry does not
+    have are all broken doors into a room that exists.
+    """
+    from conftest import invoke
+
+    results: list[dict[str, Any]] = []
+    registry = runtime.registry
+    known = {command.name for command in registry.visible()}
+    for command in registry.visible():
+        for alias in command.aliases:
+            resolved = registry.resolve(alias)
+            entry: dict[str, Any] = {"surface": f"alias:{alias}", "of": command.name}
+            if resolved is None or resolved.name != command.name:
+                entry["findings"] = ["alias_misroutes"]
+                results.append(entry)
+                continue
+            if not alias or not alias.strip("?!/") or alias.startswith(("?", "/")):
+                # An alias made of punctuation is not dispatchable by a person
+                # either; the resolver check above is the whole test for it.
+                results.append(entry)
+                continue
+            sent = await invoke(runtime, f".{alias}", sender_id=Harness.OWNER)
+            findings: list[str] = []
+            for message in sent:
+                if not (message.text or "").strip() and "file" in message.kwargs:
+                    continue
+                findings.extend(check_message(message.text))
+            if not sent:
+                # Aliases of commands that need arguments may refuse; a *silent*
+                # alias is the bug.
+                findings.append("silent")
+            if findings:
+                entry["findings"] = sorted(set(findings))
+                entry["said"] = " ⏎ ".join(m.text.replace("\n", " / ") for m in sent)[:300]
+            results.append(entry)
+
+    for name in sorted(known):
+        sent = await invoke(runtime, f".help {name}", sender_id=Harness.OWNER)
+        entry = {"surface": f"help:{name}"}
+        findings: list[str] = []
+        text = " ".join(message.text for message in sent)
+        for message in sent:
+            if not (message.text or "").strip() and "file" in message.kwargs:
+                continue
+            findings.extend(check_message(message.text))
+        if not sent:
+            findings.append("silent")
+        elif name.lower() not in text.lower():
+            # The help screen for `.send` must mention `.send`.
+            findings.append("does_not_name_itself")
+        if findings:
+            entry["findings"] = sorted(set(findings))
+            entry["said"] = text.replace("\n", " / ")[:300]
+        results.append(entry)
+    return results
+
+
+async def probe_groups(runtime: Any) -> list[dict[str, Any]]:
+    """A room full of people: the rules he set are the rules that must hold.
+
+    These are *his* requirements, not mine: her answer to a message that answers
+    her is always sent, she answers in a group when she is named, and a rule he
+    wrote about a person wins over all of it.
+    """
+    from conftest import FakeMessage, incoming
+
+    results: list[dict[str, Any]] = []
+    group = -1001234567890
+    replies = runtime.persona_replies
+
+    async def say(text: str, *, sender: int = Harness.OWNER, reply: Any = None) -> list[Any]:
+        message = FakeMessage(
+            id=random_id(),
+            chat_id=group,
+            sender_id=sender,
+            text=text,
+            out=sender == Harness.OWNER,
+            reply=reply,
+            is_private=False,
+            is_group=True,
+        )
+        await incoming(runtime, message)
+        return message
+
+    async def sent_by(call) -> list[Any]:
+        before = len(runtime.client.sent)
+        await call()
+        return runtime.client.sent[before:]
+
+    def record(label: str, sent: list[Any], *, want: bool, extra: list[str] | None = None) -> None:
+        findings: list[str] = []
+        if want and not sent:
+            findings.append("not_answered")
+        if not want and sent:
+            findings.append("answered_when_it_should_not")
+        for message in sent:
+            if not (message.text or "").strip() and "file" in message.kwargs:
+                continue
+            findings.extend(check_message(message.text))
+        findings.extend(extra or [])
+        results.append(
+            {
+                "group": label,
+                "findings": sorted(set(findings)),
+                "said": " ⏎ ".join(m.text.replace("\n", " / ") for m in sent)[:300],
+            }
+        )
+
+    # 1. her name in a group is an invitation.
+    replies._group_last.clear()
+    replies._group_window.clear()
+    sent = await sent_by(lambda: say("yura, hello there", sender=1234))
+    record("named by a stranger", sent, want=True)
+
+    # 2. a rule about that person wins: "don't answer him".
+    replies._group_last.clear()
+    replies._group_window.clear()
+    await runtime.store.set_person_rule(1234, "ignore", chat_id=group, name="stranger")
+    sent = await sent_by(lambda: say("yura, hello again", sender=1234))
+    record("a rule he wrote about the person", sent, want=False)
+
+    # 3. a reply to *her* message is always answered, even mid-cooldown.
+    replies._group_last.clear()
+    replies._group_window.clear()
+    her_message = FakeMessage(id=random_id(), chat_id=group, sender_id=42, text="hm.", out=True, is_private=False, is_group=True)
+    await replies._note_own(group, her_message.id)
+    replies._group_last[group] = __import__("time").monotonic()
+    answered = await sent_by(lambda: say("so?", sender=555, reply=her_message))
+    record("a reply to her own message", answered, want=True)
+
+    # 4. chatter that is not aimed at her stays his.
+    replies._group_last.clear()
+    replies._group_window.clear()
+    sent = await sent_by(lambda: say("did you see the match last night", sender=555))
+    record("a conversation between two people", sent, want=False)
+    return results
+
+
+def random_id() -> int:
+    """A fresh message id: the engine drops a repeated one as a duplicate."""
+    global _NEXT_ID
+    _NEXT_ID += 1
+    return _NEXT_ID
+
+
+_NEXT_ID = 20_000
+
+
 async def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--json", default=".probe.json")
@@ -809,6 +962,8 @@ async def main() -> int:
         voice = await probe_voice(runtime)
         round_trips = await probe_round_trips(runtime)
         sentences = await probe_sentences(runtime)
+        surfaces = await probe_surfaces(runtime)
+        groups = await probe_groups(await build_runtime())
     finally:
         await runtime.db.close()
 
@@ -820,6 +975,8 @@ async def main() -> int:
         "plain": plain,
         "round_trips": round_trips,
         "sentences": sentences,
+        "surfaces": surfaces,
+        "groups": groups,
     }
     Path(args.json).write_text(json.dumps(report, ensure_ascii=False, indent=2))
 
@@ -830,6 +987,8 @@ async def main() -> int:
     bad_plain = [v for v in plain if v.get("findings") or v.get("crash")]
     bad_trips = [v for v in round_trips if v.get("findings") or v.get("crash")]
     bad_sentences = [v for v in sentences if v.get("findings") or v.get("crash")]
+    bad_surfaces = [v for v in surfaces if v.get("findings") or v.get("crash")]
+    bad_groups = [v for v in groups if v.get("findings") or v.get("crash")]
 
     for title, rows, key in (
         ("COMMANDS", bad_commands, "command"),
@@ -839,6 +998,8 @@ async def main() -> int:
         ("PLAIN", bad_plain, "plain"),
         ("ROUND TRIPS", bad_trips, "trip"),
         ("SENTENCES", bad_sentences, "sentence"),
+        ("SURFACES", bad_surfaces, "surface"),
+        ("GROUPS", bad_groups, "group"),
     ):
         print(f"\n=== {title}: {len(rows)} with findings")
         for row in rows:
@@ -855,7 +1016,8 @@ async def main() -> int:
         f"{len(bad_tools)}/{len(tools)} tools, {len(bad_visuals)}/{len(visuals)} visuals, "
         f"{len(bad_voice)}/{len(voice)} voice samples, {len(bad_plain)}/{len(plain)} plain messages, "
         f"{len(bad_trips)}/{len(round_trips)} round trips, "
-        f"{len(bad_sentences)}/{len(sentences)} sentences"
+        f"{len(bad_sentences)}/{len(sentences)} sentences, "
+        f"{len(bad_surfaces)}/{len(surfaces)} surfaces, {len(bad_groups)}/{len(groups)} group cases"
     )
     return (
         1
@@ -867,6 +1029,8 @@ async def main() -> int:
             or bad_plain
             or bad_trips
             or bad_sentences
+            or bad_surfaces
+            or bad_groups
         )
         else 0
     )

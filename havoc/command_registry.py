@@ -275,6 +275,21 @@ class CommandRegistry:
         name = command.name.lower()
         if name in self._commands:
             raise ValueError(f"duplicate command name: {name}")
+        # A *name* beats an alias. ``.suggest`` claimed the aliases ``reply`` and
+        # ``draft`` before those commands existed; when they landed, the resolver
+        # quietly pointed ``.reply`` at the command (right) while ``.suggest``
+        # kept advertising an alias that could never reach it (wrong). The old
+        # alias is retired here so the registry and the help screen agree.
+        if name in self._alias_map:
+            owner = self._alias_map.pop(name)
+            previous = self._commands.get(owner)
+            if previous is not None:
+                self._commands[owner] = replace(
+                    previous,
+                    aliases=tuple(
+                        alias for alias in previous.aliases if alias.lower() != name
+                    ),
+                )
         for alias in command.aliases:
             alias_lower = alias.lower()
             if alias_lower in self._alias_map or alias_lower in self._commands:
