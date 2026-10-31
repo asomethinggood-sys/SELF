@@ -377,9 +377,10 @@ def test_leaving_and_moderating_in_persian() -> None:
 
 
 def test_a_persian_mute_is_a_window_not_an_error() -> None:
-    assert intent_module.detect("ساکت شو").lines == ("quiet-hours on 4h",)
+    # "shut up" is "stop talking here"; a span makes it a timed silence.
+    assert intent_module.detect("ساکت شو").lines == ("yura off",)
     assert intent_module.detect("ساکت شو ۲ ساعت").lines == ("quiet-hours on 2 ساعت",)
-    assert intent_module.detect("ساکت نباش").lines == ("quiet-hours off",)
+    assert intent_module.detect("ساکت نباش").lines == ("yura on",)
 
 
 def test_a_persian_reminder_with_a_clock_time() -> None:

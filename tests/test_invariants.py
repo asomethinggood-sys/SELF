@@ -105,3 +105,31 @@ async def test_the_big_cards_are_well_formed(runtime, line: str) -> None:
     opens = re.findall(r"<(?!/)([a-z-]+)", joined)
     closes = re.findall(r"</([a-z-]+)", joined)
     assert sorted(opens) == sorted(closes), (line, opens, closes)
+
+
+def test_no_locale_uses_angle_bracket_placeholders() -> None:
+    """`<text>` in a locale is a tag to Telegram and an entity to the escaper.
+
+    Every placeholder is drawn with ‹› instead, so no card can ever show the
+    escaping and no message can lose the brackets to the HTML parser.
+    """
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "havoc" / "locales"
+    tags = {
+        "b", "strong", "i", "em", "u", "ins", "s", "strike", "del", "a", "code",
+        "pre", "span", "tg-spoiler", "blockquote", "expandable_blockquote", "tg-emoji",
+    }
+    offenders: list[tuple[str, str]] = []
+    for path in sorted(root.glob("*.json")):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        for key, value in data.items():
+            if not isinstance(value, str):
+                continue
+            for match in re.finditer(r"<(/?)([^\s<>]{1,40})>", value):
+                name = match.group(2).split()[0].split("=")[0].lower()
+                if match.group(1) or name in tags:
+                    continue
+                offenders.append((f"{path.name}:{key}", match.group(0)))
+    assert not offenders, offenders[:10]

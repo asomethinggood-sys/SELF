@@ -354,7 +354,10 @@ def _reminder(text: str) -> Intent | None:
         # command's own parser knows `HH:MM`; all that is missing is the shape.
         clock = _FA_CLOCK_TIME.search(folded)
         if clock:
-            what = folded[clock.end() :].strip(" .,!؟?؛;:کهرا")
+            # Only punctuation goes — not letters. `.strip("هکر")` ate the last
+            # letter of "جلسه", which is how a reminder about a meeting became a
+            # reminder about "جلس".
+            what = folded[clock.end() :].strip(" .,!؟?؛:،")
             what = re.sub(r"^(?:که|را|رو)\s+", "", what).strip() or "reminder"
             hour = int(clock.group("hour"))
             minute = int(clock.group("minute") or 0)
@@ -362,7 +365,11 @@ def _reminder(text: str) -> Intent | None:
                 hour += 12
             if not (0 <= hour <= 23 and 0 <= minute <= 59):
                 return None
-            stamp = f"{hour:02d}:{minute:02d}"
+            # "فردا ساعت ۹" is tomorrow's nine, and saying it as a bare clock
+            # time lets the command roll it to tomorrow by accident rather than
+            # because he said so.
+            day = "tomorrow " if re.search(r"\bفردا\b", folded) else ""
+            stamp = f"{day}{hour:02d}:{minute:02d}"
             return Intent(
                 lines=(f"remind {stamp} {what}",),
                 label="remind",
@@ -777,14 +784,11 @@ def _actions(text: str) -> Intent | None:
         return Intent(lines=("leave --yes",), label="leave", detail="leave this chat")
 
     match = _FA_QUIET.match(folded)
-    if match:
-        span = (match.group("span") or match.group("span2") or "").strip()
-        line = f"quiet-hours on {span}".strip() if span else "quiet-hours on 4h"
-        return Intent(lines=(line,), label="quiet-hours", detail="quiet hours on")
-
-    match = _FA_LOUD.match(folded)
-    if match:
-        return Intent(lines=("quiet-hours off",), label="quiet-hours", detail="quiet hours off")
+    # Only a *span* becomes a quiet window: "ساکت شو" on its own means "stop
+    # talking", which `_fa_orders` answers with `.yura off`, closer to the words.
+    span = (match.group("span") or match.group("span2") or "").strip() if match else ""
+    if span:
+        return Intent(lines=(f"quiet-hours on {span}",), label="quiet-hours", detail="quiet hours on")
 
     match = _FA_BAN.match(folded)
     if match:
@@ -987,12 +991,104 @@ _VERSION_ASK = re.compile(
 )
 
 
+def _fa_when(text: str) -> tuple[str, str] | None:
+    """A Persian time phrase and the rest of the sentence, split apart.
+
+    ``یادم بنداز ساعت ۵ شیر بخرم`` → ``("05:00", "شیر بخرم")``. The command layer
+    speaks ``HH:MM`` / ``tomorrow HH:MM`` / ``30m``; this is the translation from
+    the way the sentence is actually said to that shape.
+    """
+    folded = " ".join(text.translate(_PERSIAN_DIGITS).split())
+    day = ""
+    if folded.startswith("فردا"):
+        day, folded = "tomorrow ", folded[len("فردا") :].strip()
+    elif folded.startswith("امروز"):
+        day, folded = "", folded[len("امروز") :].strip()
+    match = re.match(r"^(?:ساعت\s*)?(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\s*(?P<half>و\s*نیم)?\s+(?P<rest>.+)$", folded)
+    if match and ("ساعت" in text or day):
+        hour = int(match.group("hour"))
+        minute = int(match.group("minute") or (30 if match.group("half") else 0))
+        if 0 <= hour <= 23 and 0 <= minute <= 59:
+            return f"{day}{hour:02d}:{minute:02d}", match.group("rest").strip()
+    counted = re.match(
+        r"^(?P<amount>\d{1,3})\s*(?P<unit>ثانیه|دقیقه|ساعت|روز)\s*(?:دیگه|بعد|دیگر)\s*(?P<rest>.*)$",
+        folded,
+    )
+    if counted:
+        unit = {"ثانیه": "s", "دقیقه": "m", "ساعت": "h", "روز": "d"}[counted.group("unit")]
+        rest = counted.group("rest").strip() or "یادآوری"
+        return f"{counted.group('amount')}{unit}", rest
+    return None
+
+
+def _fa_orders(folded: str) -> Intent | None:
+    """The Persian orders that name a real ability, in the words he types them."""
+    # The clock is *her* clock (the live time on the profile), not the wall clock.
+    if re.match(r"^ساعت(?:ت|ت\s*رو|ت\s*را|م|م\s*رو|ه)?\s*(?:رو|را)?\s*(?:روشن|برگردون|برگردان|فعال|نشون)\s*کن", folded):
+        return Intent(lines=("clock on",), label="clock", detail="clock on")
+    if re.match(r"^ساعت(?:ت|ت\s*رو|ت\s*را|م|م\s*رو|ه)?\s*(?:رو|را)?\s*(?:خاموش|ببند|بردار|حذف)\s*کن", folded):
+        return Intent(lines=("clock off",), label="clock", detail="clock off")
+
+    if re.match(r"^(?:از\s*)?(?:این\s*|همین\s*)?گروه\s*(?:رو|را)?\s*(?:برو|ترک\s*کن|خارج\s*شو|بیا\s*بیرون)", folded):
+        return Intent(lines=("leave --yes",), label="admin", detail="leave this group")
+
+    match = re.match(
+        r"^(?:اسم|نام)(?:م|ش|ت|ت\s*رو|م\s*رو|ش\s*رو)?\s*(?:رو|را)?\s*"
+        r"(?:عوض\s*کن|تغییر\s*بده|بذار|بزار|کن)\s*(?:بذار|بزار|به|روی|:)?\s*(?P<name>.+)$",
+        folded,
+    )
+    if match:
+        name = match.group("name").strip(' .,!؟"«»')
+        if name and len(name) <= 40:
+            return Intent(lines=(f"profile name {name}",), label="profile", detail=f"name → {name}")
+
+    match = re.match(
+        r"^بیو(?:ت|م|ش)?\s*(?:رو|را)?\s*"
+        r"(?:عوض\s*کن|تغییر\s*بده|بنویس|بذار|بزار|کن)\s*(?:بنویس|بذار|بزار|:)?\s*(?P<bio>.+)$",
+        folded,
+    )
+    if match:
+        bio = match.group("bio").strip(' .,!؟"«»')
+        if bio and len(bio) > 1:
+            return Intent(lines=(f"bio set {bio}",), label="profile", detail="bio")
+
+    # "این شخص رو بن کن" — the target is the message he replied to, and the
+    # command reads the reply rather than making him type a handle.
+    if re.match(
+        r"^(?:این|اون)?\s*(?:شخص|کاربر|یارو|آدم|بچه|طرف|مردم)?\s*(?:رو|را)?\s*بن\s*کن",
+        folded,
+    ):
+        return Intent(lines=("ban --yes",), label="admin", detail="ban · the replied-to person")
+    if re.match(
+        r"^(?:این|اون)?\s*(?:شخص|یارو|آدم|طرف)?\s*(?:رو|را)?\s*(?:اخراج|بیرون|بیرونش)\s*کن",
+        folded,
+    ):
+        return Intent(lines=("kick --yes",), label="admin", detail="kick · the replied-to person")
+
+    if re.match(r"^(?:ساکت\s*شو|خفه\s*شو|خفه\s*بابا|ساکت)$", folded):
+        return Intent(lines=("yura off",), label="persona", detail="quiet in this chat")
+    if re.match(r"^(?:برگرد|دوباره\s*حرف\s*بزن|حرف\s*بزن|ساکت\s*نباش|دیگه\s*ساکت\s*نباش)$", folded):
+        return Intent(lines=("yura on",), label="persona", detail="talking again")
+
+    match = re.match(r"^یادم\s*(?:بنداز|بیار|بندازی)\s+(?P<body>.+)$", folded)
+    if match:
+        split = _fa_when(match.group("body"))
+        if split:
+            when, rest = split
+            return Intent(lines=(f"remind {when} {rest}",), label="remind", detail=f"remind · {when}")
+    return None
+
+
 def _surface(text: str) -> Intent | None:
     """Message verbs, the inbox, groups, and questions about herself."""
     original = _tidy(_lead(_tidy(text)))
     folded = original.lower()
     if not folded or len(folded) > 70:
         return None
+
+    order = _fa_orders(folded)
+    if order is not None:
+        return order
 
     match = _FORWARD.match(original)
     if match:

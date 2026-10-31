@@ -25,40 +25,40 @@ Total: **145 commands**.
 
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
-| `.ban` | Remove someone and keep them out _(owner only; changes state; asks for confirmation)._ | `.ban <person>` | — |
-| `.demote` | Take admin rights away _(owner only; changes state; asks for confirmation)._ | `.demote <person>` | — |
-| `.kick` | Remove someone from the group; they may come back _(owner only; changes state; asks for confirmation)._ | `.kick <person>` | — |
+| `.ban` | Remove someone and keep them out _(owner only; changes state; asks for confirmation)._ | `.ban ‹person›` | — |
+| `.demote` | Take admin rights away _(owner only; changes state; asks for confirmation)._ | `.demote ‹person›` | — |
+| `.kick` | Remove someone from the group; they may come back _(owner only; changes state; asks for confirmation)._ | `.kick ‹person›` | — |
 | `.leave` | Leave a group, this one or the one you name _(owner only; changes state; asks for confirmation)._ | `.leave [chat]` | — |
-| `.promote` | Make someone an admin with exactly the rights you name _(owner only; changes state; asks for confirmation)._ | `.promote <person> [--delete] [--pin] [--invite] [--ban] [--manage]` | — |
-| `.setdesc` | Rewrite the group description _(owner only; changes state)._ | `.setdesc <text>` | `.setabout` |
-| `.settitle` | Rename the group you are standing in _(owner only; changes state)._ | `.settitle <text>` | `.retitle` |
-| `.slowmode` | Throttle how often people may post _(owner only; changes state)._ | `.slowmode <30s|5m|off>` | — |
-| `.unban` | Let a banned person back in _(owner only; changes state)._ | `.unban <person>` | — |
+| `.promote` | Make someone an admin with exactly the rights you name _(owner only; changes state; asks for confirmation)._ | `.promote ‹person› [--delete] [--pin] [--invite] [--ban] [--manage]` | — |
+| `.setdesc` | Rewrite the group description _(owner only; changes state)._ | `.setdesc ‹text›` | `.setabout` |
+| `.settitle` | Rename the group you are standing in _(owner only; changes state)._ | `.settitle ‹text›` | `.retitle` |
+| `.slowmode` | Throttle how often people may post _(owner only; changes state)._ | `.slowmode ‹30s|5m|off›` | — |
+| `.unban` | Let a banned person back in _(owner only; changes state)._ | `.unban ‹person›` | — |
 
 ## Ai
 
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
-| `.ai` | Every AI model and key, with today's budgets _(owner only)._ | `.ai [model <n|name|auto>|key [add <key>|rm <label>]|test|reset]` | `.models`, `.model`, `.keys` |
+| `.ai` | Every AI model and key, with today's budgets _(owner only)._ | `.ai [model ‹n|name|auto›|key [add ‹key›|rm ‹label›]|test|reset]` | `.models`, `.model`, `.keys` |
 
 ## Chats
 
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
-| `.archive` | Put a chat in the archive without deleting anything _(owner only; changes state)._ | `.archive <chat>` | — |
-| `.draft` | Write a message into a chat's input box without sending it _(owner only; changes state)._ | `.draft <chat> <text|off>` | `.drafts_put` |
+| `.archive` | Put a chat in the archive without deleting anything _(owner only; changes state)._ | `.archive ‹chat›` | — |
+| `.draft` | Write a message into a chat's input box without sending it _(owner only; changes state)._ | `.draft ‹chat› ‹text|off›` | `.drafts_put` |
 | `.drafts` | Every chat that is holding a draft _(owner only)._ | `.drafts` | — |
 | `.folder` | Your Telegram folders _(owner only)._ | `.folder [list]` | `.folders` |
 | `.groups` | Your groups, with member counts _(owner only)._ | `.groups [count]` | `.guilds` |
-| `.invite` | An invite link for a chat, revocable from Telegram _(owner only; changes state)._ | `.invite <chat>` | — |
+| `.invite` | An invite link for a chat, revocable from Telegram _(owner only; changes state)._ | `.invite ‹chat›` | — |
 | `.join` | Join a chat by the link you were given _(owner only; changes state)._ | `.join <t.me link>` | — |
-| `.members` | Who is in a group, admins first _(owner only)._ | `.members <chat>` | — |
-| `.mute` | Silence a chat for a while, or forever _(owner only; changes state)._ | `.mute <chat> [1h|2d|forever]` | — |
+| `.members` | Who is in a group, admins first _(owner only)._ | `.members ‹chat›` | — |
+| `.mute` | Silence a chat for a while, or forever _(owner only; changes state)._ | `.mute ‹chat› [1h|2d|forever]` | — |
 | `.peek` | What is behind an invite link, before joining _(owner only)._ | `.peek <t.me link>` | `.inviteinfo` |
-| `.topic` | Start, close, pin or rename a forum topic _(owner only; changes state)._ | `.topic [new <title> | close <id> | open <id> | pin <id> | unpin <id> | rename <id> <title>]` | — |
+| `.topic` | Start, close, pin or rename a forum topic _(owner only; changes state)._ | `.topic [new ‹title› | close ‹id› | open ‹id› | pin ‹id› | unpin ‹id› | rename ‹id› ‹title›]` | — |
 | `.topics` | The forum topics of a group, with unread counts _(owner only)._ | `.topics [chat]` | `.threads` |
-| `.unarchive` | Bring a chat back out of the archive _(owner only; changes state)._ | `.unarchive <chat>` | — |
-| `.unmute` | Let a chat be loud again _(owner only; changes state)._ | `.unmute <chat>` | — |
+| `.unarchive` | Bring a chat back out of the archive _(owner only; changes state)._ | `.unarchive ‹chat›` | — |
+| `.unmute` | Let a chat be loud again _(owner only; changes state)._ | `.unmute ‹chat›` | — |
 
 ## Core
 
@@ -70,11 +70,11 @@ Total: **145 commands**.
 | `.diagnose` | Connection, scheduler, model, database, queue, last error _(owner only)._ | `.diagnose` | `.doctor`, `.health` |
 | `.diagnostics` | Detailed runtime diagnostics _(owner only)._ | `.diagnostics` | `.diag`, `.عیب‌یابی` |
 | `.dryrun` | Turn preview-only mode on or off _(owner only; changes state)._ | `.dryrun [on|off|status]` | `.آزمایشی` |
-| `.feature` | Enable or disable a feature _(owner only; changes state)._ | `.feature <name> <on|off>` | `.قابلیت` |
+| `.feature` | Enable or disable a feature _(owner only; changes state)._ | `.feature ‹name› ‹on|off›` | `.قابلیت` |
 | `.features` | List features and their state _(owner only)._ | `.features` | `.قابلیت‌ها` |
 | `.help` | Show help for all commands or one command _(owner only)._ | `.help [command]` | `.?`, `.کمک`, `.راهنما` |
 | `.id` | Show ids for this chat, message and sender _(owner only)._ | `.id` | `.ids`, `.شناسه` |
-| `.lang` | Change the interface language _(owner only; changes state)._ | `.lang [en|fa|auto|status] or [chat|user] <lang>` | `.language`, `.زبان` |
+| `.lang` | Change the interface language _(owner only; changes state)._ | `.lang [en|fa|auto|status] or [chat|user] ‹lang›` | `.language`, `.زبان` |
 | `.news` | The version, and what the last runs actually did _(owner only)._ | `.news` | `.changelog`, `.whatsnew` |
 | `.ping` | Measure database and reply latency _(owner only)._ | `.ping` | `.پینگ` |
 | `.repair` | Clear stuck jobs, abandoned flows, expired dedupe and wedged cooldowns _(owner only; changes state)._ | `.repair` | `.fix`, `.heal` |
@@ -113,26 +113,26 @@ Total: **145 commands**.
 | --- | --- | --- | --- |
 | `.inbox` | The last private chats: who, when, how many unread — never the words _(owner only)._ | `.inbox [count]` | `.dms`, `.messages` |
 | `.people` | Everyone in her book: name, tone, whether she answers their DMs _(owner only)._ | `.people` | — |
-| `.read` | What was said in one conversation, summarised; --raw for the lines _(owner only)._ | `.read <who> [--limit n] [--raw]` | `.convo`, `.transcript` |
+| `.read` | What was said in one conversation, summarised; --raw for the lines _(owner only)._ | `.read ‹who› [--limit n] [--raw]` | `.convo`, `.transcript` |
 | `.unread` | Every private chat with something waiting in it _(owner only)._ | `.unread` | `.unanswered` |
-| `.whois` | Everything she knows about one person _(owner only)._ | `.whois <who>` | `.who` |
+| `.whois` | Everything she knows about one person _(owner only)._ | `.whois ‹who›` | `.who` |
 
 ## Information
 
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
 | `.bookmark` | Save, list and search bookmarks _(owner only; changes state)._ | `.bookmark [save|list|search|show|delete|export]` | `.bm`, `.نشان` |
-| `.calc` | Safely evaluate an arithmetic expression _(owner only)._ | `.calc <expression>` | `.math`, `.حساب` |
+| `.calc` | Safely evaluate an arithmetic expression _(owner only)._ | `.calc ‹expression›` | `.math`, `.حساب` |
 | `.chatinfo` | Show available metadata about this chat or user _(owner only)._ | `.chatinfo` | `.chatinfo`, `.info`, `.اطلاعات‌چت` |
 | `.chats` | Search your chats by name or username _(owner only)._ | `.chats [query]` | `.چت‌ها` |
-| `.convert-time` | Convert a time between timezones _(owner only)._ | `.convert-time <HH:MM> <from> <to>` | `.convert`, `.تبدیل‌زمان` |
-| `.digits` | Convert digits between Persian, Arabic and Latin _(owner only)._ | `.digits <fa|en|ar> [text]` | `.ارقام` |
+| `.convert-time` | Convert a time between timezones _(owner only)._ | `.convert-time ‹HH:MM› ‹from› ‹to›` | `.convert`, `.تبدیل‌زمان` |
+| `.digits` | Convert digits between Persian, Arabic and Latin _(owner only)._ | `.digits ‹fa|en|ar› [text]` | `.ارقام` |
 | `.media` | Inspect or download the replied media _(owner only; changes state)._ | `.media [info|download]` | `.رسانه` |
 | `.normalize` | Preview Persian text normalization _(owner only)._ | `.normalize` | `.یکسان‌سازی` |
 | `.note` | Private local notes _(owner only; changes state)._ | `.note [add|list|search|show|delete]` | `.notes`, `.یادداشت` |
 | `.rtl` | Analyze direction and script balance of text _(owner only)._ | `.rtl` | `.راست‌به‌چپ` |
 | `.saved` | Saved Messages assistant overview _(owner only)._ | `.saved` | `.savedmessages`, `.ذخیره‌ها` |
-| `.search` | Search accessible message history _(owner only)._ | `.search <query> [--chat id] [--limit n]` | `.جستجو` |
+| `.search` | Search accessible message history _(owner only)._ | `.search ‹query› [--chat id] [--limit n]` | `.جستجو` |
 | `.summarize` | Summarize the replied text or recent messages _(owner only)._ | `.summarize [count]` | `.summary`, `.خلاصه` |
 | `.textstats` | Count words, characters and sentences _(owner only)._ | `.textstats [text]` | `.stats`, `.آمارمتن` |
 | `.time` | Show the current time in cities or timezones _(owner only)._ | `.time [city...]` | `.clock-time`, `.زمان` |
@@ -151,50 +151,50 @@ Total: **145 commands**.
 | `.enable` | Switches a command back on. It is never itself switchable off _(owner only; changes state)._ | `.enable [command]` | `.switch-on` |
 | `.export` | Export selected application data as a JSON file _(owner only; changes state)._ | `.export <bookmarks|notes|settings|reminders|templates|rules|all>` | `.خروجی` |
 | `.labels` | Label this chat locally _(owner only; changes state)._ | `.labels [list|add|remove]` | `.label`, `.برچسب‌ها` |
-| `.owner` | Who owns her: the only accounts that can change her mind _(owner only; changes state)._ | `.owner [list | add @handle | remove <id>]` | — |
+| `.owner` | Who owns her: the only accounts that can change her mind _(owner only; changes state)._ | `.owner [list | add @handle | remove ‹id›]` | — |
 | `.plugins` | List and manage local plugins _(owner only; changes state)._ | `.plugins [list|reload|enable|disable]` | `.افزونه‌ها` |
-| `.prefix` | Change the command prefix _(owner only; changes state; asks for confirmation)._ | `.prefix <new|reset>` | `.پیشوند` |
-| `.quick` | Manage quick actions that run a command _(owner only; changes state)._ | `.quick [list|add|remove|run] <name>` | `.میان‌بر` |
+| `.prefix` | Change the command prefix _(owner only; changes state; asks for confirmation)._ | `.prefix ‹new|reset›` | `.پیشوند` |
+| `.quick` | Manage quick actions that run a command _(owner only; changes state)._ | `.quick [list|add|remove|run] ‹name›` | `.میان‌بر` |
 | `.selfcheck` | Run real health checks _(owner only)._ | `.selfcheck` | `.check`, `.بررسی` |
 
 ## Media
 
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
-| `.geo` | Send a location point _(owner only; changes state)._ | `.geo <lat>, <lon>` | — |
-| `.pic` | Send a picture or file (path or URL); several files become an album _(owner only; changes state)._ | `.pic <path|url> [...] [--caption text] [--to chat] [--silent]` | `.image`, `.file`, `.sendfile`, `.عکس`, `.تصویر` |
-| `.poll` | Post a real poll in this chat _(owner only; changes state)._ | `.poll <question> | <option> | <option>` | — |
-| `.sticker` | Send a sticker from the account's own packs — by emoji or by a word for it _(owner only; changes state)._ | `.sticker <emoji|word> [--to chat] [--silent] [--first] [--reply]` | `.stikers`, `.stix` |
+| `.geo` | Send a location point _(owner only; changes state)._ | `.geo ‹lat›, ‹lon›` | — |
+| `.pic` | Send a picture or file (path or URL); several files become an album _(owner only; changes state)._ | `.pic ‹path|url› [...] [--caption text] [--to chat] [--silent]` | `.image`, `.file`, `.sendfile`, `.عکس`, `.تصویر` |
+| `.poll` | Post a real poll in this chat _(owner only; changes state)._ | `.poll ‹question› | ‹option› | ‹option›` | — |
+| `.sticker` | Send a sticker from the account's own packs — by emoji or by a word for it _(owner only; changes state)._ | `.sticker ‹emoji|word› [--to chat] [--silent] [--first] [--reply]` | `.stikers`, `.stix` |
 
 ## Memory
 
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
-| `.forget` | Drop what she remembers about something, or one fact by number _(owner only; changes state)._ | `.forget <words|#id>` | — |
+| `.forget` | Drop what she remembers about something, or one fact by number _(owner only; changes state)._ | `.forget ‹words|#id›` | — |
 | `.memories` | Everything she remembers, with the numbers .forget wants _(owner only)._ | `.memories [count]` | `.memory`, `.facts` |
-| `.recall` | What she remembers that mentions those words _(owner only)._ | `.recall <words>` | — |
-| `.remember` | Keep one sentence about you, and use it later _(owner only; changes state)._ | `.remember <fact>` | `.keep` |
+| `.recall` | What she remembers that mentions those words _(owner only)._ | `.recall ‹words›` | — |
+| `.remember` | Keep one sentence about you, and use it later _(owner only; changes state)._ | `.remember ‹fact›` | `.keep` |
 
 ## Messages
 
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
 | `.clearhistory` | Delete a whole conversation's history, here or in a named chat _(owner only; changes state; asks for confirmation)._ | `.clearhistory [chat] [--for-everyone]` | `.wipe`, `.purge` |
-| `.copy` | Send the same words somewhere else, with no forward header _(owner only; changes state; reply required)._ | `.copy <to>` | — |
+| `.copy` | Send the same words somewhere else, with no forward header _(owner only; changes state; reply required)._ | `.copy ‹to›` | — |
 | `.delete` | Delete the message you replied to _(owner only; changes state; asks for confirmation; reply required)._ | `.delete [--yes]` | `.del`, `.rm` |
 | `.edit` | Change a message she sent _(owner only; changes state; reply required)._ | `.edit <new text>` | — |
-| `.forward` | Forward the message you replied to, header and all _(owner only; changes state; reply required)._ | `.forward <to>` | `.fwd` |
+| `.forward` | Forward the message you replied to, header and all _(owner only; changes state; reply required)._ | `.forward ‹to›` | `.fwd` |
 | `.pin` | Pin the message you replied to _(owner only; changes state; reply required)._ | `.pin [--silent]` | — |
-| `.reply` | Answer the message you replied to, in this chat _(owner only; changes state; reply required)._ | `.reply <text>` | `.ans` |
+| `.reply` | Answer the message you replied to, in this chat _(owner only; changes state; reply required)._ | `.reply ‹text›` | `.ans` |
 | `.unpin` | Unpin the message you replied to, or the chat's pin _(owner only; changes state)._ | `.unpin [--all]` | — |
 
 ## Messaging
 
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
-| `.autoreply` | Configure automatic replies _(owner only; changes state)._ | `.autoreply list|add <trigger> => <reply> [--type any] [--private|--group]|on|off|remove|clear` | `.ar`, `.پاسخ‌خودکار` |
-| `.away` | Set an away message for private chats _(owner only; changes state)._ | `.away [on <text>|off|status]` | `.دورباش` |
-| `.schedule` | Schedule a message for later _(owner only; changes state)._ | `.schedule <when> <text> [--to chat] [--repeat daily]` | `.زمان‌بندی` |
+| `.autoreply` | Configure automatic replies _(owner only; changes state)._ | `.autoreply list|add ‹trigger› => ‹reply› [--type any] [--private|--group]|on|off|remove|clear` | `.ar`, `.پاسخ‌خودکار` |
+| `.away` | Set an away message for private chats _(owner only; changes state)._ | `.away [on ‹text›|off|status]` | `.دورباش` |
+| `.schedule` | Schedule a message for later _(owner only; changes state)._ | `.schedule ‹when› ‹text› [--to chat] [--repeat daily]` | `.زمان‌بندی` |
 | `.scheduled` | Manage scheduled messages _(owner only; changes state)._ | `.scheduled [list|cancel|reschedule]` | `.زمان‌بندی‌ها` |
 | `.suggest` | Draft reply options for the replied message _(owner only)._ | `.suggest [tone]` | `.reply`, `.draft`, `.پیشنهاد` |
 | `.template` | Save and send message templates _(owner only; changes state)._ | `.template [list|add|show|send|delete]` | `.قالب` |
@@ -203,25 +203,25 @@ Total: **145 commands**.
 
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
-| `.block` | Stop someone being able to reach this account _(owner only; changes state; asks for confirmation)._ | `.block <chat>` | — |
+| `.block` | Stop someone being able to reach this account _(owner only; changes state; asks for confirmation)._ | `.block ‹chat›` | — |
 | `.blocklist` | Who is blocked right now _(owner only)._ | `.blocklist` | `.blocked` |
-| `.contact` | Add a number to the address book _(owner only; changes state)._ | `.contact <phone> <name>` | `.addcontact` |
+| `.contact` | Add a number to the address book _(owner only; changes state)._ | `.contact ‹phone› ‹name›` | `.addcontact` |
 | `.contacts` | His address book, as Telegram has it _(owner only)._ | `.contacts [query] [--limit n]` | `.addressbook` |
-| `.unblock` | Undo a block _(owner only; changes state; asks for confirmation)._ | `.unblock <chat>` | — |
+| `.unblock` | Undo a block _(owner only; changes state; asks for confirmation)._ | `.unblock ‹chat›` | — |
 
 ## Persona
 
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
-| `.yura` | Yura herself: talk to her, or manage what she remembers _(owner only; changes state)._ | `.yura [on|off|status|memory|log|clear|<anything>]` | `.person`, `.self`, `.یورا` |
+| `.yura` | Yura herself: talk to her, or manage what she remembers _(owner only; changes state)._ | `.yura [on|off|status|memory|log|clear|‹anything›]` | `.person`, `.self`, `.یورا` |
 
 ## Profile
 
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
 | `.bio` | Set or rotate your profile bio _(owner only; changes state)._ | `.bio [show|set|add|rotation|preview|reset]` | `.بیو` |
-| `.clock` | Show a configurable clock in your profile name _(owner only; changes state)._ | `.clock [on <timezone>|off|status]` | `.ساعت` |
-| `.counter` | Manage local counters (usable in bio rotation) _(owner only; changes state)._ | `.counter [list|inc|reset|delete] <name>` | `.counters`, `.شمارنده` |
+| `.clock` | Show a configurable clock in your profile name _(owner only; changes state)._ | `.clock [on ‹timezone›|off|status]` | `.ساعت` |
+| `.counter` | Manage local counters (usable in bio rotation) _(owner only; changes state)._ | `.counter [list|inc|reset|delete] ‹name›` | `.counters`, `.شمارنده` |
 | `.photo` | Use the picture you replied to as her profile photo _(owner only; changes state; asks for confirmation; reply required)._ | `.photo (reply to a picture)` | `.avatar`, `.pfp`, `.setpic` |
 | `.preset` | Save and apply profile presets _(owner only; changes state)._ | `.preset [list|create|apply|preview|delete|schedule|scheduled|unschedule]` | — |
 | `.profile` | Preview, restore and review profile changes _(owner only; changes state)._ | `.profile [show|preview|restore|history|name]` | `.پروفایل` |
@@ -231,12 +231,12 @@ Total: **145 commands**.
 
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
-| `.broadcast` | Send the same message to a list of chats, paced _(owner only; changes state)._ | `.broadcast <to…|groups|dms> <text> [--limit N] [--dry] [--yes]` | — |
-| `.emoji` | React to the message you replied to _(owner only; changes state)._ | `.emoji <emoji>` | `.reaction`, `.reactto` |
-| `.ignore` | Never answer this person again _(owner only; changes state)._ | `.ignore [list|on <who>|off <who>]` | `.mute-person` |
+| `.broadcast` | Send the same message to a list of chats, paced _(owner only; changes state)._ | `.broadcast ‹to…|groups|dms› ‹text› [--limit N] [--dry] [--yes]` | — |
+| `.emoji` | React to the message you replied to _(owner only; changes state)._ | `.emoji ‹emoji›` | `.reaction`, `.reactto` |
+| `.ignore` | Never answer this person again _(owner only; changes state)._ | `.ignore [list|on ‹who›|off ‹who›]` | `.mute-person` |
 | `.outbox` | The last messages this account sent, from the database _(owner only)._ | `.outbox [limit]` | `.sent` |
-| `.plan` | Timelines: one sentence, many moments _(owner only; changes state)._ | `.plan [list|stop [word]|add <sentence>]` | `.timeline` |
-| `.send` | Send a message — repeated, hidden behind a spoiler, self-destructing, later, or written by her _(owner only; changes state)._ | `.send <to> <text> [--repeat N] [--every 30s] [--spoiler] [--silent] [--delete-after 10s] [--at 21:00] [--compose] [--dry]` | `.say`, `.msg`, `.message` |
+| `.plan` | Timelines: one sentence, many moments _(owner only; changes state)._ | `.plan [list|stop [word]|add ‹sentence›]` | `.timeline` |
+| `.send` | Send a message — repeated, hidden behind a spoiler, self-destructing, later, or written by her _(owner only; changes state)._ | `.send ‹to› ‹text› [--repeat N] [--every 30s] [--spoiler] [--silent] [--delete-after 10s] [--at 21:00] [--compose] [--dry]` | `.say`, `.msg`, `.message` |
 | `.unsend` | Delete a message by its outbox number _(owner only; changes state)._ | `.unsend <outbox id>` | — |
 
 ## Read
@@ -244,7 +244,7 @@ Total: **145 commands**.
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
 | `.diary` | Read the Saved Messages notepad, newest first _(owner only)._ | `.diary [count]` | `.savedmsgs`, `.tgnotes` |
-| `.exportchat` | Save a conversation as a text file and send it back here _(owner only)._ | `.exportchat <chat> [count] [--limit n]` | `.chatfile` |
+| `.exportchat` | Save a conversation as a text file and send it back here _(owner only)._ | `.exportchat ‹chat› [count] [--limit n]` | `.chatfile` |
 | `.mentions` | Where someone wrote his name _(owner only)._ | `.mentions [count]` | `.whereami` |
 
 ## Scheduling & time
@@ -252,8 +252,8 @@ Total: **145 commands**.
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
 | `.agenda` | Show today's or this week's reminders and scheduled messages _(owner only)._ | `.agenda [today|week]` | `.calendar`, `.برنامه` |
-| `.quiet-hours` | Pause automation during chosen hours _(owner only; changes state)._ | `.quiet-hours [on <start> <end>|off|status] [--chat]` | `.quiet`, `.ساکت` |
-| `.remind` | Create a reminder _(owner only; changes state)._ | `.remind <when> <text> [--repeat daily]` | `.reminder`, `.یادآوری`, `.یادآور` |
+| `.quiet-hours` | Pause automation during chosen hours _(owner only; changes state)._ | `.quiet-hours [on ‹start› ‹end›|off|status] [--chat]` | `.quiet`, `.ساکت` |
+| `.remind` | Create a reminder _(owner only; changes state)._ | `.remind ‹when› ‹text› [--repeat daily]` | `.reminder`, `.یادآوری`, `.یادآور` |
 | `.reminders` | Manage reminders _(owner only; changes state)._ | `.reminders [list|done|cancel|edit|missed|release]` | `.یادآورها` |
 | `.tasks` | Inspect and cancel pending scheduler tasks _(owner only; changes state)._ | `.tasks [list|cancel|info]` | `.کارها` |
 
