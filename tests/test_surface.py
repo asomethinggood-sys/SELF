@@ -115,8 +115,12 @@ async def test_inbox_lists_people_not_their_words(runtime) -> None:
     ]
     sent = await invoke(runtime, ".inbox", chat_id=OWNER)
     body = _said(sent)
-    assert "Sara" in body and "999" in body
+    assert "Sara" in body and "@sara" in body
     assert "Sunday lunch" not in body, "a group is not a private chat"
+    # The id is available, but it is not in the way of reading the list.
+    assert "999" not in body
+    with_ids = _said(await invoke(runtime, ".inbox --ids", chat_id=OWNER))
+    assert "999" in with_ids
 
 
 async def test_unread_counts_only_what_is_waiting(runtime) -> None:

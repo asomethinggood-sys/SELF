@@ -24,7 +24,7 @@ from typing import Any
 from ..command_registry import Command, CommandContext, CommandError
 from ..utils.formatting import bold, code, escape
 from ..utils.text import truncate
-from ..utils.time import format_datetime, parse_iso, utc_now
+from ..utils.time import format_datetime, format_short, parse_iso, utc_now
 from .helpers import display_name, media_label
 
 __all__ = ["register"]
@@ -101,31 +101,56 @@ def _limit(ctx: CommandContext, default: int = 10, ceiling: int = 30) -> int:
 # ---------------------------------------------------------------------------
 # .inbox / .unread
 # ---------------------------------------------------------------------------
+def _row_line(
+    ctx: CommandContext,
+    entity: Any,
+    dialog: Any,
+    *,
+    tz: str,
+    unread: int,
+    with_id: bool,
+) -> str:
+    """One chat, in the order the eye reads: who, how to reach them, when, how many."""
+    name = display_name(entity, str(getattr(dialog, "id", "?")))
+    handle = getattr(entity, "username", None)
+    bits = [f"▸ {escape(name)}"]
+    if handle:
+        bits.append(code("@" + str(handle)))
+    moment = _dialog_date(dialog)
+    stamp = ""
+    if moment:
+        try:
+            stamp = format_short(parse_iso(moment), tz, ctx.language)
+        except Exception:  # noqa: BLE001 - a bad timestamp never sinks the list
+            stamp = ""
+    if unread:
+        bits.append(f"{code(str(unread))} {ctx.t('inbox.unread_mark')}")
+    if stamp:
+        bits.append(escape(stamp))
+    if with_id:
+        bits.append(code(str(getattr(dialog, "id", "?"))))
+    return " · ".join(bits)
+
+
 async def cmd_inbox(ctx: CommandContext) -> None:
     wanted = _limit(ctx)
     tz = getattr(ctx.config, "timezone", "UTC")
+    with_id = ctx.has_flag("ids")
     rows = [dialog for dialog in await _dialogs(ctx) if _is_private(dialog)]
     rows.sort(key=lambda dialog: _dialog_date(dialog) or "", reverse=True)
     if not rows:
         await ctx.reply(ctx.t("inbox.empty"))
         return
-    lines = [bold(ctx.t("inbox.header", count=len(rows[:wanted])))]
-    total_unread = 0
+    total_unread = sum(_unread(dialog) for dialog in rows)
+    head = bold(ctx.t("inbox.header", count=len(rows[:wanted])))
+    if total_unread:
+        head += "\n" + ctx.t("inbox.unread_total", total=total_unread)
+    lines = [head, ""]
     for dialog in rows[:wanted]:
         entity = getattr(dialog, "entity", None) or dialog
-        name = display_name(entity, str(getattr(dialog, "id", "?")))
-        handle = getattr(entity, "username", None)
-        unread = _unread(dialog)
-        total_unread += unread
-        mark = f" · {code(str(unread))} {ctx.t('inbox.unread_mark')}" if unread else ""
         lines.append(
-            f"• {escape(name)}"
-            + (f" {code('@' + str(handle))}" if handle else "")
-            + f" — {code(str(getattr(dialog, 'id', '?')))}{mark}"
-            + f" · {escape(_when(_dialog_date(dialog), tz, ctx.language))}"
+            _row_line(ctx, entity, dialog, tz=tz, unread=_unread(dialog), with_id=with_id)
         )
-    if total_unread:
-        lines.append(ctx.t("inbox.unread_total", total=total_unread))
     lines.append(ctx.t("inbox.hint", prefix=ctx.runtime.prefix))
     await ctx.reply("\n".join(lines))
 

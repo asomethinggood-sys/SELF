@@ -26,6 +26,26 @@ from .translation_provider import TranslationError
 __all__ = ["build_tools"]
 
 
+def first_emoji(text: str) -> str:
+    """The one emoji in a sentence — ``قلب`` is not one, ``❤️`` is.
+
+    A model asked to react sometimes supplies a word or a sentence instead of a
+    reaction; sending that to Telegram fails and she ends up narrating a broken
+    tool. Picking the emoji out is the repair.
+    """
+    cleaned = (text or "").strip()
+    if not cleaned:
+        return ""
+    found = [character for character in cleaned if ord(character) > 0x2000 and not character.isspace()]
+    # Keep modifiers and joiners attached to the emoji they belong to.
+    if not found:
+        return ""
+    first = found[0]
+    index = cleaned.index(first)
+    tail = cleaned[index : index + 8]
+    return tail.split(" ")[0][:8]
+
+
 def _t(runtime: Any, turn: Turn, key: str, **variables: Any) -> str:
     """A localized card phrase, never a crash if a locale is stripped."""
     try:
@@ -389,10 +409,19 @@ def build_tools(runtime: Any) -> list[Tool]:
         )
 
     async def react_to(turn: Turn, args: dict[str, str]) -> ActionResult:
-        emoji = (args.get("emoji") or "").strip()
-        message_id = args.get("message_id") or turn.message_id
-        if not emoji or not message_id:
-            return ActionResult(False, detail="an emoji and a message are needed", kind="bad_args")
+        """React to the message he pointed at, or to the one he typed."""
+        emoji = first_emoji(args.get("emoji") or "")
+        if not emoji:
+            return ActionResult(False, detail="one emoji is needed", kind="bad_args")
+        try:
+            message_id = int(args.get("message_id") or 0)
+        except ValueError:
+            message_id = 0
+        # "react to his message" = the bubble he answered. Only when there is no
+        # reply does it fall back to his own line, which is still a real target.
+        message_id = message_id or int(turn.reply_to or turn.message_id or 0)
+        if not message_id:
+            return ActionResult(False, detail="there is no message to react to", kind="bad_args")
         ok = await runtime.reach.react(turn.chat_id, int(message_id), emoji)
         if not ok:
             return ActionResult(False, detail="telegram refused the reaction", kind="failed")

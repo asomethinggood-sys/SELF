@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
@@ -39,6 +40,9 @@ KINDS = ("saved", "user", "group", "channel", "unknown")
 MIN_GAP_SECONDS = 1.0
 #: Past this a "repeat 500 times" is a broadcast, and broadcasts are confirmed.
 MAX_REPEAT = 500
+
+#: The gap between repeated lines when he did not name one.
+MIN_GAP = 1.2
 
 
 class ReachError(Exception):
@@ -81,11 +85,15 @@ class SendReport:
     scheduled_for: str = ""
     deletes_at: str = ""
     note: str = ""
+    #: True when the same line had just been sent, so this one was skipped.
+    duplicate: bool = False
 
     @property
     def summary(self) -> str:
         if self.error:
             return self.error
+        if self.duplicate:
+            return "already sent a moment ago — skipped the copy"
         if self.scheduled_for:
             return f"scheduled for {self.scheduled_for}"
         if self.dry_run:
@@ -152,8 +160,14 @@ def spoiler(text: str) -> str:
 class Reach:
     """Resolve, send, react, unsend — and record all of it."""
 
+    #: body → the moment it was sent, per chat. Two identical sends inside this
+    #: window are one instruction carried out twice, and he has said what to do
+    #: with the second one: ignore it.
+    DUPLICATE_WINDOW = 6.0
+
     def __init__(self, runtime: Any) -> None:
         self.runtime = runtime
+        self._recent: dict[tuple[int, str], float] = {}
 
     # -- properties ----------------------------------------------------
     @property
@@ -321,6 +335,7 @@ class Reach:
         at: Any = None,
         plan_id: int | None = None,
         dry_run: bool | None = None,
+        dedupe: bool = True,
     ) -> SendReport:
         """Send ``text`` to ``target`` with every option the sentence asked for."""
         body = str(text or "")
@@ -356,8 +371,9 @@ class Reach:
             return report
 
         # A repeat is a first send and the rest on the clock, so a restart does
-        # not lose the tail and no loop sleeps inside a reply.
-        gaps = max(float(every or 0.0), 0.0)
+        # not lose the tail and no loop sleeps inside a reply. With no interval
+        # asked for, a small gap keeps ten of them from arriving as one flood.
+        gaps = max(float(every or 0.0), MIN_GAP if repeat > 1 else 0.0)
         if repeat > 1:
             for index in range(1, repeat):
                 when = utc_now() + timedelta(seconds=gaps * index)
@@ -373,6 +389,21 @@ class Reach:
                         "plan_id": plan_id,
                     },
                 )
+
+        now = time.monotonic()
+        key = (int(target.id or 0), body)
+        if dedupe and not dry_run:
+            last = self._recent.get(key)
+            if last is not None and now - last < self.DUPLICATE_WINDOW:
+                report.duplicate = True
+                report.ok = True
+                report.note = "the same line was just sent; the second one was skipped"
+                return report
+        self._recent[key] = now
+        if len(self._recent) > 256:
+            # Bounded: an old key is not a duplicate of anything any more.
+            for stale in [k for k, when in self._recent.items() if now - when > 60.0]:
+                self._recent.pop(stale, None)
 
         result = await self._send_once(target, body, silent=silent, reply_to=reply_to, dry_run=dry_run)
         report.sent = 1 if result.get("ok") and not result.get("dry_run") else 0
@@ -452,6 +483,8 @@ class Reach:
             reply_to=payload.get("reply_to"),
             delete_after=payload.get("delete_after"),
             plan_id=payload.get("plan_id"),
+            # A scheduled repeat *is* the same sentence again; that is the point.
+            dedupe=False,
         )
         if not report.ok:
             self.runtime.logger.warning("scheduled send failed: %s", report.error)

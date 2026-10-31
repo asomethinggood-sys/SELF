@@ -22,6 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..utils.security import redact_text
+from ..utils.text import plain_text
 
 __all__ = ["TelegramExtras", "ExtrasError"]
 
@@ -37,7 +38,7 @@ class ExtrasError(RuntimeError):
 def _name(entity: Any) -> str:
     title = getattr(entity, "title", None)
     if title:
-        return str(title)
+        return plain_text(title)
     parts = [getattr(entity, "first_name", None), getattr(entity, "last_name", None)]
     joined = " ".join(part for part in parts if part)
     if joined:
@@ -210,7 +211,8 @@ class TelegramExtras:
             out.append(
                 {
                     "id": getattr(row, "id", None),
-                    "title": str(getattr(row, "title", "") or "—"),
+                    # Folder titles are ``TextWithEntities`` in current layers.
+                    "title": plain_text(getattr(row, "title", None), "—"),
                     "count": len(peers),
                 }
             )

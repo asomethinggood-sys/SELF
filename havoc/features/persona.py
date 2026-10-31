@@ -579,6 +579,7 @@ async def _chat(ctx: CommandContext, text: str, *, greeting: bool = False) -> No
             audience = await replies.room_for(normalized)
         except Exception:  # noqa: BLE001 - context is a bonus
             quoted, audience = "", None
+    reply_id = getattr(normalized, "reply_to_id", None) if normalized is not None else None
     answer = await ctx.runtime.yura_chat.answer(
         text,
         chat_id=ctx.chat_id,
@@ -587,6 +588,7 @@ async def _chat(ctx: CommandContext, text: str, *, greeting: bool = False) -> No
         picture=picture,
         quoted=quoted,
         audience=audience,
+        reply_to=reply_id,
     )
     if answer.text:
         # `rich` for model text, not `escape`: she writes **bold** and > quotes
@@ -887,6 +889,8 @@ class Quote:
     #: Who wrote the message being replied to, so "remember this" can be attached
     #: to the right person instead of to the room.
     user_id: int | None = None
+    #: The id of the newest message in the chain. "react to it" means this one.
+    message_id: int | None = None
 
 
 class PersonaReplies:
@@ -1156,7 +1160,8 @@ class PersonaReplies:
             self._skip("cooldown")
             return
         await self._answer(
-            event, chat_id=event.chat_id, picture=picture, quoted=quote.text, is_private=True
+            event, chat_id=event.chat_id, picture=picture, quoted=quote.text,
+            reply_to=quote.message_id, is_private=True
         )
         self._last_at = now
         self._window.append(now)
@@ -1243,6 +1248,7 @@ class PersonaReplies:
             chat_id=event.chat_id,
             picture=picture,
             quoted=quote.text,
+            reply_to=quote.message_id,
             is_private=False,
         )
         self._group_last[event.chat_id] = now
@@ -1320,6 +1326,7 @@ class PersonaReplies:
             chat_id=event.chat_id,
             picture=picture,
             quoted=quote.text,
+            reply_to=quote.message_id,
             is_private=False,
         )
         self._dm_last[event.chat_id] = now
@@ -1379,6 +1386,7 @@ class PersonaReplies:
             chat_id=event.chat_id,
             picture=picture,
             quoted=quote.text,
+            reply_to=quote.message_id,
             is_private=False,
         )
         self._dm_last[event.chat_id] = now
@@ -1394,6 +1402,7 @@ class PersonaReplies:
         picture: Picture | None,
         quoted: str,
         is_private: bool,
+        reply_to: int | None = None,
     ) -> None:
         language = await self._language(event)
         audience = await self._audience(event) if not is_private else None
@@ -1416,6 +1425,7 @@ class PersonaReplies:
             chat_title=getattr(audience, "chat_title", "") if audience is not None else "",
             lessons=rules,
             reminder=reminder,
+            reply_to=reply_to,
         )
         self.logger.info(
             "yura: answering '%s' in %s%s",
@@ -1646,6 +1656,7 @@ class PersonaReplies:
         hers = False
         from_account = False
         author: int | None = getattr(replied, "sender_id", None)
+        pointed_at = getattr(replied, "id", None)
         current = replied
         for _ in range(max(1, depth)):
             if current is None:
@@ -1683,10 +1694,16 @@ class PersonaReplies:
             except Exception:  # noqa: BLE001
                 break
         if not lines:
-            return Quote(hers=hers, from_account=from_account, user_id=author)
+            return Quote(
+                hers=hers, from_account=from_account, user_id=author, message_id=pointed_at
+            )
         # Oldest first reads like a thread; the model answers the newest.
         return Quote(
-            text="\n".join(reversed(lines)), hers=hers, from_account=from_account, user_id=author
+            text="\n".join(reversed(lines)),
+            hers=hers,
+            from_account=from_account,
+            user_id=author,
+            message_id=pointed_at,
         )
 
     async def _language(self, event: NormalizedEvent) -> str:

@@ -285,6 +285,7 @@ class YuraChat:
         chat_title: str = "",
         lessons: tuple[str, ...] = (),
         reminder: str = "",
+        reply_to: int | None = None,
     ) -> Answer:
         """Reply to ``text``. Never raises for provider problems.
 
@@ -422,9 +423,16 @@ class YuraChat:
         elif self.enabled:
             budget = FILE_TOKENS if _wants_file(prompt) else CHAT_TOKENS
             try:
-                step = await self._with_hands(messages, budget=budget, chat_id=chat_id,
-                                              language=language, who=who, owner=owner,
-                                              person=person)
+                step = await self._with_hands(
+                    messages,
+                    budget=budget,
+                    chat_id=chat_id,
+                    language=language,
+                    who=who,
+                    owner=owner,
+                    person=person,
+                    reply_to=reply_to,
+                )
                 if step is not None and step.waiting is not None:
                     # The only answer to a pending action is the question about it.
                     return self._ask_permission(step, chat_id=chat_id, language=language)
@@ -459,7 +467,9 @@ class YuraChat:
         # and the sentence itself is the second: "turn off my live clock" must turn
         # the clock off even on a turn where the model only wrote a paragraph.
         if owner and not did:
-            await self._run_intent(spoken, chat_id=chat_id, language=language)
+            await self._run_intent(
+                spoken, chat_id=chat_id, language=language, reply_to=reply_to
+            )
         if reply is None:
             source = "offline"
             self.fallbacks += 1
@@ -516,7 +526,9 @@ class YuraChat:
             rendered=answer.rendered,
         )
 
-    async def _run_intent(self, text: str, *, chat_id: int, language: str) -> None:
+    async def _run_intent(
+        self, text: str, *, chat_id: int, language: str, reply_to: int | None = None
+    ) -> None:
         """Read the sentence as an instruction and *do* it.
 
         This is the floor under her hands: a model that answers but sends no block
@@ -552,6 +564,7 @@ class YuraChat:
                     chat_id=chat_id,
                     sender_id=int(getattr(self.runtime.permissions, "self_id", None) or 0),
                     language=language,
+                    reply_to=reply_to,
                 )
             except Exception as exc:  # noqa: BLE001 - a failed hand is a sentence
                 self.logger.warning("yura: intent %r failed: %s", line, exc)
@@ -673,6 +686,7 @@ class YuraChat:
         who: Any = None,
         owner: bool = True,
         person: Any = None,
+        reply_to: int | None = None,
     ) -> Any:
         """Run the tool loop, or return ``None`` when there is nothing to run.
 
@@ -693,6 +707,9 @@ class YuraChat:
             actor_id=int(actor or 0),
             language=language,
             is_owner=owner,
+            # "react to it", "delete that": the message he pointed at, not the
+            # sentence he typed. Without this, every aimed verb missed.
+            reply_to=int(reply_to) if reply_to else None,
         )
         self.last_turn = turn
         return await agent.run(self.provider, messages, turn=turn, max_tokens=budget)

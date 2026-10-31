@@ -272,7 +272,7 @@ def test_the_card_does_not_change_when_raqm_exists(monkeypatch) -> None:
 # ---------------------------------------------------------------------------
 async def test_roast_needs_a_target(runtime) -> None:
     sent = await invoke(runtime, ".roast")
-    assert ".roast <text>" in sent[0].text
+    assert ".roast &lt;text&gt;" in sent[0].text
 
 
 async def test_roast_uses_replied_text(runtime) -> None:
@@ -447,7 +447,9 @@ async def test_poem_search_explains_an_empty_result(runtime) -> None:
 
 async def test_poem_search_without_a_word_asks_for_one(runtime) -> None:
     sent = await invoke(runtime, ".poem search")
-    assert ".poem search <word>" in sent[0].text
+    # Escaped on the wire, literal on his screen: Telegram renders the entity as
+    # the angle brackets of the placeholder, and a bare `<word>` would be eaten.
+    assert ".poem search &lt;word&gt;" in sent[0].text
 
 
 # ---------------------------------------------------------------------------

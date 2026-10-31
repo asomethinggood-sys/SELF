@@ -537,6 +537,7 @@ _VERSION = re.compile(
 
 #: The auto-reply family, in the shapes people actually write it. Ordered: the
 #: "if anyone messages me …" form is the most specific, so it is read first.
+_SCOPE_FROM_SENTENCE = re.compile(r"\b(?:private|dms?|direct\s+messages?)\b", re.I)
 _AUTOREPLY_IF = re.compile(
     r"^(?:(?:set|put|create|make|add)\s+(?:up\s+)?(?:an?\s+)?)?"
     r"(?:auto[\s-]?reply|automatic\s+reply)?"
@@ -560,9 +561,12 @@ _AUTOREPLY_OFF = re.compile(
     r"\s*(?:now|please)?\s*[.!]*$"
 )
 _REPLY_TO_ALL = re.compile(
-    r"^(?:reply|respond|answer)\s+to\s+(?:every|each|any|all)\s+"
-    r"(?:private\s+chats?|dms?|direct\s+messages?|messages?|chats?)\s*"
-    r"(?:with|saying|:)?\s+(?P<body>.+)$"
+    r"^(?:reply|respond|answer)\s+(?:to\s+)?(?:every|each|any|all)\s+"
+    r"(?:single\s+)?(?:private\s+chats?|dms?|direct\s+messages?|messages?|chats?|people)\s*"
+    # "…that I get", "…I receive": he is naming the inbox, not the text.
+    r"(?:(?:that|which)\s+)?(?:i\s+(?:get|receive|got))?\s*"
+    r"(?:with|saying|that says|:)?\s+(?P<body>.+)$",
+    re.I,
 )
 _AWAY_ON = re.compile(
     r"^(?:tell\s+(?:everyone|them|people)\s+)?(?:that\s+)?"
@@ -599,7 +603,14 @@ _SCOPE_WORDS = {
 
 def _lead(text: str) -> str:
     """Drop the vocative: "yura, set …" is an instruction, not a sentence about her."""
-    return re.sub(r"^(?:hey\s+|ok\s+|okay\s+)?(?:yura|یورا|لیانا|leena)\b[ ,:؛-]*", "", text).strip()
+    # Case-insensitive on purpose: "Yura, turn the clock off" is the same order as
+    # "yura turn the clock off", and the capitalised one was not stripped.
+    return re.sub(
+        r"^(?:hey\s+|ok\s+|okay\s+)?(?:yura|یورا|لیانا|leena)\b[ ,:؛-]*",
+        "",
+        text,
+        flags=re.I,
+    ).strip()
 
 
 def _clean_body(raw: str) -> str:
@@ -643,7 +654,7 @@ def _actions(text: str) -> Intent | None:
     if match:
         body = _clean_body(match.group("body"))
         if body and len(body) > 1 and body not in _NOISE:
-            scope = "private" if "private" in folded or "dm" in folded else "any"
+            scope = "private" if re.search(r"\b(?:private|dm|dms|direct)\b", folded) else "any"
             return Intent(
                 lines=(f"autoreply add --type any --{scope} => {body}", "autoreply on"),
                 label="autoreply",
@@ -654,7 +665,9 @@ def _actions(text: str) -> Intent | None:
     match = _AUTOREPLY.match(folded)
     if match:
         body = _clean_body(match.group("body"))
-        scope = _SCOPE_WORDS.get(_clean(match.group("scope") or ""), "any")
+        scope = _SCOPE_WORDS.get(_clean(match.group("scope") or ""), "")
+        if not scope:
+            scope = "private" if _SCOPE_FROM_SENTENCE.search(folded) else "any"
         if body and len(body) > 1 and body not in _NOISE:
             return Intent(
                 lines=(f"autoreply add --type any --{scope} => {body}", "autoreply on"),
@@ -1083,6 +1096,32 @@ _SAY_INTO = re.compile(
     r"\s*(?:,|and)?\s*(?:say|saying|write|put|post)?\s*(?P<body>.+)$",
     re.I,
 )
+#: "say I'm a good girl and repeat 100 times" — the count is the instruction, and
+#: the place is optional because "here" is where he is standing.
+_REPEAT_AFTER_SAY = re.compile(
+    r"^(?:please\s+)?(?:say|tell\s+(?:them|him|her|everyone)|write|send|post)\s+(?P<body>.+?)\s+"
+    r"(?:and\s+)?(?:repeat(?:ing)?\s+(?:it\s+)?|send\s+it\s+(?:again\s+)?)"
+    r"(?P<count>\d{1,3}|a couple of|three|five|ten|twice)\s+times?"
+    r"(?:\s+(?:in|to|into)\s+(?P<where>this\s+(?:group|chat|channel|room)|here|the\s+group|the\s+chat))?"
+    r"\s*[.!]*$",
+    re.I,
+)
+_REPEAT_FIRST = re.compile(
+    r"^(?:please\s+)?(?:repeat|send|say|post)\s+(?P<body>.+?)\s+"
+    r"(?P<count>\d{1,3}|a couple of|three|five|ten|twice)\s+times?"
+    r"(?:\s+(?:in|to|into)\s+(?P<where>this\s+(?:group|chat|channel|room)|here|the\s+group))?"
+    r"\s*[.!]*$",
+    re.I,
+)
+#: "send hi in 10 different messages in this group" — a burst, not a repeat of one.
+_BURST = re.compile(
+    r"^(?:please\s+)?(?:send|say|write|put|post)\s+(?P<body>.+?)\s+"
+    r"(?:in|as)\s+(?P<count>\d{1,3}|a couple of|three|five|ten)\s+"
+    r"(?:different\s+|separate\s+|new\s+|individual\s+)?messages?"
+    r"\s+(?:in|to|into)\s+(?P<where>this\s+(?:group|chat|channel|room)|here|the\s+group|the\s+chat)"
+    r"\s*[.!]*$",
+    re.I,
+)
 _IGNORE = re.compile(
     r"^(?:please\s+)?(?:don'?t|do not|never)\s+(?:talk|answer|reply|respond)\s+"
     r"(?:to\s+|back to\s+)?(?P<who>@[\w.]+|[\w][\w\s.-]{1,40})$",
@@ -1094,10 +1133,36 @@ _UNIGNORE = re.compile(
     re.I,
 )
 _REACT = re.compile(
-    r"^(?:please\s+)?(?:react|put a reaction|leave a reaction)\s*"
-    r"(?:to (?:that|this|it)\s*)?(?:with\s+|using\s+)?(?P<emoji>[^\s]+)",
+    r"^(?:please\s+)?(?:react|put a reaction|leave a reaction|add a reaction)\s*"
+    r"(?:to (?:that|this|it|his message|her message|their message)\s*)?"
+    r"(?:with\s+|using\s+)?(?P<emoji>[^\s]+)",
     re.I,
 )
+#: The Persian order has three word orders and one verb in common: the reaction
+#: word itself. Everything else in the sentence is noise, so the verb is the
+#: trigger and the remaining token is the reaction.
+_REACT_FA_VERB = re.compile(
+    r"(?:واکنش|ری\s*[-\u200c]?\s*اکشن|راکشن|ریакشن)", re.I
+)
+"""The words that are never the reaction: they are the sentence around it."""
+_REACT_FA_NOISE = {
+    "به", "بهش", "بهاش", "به‌ش", "این", "اینو", "اون", "اونو", "ایش", "اینا",
+    "پیام", "پیامش", "پیامو", "پیام‌ش", "پست", "یورا", "لطفا", "لطفاً", "یه",
+    "یک", "بده", "بکن", "کن", "بذار", "بگذار", "بزار", "بنداز",
+    "برای", "روی", "رو", "با", "و", "please", "react", "reaction", "add",
+    "put", "leave", "with", "to", "his", "her", "their", "message", "the",
+}
+#: "یورا به پیامش قلب واکنش بده" — `قلب` is a word for a heart. Translated to
+#: the reaction Telegram actually accepts, because a reaction is bytes, not prose.
+_REACTION_WORDS = {
+    "قلب": "❤️", "هارت": "❤️", "دل": "❤️", "عشق": "❤️", "heart": "❤️", "love": "❤️",
+    "لایک": "👍", "like": "👍", "پسند": "👍", "thumbs up": "👍",
+    "خنده": "🤣", "لول": "🤣", "laugh": "🤣", "lol": "🤣",
+    "آتش": "🔥", "fire": "🔥", "ستاره": "⭐", "star": "⭐",
+    "دست": "👏", "تشویق": "👏", "clap": "👏", "گل": "💐", "flower": "💐",
+    "خوشحال": "🥰", "دوستت دارم": "🥰", "هزار": "💯", "صد": "💯", "hundred": "💯",
+    "فکر": "🤔", "think": "🤔", "گریه": "😭", "cry": "😭", "تعجب": "🤯", "wow": "🤯",
+}
 _PLAN_STOP = re.compile(
     r"^(?:stop|cancel|kill|end)\s+(?:the\s+)?(?:plan|timeline)\s*(?P<what>.*)$|"
     r"^(?:stop|cancel)\s+(?P<what2>that|it|everything)$",
@@ -1125,6 +1190,62 @@ _COUNT_WORDS = {"a couple of": 2, "three": 3, "five": 5, "ten": 10}
 #: Guards the plan reader from reading itself: a clause inside a timeline is an
 #: instruction, and must not be re-read as another timeline.
 _READING_PLAN = False
+
+
+def _repeat_count(raw: str) -> int:
+    """The number in "repeat 40 times", clamped to what the sender allows."""
+    text = str(raw or "").strip().lower()
+    if text == "twice":
+        return 2
+    value = _COUNT_WORDS.get(text)
+    if value is None:
+        try:
+            value = int(text)
+        except ValueError:
+            value = 0
+    return max(0, min(int(value or 0), 500))
+
+
+def _fa_reaction(text: str) -> str:
+    """Pull the reaction out of a Persian order, or return nothing.
+
+    "به پیامش قلب واکنش بده", "به این پیام ری‌اکشن بده ❤️", "بهش ری اکشن 🔥 بده"
+    are one instruction in three shapes. The verb is already known to be present;
+    what is left after the connective words is the reaction — either a glyph or a
+    word for one.
+    """
+    words = [word for word in re.split(r"[\s،,.!؟?]+", str(text or "")) if word]
+    glyphs: list[str] = []
+    spoken: list[str] = []
+    for word in words:
+        bare = word.strip()
+        if _REACT_FA_VERB.fullmatch(bare):
+            continue
+        if any(ord(character) > 0x2000 and not character.isspace() for character in bare):
+            glyphs.append(bare)
+            continue
+        lowered = bare.lower()
+        if lowered in _REACT_FA_NOISE:
+            continue
+        if not re.search(r"[\u0600-\u06FF]", bare):
+            continue
+        spoken.append(lowered)
+    for candidate in glyphs:
+        cleaned = "".join(
+            character
+            for character in candidate
+            if ord(character) > 0x2000 and not character.isspace()
+        )
+        if cleaned:
+            return cleaned[:8]
+    for candidate in spoken:
+        if candidate in _REACTION_WORDS:
+            return _REACTION_WORDS[candidate]
+    joined = " ".join(spoken)
+    for phrase, emoji in sorted(_REACTION_WORDS.items(), key=lambda item: -len(item[0])):
+        if phrase in joined:
+            return emoji
+    return ""
 
 
 def _reach_options(body: str) -> tuple[str, list[str]]:
@@ -1218,6 +1339,42 @@ def _reach(text: str, *, allow_plan: bool = True) -> Intent | None:
         emoji = match.group("emoji").strip(" .,!")
         if emoji and len(emoji) <= 12 and emoji.lower() not in _NOISE:
             return Intent(lines=(f"emoji {emoji}",), label="react", detail=f"react {emoji}")
+
+    if _REACT_FA_VERB.search(folded):
+        emoji = _fa_reaction(folded)
+        if emoji:
+            return Intent(lines=(f"emoji {emoji}",), label="react", detail=f"react {emoji}")
+
+    spoken_once = _lead(original)
+    for pattern in (_BURST, _REPEAT_AFTER_SAY, _REPEAT_FIRST):
+        match = pattern.match(spoken_once)
+        if not match:
+            continue
+        body = _clean_body(match.group("body"))
+        count = _repeat_count(match.group("count"))
+        if not body or len(body) < 1 or count < 2:
+            continue
+        # Nothing but a number is not a message ("repeat 3 times 3 times").
+        if body.isdigit():
+            continue
+        if body.lower() in _NOISE:
+            continue
+        # A named recipient survives: "send @sara boo 3 times" is to Sara.
+        target = ""
+        addressed = re.match(r"(@[\w.]+|saved messages|saved)\s+(?P<rest>.+)$", body, re.I)
+        if addressed:
+            target = addressed.group(1)
+            body = addressed.group("rest").strip()
+        if not target:
+            # No room named: the one he is standing in. Sending to Saved
+            # Messages instead is how "repeat it 100 times" went nowhere.
+            target = "--here"
+        where = target
+        return Intent(
+            lines=(" ".join(part for part in ("send", where, body, "--repeat", str(count)) if part),),
+            label="send",
+            detail=f"send · {count}×",
+        )
 
     match = _SAY_INTO.match(original)
     if match:
@@ -1405,10 +1562,12 @@ def _misc(text: str) -> Intent | None:
         (r"^(?:my notes|list (?:my )?notes|show (?:me )?(?:my )?notes|یادداشت‌ها)", "note list"),
         (r"^(?:agenda|my agenda|what is on today|today'?s plan|برنامه امروز)", "agenda today"),
         (r"^(?:quiet hours|ساعت سکوت)", "quiet-hours status"),
-        (r"^(?:fal|فال)$", "fal"),
-        (r"^(?:poem|شعر)$", "poem"),
-        (r"^(?:joke|tell me a joke|لطیفه|جوک)", "joke"),
-        (r"^(?:quote|give me a quote|جمله)", "quote"),
+        # "فال بگیر" is the order; "فال" alone is the noun. Anchoring only the
+        # noun is why she discussed a fortune instead of drawing one.
+        (r"^(?:fal(?:\s+(?:for\s+me|please))?|فال(?:\s*حافظ)?(?:\s*(?:بگیر|بنداز|بیار|بزن))?)\s*[.!؟?]*$", "fal"),
+        (r"^(?:poem|شعر(?:ی)?(?:\s*(?:بگو|بخوان|بخون|بگیر|بزن))?)\s*[.!؟?]*$", "poem"),
+        (r"^(?:joke|tell me a joke|لطیفه|جوک|یکی\s+بگو)\s*[.!؟?]*$", "joke"),
+        (r"^(?:quote|give me a quote|جمله(?:\s*(?:بگو|بزن|بخوان))?)\s*[.!؟?]*$", "quote"),
         (r"^(?:say something in (?:persian|farsi|english)|حرف بزن)", "yura"),
     ]
     for pattern, line in rules:
@@ -1502,4 +1661,6 @@ def detect(
         # a request — never guess.
         return None
 
-    return _misc(folded)
+    # The vocative is not part of the sentence: "یورا فال بگیر" asks for a
+    # fortune exactly like "فال بگیر" does.
+    return _misc(_lead(folded))

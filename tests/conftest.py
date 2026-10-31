@@ -162,8 +162,15 @@ class FakeClient:
         self.input_peers: list[Any] = []
         self.dialogs: list[Any] = []
         self.history: list[FakeMessage] = []
+        #: Every reaction the bot asked for, so a test can assert it reached the
+        #: wire — the whole bug was that it never did.
+        self.reactions: list[tuple[Any, int, str]] = []
         self._next_id = 1000
         self.fail_with: Exception | None = None
+
+    async def send_reaction(self, chat_id: Any, message_id: int, emoji: str) -> bool:
+        self.reactions.append((chat_id, int(message_id), emoji))
+        return True
 
     async def send_message(self, chat_id: Any, text: str, **kwargs: Any) -> FakeMessage:
         if self.fail_with is not None:

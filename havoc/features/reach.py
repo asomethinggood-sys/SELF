@@ -76,6 +76,15 @@ def _split_targets_and_text(ctx: CommandContext) -> tuple[list[str], str]:
     list of words to be re-joined wrongly.
     """
     args = [part for part in ctx.args if part.strip()]
+    # ``--here``: the room the instruction was given in. Yura has to be able to
+    # say "send hi in 10 messages *in this group*" without knowing its id, and
+    # the chat she was called in is the only honest answer to "this group".
+    here = bool(ctx.has_flag("here")) or bool(ctx.has_flag("this_chat"))
+    if here:
+        text = " ".join(args).strip()
+        if not text:
+            raise CommandError("reach.usage_send", prefix=ctx.runtime.prefix)
+        return [str(ctx.chat_id)], text
     if not args:
         raise CommandError("reach.usage_send", prefix=ctx.runtime.prefix)
     # The positional arguments are already free of flags, so the body survives
@@ -405,6 +414,14 @@ async def cmd_emoji(ctx: CommandContext) -> None:
         raise CommandError("reach.usage_emoji", prefix=ctx.runtime.prefix)
     message = getattr(ctx, "message", None)
     target_id = getattr(message, "reply_to_msg_id", None)
+    # ``--on <id>``: she can point at a message without being a Telegram reply,
+    # which is what a spoken order ("به پیامش قلب واکنش بده") actually is.
+    explicit = (ctx.flag("on") or ctx.flag("message") or "").strip()
+    if explicit:
+        try:
+            target_id = int(explicit)
+        except ValueError:
+            raise CommandError("reach.usage_emoji", prefix=ctx.runtime.prefix) from None
     if not target_id:
         raise CommandError("reach.usage_emoji", prefix=ctx.runtime.prefix)
     ok = await ctx.runtime.reach.react(ctx.chat_id, int(target_id), emoji)
@@ -560,7 +577,7 @@ def register(runtime: Any) -> None:
             cmd_send,
             category="reach",
             aliases=("say", "msg", "message"),
-            usage="<to> <text> [--repeat N] [--every 30s] [--spoiler] [--silent] "
+            usage="<to> <text> [--here] [--repeat N] [--every 30s] [--spoiler] [--silent] "
                   "[--delete-after 10s] [--at 21:00] [--compose] [--dry]",
             description=(
                 "Send a message — repeated, hidden behind a spoiler, self-destructing, "
@@ -573,6 +590,7 @@ def register(runtime: Any) -> None:
                 ".send @sara,amir the meeting moved",
                 ".send @sara boo --spoiler --delete-after 10s",
                 ".send @sara still here? --repeat 3 --every 1m",
+                ".send --here hi --repeat 10",
                 ".send @sara --compose wish her luck with the exam",
             ),
             subcommands=("list",),
@@ -622,7 +640,7 @@ def register(runtime: Any) -> None:
             cmd_emoji,
             category="reach",
             aliases=("reaction", "reactto"),
-            usage="<emoji>  (reply to the message)",
+            usage="<emoji> [--on <message id>]  (or reply to the message)",
             description="React to the message you replied to.",
             owner_only=True,
             changes_state=True,

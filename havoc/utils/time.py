@@ -404,6 +404,24 @@ def format_datetime(dt: datetime, tz_name: str | None = "UTC", language: str = "
     return local.strftime("%Y-%m-%d %H:%M %Z").strip()
 
 
+def format_short(dt: datetime, tz_name: str | None = "UTC", language: str = "en") -> str:
+    """Just enough time for a list: the clock today, the date before that.
+
+    An inbox line with a full date, a weekday and a zone is three facts where
+    one is wanted — he cannot scan it.
+    """
+    local = to_local(dt, tz_name)
+    now = to_local(utc_now(), tz_name)
+    if local.date() == now.date():
+        clock = local.strftime("%H:%M")
+        return digits_for(language, clock) if language == "fa" else clock
+    if local.year == now.year:
+        stamp = local.strftime("%m/%d %H:%M")
+        return digits_for(language, stamp) if language == "fa" else stamp
+    stamp = local.strftime("%Y-%m-%d")
+    return digits_for(language, stamp) if language == "fa" else stamp
+
+
 def gregorian_to_jalali(gy: int, gm: int, gd: int) -> tuple[int, int, int]:
     """Convert a Gregorian date to the Jalali (Solar Hijri) calendar."""
     g_days_in_month = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)

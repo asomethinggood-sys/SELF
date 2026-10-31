@@ -54,6 +54,26 @@ _FROM_FA = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "0123456789
 _ARABIC_TO_PERSIAN = str.maketrans({"ي": "ی", "ك": "ک", "ٱ": "ا", "ۀ": "ه"})
 
 
+def plain_text(value: object, default: str = "") -> str:
+    """A human string from whatever Telegram handed back.
+
+    Newer layers wrap titles and names in ``TextWithEntities``; ``str()`` on one
+    of those produces ``TextWithEntities(text='x', entities=[])`` — which is what
+    a folder list printed to him once. This is the one place that knows the
+    difference between an object with words in it and the words themselves.
+    """
+    if value is None:
+        return default
+    text = getattr(value, "text", None)
+    if isinstance(text, str):
+        return text
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (int, float)):
+        return str(value)
+    return str(value)
+
+
 def strip_urls(text: str) -> str:
     return _RE_URL.sub(" ", text)
 

@@ -217,6 +217,7 @@ async def run(
     message_id: int | None = None,
     language: str = "en",
     is_private: bool = False,
+    reply_to: int | None = None,
 ) -> ConsoleReply:
     """Dispatch ``line`` (``fal page 166``) as the owner, through the real path."""
     text = " ".join(str(line or "").split())
@@ -259,6 +260,11 @@ async def run(
         is_outgoing=True,
         is_private=bool(is_private),
         is_group=not is_private,
+        # "react to his message": the console is the hand, so it has to know
+        # which message was pointed at — a hand with no target is why a plain
+        # "به پیامش قلب واکنش بده" did nothing.
+        reply_to_id=int(reply_to) if reply_to else None,
+        is_reply=bool(reply_to),
     )
     message = _ConsoleMessage(
         id=int(message_id or 0),
@@ -268,6 +274,7 @@ async def run(
         out=True,
         is_private=bool(is_private),
         is_group=not is_private,
+        reply_to_msg_id=int(reply_to) if reply_to else None,
     )
     from ..command_registry import Dispatcher
 

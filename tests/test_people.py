@@ -245,7 +245,7 @@ async def test_the_owner_can_switch_it_with_a_command(runtime) -> None:
 async def test_a_command_without_a_target_says_how_to_give_one(runtime) -> None:
     await _enable(runtime)
     await invoke(runtime, ".yura rude", chat_id=GROUP, is_private=False)
-    assert "yura nice <name>" in last_text(runtime)
+    assert "yura nice &lt;name&gt;" in last_text(runtime)
 
 
 async def test_he_cannot_make_her_rude_to_himself(runtime) -> None:

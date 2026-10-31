@@ -267,6 +267,8 @@ class Turn:
     language: str = "en"
     is_owner: bool = False
     message_id: int | None = None
+    #: The message the owner replied to, if any — what "it" refers to.
+    reply_to: int | None = None
     started_at: datetime = field(default_factory=utc_now)
     #: How many tools have been used in this turn (the per-turn budget).
     calls: int = 0

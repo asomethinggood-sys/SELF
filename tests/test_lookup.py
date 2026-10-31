@@ -7,6 +7,7 @@ the suite uses, so a passing test means the live path produces the same lines.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 from conftest import FakeMessage, FakeUser, invoke
 
@@ -81,6 +82,7 @@ async def test_mentions_reads_the_mention_filter(runtime) -> None:
     runtime.client.history = [
         _message(51, "@yura look at this", sender=FakeUser(9, "Sara")),
     ]
+    runtime.client.dialogs = [SimpleNamespace(entity=FakeUser(9, "Sara"), id=9)]
     sent = await invoke(runtime, ".mentions")
     text = _said(sent)
     assert "mentions" in text.lower()
@@ -88,22 +90,30 @@ async def test_mentions_reads_the_mention_filter(runtime) -> None:
     assert "Sara" in text
 
 
-async def test_mentions_passes_the_telegram_filter(runtime) -> None:
-    seen: dict[str, object] = {}
-    original = runtime.client.iter_messages
+async def test_mentions_walks_chats_instead_of_asking_for_a_global_search(runtime) -> None:
+    """``SearchGlobal`` rejects the mention filter; per-chat requests do not."""
+    calls: list[dict[str, object]] = []
+    original = runtime.client.get_messages
 
-    def spy(entity=None, **kwargs):
-        seen.update(kwargs)
-        return original(entity, **kwargs)
+    async def spy(entity=None, **kwargs):
+        calls.append({"entity": entity, **kwargs})
+        return await original(entity, **kwargs)
 
-    runtime.client.iter_messages = spy
+    runtime.client.get_messages = spy
     runtime.client.history = []
+    runtime.client.dialogs = [
+        SimpleNamespace(entity=FakeUser(9, "Sara"), id=9),
+        SimpleNamespace(entity=FakeUser(10, "Ali"), id=10),
+    ]
     await invoke(runtime, ".mentions")
-    assert type(seen.get("filter")).__name__ == "InputMessagesFilterMyMentions"
+    assert len(calls) == 2, "every recent chat is asked, once"
+    for call in calls:
+        assert type(call["filter"]).__name__ == "InputMessagesFilterMyMentions"
 
 
 async def test_no_mentions_is_a_sentence(runtime) -> None:
     runtime.client.history = []
+    runtime.client.dialogs = []
     sent = await invoke(runtime, ".mentions")
     assert "nobody" in _said(sent).lower()
 

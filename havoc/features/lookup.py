@@ -104,28 +104,70 @@ async def cmd_diary(ctx: CommandContext) -> None:
     await ctx.reply("\n".join(lines))
 
 
-async def _mentions(ctx: CommandContext, limit: int) -> list[Any]:
+#: How many recent chats are searched for a mention. Telegram has no supported
+#: global "my mentions" search — ``messages.SearchGlobal`` rejects the mention
+#: filter, which is exactly the error that came back once — so this walks the
+#: chats the account is already in, newest first, and stops when it has enough.
+MENTION_CHATS = 20
+
+
+async def _mention_rows(ctx: CommandContext, entity: Any, limit: int) -> list[Any]:
+    """Mention-filtered messages of one chat — one request, no searching."""
+    from telethon.tl.types import InputMessagesFilterMyMentions
+
     client = ctx.runtime.client
-    iterator = getattr(client, "iter_messages", None)
-    if iterator is None:
+    getter = getattr(client, "get_messages", None)
+    if getter is None:
         raise CommandError("errors.not_connected")
     try:
-        from telethon.tl.types import InputMessagesFilterMyMentions
-    except Exception as exc:  # noqa: BLE001 - an old Telethon is not a crash
-        raise CommandError("lookup.mentions_unsupported", detail=escape(str(exc)[:120])) from exc
-    rows: list[Any] = []
+        rows = await getter(entity, limit=limit, filter=InputMessagesFilterMyMentions())
+    except Exception as exc:  # noqa: BLE001 - Telegram's reason is the answer
+        raise CommandError("lookup.failed", detail=escape(str(exc)[:180])) from exc
+    return [row for row in (rows or []) if row is not None]
+
+
+async def _mentions(ctx: CommandContext, limit: int, where: str = "") -> list[Any]:
+    """Mentions in one named chat, or across the most recent ones."""
+    from telethon.tl.types import InputMessagesFilterMyMentions  # noqa: F401 - version probe
+
+    if where:
+        target = await ctx.runtime.reach.resolve_or_raise(where)
+        return await _mention_rows(ctx, getattr(target, "id", None) or where, limit)
+
+    client = ctx.runtime.client
+    getter = getattr(client, "get_dialogs", None)
+    if getter is None:
+        return await _mention_rows(ctx, "me", limit)
     try:
-        async for message in iterator(None, limit=limit, filter=InputMessagesFilterMyMentions()):
-            if message is not None:
-                rows.append(message)
+        dialogs = await getter(limit=MENTION_CHATS) or []
     except Exception as exc:  # noqa: BLE001
         raise CommandError("lookup.failed", detail=escape(str(exc)[:180])) from exc
-    return rows
+
+    found: list[Any] = []
+    for dialog in dialogs:
+        entity = getattr(dialog, "entity", None) or getattr(dialog, "id", None) or dialog
+        try:
+            found.extend(await _mention_rows(ctx, entity, limit - len(found)))
+        except CommandError:
+            continue  # one chat the account cannot search must not sink the rest
+        if len(found) >= limit:
+            break
+    # Newest first: Telegram returns per chat, and a mention list is a timeline.
+    found.sort(key=lambda row: getattr(row, "date", None) or 0, reverse=True)
+    return found[:limit]
 
 
 async def cmd_mentions(ctx: CommandContext) -> None:
     limit = _limit(ctx, 15)
-    rows = await _mentions(ctx, limit)
+    where = ctx.flag("chat") or ""
+    if not where:
+        words = [word for word in ctx.args if word.strip()]
+        lowered = [word.lower() for word in words]
+        for marker in ("in", "from"):
+            if marker in lowered:
+                where = " ".join(words[lowered.index(marker) + 1 :]).strip()
+                break
+    rows = await _mentions(ctx, limit, where)
     if not rows:
         await ctx.reply(ctx.t("lookup.no_mentions"))
         return

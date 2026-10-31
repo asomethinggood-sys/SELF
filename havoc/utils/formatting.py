@@ -89,11 +89,44 @@ def sanitize_output(text: str) -> str:
 
 
 def prepare(text: str, *, limit: int = MAX_MESSAGE_LENGTH) -> list[str]:
-    """Sanitize and split a message for sending."""
-    return [chunk for chunk in split_message(sanitize_output(text), limit) if chunk]
+    """Sanitize, repair stray markup, and split a message for sending."""
+    return [chunk for chunk in split_message(sanitize_output(repair_html(text)), limit) if chunk]
 
 
 _HTML_TAG_RE = re.compile(r"<[^>]{1,64}>")
+
+#: Every tag Telegram's HTML parser actually knows. Anything else in angle
+#: brackets is **text** — and Telegram either rejects the message or, worse,
+#: shows the escaping to him. Locale strings use ``<name>`` for "put a name
+#: here", which is exactly the shape that used to arrive as ``&lt;نام&gt;``.
+_ALLOWED_TAGS = frozenset(
+    {
+        "b", "strong", "i", "em", "u", "ins", "s", "strike", "del", "a", "code",
+        "pre", "span", "tg-spoiler", "blockquote", "expandable_blockquote", "tg-emoji",
+    }
+)
+_TAG_SHAPE = re.compile(r"^</?([a-zA-Z][a-zA-Z0-9-]*)(\s[^<>]*)?/?>$")
+
+
+def repair_html(text: str) -> str:
+    """Escape angle-bracket text that is not a tag Telegram understands.
+
+    Every message HAVOC sends goes through this: a locale saying ``<name>``, a
+    folder called ``2 < 3`` or a model that invents ``<mood>`` all arrive as the
+    characters the author meant instead of a Telegram parse error or a visible
+    ``&lt;``.
+    """
+    if not text or "<" not in text:
+        return text
+
+    def fix(match: re.Match[str]) -> str:
+        tag = match.group(0)
+        shape = _TAG_SHAPE.match(tag)
+        if shape and shape.group(1).lower() in _ALLOWED_TAGS:
+            return tag
+        return html.escape(tag, quote=False)
+
+    return _HTML_TAG_RE.sub(fix, text)
 
 
 def strip_html(text: str) -> str:

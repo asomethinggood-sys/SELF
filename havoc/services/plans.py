@@ -341,6 +341,14 @@ def _actions_for(clause: str, *, intent: Any, last_body: str = "") -> list[str]:
 def _subject_of(clause: str) -> str:
     """The thing a clause is about: "turn my live clock off" → "clock"."""
     text = str(clause or "").lower()
+    # "reply to every DM with X" *is* an auto reply, spelled as a sentence. Its
+    # off switch is `autoreply off`, so the subject has to say so — reading the
+    # last word instead ("bro") found nothing to undo and the rule outlived the
+    # four hours he asked for.
+    if re.search(r"\b(?:reply|respond|answer)\s+to\s+(?:every|each|any|all)\b", text):
+        return "autoreply"
+    if re.search(r"\b(?:auto[\s-]?repl(?:y|ies)|away\s+message)\b", text):
+        return "autoreply"
     for word in ("clock", "autoreply", "auto reply", "away", "profile", "timer", "fal"):
         if word in text:
             return "autoreply" if word == "auto reply" else word
