@@ -17,6 +17,8 @@ Two names, on purpose:
 
 from __future__ import annotations
 
+import re
+
 from .version import VERSION
 
 #: The letters, spelled out — the way the name is written on the tin.
@@ -70,3 +72,34 @@ def answers_to(text: str) -> bool:
     """True when ``text`` says her name, however it is spelled."""
     lowered = str(text or "").lower()
     return any(address and address in lowered for address in ADDRESSES)
+
+
+#: How a sentence addresses her when it is not just her name: a vocative, a
+#: greeting, or the punctuation people put around a name they are calling.
+_VOCATIVE = r"(?:^|[\s،,؛;:.!?…\-—])(?:{names})(?:\s*(?:جان|جون|عزیزم|darling|honey|babe|baby|sweetie|dear))?(?=[\s،,؛;:.!?…\-—]|$)"
+_ADDRESS_RE = re.compile(
+    _VOCATIVE.format(names="|".join(re.escape(name) for name in sorted(ADDRESSES, key=len, reverse=True))),
+    re.IGNORECASE,
+)
+
+
+def strip_address(text: str) -> str:
+    """``text`` with her name taken out of it, spacing tidied.
+
+    "yura what's the time in Tokyo" is a sentence with a vocative, and the
+    instruction inside it is "what's the time in Tokyo". Without this the
+    sentence floor saw her own name first and read the whole thing as chatter —
+    so calling her by name, which is the only way she is called, disabled every
+    ability she has.
+
+    A sentence that is *only* her name is returned unchanged: that is a greeting,
+    not an empty instruction.
+    """
+    raw = str(text or "")
+    stripped = _ADDRESS_RE.sub(" ", raw)
+    tidied = re.sub(r"\s{2,}", " ", stripped)
+    # "hey yura, send hi" loses the name and leaves the comma hanging in front
+    # of the instruction; nobody writes "hey , send hi".
+    tidied = re.sub(r"\s+([،,؛;:.!?…])", r"\1", tidied)
+    tidied = tidied.strip(" ،,؛;:.!?…-—")
+    return tidied or raw.strip()

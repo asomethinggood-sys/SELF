@@ -17,7 +17,7 @@ from typing import Any
 
 from ..command_registry import CommandContext
 from ..services.tts import SPEECH_LANGUAGES, TextToSpeech, detect_speech_language
-from ..utils.formatting import bold, escape
+from ..utils.formatting import bold, code, escape, italic
 from ..utils.markup import rich
 from ..utils.mood import mood_line
 from ..utils.time import to_local, utc_now
@@ -99,7 +99,7 @@ def _recap_lines(rows: list[tuple[str, str, Any]], ctx: CommandContext, limit: i
     for role, content, moment in rows[-limit:]:
         who = "you" if role == "user" else "me"
         said = " ".join(str(content).split())[:110]
-        lines.append(f"`{_clock(ctx, moment)}` *{who}* — {escape(said)}")
+        lines.append(f"{code(_clock(ctx, moment))} {italic(who)} — {escape(said)}")
     return lines
 
 
@@ -112,8 +112,8 @@ async def recap(ctx: CommandContext) -> None:
         await ctx.reply(escape(ctx.t("yura.recap_empty")))
         return
     lines = _recap_lines(rows, ctx)
-    tone = f"*{escape(mood_line(_local_hour(ctx)))}*"
-    await ctx.reply("\n".join([header, *lines, f"_{tone}_"]))
+    tone = italic(mood_line(_local_hour(ctx)))
+    await ctx.reply("\n".join([header, *lines, tone]))
 
 
 async def diary(ctx: CommandContext) -> None:
@@ -161,8 +161,8 @@ async def faces(ctx: CommandContext, words: list[str]) -> None:
         return
     lines = [bold(escape(ctx.t("yura.faces_title")))]
     for mood, options in book.items():
-        lines.append(f"*{escape(mood)}* — {escape(' '.join(options))}")
-    lines.append(f"_{escape(ctx.t('yura.faces_hint'))}_")
+        lines.append(f"{italic(escape(mood))} — {escape(' '.join(options))}")
+    lines.append(f"_{escape(ctx.t('yura.faces_hint', prefix=ctx.runtime.prefix))}_")
     await ctx.reply("\n".join(lines))
 
 
@@ -173,7 +173,7 @@ async def say(ctx: CommandContext, text: str) -> None:
     """One voice note, only when asked for."""
     spoken = (text or "").strip()
     if not spoken:
-        await ctx.reply(escape(ctx.t("yura.say_needs_text")))
+        await ctx.reply(escape(ctx.t("yura.say_needs_text", prefix=ctx.runtime.prefix)))
         return
     engine = tts_for(ctx.runtime)
     # The script of the sentence decides the mouth: Russian and Japanese are read
@@ -233,10 +233,10 @@ async def voice(ctx: CommandContext, words: list[str]) -> None:
         "\n".join(
             [
                 bold(escape(ctx.t("yura.voice_title"))),
-                f"`{escape(state)}`",
+                code(state),
                 escape(ctx.t("yura.voice_spoken", count=spoken)),
                 escape(ctx.t("yura.voice_languages", languages=" · ".join(SPEECH_LANGUAGES))),
-                f"_{escape(ctx.t('yura.voice_hint', prefix=ctx.runtime.prefix))}_",
+                italic(ctx.t('yura.voice_hint', prefix=ctx.runtime.prefix)),
             ]
         )
     )
@@ -296,7 +296,10 @@ async def poster(ctx: CommandContext, words: list[str]) -> None:
     if not path.exists():
         await ctx.reply(escape(ctx.t("yura.poster_missing")))
         return
-    caption = f"{bold(escape(str(choice.get('poet', ''))))}\n*{escape(str(choice.get('title', '')))}*"
+    caption = (
+        f"{bold(escape(str(choice.get('poet', ''))))}\n"
+        f"{italic(escape(str(choice.get('title', ''))))}"
+    )
     await ctx.runtime.sender.send_media(
         ctx.chat_id,
         str(path),

@@ -180,6 +180,10 @@ async def cmd_quick(ctx: CommandContext) -> None:
         return
     if action in {"remove", "delete", "rm"}:
         name = (ctx.arg(0) or "").strip().lower()
+        if not name:
+            raise CommandError("errors.missing_argument", usage=ctx.usage_text())
+        if await ctx.store.get_setting(f"quick.{name}", None) is None:
+            raise CommandError("errors.not_found", what="quick action", id=escape(name))
         await ctx.store.delete_setting(f"quick.{name}")
         await ctx.reply(ctx.t("quick.removed", name=escape(name)))
         return
@@ -270,7 +274,7 @@ async def cmd_backup(ctx: CommandContext) -> None:
         directory = _backup_dir(ctx)
         files = sorted(directory.glob("havoc-backup-*.json"), key=lambda path: path.stat().st_mtime, reverse=True)
         if not files:
-            await ctx.reply(ctx.t("backup.none"))
+            await ctx.reply(ctx.t("backup.none", prefix=ctx.runtime.prefix))
             return
         lines = [bold(ctx.t("backup.header", count=len(files)))]
         for path in files[:15]:

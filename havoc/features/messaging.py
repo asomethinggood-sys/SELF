@@ -648,7 +648,7 @@ async def cmd_suggest(ctx: CommandContext) -> None:
     if ctx.runtime.ai.available and ctx.has_flag("ai"):
         try:
             answer = await ctx.runtime.ai.complete(
-                ctx.t("suggest.ai_prompt", text=truncate(source, 1200), tone=tone),
+                ctx.t("suggest.ai_prompt", message=truncate(source, 1200), tone=tone),
                 max_tokens=200,
                 temperature=0.85,
             )

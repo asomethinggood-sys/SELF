@@ -20,7 +20,7 @@ from typing import Any
 
 from .. import ai_models, ui
 from ..command_registry import Command, CommandContext
-from ..utils.formatting import escape
+from ..utils.formatting import code, escape
 
 #: How long a half-finished menu stays open before it is forgotten.
 FLOW = "settings"
@@ -455,7 +455,7 @@ def _set_feature(name: str, enabled: bool) -> Callable[[Menu, str, int | None], 
         return runtime.t(
             "settings.feature_changed",
             language,
-            feature=escape(f"`{name}`"),
+            feature=code(name),
             state=runtime.t("settings.state_on" if enabled else "settings.state_off", language),
         )
 

@@ -340,7 +340,20 @@ async def cmd_config(ctx: CommandContext) -> None:
         "ai_provider", "ai_model", "translate_provider", "plugins_enabled",
         "automation_allowlist", "automation_denylist", "owner_ids", "session_path",
     ]
-    pairs = [(key, redacted.get(key)) for key in keys if key in redacted]
+    # ``False`` is Python, not an interface: a switch reads on/off, and a
+    # person reading the card never sees a literal True/None again.
+    def shown(key: str) -> object:
+        value = redacted.get(key)
+        if isinstance(value, bool):
+            return ctx.t("common.on" if value else "common.off")
+        if value is None:
+            return "—"
+        if isinstance(value, (list, tuple, set)):
+            # "[42]" is a Python repr; "42" (or "sara, ali") is an answer.
+            return ", ".join(str(item) for item in value) if value else "—"
+        return value
+
+    pairs = [(key, shown(key)) for key in keys if key in redacted]
     secrets_state = [
         (
             ctx.t("config.api_hash"),

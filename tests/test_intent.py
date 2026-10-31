@@ -464,3 +464,94 @@ def test_an_auto_reply_is_switched_on_with_the_rule() -> None:
 )
 def test_a_sentence_about_things_is_not_an_order_about_them(sentence: str) -> None:
     assert detect(sentence) is None
+
+
+# ---------------------------------------------------------------------------
+# Calling her by name must not disable her
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("said", "line"),
+    [
+        ("yura, what's the time in Tokyo", "time tokyo"),
+        ("yura fal", "fal"),
+        ("یورا ساعت چند است", None),
+        ("hey yura, remind me to stretch in 20 minutes", "remind 20m stretch"),
+    ],
+)
+def test_her_name_in_front_of_an_order_is_not_part_of_the_order(
+    said: str, line: str | None
+) -> None:
+    """"yura <something>" is how she is called; the order is the something."""
+    from havoc.identity import strip_address
+
+    instruction = strip_address(said)
+    assert "yura" not in instruction.lower()
+    if line is None:
+        assert detect(instruction) is not None
+    else:
+        assert detect(instruction) is not None
+        assert detect(instruction).lines[0] == line
+
+
+def test_a_sentence_that_is_only_her_name_is_left_alone() -> None:
+    from havoc.identity import strip_address
+
+    assert strip_address("yura") == "yura"
+
+
+# ---------------------------------------------------------------------------
+# A sentence the model is not needed for
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("said", "line"),
+    [
+        ("tell sara good morning", "send sara good morning"),
+        ("send sara good morning", "send sara good morning"),
+        ("send hi here", "send --here hi"),
+        ("send hi to this chat", "send --here hi"),
+        ("پیام به سارا بگو صبح بخیر", "send سارا صبح بخیر"),
+        ("unsend your last message", "unsend last"),
+        ("mute this chat for an hour", "mute here 1h"),
+        ("archive this chat", "archive here"),
+        ("pin this message", "pin"),
+    ],
+)
+def test_the_plain_sentences_that_have_one_obvious_command(
+    said: str, line: str | None
+) -> None:
+    found = detect(said)
+    assert found is not None, said
+    assert found.lines[0] == line, said
+
+
+@pytest.mark.parametrize(
+    "said",
+    ["send me the file", "tell her the news", "the chat was muted for a week", "mute is a weird word"],
+)
+def test_a_recipient_shaped_word_is_not_treated_as_a_recipient(said: str) -> None:
+    found = detect(said)
+    assert found is None or all("send " not in line for line in found.lines)
+
+
+# ---------------------------------------------------------------------------
+# A timeline keeps every step
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("said", "expected"),
+    [
+        (
+            "remind me to call mom in 30 minutes and then turn off the clock",
+            ["remind 30m call mom", "clock off"],
+        ),
+        (
+            "ignore sara for 2 hours then remind me to sleep",
+            ["policy ignore sara --for 2h", "remind 2h sleep"],
+        ),
+    ],
+)
+def test_no_step_of_a_timeline_is_silently_dropped(said: str, expected: list[str]) -> None:
+    from havoc.services import intent as intent_module
+    from havoc.services.plans import build_plan
+
+    plan = build_plan(said, intent=intent_module)
+    assert [step.action for step in plan.steps] == expected

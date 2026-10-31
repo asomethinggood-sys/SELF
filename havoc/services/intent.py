@@ -1416,10 +1416,10 @@ _SAY_INTO = re.compile(
     r"\s*(?:,|and)?\s*(?:say|saying|write|put|post)?\s*(?P<body>.+)$",
     re.I,
 )
-#: "say hi here" / "say hi in this group" — the room he is standing in is the
-#: address, so the order needs no name at all.
+#: "say hi here" / "send hi here" / "say hi in this group" — the room he is
+#: standing in is the address, so the order needs no name at all.
 _SAY_HERE_EN = re.compile(
-    r"^(?:please\s+)?(?:say|write|post|tell\s+(?:them|everyone))\s+(?P<body>.+?)\s+"
+    r"^(?:please\s+)?(?:say|write|post|send|send\s+out|tell\s+(?:them|everyone))\s+(?P<body>.+?)\s+"
     r"(?:here|in\s+(?:this|the)\s+(?:group|chat|room|channel)|to\s+(?:this|the)\s+(?:group|chat|room))\s*$",
     re.I,
 )
@@ -1516,6 +1516,38 @@ _BURST = re.compile(
     r"\s*[.!]*$",
     re.I,
 )
+#: "tell sara good morning" / "send sara good morning": a bare recipient between
+#: the verb and the words. It is the most natural way to dictate a message, and it
+#: was the one shape that did nothing at all.
+#:
+#: Bare is dangerous — "send me the file", "tell her the news" — so the recipient
+#: must not be a pronoun or a room word, and the body must not open with an
+#: article. "send sara the file" is a file, not a message, and stays conversation.
+_TELL_BARE = re.compile(
+    r"^(?:please\s+)?(?:tell|send|message|text)\s+"
+    r"(?P<who>@[\w.]+|[A-Za-z][\w-]{1,20}|[^\s،]{2,20})\s+"
+    r"(?P<body>[^\s].+)$",
+    re.I,
+)
+#: Never a recipient: pronouns, the room, and the words that start a file ref.
+_NOT_A_RECIPIENT = frozenset(
+    {
+        "me", "him", "her", "them", "it", "us", "you", "everyone", "people", "all",
+        "here", "there", "this", "that", "the", "a", "an", "my", "our", "your", "his",
+        "their", "mine", "back", "again", "out", "off", "on", "up", "down", "away",
+        "این", "اون", "آن", "همه", "من", "او", "ما", "شما", "اینجا",
+    }
+)
+_FILE_OPENERS = frozenset({"the", "a", "an", "my", "our", "your", "his", "her", "their", "this", "that"})
+
+#: "پیام به سارا بگو صبح بخیر" — the send noun first, then the person, then the
+#: verb. The other Persian orders were covered; this one was not.
+_SEND_FA4 = re.compile(
+    r"^(?:please\s+)?(?:پیام|پیامک|مسیج)\s*(?:به|برای)\s+"
+    r"(?P<who>@[\w.]+|[^\s،]+)\s*(?:بگو|بنویس|بفرست)\s*[:،]?\s*(?P<body>.+)$",
+    re.I,
+)
+
 #: The tail that ties a rule to the room he is standing in: "…in this group",
 #: "…here". Without it the rule follows him everywhere, which is usually wrong.
 _HERE_TAIL = (
@@ -2073,14 +2105,9 @@ def _reach(text: str, *, allow_plan: bool = True) -> Intent | None:
         what = (match.group("what") or match.group("what2") or "").strip()
         return Intent(lines=(f"plan stop {what}".strip(),), label="plan", detail="stop")
 
-    # A timeline is read before anything else: "clock off for ten minutes, then on
-    # and off again after three" must not be answered with one clock command.
-    if allow_plan and (
-        _SEQUENCE.search(folded) or _FOR_A_WHILE.search(folded) or _LEADING_WAIT.match(folded)
-    ):
-        lines = _plan_lines(original)
-        if lines:
-            return Intent(lines=lines, label="plan", detail="timeline")
+    timeline = _timeline(original, allow_plan=allow_plan)
+    if timeline is not None:
+        return timeline
 
     # A rule may carry a tail that is not part of the rule: "…از این به بعد"
     # (permanent, which is the default) and "…for two hours" (a window). Both
@@ -2165,7 +2192,7 @@ def _reach(text: str, *, allow_plan: bool = True) -> Intent | None:
             return Intent(lines=(f"emoji {emoji}",), label="react", detail=f"react {emoji}")
 
     spoken_once = _lead(original)
-    for pattern in (_SEND_FA, _SEND_FA2, _SEND_FA3):
+    for pattern in (_SEND_FA, _SEND_FA2, _SEND_FA3, _SEND_FA4):
         match = pattern.match(spoken_once)
         if not match:
             continue
@@ -2328,7 +2355,48 @@ def _reach(text: str, *, allow_plan: bool = True) -> Intent | None:
                 detail=f"send · {len(targets)}",
             )
 
+    match = _TELL_BARE.match(original)
+    if match:
+        who = _who(match.group("who"))
+        body, flags = _reach_options(match.group("body"))
+        first_word = body.split()[0].lower() if body.split() else ""
+        looks_like_a_draft = (
+            who
+            and body
+            and len(body) > 1
+            and who.lower() not in _NOT_A_RECIPIENT
+            and not _is_room_word(who)
+            and first_word not in _FILE_OPENERS
+            and body.lower() not in _NOISE
+        )
+        if looks_like_a_draft:
+            return Intent(
+                lines=(" ".join(["send", who, body, *flags]),),
+                label="send",
+                detail=f"send · {who}",
+            )
+
     return None
+
+
+def _timeline(text: str, *, allow_plan: bool = True) -> Intent | None:
+    """Read a *sequence* — "…, then …" — as a plan, or ``None``.
+
+    This runs before every single-instruction reader. It used to run after the
+    reminder reader, which meant "remind me to call mom in 30 minutes and then
+    turn the clock off" became one reminder whose text was "call mom and then
+    turn the clock off": the second half of the sentence was quietly part of the
+    first, and nothing ever ran it.
+    """
+    if not allow_plan:
+        return None
+    folded = _clean(text)
+    if not (_SEQUENCE.search(folded) or _FOR_A_WHILE.search(folded) or _LEADING_WAIT.match(folded)):
+        return None
+    lines = _plan_lines(_tidy(_lead(_tidy(text))))
+    if not lines:
+        return None
+    return Intent(lines=lines, label="plan", detail="timeline")
 
 
 def _plan_lines(sentence: str) -> tuple[str, ...]:
@@ -2346,6 +2414,145 @@ def _plan_lines(sentence: str) -> tuple[str, ...]:
     if len(plan.steps) < 2 and plan.steps[0].at <= _now():
         return ()
     return (f"plan do {sentence}",)
+
+
+
+#: Housekeeping said as a sentence: the ones that are pure machine work and have
+#: no ambiguity, so a whole-sentence match is enough. Each entry is
+#: ``(pattern, console line)``; ``{who}`` is filled from the sentence.
+_HOUSEKEEPING = (
+    # "unsend your last message" / "delete the message you just sent"
+    (
+        re.compile(
+            r"^(?:please\s+)?(?:unsend|un-send|delete|remove|take\s+back|recall)\s+"
+            r"(?:your|her|the\s+bot'?s|that)\s+(?:last|latest|previous|most\s+recent)\s+"
+            r"(?:message|msg|line|reply|one)\s*[.!?]*$"
+            r"|^(?:please\s+)?(?:unsend|un-send|recall)\s+(?:your|her)\s+(?:message|reply|last)\s*[.!?]*$"
+            r"|^(?:please\s+)?(?:delete|remove)\s+the\s+message\s+you\s+(?:just\s+)?sent\s*[.!?]*$",
+            re.I,
+        ),
+        "unsend last",
+    ),
+    # "mute this chat for an hour" / "silence this group"
+    (
+        re.compile(
+            r"^(?:please\s+)?(?:mute|silence|quiet)\s+(?:this|the)\s+(?:chat|group|room|channel)"
+            r"(?:\s+for\s+(?P<how>[\w\s]{1,20}?))?\s*[.!]*$",
+            re.I,
+        ),
+        "mute here {how}",
+    ),
+    (
+        re.compile(
+            r"^(?:please\s+)?(?:unmute|un-silence|let)\s+(?:this|the)\s+(?:chat|group|room|channel)"
+            r"(?:\s+(?:be\s+)?(?:loud|noisy))?(?:\s+again)?\s*[.!]*$",
+            re.I,
+        ),
+        "unmute here",
+    ),
+    # "archive this chat" / "put this chat in the archive"
+    (
+        re.compile(
+            r"^(?:please\s+)?archive\s+(?:this|the)\s+(?:chat|group|room)\s*[.!]*$"
+            r"|^(?:please\s+)?(?:put|move|send)\s+(?:this|the)\s+(?:chat|group|room)"
+            r"\s+(?:in|into|to)\s+(?:the\s+)?archive\s*[.!]*$",
+            re.I,
+        ),
+        "archive here",
+    ),
+    (
+        re.compile(
+            r"^(?:please\s+)?(?:unarchive|un-archive|unarchive\s+(?:this|the))\s*"
+            r"(?:this|the)?\s*(?:chat|group|room)?\s*[.!]*$"
+            r"|^(?:please\s+)?(?:bring|take)\s+(?:this|the)\s+(?:chat|group)\s+(?:back|out\s+of\s+the\s+archive)"
+            r"\s*[.!]*$",
+            re.I,
+        ),
+        "unarchive here",
+    ),
+    # "pin this message" / "unpin it"
+    (
+        re.compile(
+            r"^(?:please\s+)?(?:pin|stick)\s+(?:this|that|the)\s+(?:message|msg|one)\s*[.!]*$",
+            re.I,
+        ),
+        "pin",
+    ),
+    (
+        re.compile(
+            r"^(?:please\s+)?unpin\s+(?:this|that|the)\s+(?:message|msg|one|pin)\s*[.!]*$"
+            r"|^(?:please\s+)?unpin\s+it\s*[.!]*$",
+            re.I,
+        ),
+        "unpin",
+    ),
+)
+
+
+#: The words a person uses for a wait, turned into the ``1h`` the console takes.
+_DURATION_WORDS = {
+    "an": 1, "a": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+    "seven": 7, "eight": 8, "nine": 9, "ten": 10, "fifteen": 15, "twenty": 20,
+    "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "half": 0.5,
+}
+_DURATION_UNITS = {
+    "s": "s", "sec": "s", "secs": "s", "second": "s", "seconds": "s",
+    "m": "m", "min": "m", "mins": "m", "minute": "m", "minutes": "m",
+    "h": "h", "hour": "h", "hours": "h", "d": "d", "day": "d", "days": "d",
+    "w": "w", "week": "w", "weeks": "w",
+}
+
+
+def _plain_duration(text: str) -> str:
+    """``"an hour"`` → ``"1h"``; anything unreadable becomes the empty string."""
+    words = str(text or "").strip().lower().split()
+    if not words:
+        return ""
+    if len(words) == 1:
+        token = words[0]
+        if token in {"forever", "always", "∞"}:
+            return "forever"
+        match = re.fullmatch(r"(\d+)([a-z]+)", token)
+        if match:
+            unit = _DURATION_UNITS.get(match.group(2))
+            return f"{match.group(1)}{unit}" if unit else ""
+        return ""
+    amount, unit_word = words[0], words[-1]
+    unit = _DURATION_UNITS.get(unit_word)
+    if not unit:
+        return ""
+    value = _DURATION_WORDS.get(amount)
+    if value is None:
+        try:
+            value = float(amount)
+        except ValueError:
+            return ""
+    if value == int(value):
+        return f"{int(value)}{unit}"
+    return f"{int(value * 3600)}s" if unit == "h" else ""
+
+
+def _housekeeping(text: str) -> Intent | None:
+    """The plain sentences for pure housekeeping — unsend, mute, archive, pin.
+
+    Every one of these was reachable only as a command with a dot in front of it,
+    which is not how a person asks for it. A whole-sentence match keeps them from
+    stealing a conversation: "the chat was muted for a week" is not an order.
+    """
+    folded = _clean(text)
+    if not folded:
+        return None
+    for pattern, template in _HOUSEKEEPING:
+        match = pattern.match(folded)
+        if match is None:
+            continue
+        line = template
+        groups = match.groupdict()
+        if "{how}" in line:
+            how = _plain_duration(groups.get("how") or "")
+            line = line.replace(" {how}", f" {how}" if how else "").strip()
+        return Intent(lines=(line,), label="housekeeping", detail=line)
+    return None
 
 
 def _utility(text: str) -> Intent | None:
@@ -2648,6 +2855,12 @@ def _detect(
         return None
     known = {name for name in set(commands) | set(features) if name and name.isascii()}
 
+    # A sentence with "then" in it is several instructions, and reading it as one
+    # is how the tail of it disappears.
+    timeline = _timeline(text, allow_plan=allow_plan)
+    if timeline is not None:
+        return timeline
+
     reminder = _reminder(folded)
     if reminder is not None:
         return reminder
@@ -2659,6 +2872,10 @@ def _detect(
     reached = _reach(text, allow_plan=allow_plan)
     if reached is not None:
         return reached
+
+    housekeeping = _housekeeping(text)
+    if housekeeping is not None:
+        return housekeeping
 
     surface = _surface(text)
     if surface is not None:

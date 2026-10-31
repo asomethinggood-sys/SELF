@@ -128,7 +128,15 @@ async def cmd_trigger(ctx: CommandContext) -> None:
         if not ctx.raw_args:
             raise CommandError("errors.missing_argument", usage=ctx.usage_text())
         # syntax: .trigger add name "pattern" action payload
-        parts = _split_trigger_body(ctx.rest_raw, name)
+        #
+        # The tokenizer already knows which words were quoted, so its view wins:
+        # ``rest_raw`` is a *rejoin*, and a quoted pattern with a space in it
+        # (".trigger add x \"good morning\" notify") came back as three words and
+        # was refused as an unknown action. The raw split stays as a fallback for
+        # arguments that never went through the tokenizer.
+        parts = [part for part in ctx.rest[1:] if part.strip()] or _split_trigger_body(
+            ctx.rest_raw, name
+        )
         if not parts:
             raise CommandError("trigger.usage_hint", prefix=ctx.runtime.prefix)
         pattern = parts[0]

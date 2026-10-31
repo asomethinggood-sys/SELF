@@ -9,8 +9,8 @@ about it is the bug.
 from __future__ import annotations
 
 import pytest
+from conftest import invoke
 
-from conftest import FakeMessage, incoming, invoke
 from havoc.services.intent import detect
 
 

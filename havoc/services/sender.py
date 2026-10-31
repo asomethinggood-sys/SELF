@@ -25,8 +25,9 @@ from .rate_limiter import FloodGuard, RateLimited, RateLimiter
 
 
 class SendError(Exception):
-    def __init__(self, message: str, kind: str = "send_error") -> None:
+    def __init__(self, message: str, kind: str = "send_error", retry_after: float | None = None) -> None:
         self.kind = kind
+        self.retry_after = retry_after
         super().__init__(message)
 
 
@@ -58,6 +59,8 @@ class Sender:
         self.dry_run = config.dry_run if dry_run is None else dry_run
         self.flood = FloodGuard(limiter)
         self.max_flood_wait = max_flood_wait
+        #: How long a *reply* will wait for the outbound window before giving up.
+        self.burst_patience = 75.0
         self.sent_count = 0
         self.blocked_count = 0
         #: Told when Telegram asks the account to wait. The runtime points this at
@@ -113,7 +116,9 @@ class Sender:
         except RateLimited as exc:
             self.blocked_count += 1
             raise SendError(
-                f"outbound limit reached; retry in {exc.retry_after:.1f}s", kind="rate_limited"
+                f"outbound limit reached; retry in {exc.retry_after:.1f}s",
+                kind="rate_limited",
+                retry_after=exc.retry_after,
             ) from exc
 
         for index, chunk in enumerate(chunks or [""]):
@@ -209,12 +214,23 @@ class Sender:
         swallowed every reply, which is what happened after ``.dryrun on``.
         """
         kwargs.setdefault("dry_run", False)
-        return await self.send(
-            event.chat_id,
-            text,
-            reply_to=getattr(event, "id", None) if reply else None,
+        send = {
+            "reply_to": getattr(event, "id", None) if reply else None,
             **kwargs,
-        )
+        }
+        try:
+            return await self.send(event.chat_id, text, **send)
+        except SendError as exc:
+            # An answer to a person is the one send that must land. A burst of
+            # twenty commands in a minute used to end with silence and a
+            # ``SendError`` traceback in the handler; waiting out the window and
+            # trying once more is the honest behaviour.
+            if exc.kind != "rate_limited" or not exc.retry_after:
+                raise
+            wait = min(self.burst_patience, exc.retry_after) + 0.5
+            self.logger.warning("reply held by the outbound window; waiting %.1fs", wait)
+            await asyncio.sleep(wait)
+            return await self.send(event.chat_id, text, **send)
 
     async def send_media(
         self,

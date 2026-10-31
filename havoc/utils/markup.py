@@ -40,14 +40,15 @@ from .typeface import small_caps, spaced
 
 #: Telegram rejects a message whose tags do not nest; this module cannot produce
 #: one, but the tests check that anyway.
-__all__ = ["rich", "plain_preview", "looks_formatted"]
+__all__ = ["rich", "rescue_inline", "plain_preview", "looks_formatted"]
 
 _FENCE_RE = re.compile(r"```([a-zA-Z0-9_+-]{0,16})\n?(.*?)```", re.DOTALL)
 _INLINE_CODE_RE = re.compile(r"`([^`\n]{1,400})`")
-_BOLD_STAR_RE = re.compile(r"\*\*(?=\S)([^\n]{1,600}?)\*\*")
-_BOLD_UNDER_RE = re.compile(r"(?<![\w])__(?=\S)([^\n]{1,600}?)__(?![\w])")
-_ITALIC_STAR_RE = re.compile(r"(?<![\w*])\*(?=\S)([^*\n]{1,400}?)\*(?![\w*])")
-_ITALIC_UNDER_RE = re.compile(r"(?<![\w])_(?=\S)([^_\n]{1,400}?)_(?![\w])")
+_BOLD_STAR_RE = re.compile(r"\*\*(?=\S)([^\n]{1,3000}?)\*\*")
+_BOLD_UNDER_RE = re.compile(r"(?<![\w])__(?=\S)([^\n]{1,3000}?)__(?![\w])")
+_ITALIC_STAR_RE = re.compile(r"(?<![\w*])\*(?=\S)([^*\n]{1,3000}?)\*(?![\w*])")
+_ITALIC_UNDER_RE = re.compile(r"(?<![\w])_(?=\S)([^_\n]{1,3000}?)_(?![\w])")
+_LINK_RE = re.compile(r"\[([^\]\n]{1,200})\]\((https?://[^)\s]{1,400}|tg://[^)\s]{1,400})\)")
 _STRIKE_RE = re.compile(r"~~(?=\S)([^\n]{1,400}?)~~")
 _SPOILER_RE = re.compile(r"\|\|(?=\S)([^\n]{1,400}?)\|\|")
 _HEADING_RE = re.compile(r"(?m)^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$")
@@ -95,6 +96,37 @@ def looks_formatted(text: str) -> bool:
         marker in text
         for marker in ("**", "__", "`", "~~", "||", "++", "^^", "%%", "> ", "# ", "\n- ", "\n* ", "\n1. ")
     ) or bool(re.search(r"(?m)^(\s{0,3}[-*+#>]|\s{0,3}\d{1,3}[.)]\s)", text))
+
+
+def rescue_inline(html_text: str) -> str:
+    """Turn leftover inline markdown in **already-escaped HTML** into entities.
+
+    Locale strings and a few hand-built lines still say ``**okay**``, ``_note_``
+    or ``` `fal` ```, because that is how they were written when the bot rendered
+    markdown. Telegram HTML shows those characters literally — the owner saw the
+    asterisks. This converts them at the last moment, on the string that is about
+    to be sent, and leaves ``<pre>``/``<code>`` bodies untouched: there, a star is
+    content.
+    """
+    if not html_text:
+        return html_text
+    parts = re.split(r"(<pre>.*?</pre>|<code>.*?</code>)", html_text, flags=re.DOTALL)
+
+    def _spans(chunk: str) -> str:
+        chunk = _INLINE_CODE_RE.sub(lambda m: f"<code>{m.group(1)}</code>", chunk)
+        # ``[text](url)`` — Telegram HTML has no markdown link, so it used to
+        # arrive with the brackets. The label becomes the anchor.
+        chunk = _LINK_RE.sub(lambda m: f'<a href="{m.group(2)}">{m.group(1)}</a>', chunk)
+        chunk = _BOLD_STAR_RE.sub(_emphasise("b"), chunk)
+        chunk = _BOLD_UNDER_RE.sub(_emphasise("b"), chunk)
+        chunk = _ITALIC_STAR_RE.sub(_emphasise("i"), chunk)
+        chunk = _ITALIC_UNDER_RE.sub(_emphasise("i"), chunk)
+        chunk = _STRIKE_RE.sub(_emphasise("s"), chunk)
+        return chunk
+
+    return "".join(
+        part if part.startswith(("<pre>", "<code>")) else _spans(part) for part in parts
+    )
 
 
 def rich(text: str) -> str:

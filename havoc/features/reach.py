@@ -411,7 +411,7 @@ async def cmd_outbox(ctx: CommandContext) -> None:
         return
     lines = [bold(ctx.t("reach.outbox_header", count=len(rows)))]
     if total > len(rows):
-        lines.append(ctx.t("reach.outbox_total", total=total))
+        lines.append(ctx.t("reach.outbox_total", count=len(rows), total=total))
     for row in rows:
         mark = {"sent": "●", "deleted": "○", "failed": "✕", "dry": "◌"}.get(str(row["status"]), "·")
         when = str(row["sent_at"] or "")[11:16]
@@ -610,6 +610,8 @@ async def cmd_rules(ctx: CommandContext) -> None:
         await _rules_list(ctx)
         return
     if action in {"clear", "remove", "delete", "forget", "reset"}:
+        if not " ".join(ctx.args).strip():
+            raise CommandError("errors.missing_argument", usage=ctx.usage_text())
         found = await _rule_person(ctx, " ".join(ctx.args))
         if found is None:
             raise CommandError("policy.unknown", name=escape(" ".join(ctx.args)))
@@ -634,6 +636,9 @@ async def cmd_rules(ctx: CommandContext) -> None:
     if mode is None:
         raise CommandError("policy.usage", prefix=ctx.runtime.prefix)
     raw = " ".join(ctx.args)
+    if not raw.strip():
+        # "I don't know anyone called  —" is what a dropped name looks like.
+        raise CommandError("errors.missing_argument", usage=ctx.usage_text())
     emoji = ""
     if mode in {"react", "sticker"}:
         # ".policy react sara heart" — the glyph is the last word, not part of

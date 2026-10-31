@@ -387,7 +387,7 @@ live account from this environment.
 
 ### Working with limits you should know about
 
-- **She is Y.U.R.A 1.7 Open beta**, and she knows her own console: every command
+- **She is Y.U.R.A 1.9 Open beta**, and she knows her own console: every command
   in `.help`, with its usage, is in her prompt, and she can run any of them for
   you through one gated tool — "yura, fal page 166" is the `.fal` you already
   have, not a second version of it. Answers that do something are drawn: a mark,

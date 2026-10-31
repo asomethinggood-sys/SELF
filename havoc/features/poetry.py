@@ -119,8 +119,10 @@ def _poem_card(poem: dict[str, Any], *, note: str = "") -> str:
     lines = text.count("\n") + 1
     # Persian verse is set in italics: it separates the quoted couplets from
     # Yura's own voice, which is never italic.
-    title = str(poem.get("title", "")).strip()
-    poet = str(poem.get("poet", "")).strip()
+    # The shipped corpus came from HTML and carries double spaces inside its
+    # titles; a card is not the place to show them.
+    title = " ".join(str(poem.get("title", "")).split())
+    poet = " ".join(str(poem.get("poet", "")).split())
     # The card is a fixed grid: a bold headline you can recognise from across a
     # chat list, then the verse as a quotation, then where it came from.
     # Title on top in bold, verse in a quotation, poet in italics under it: the
@@ -194,7 +196,9 @@ async def cmd_fal(ctx: CommandContext) -> None:
 
 
 def _fal_text(reading: dict[str, Any], ctx: CommandContext, *, reason: str = "") -> str:
-    verses = "\n".join(str(verse) for verse in reading.get("verses", []))
+    verses = "\n".join(
+        " ".join(str(verse).split()) for verse in reading.get("verses", [])
+    )
     blocks = [
         ui.title("☾", ctx.t("fal.title")),
         ui.quote_card(verses, "حافظ", expandable=True),

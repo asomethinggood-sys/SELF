@@ -282,7 +282,10 @@ async def cmd_clock(ctx: CommandContext) -> None:
         await ctx.store.set_setting("clock.template", template)
         await ctx.runtime.feature_manager.set_enabled("clock", True)
         await ctx.runtime.scheduler.ensure_periodic("profile.clock", CLOCK_INTERVAL)
-        await ctx.reply(ctx.t("clock.enabled", template=escape(template), tz=escape(zone_name)))
+        # Show the *rendered* template, not its source: "◷ {time}" is a recipe,
+        # and he asked to see the clock, not the recipe.
+        sample = _render_clock(str(template), str(zone_name))
+        await ctx.reply(ctx.t("clock.enabled", template=escape(sample), tz=escape(zone_name)))
         return
     if action == "off":
         await ctx.store.set_setting("clock.enabled", False)
@@ -293,16 +296,21 @@ async def cmd_clock(ctx: CommandContext) -> None:
         enabled = await ctx.store.get_bool("clock.enabled", False)
         template = await ctx.store.get_setting("clock.template", "◷ {time}")
         zone_name = await ctx.store.get_setting("clock.timezone", ctx.config.timezone)
-        preview = _render_clock(str(template), str(zone_name)) if enabled else "—"
+        # The template is a template: printing it raw put the literal "◷ {time}"
+        # in front of him. Render it instead — the sample *is* the answer to
+        # "what will my name look like".
+        try:
+            preview = _render_clock(str(template), str(zone_name))
+        except (KeyError, ValueError, IndexError):
+            preview = _render_clock("◷ {time}", str(zone_name))
         await ctx.reply(
             bold(ctx.t("clock.header"))
             + "\n"
             + key_value_block(
                 [
                     (ctx.t("clock.state"), ctx.t("common.on" if enabled else "common.off")),
-                    (ctx.t("clock.template"), template),
+                    (ctx.t("clock.template"), preview),
                     (ctx.t("clock.timezone"), zone_name),
-                    (ctx.t("clock.preview"), preview),
                 ]
             )
         )

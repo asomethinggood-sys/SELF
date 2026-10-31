@@ -12,8 +12,8 @@ Two promises, both of them his words:
 from __future__ import annotations
 
 import pytest
-
 from conftest import FakeMessage, incoming, invoke
+
 from havoc.services.intent import detect
 
 GROUP = -1001234567890

@@ -18,13 +18,31 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from ..utils.formatting import code, escape
 from ..utils.text import emoji_in
 from ..utils.time import TimeParseError, format_datetime, parse_when, utc_now
 from .actions import MAX_CALLS_PER_TURN, ActionResult, Tool, Turn
+from .reach import ReachError
 from .self_console import run as run_command
 from .translation_provider import TranslationError
 
 __all__ = ["build_tools"]
+
+
+def _number(value: Any, cast: type, default: Any = None) -> Any:
+    """A model's argument, as a number — or the default when it is not one.
+
+    The model invents arguments; ``repeat: "a few times"`` must become a
+    sensible default, not a stack trace inside a toolbox.
+    """
+    text = str(value if value is not None else "").strip()
+    if not text:
+        return default
+    try:
+        return cast(float(text)) if cast is int else cast(text)
+    except (TypeError, ValueError):
+        return default
+
 
 
 #: The ways a sentence says "the room I am standing in".
@@ -56,9 +74,18 @@ def first_emoji(text: str) -> str:
 
 
 def _t(runtime: Any, turn: Turn, key: str, **variables: Any) -> str:
-    """A localized card phrase, never a crash if a locale is stripped."""
+    """A localized card phrase, never a crash if a locale is stripped.
+
+    Every variable is escaped here, once. The values come from a model, from a
+    person's name, from whatever he replied to — and a card that prints
+    ``<b>Sara`` as markup is a card Telegram refuses to render at all.
+    """
+    safe = {
+        name: escape(value) if isinstance(value, str) else value
+        for name, value in variables.items()
+    }
     try:
-        return str(runtime.t(key, turn.language, **variables))
+        return str(runtime.t(key, turn.language, **safe))
     except Exception:  # noqa: BLE001 - a missing key must not silence a card
         return ""
 
@@ -328,7 +355,7 @@ def build_tools(runtime: Any) -> list[Tool]:
                 usage = ""
                 if record is not None:
                     usage = " ".join(str(getattr(record, "usage", "") or "").split())
-                hint = f"`{runtime.prefix}{name} {usage}`".replace("  ", " ").strip()
+                hint = code(f"{runtime.prefix}{name} {usage}".replace("  ", " ").strip())
                 notes.append(f"{line}: {result.note}" + (f" — the form is {hint}" if usage else ""))
             else:
                 notes.append(f"{line}: {result.note}")
@@ -433,14 +460,19 @@ def build_tools(runtime: Any) -> list[Tool]:
                 detail=f"no chat called {who!r}" + (f"; did you mean {hint}?" if hint else ""),
                 kind="unknown_target",
             )
-        report = await runtime.reach.deliver(
-            target,
-            body,
-            spoiler_hidden=bool(args.get("spoiler")),
-            repeat=int(args.get("repeat") or 1),
-            delete_after=float(args["delete_after"]) if args.get("delete_after") else None,
-            at=args.get("at") or None,
-        )
+        try:
+            report = await runtime.reach.deliver(
+                target,
+                body,
+                spoiler_hidden=bool(args.get("spoiler")),
+                repeat=max(1, _number(args.get("repeat"), int, 1)),
+                delete_after=_number(args.get("delete_after"), float, None),
+                at=args.get("at") or None,
+            )
+        except ReachError as exc:
+            # A model that wrote "at: soon" gets an observation it can repair,
+            # not a traceback from inside the toolbox.
+            return ActionResult(False, detail=str(exc), kind="bad_args")
         if not report.ok:
             return ActionResult(False, detail=report.error or "the send failed", kind="failed")
         return ActionResult(

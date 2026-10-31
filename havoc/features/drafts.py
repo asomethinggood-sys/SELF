@@ -105,7 +105,16 @@ async def _archive(ctx: CommandContext, *, archived: bool) -> None:
         raise CommandError("drafts.usage_archive", prefix=ctx.runtime.prefix)
     target = await ctx.runtime.reach.resolve_or_raise(where)
     chat_id = getattr(target, "id", None) or where
+    # ``archive here`` resolved to a target whose label *is* the word "here", and
+    # the confirmation read "here is in the archive". The room has a name.
     label = escape(getattr(target, "label", "") or str(where))
+    from .groups import _HERE_WORDS
+
+    if (
+        str(where).strip().lower() in _HERE_WORDS
+        or str(getattr(target, "label", "")).strip().lower() in _HERE_WORDS
+    ):
+        label = escape(ctx.t("lang.scope_chat"))
     try:
         await _extras(ctx).set_archived(chat_id, archived=archived)
     except ExtrasError as exc:

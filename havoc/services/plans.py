@@ -600,6 +600,20 @@ def _actions_for(clause: str, *, intent: Any, last_body: str = "") -> list[str]:
     return []
 
 
+#: A clause whose own words decide *when* it runs. The delay belongs to it.
+_SELF_TIMED = re.compile(
+    r"^\s*(?:please\s+)?(?:remind|schedule|snooze|postpone|"
+    r"set\s+(?:a|an|the)\s+(?:reminder|timer|alarm)|یادم\s*بنداز|یادآوری|یاداوری|"
+    r"زمان\s*بندی|برنامه\s*ریزی)",
+    re.I,
+)
+
+
+def _carries_its_own_moment(clause: str) -> bool:
+    """Does this clause schedule itself, so its time is not a wait before it?"""
+    return bool(_SELF_TIMED.search(str(clause or "")))
+
+
 def _plan_action(line: str) -> str:
     """One console line, corrected for the fact that it is running in a plan.
 
@@ -677,7 +691,15 @@ def build_plan(
             else:
                 offset += waited
             body = rest
+        before_tail = body
         tail_delay, body = take_trailing_delay(body)
+        if tail_delay is not None and _carries_its_own_moment(body):
+            # "remind me to call mom in 30 minutes" — the time is the *reminder's*
+            # own, not a wait before this step. Taking it out left "remind me to
+            # call mom", which is not an instruction, and the clause was silently
+            # dropped: a timeline that loses a step is the worst kind of bug,
+            # because the rest of it works.
+            tail_delay, body = None, before_tail
         if tail_delay is not None:
             offset += tail_delay
             settled = None
@@ -688,6 +710,13 @@ def build_plan(
         # part of the order ("ignore سارا for two hours" is a two-hour rule, not
         # a rule plus an undo), and from the sentence without it otherwise.
         lines = _actions_for(body, intent=intent, last_body=last_body)
+        if not lines and settled and _carries_its_own_moment(body):
+            # "…ignore سارا for two hours, then remind me to sleep": the reminder
+            # named no time, so its time is the window that just closed. Without
+            # this the clause is dropped and the tail of the sentence vanishes.
+            restated = intent.detect(f"{body} in {int(settled)} seconds", allow_plan=False)
+            if restated is not None and getattr(restated, "lines", None):
+                lines = [str(line).strip() for line in restated.lines if str(line).strip()]
         if duration is not None:
             # With the window taken out of the words, the same order reads as a
             # clean line: "reply to every DM with X for 4 hours" must not send X

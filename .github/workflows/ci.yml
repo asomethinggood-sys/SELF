@@ -65,6 +65,15 @@ jobs:
         run: python scripts/audit_live.py --json .audit.json
         if: matrix.python-version == '3.11'
 
+      # The renderer probe: every reply judged as the *chat* would see it —
+      # balanced and allowed HTML, no escaped entity leaking, no markdown
+      # leftovers, no empty answer, no locale placeholder, plus a write-then-read
+      # round trip for every command that stores something. This is the check that
+      # catches "it answered" and "it answered with `&amp;lt;b&amp;gt;Sara`".
+      - name: Every message is well formed
+        run: python scripts/probe_everything.py --json .probe.json --lang both
+        if: matrix.python-version == '3.11'
+
       - name: CLI smoke test
         run: |
           python -m havoc version

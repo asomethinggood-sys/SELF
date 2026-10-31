@@ -250,7 +250,14 @@ async def cmd_note(ctx: CommandContext) -> None:
         if not body:
             raise CommandError("errors.empty_value", field="note")
         note_id = await store.add_note(ctx.chat_id, body, title=title)
-        await ctx.reply(ctx.t("note.added", id=note_id, title=escape(title or "—")))
+        if title:
+            await ctx.reply(ctx.t("note.added", id=note_id, title=escape(title)))
+        else:
+            # "Note #1 saved (—)" is a parenthesis around nothing. An untitled
+            # note is the normal case; say what was saved instead.
+            await ctx.reply(
+                ctx.t("note.added_untitled", id=note_id, text=escape(truncate(body, 60)))
+            )
         return
     if action in {"list", "ls"}:
         rows = await store.list_notes(limit=100)
@@ -391,7 +398,7 @@ async def _export_table(ctx: CommandContext, kind: str) -> None:
     rows = sum(len(items) for items in payload.values())
     await ctx.runtime.sender.send(
         ctx.chat_id,
-        ctx.t("export.done", kind=escape(kind), rows=rows),
+        ctx.t("export.saved", kind=escape(kind), rows=rows),
         file=str(path),
     )
 

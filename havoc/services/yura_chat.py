@@ -28,7 +28,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from .. import persona, ui
+from .. import identity, persona, ui
 from ..utils import glyphs
 from ..utils.formatting import strip_html
 from ..utils.markup import rich
@@ -605,9 +605,13 @@ class YuraChat:
         """
         if not text.strip():
             return
+        # The sentence arrives with her name in front of it — that is how a
+        # person calls her. Reading "yura, turn off the clock" as chatter meant
+        # the one way he ever speaks to her was the way that did nothing.
+        instruction = identity.strip_address(text) if text else text
         try:
             found = intent_module.detect(
-                text,
+                instruction or text,
                 features=frozenset(self.runtime.feature_manager.names()),
                 commands=frozenset(self.runtime.registry.reserved_names()),
             )

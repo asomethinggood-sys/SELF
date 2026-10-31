@@ -22,9 +22,35 @@ from .text import split_message
 MAX_MESSAGE_LENGTH = 4000
 
 
+#: The entities this project produces. Only these are unescaped before escaping
+#: again: a person who literally types ``&copy;`` must still see ``&amp;copy;``.
+_OURS = re.compile(r"&(amp|lt|gt|quot|#x27);")
+
+
 def escape(text: object) -> str:
-    """Escape text for Telegram HTML parse mode."""
-    return html.escape("" if text is None else str(text), quote=False)
+    """Escape text for Telegram HTML parse mode — **idempotently**.
+
+    ``bold()``, ``italic()``, ``code()`` and friends already escape their
+    argument, and a hundred call sites do ``bold(escape(name))`` because it is
+    the obvious thing to write. Escaping twice shipped the entity itself to the
+    chat — a person called ``<b>Sara`` arrived as ``&amp;lt;b&amp;gt;Sara``, and
+    every card that formatted a user's word showed the machinery instead of the
+    word.
+
+    Un-escaping our own entities first makes ``escape`` a fixed point:
+    ``escape(escape(x)) == escape(x)`` for every ``x``. Foreign entities
+    (``&copy;``) are left alone, because turning them into a copyright sign is
+    not this function's job, and a user typing ``&amp;`` must still see
+    ``&amp;``.
+    """
+
+    if text is None:
+        return ""
+    raw = str(text)
+    if "&" in raw:
+        # One pass is enough: unescape yields no new ``&entity;`` shapes of ours.
+        raw = _OURS.sub(lambda match: html.unescape(match.group(0)), raw)
+    return html.escape(raw, quote=False)
 
 
 def bold(text: object) -> str:
@@ -90,8 +116,17 @@ def sanitize_output(text: str) -> str:
 
 def prepare(text: str, *, limit: int = MAX_MESSAGE_LENGTH) -> list[str]:
     """Sanitize, repair stray markup, and split a message for sending."""
-    return [chunk for chunk in split_message(sanitize_output(repair_html(text)), limit) if chunk]
+    # Imported here: markup imports :func:`escape` from this module.
+    from .markup import rescue_inline
 
+    body = sanitize_output(rescue_inline(repair_html(text)))
+    # Three blank lines are never a shape; a model that leaves them makes the
+    # message look broken. One blank line is the paragraph break.
+    body = _MANY_BLANK_LINES.sub("\n\n", body)
+    return [chunk for chunk in split_message(body, limit) if chunk]
+
+
+_MANY_BLANK_LINES = re.compile(r"\n{3,}")
 
 _HTML_TAG_RE = re.compile(r"<[^>]{1,64}>")
 

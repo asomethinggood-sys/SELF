@@ -679,7 +679,15 @@ class Dispatcher:
                 )
             return True
         except CommandError as exc:
-            await runtime.sender.respond(context.event, runtime.t(exc.key, language, **exc.variables), reply=True)
+            # A message that would render a blank where a name or an id belongs
+            # ("No preset with id  found", "I don't know anyone called  —") is
+            # not a lookup failure: the argument was never typed. Saying so is
+            # the difference between an answer and a broken-looking one.
+            key, variables = exc.key, dict(exc.variables)
+            if any(isinstance(value, str) and not value.strip() for value in variables.values()):
+                key = "errors.missing_argument"
+                variables = {"usage": escape(context.usage_text())}
+            await runtime.sender.respond(context.event, runtime.t(key, language, **variables), reply=True)
             runtime.stats["commands_failed"] += 1
             return False
         except ValidationError as exc:
