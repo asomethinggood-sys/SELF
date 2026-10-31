@@ -139,6 +139,29 @@ async def cmd_join(ctx: CommandContext) -> None:
 
 
 # ---------------------------------------------------------------------------
+# .peek — what is behind an invite link, before joining
+# ---------------------------------------------------------------------------
+async def cmd_peek(ctx: CommandContext) -> None:
+    link = " ".join(ctx.args).strip()
+    if not link:
+        raise CommandError("groups.usage_peek", prefix=ctx.runtime.prefix)
+    try:
+        info = await ctx.runtime.tg.invite_info(link)
+    except ExtrasError as exc:
+        raise _fail(exc, key="groups.peek_failed") from exc
+    lines = [bold(ctx.t("groups.peek_header", name=escape(str(info.get("title") or "—"))))]
+    if info.get("members"):
+        lines.append(ctx.t("groups.peek_members", count=info["members"]))
+    if info.get("already"):
+        lines.append(ctx.t("groups.peek_already"))
+    elif info.get("request"):
+        lines.append(ctx.t("groups.peek_request"))
+    else:
+        lines.append(ctx.t("groups.peek_join_hint", prefix=ctx.runtime.prefix, link=code(link)))
+    await ctx.reply("\n".join(lines))
+
+
+# ---------------------------------------------------------------------------
 # .folder
 # ---------------------------------------------------------------------------
 async def cmd_folder(ctx: CommandContext) -> None:
@@ -280,6 +303,15 @@ def register(runtime: Any) -> None:
                 usage="<t.me link>",
                 description="Join a chat by the link you were given.",
                 changes_state=True,
+            ),
+            Command(
+                "peek",
+                cmd_peek,
+                category="chats",
+                aliases=("inviteinfo",),
+                usage="<t.me link>",
+                description="What is behind an invite link, before joining.",
+                examples=(".peek https://t.me/+AbCdEf",),
             ),
             Command(
                 "folder",

@@ -185,6 +185,36 @@ async def cmd_unpin(ctx: CommandContext) -> None:
 
 
 # ---------------------------------------------------------------------------
+# .clearhistory — the whole conversation, not one line
+# ---------------------------------------------------------------------------
+async def cmd_clearhistory(ctx: CommandContext) -> None:
+    """Drop a chat's history.
+
+    ``--for-everyone`` is the Telegram ``revoke`` flag: without it the lines go
+    from this account only. Both are confirmed by the registry before they run,
+    because neither can be undone by ``.undo``.
+    """
+    where = " ".join(ctx.args).strip()
+    target = await ctx.runtime.reach.resolve_or_raise(where) if where else None
+    chat_id = getattr(target, "id", None) or ctx.chat_id
+    label = escape(getattr(target, "label", "") or str(chat_id))
+    # The parser lowercases and turns dashes into underscores, so the flag he
+    # types as ``--for-everyone`` arrives as ``for_everyone``.
+    revoke = ctx.has_flag("for_everyone") or ctx.has_flag("everyone")
+    extras = getattr(ctx.runtime, "tg", None)
+    if extras is None:
+        raise CommandError("errors.not_connected")
+    from ..services.tg_extra import ExtrasError
+
+    try:
+        await extras.clear_history(chat_id, revoke=revoke)
+    except ExtrasError as exc:
+        raise CommandError("msg.clear_failed", name=label, detail=escape(str(exc)[:180])) from exc
+    key = "msg.cleared_everyone" if revoke else "msg.cleared"
+    await ctx.reply(ctx.t(key, name=label))
+
+
+# ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
 def register(runtime: Any) -> None:
@@ -251,6 +281,17 @@ def register(runtime: Any) -> None:
                 requires_reply=True,
                 changes_state=True,
                 description="Pin the message you replied to.",
+            ),
+            Command(
+                "clearhistory",
+                cmd_clearhistory,
+                category="messages",
+                aliases=("wipe", "purge"),
+                usage="[chat] [--for-everyone]",
+                changes_state=True,
+                needs_confirmation=True,
+                description="Delete a whole conversation's history, here or in a named chat.",
+                examples=(".clearhistory", ".clearhistory @noise --for-everyone"),
             ),
             Command(
                 "unpin",

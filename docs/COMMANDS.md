@@ -9,7 +9,7 @@ account other than the logged-in user.
 `.` in the usage column stands for the active prefix (default `.`).
 
 
-Total: **139 commands**.
+Total: **141 commands**.
 
 
 ## Account
@@ -54,6 +54,7 @@ Total: **139 commands**.
 | `.join` | Join a chat by the link you were given _(owner only; changes state)._ | `.join <t.me link>` | — |
 | `.members` | Who is in a group, admins first _(owner only)._ | `.members <chat>` | — |
 | `.mute` | Silence a chat for a while, or forever _(owner only; changes state)._ | `.mute <chat> [1h|2d|forever]` | — |
+| `.peek` | What is behind an invite link, before joining _(owner only)._ | `.peek <t.me link>` | `.inviteinfo` |
 | `.unarchive` | Bring a chat back out of the archive _(owner only; changes state)._ | `.unarchive <chat>` | — |
 | `.unmute` | Let a chat be loud again _(owner only; changes state)._ | `.unmute <chat>` | — |
 
@@ -175,6 +176,7 @@ Total: **139 commands**.
 
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
+| `.clearhistory` | Delete a whole conversation's history, here or in a named chat _(owner only; changes state; asks for confirmation)._ | `.clearhistory [chat] [--for-everyone]` | `.wipe`, `.purge` |
 | `.copy` | Send the same words somewhere else, with no forward header _(owner only; changes state; reply required)._ | `.copy <to>` | — |
 | `.delete` | Delete the message you replied to _(owner only; changes state; asks for confirmation; reply required)._ | `.delete [--yes]` | `.del`, `.rm` |
 | `.edit` | Change a message she sent _(owner only; changes state; reply required)._ | `.edit <new text>` | — |

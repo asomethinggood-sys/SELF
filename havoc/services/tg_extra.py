@@ -562,3 +562,40 @@ class TelegramExtras:
             EditPeerFoldersRequest,
             folder_peers=[InputFolderPeer(peer=peer, folder_id=1 if archived else 0)],
         )
+
+    # ------------------------------------------------------------------
+    # Invite links that need a request — and clearing a history
+    # ------------------------------------------------------------------
+    @staticmethod
+    def invite_hash(link: str) -> str:
+        """``https://t.me/+AbCdEf`` or ``t.me/joinchat/AbCdEf`` → ``AbCdEf``."""
+        text = (link or "").strip()
+        marker = "+"
+        if "/joinchat/" in text:
+            return text.split("/joinchat/", 1)[1].strip("/").split("?")[0]
+        if marker in text:
+            return text.split(marker, 1)[1].strip("/").split("?")[0]
+        raise ExtrasError("that is not an invite link", kind="bad_args")
+
+    async def invite_info(self, link: str) -> dict[str, Any]:
+        """What is behind a private invite — name, members, whether he is in."""
+        from telethon.tl.functions.messages import CheckChatInviteRequest
+
+        result = await self._call(CheckChatInviteRequest, self.invite_hash(link))
+        chat = getattr(result, "chat", None) or result
+        return {
+            "already": type(result).__name__ == "ChatInviteAlready",
+            "title": _name(chat) if chat is not None else "",
+            "id": getattr(chat, "id", None),
+            "members": int(getattr(result, "participants_count", 0) or getattr(chat, "participants_count", 0) or 0),
+            "request": type(result).__name__ == "ChatInvitePeek",
+        }
+
+    async def clear_history(self, chat_id: Any, *, revoke: bool = False) -> None:
+        """Delete the history of one chat — ``revoke`` deletes it for everyone."""
+        from telethon.tl.functions.messages import DeleteHistoryRequest
+
+        peer = await self._input_peer(chat_id)
+        await self._call(
+            DeleteHistoryRequest, peer=peer, max_id=0, just_clear=False, revoke=bool(revoke)
+        )

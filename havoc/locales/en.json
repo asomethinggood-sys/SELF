@@ -1453,5 +1453,19 @@
   "cmd.archive.description": "Put a chat in the archive without deleting anything.",
   "cmd.archive.usage": "<chat>",
   "cmd.unarchive.description": "Bring a chat back out of the archive.",
-  "cmd.unarchive.usage": "<chat>"
+  "cmd.unarchive.usage": "<chat>",
+  "msg.clear_failed": "the history did not go — {detail}",
+  "msg.cleared": "✓ the history of {name} is gone on this device",
+  "msg.cleared_everyone": "✓ the history of {name} is gone for both sides",
+  "cmd.clearhistory.description": "Delete a whole conversation's history, here or in a named chat.",
+  "cmd.clearhistory.usage": "[chat] [--for-everyone]",
+  "groups.usage_peek": "which link? {prefix}peek https://t.me/+AbCdEf",
+  "groups.peek_failed": "Telegram would not open that link — {detail}",
+  "groups.peek_header": "⟡ invite · {name}",
+  "groups.peek_members": "◦ members · {count}",
+  "groups.peek_already": "◦ you are already in",
+  "groups.peek_request": "◦ joining needs an admin's approval",
+  "groups.peek_join_hint": "◦ {prefix}join {link} to go in",
+  "cmd.peek.description": "What is behind an invite link, before joining.",
+  "cmd.peek.usage": "<t.me link>"
 }

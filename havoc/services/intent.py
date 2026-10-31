@@ -823,6 +823,17 @@ _ARCHIVE_ASK = re.compile(
     r"^(?:please\s+)?(?P<verb>archive|unarchive)\s+(?P<who>@[\w.]+|this\s+chat)$",
     re.I,
 )
+_PEEK_ASK = re.compile(
+    r"^(?:what(?:'s|\s+is)\s+(?:in|behind)|what\s+is)\s+(?:this\s+)?(?:invite|link)\s*"
+    r"(?P<link>(?:https?://)?(?:t\.me|telegram\.me)/\S+)$",
+    re.I,
+)
+_WIPE_ASK = re.compile(
+    r"^(?:please\s+)?(?:clear|wipe|delete)\s+(?:the\s+)?(?:whole\s+|entire\s+)?"
+    r"(?:this\s+|that\s+|our\s+)?"
+    r"(?P<what>history|conversation|chat\s+history)(?:\s+(?:of|with)\s+(?P<who>.+))?\s*[?!.]*$",
+    re.I,
+)
 _VERSION_ASK = re.compile(
     r"^(?:what|which)\s+version\s+are\s+you(?:\s+running)?\s*[?!.]*$", re.I
 )
@@ -917,6 +928,17 @@ def _surface(text: str) -> Intent | None:
 
     if _ABILITIES_ASK.match(folded):
         return Intent(lines=("abilities",), label="self", detail="abilities")
+
+    match = _PEEK_ASK.match(original)
+    if match:
+        link = match.group("link").strip(" .,!?")
+        return Intent(lines=(f"peek {link}",), label="chats", detail=f"peek · {link[:40]}")
+
+    match = _WIPE_ASK.match(original)
+    if match:
+        who = (match.group("who") or "").strip(" .,!?")
+        line = "clearhistory" + (f" {who}" if who else "")
+        return Intent(lines=(line,), label="msg", detail="clear history")
 
     match = _DRAFT_ASK.match(original)
     if match:

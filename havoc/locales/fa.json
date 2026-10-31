@@ -1453,5 +1453,19 @@
   "cmd.archive.description": "گفتگو را بدون پاک کردن چیزی بایگانی کن.",
   "cmd.archive.usage": "<گفتگو>",
   "cmd.unarchive.description": "گفتگو را از بایگانی بیرون بیاور.",
-  "cmd.unarchive.usage": "<گفتگو>"
+  "cmd.unarchive.usage": "<گفتگو>",
+  "msg.clear_failed": "تاریخچه پاک نشد — {detail}",
+  "msg.cleared": "✓ تاریخچهٔ {name} روی این دستگاه پاک شد",
+  "msg.cleared_everyone": "✓ تاریخچهٔ {name} برای هر دو طرف پاک شد",
+  "cmd.clearhistory.description": "تاریخچهٔ یک گفتگو را پاک کن، همین‌جا یا در گفتگویی که می‌گویی.",
+  "cmd.clearhistory.usage": "[گفتگو] [--for-everyone]",
+  "groups.usage_peek": "کدام لینک؟ {prefix}peek https://t.me/+AbCdEf",
+  "groups.peek_failed": "تلگرام آن لینک را باز نکرد — {detail}",
+  "groups.peek_header": "⟡ دعوت · {name}",
+  "groups.peek_members": "◦ اعضا · {count}",
+  "groups.peek_already": "◦ از قبل عضو هستی",
+  "groups.peek_request": "◦ ورود نیاز به تأیید ادمین دارد",
+  "groups.peek_join_hint": "◦ {prefix}join {link} برای ورود",
+  "cmd.peek.description": "پشت یک لینک دعوت چیست، پیش از پیوستن.",
+  "cmd.peek.usage": "<لینک t.me>"
 }

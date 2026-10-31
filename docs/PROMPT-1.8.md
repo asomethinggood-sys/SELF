@@ -998,12 +998,13 @@ text      .translate .transform .normalize .rtl .digits .textstats .summarize
           .calc .convert-time .time .persianize .search
 content   .fal .poem .quote .random .joke .roast .pic .coin .fight
 memory    .remember .forget .memories .recall .note .bookmark .saved
-messages  .reply .forward .copy .edit .delete .pin .unpin
+messages  .reply .forward .copy .edit .delete .pin .unpin .clearhistory
 sending   .send .say .broadcast .outbox .unsend .emoji .plan
 inbox     .inbox .unread .read .whois .people
 read      .diary .mentions
 chats     .chats .chatinfo .chatsettings .labels .media .groups .members
-          .invite .join .folder .mute .unmute .draft .drafts .archive .unarchive
+          .invite .join .peek .folder .mute .unmute .draft .drafts .archive
+          .unarchive
 admin     .settitle .setdesc .slowmode .kick .ban .unban .promote .demote
           .leave
 people    .contacts .contact .block .unblock .blocklist
@@ -1038,6 +1039,10 @@ yura      .yura .ai
 * **people** — `.contacts .contact .block .unblock .blocklist`;
 * **running a group** — `.settitle .setdesc .slowmode .kick .ban .unban
   .promote .demote .leave`, with `.promote` granting only the rights he names;
+* **invites and histories** — `.peek` shows what is behind a private invite
+  before joining (name, members, whether he is already in), and `.clearhistory`
+  clears a conversation's history — his copy by default, both sides with
+  `--for-everyone`, confirmed either way;
 * **drafts and the archive** — `.draft @sara running late` writes into her input
   box and sends nothing (the promise is tested), `.drafts` lists what Telegram
   holds, `.archive` / `.unarchive` move a chat without deleting a word;
