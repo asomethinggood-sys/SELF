@@ -18,6 +18,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from ..utils.text import emoji_in
 from ..utils.time import TimeParseError, format_datetime, parse_when, utc_now
 from .actions import MAX_CALLS_PER_TURN, ActionResult, Tool, Turn
 from .self_console import run as run_command
@@ -47,21 +48,11 @@ _HERE_WORDS = {
 def first_emoji(text: str) -> str:
     """The one emoji in a sentence — ``قلب`` is not one, ``❤️`` is.
 
-    A model asked to react sometimes supplies a word or a sentence instead of a
-    reaction; sending that to Telegram fails and she ends up narrating a broken
-    tool. Picking the emoji out is the repair.
+    The rule lives in :func:`havoc.utils.text.emoji_in` so the sentence reader and
+    the tool agree on what a reaction is; a word or a Chinese character is not
+    one, and sending one to Telegram fails.
     """
-    cleaned = (text or "").strip()
-    if not cleaned:
-        return ""
-    found = [character for character in cleaned if ord(character) > 0x2000 and not character.isspace()]
-    # Keep modifiers and joiners attached to the emoji they belong to.
-    if not found:
-        return ""
-    first = found[0]
-    index = cleaned.index(first)
-    tail = cleaned[index : index + 8]
-    return tail.split(" ")[0][:8]
+    return emoji_in(text)
 
 
 def _t(runtime: Any, turn: Turn, key: str, **variables: Any) -> str:

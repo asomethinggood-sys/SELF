@@ -30,6 +30,24 @@ ARABIC_INDIC_DIGITS = "\u0660-\u0669"
 PERSIAN_DIGITS = "\u06F0-\u06F9"
 BIDI_MARKS = "\u200E\u200F\u061C\u202A-\u202E\u2066-\u2069"
 
+#: Where an emoji lives. The old ``ord(character) > 0x2000`` test counted every
+#: CJK and Devanagari letter as a reaction, so "send 你好" produced a "reaction"
+#: made of a word. These are the ranges that are actually pictures.
+_EMOJI_RANGES: tuple[tuple[int, int], ...] = (
+    (0x1F000, 0x1FAFF),  # pictographs, faces, symbols, flags' components
+    (0x1F1E6, 0x1F1FF),  # regional indicators
+    (0x2600, 0x27BF),  # misc symbols and dingbats
+    (0x2B00, 0x2BFF),  # arrows and stars
+    (0x2190, 0x21FF),  # arrows people do react with
+    (0x2900, 0x297F),
+    (0x3030, 0x3030),
+    (0x303D, 0x303D),
+    (0x3297, 0x3299),
+    (0xFE0F, 0xFE0F),  # variation selector: keeps the glyph coloured
+    (0x200D, 0x200D),  # zero-width joiner: keeps a family together
+    (0x20E3, 0x20E3),  # combining keycap
+)
+
 _RE_PERSIAN_CHAR = re.compile(f"[{PERSIAN_RANGE}]")
 _RE_PERSIAN_LETTER = re.compile(f"[{PERSIAN_LETTERS}]")
 _RE_LATIN_LETTER = re.compile(r"[A-Za-z\u00C0-\u024F]")
@@ -52,6 +70,49 @@ _FROM_FA = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "0123456789
 
 # Letters that Persian and Arabic share but that are usually mistyped.
 _ARABIC_TO_PERSIAN = str.maketrans({"ي": "ی", "ك": "ک", "ٱ": "ا", "ۀ": "ه"})
+
+
+def is_emoji_char(character: str) -> bool:
+    """True for a picture, False for a letter that merely lives high up."""
+    if not character:
+        return False
+    point = ord(character[0])
+    return any(low <= point <= high for low, high in _EMOJI_RANGES)
+
+
+def emoji_in(text: object) -> str:
+    """The first emoji in a sentence, with its modifiers and joiners attached.
+
+    ``"react with ❤️ please"`` gives ``"❤️"``; ``"قلب"`` and ``"你好"`` give ``""``,
+    because a word is not a reaction and Telegram rejects one.
+    """
+    cleaned = str(text or "")
+    # Joiners and variation selectors are *part* of an emoji, never its start:
+    # "1️⃣" begins at the digit, not at the invisible mark after it.
+    weak = {"\ufe0f", "\u20e3", "\u200d"}
+    # A keycap ("1️⃣", "#️⃣") is a digit plus the mark that makes it a picture,
+    # and nothing in it is a "high" character on its own — so it is found first.
+    keycap = re.search(r"[0-9#*]\ufe0f?\u20e3", cleaned)
+    start = next(
+        (index for index, ch in enumerate(cleaned) if is_emoji_char(ch) and ch not in weak),
+        None,
+    )
+    if start is None:
+        return keycap.group(0) if keycap else ""
+    if keycap is not None and keycap.start() < start:
+        return keycap.group(0)
+    end = start
+    for index in range(start, len(cleaned)):
+        character = cleaned[index]
+        if character == "\u200d" or is_emoji_char(character) or character in "\ufe0f\u20e3":
+            end = index + 1
+            continue
+        if character.isdigit() or character == "#":
+            # A keycap reaction ("1️⃣") is a digit plus a combining mark.
+            end = index + 1
+            continue
+        break
+    return cleaned[start:end]
 
 
 def plain_text(value: object, default: str = "") -> str:

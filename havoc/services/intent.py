@@ -22,6 +22,8 @@ import re
 import sys
 from dataclasses import dataclass, field
 
+from ..utils.text import emoji_in
+
 #: Verbs that mean "change the state of the account".
 OFF_WORDS = (
     "turn off",
@@ -1221,7 +1223,7 @@ def _fa_reaction(text: str) -> str:
         bare = word.strip()
         if _REACT_FA_VERB.fullmatch(bare):
             continue
-        if any(ord(character) > 0x2000 and not character.isspace() for character in bare):
+        if emoji_in(bare):
             glyphs.append(bare)
             continue
         lowered = bare.lower()
@@ -1231,13 +1233,9 @@ def _fa_reaction(text: str) -> str:
             continue
         spoken.append(lowered)
     for candidate in glyphs:
-        cleaned = "".join(
-            character
-            for character in candidate
-            if ord(character) > 0x2000 and not character.isspace()
-        )
+        cleaned = emoji_in(candidate)
         if cleaned:
-            return cleaned[:8]
+            return cleaned
     for candidate in spoken:
         if candidate in _REACTION_WORDS:
             return _REACTION_WORDS[candidate]
@@ -1542,6 +1540,37 @@ def _utility(text: str) -> Intent | None:
     return None
 
 
+#: "send me a sticker with a cat", "استیکر قلب بفرست". The emoji or the word is
+#: the argument; a sticker with no subject is not a command.
+_STICKER_EN = re.compile(
+    r"^(?:please\s+)?(?:send\s+(?:me\s+)?)?(?:a\s+|an\s+)?sticker"
+    r"(?:\s+(?:of|with|for|that\s+(?:is|says?))?\s*(?P<what>.+?))?\s*[.!]*$",
+    re.I,
+)
+_STICKER_FA = re.compile(
+    r"^(?:please\s+)?(?:یک\s+)?استیکر"
+    r"(?:\s*(?:از|با|به\s+شکل)?\s*(?P<what>.+?))?"
+    r"\s*(?:بفرست|بده|بنداز|بزن)?\s*[.!؟?]*$",
+    re.I,
+)
+
+
+def _sticker(text: str) -> Intent | None:
+    """A sticker request, if that is what this is."""
+    line = _lead(_clean(text))
+    for pattern in (_STICKER_FA, _STICKER_EN):
+        match = pattern.match(line)
+        if not match:
+            continue
+        what = (match.group("what") or "").strip(" .,!؟?")
+        # "a sticker of a cat" / "a sticker with a cat" is a cat.
+        what = re.sub(r"^(?:a|an|the|one|یکی|یک)\s+", "", what, flags=re.I).strip()
+        if not what or what in _NOISE or len(what) > 40:
+            return None
+        return Intent(lines=(f"sticker {what}",), label="sticker", detail=f"sticker · {what}")
+    return None
+
+
 def _misc(text: str) -> Intent | None:
     """The read-only shapes: a question opener, or an order to show something.
 
@@ -1660,6 +1689,10 @@ def detect(
         # A switch verb with no nameable target is a sentence about switching, not
         # a request — never guess.
         return None
+
+    sticker = _sticker(text)
+    if sticker is not None:
+        return sticker
 
     # The vocative is not part of the sentence: "یورا فال بگیر" asks for a
     # fortune exactly like "فال بگیر" does.

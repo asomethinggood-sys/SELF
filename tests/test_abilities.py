@@ -259,3 +259,22 @@ async def test_the_send_tool_understands_this_group(runtime) -> None:
     here = [row for row in runtime.client.sent if row.text == "hi" and int(row.chat_id) == GROUP]
     assert len(here) == 1, "one now, the other nine queued"
     assert len(await _reach_jobs(runtime)) == 9
+
+
+def test_a_sticker_request_in_plain_words() -> None:
+    assert intent_module.detect("send me a sticker with a cat") .lines == ("sticker cat",)
+    assert intent_module.detect("یورا استیکر قلب بفرست").lines == ("sticker قلب",)
+
+
+def test_a_sticker_with_no_subject_is_not_an_order() -> None:
+    assert intent_module.detect("sticker") is None
+    assert intent_module.detect("I like stickers") is None
+
+
+def test_a_word_is_never_mistaken_for_a_reaction() -> None:
+    from havoc.utils.text import emoji_in
+
+    assert emoji_in("react with ❤️ please") == "❤️"
+    assert emoji_in("قلب") == ""
+    assert emoji_in("你好") == ""
+    assert emoji_in("1️⃣") == "1️⃣"
