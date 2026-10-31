@@ -799,6 +799,21 @@ _SLOWMODE_ASK = re.compile(
     r"^(?:set\s+)?slow\s?mode\s+(?P<value>off|\d+\s*(?:s|sec|m|min|h|hour)?)\s*[?!.]*$",
     re.I,
 )
+_PRIVACY_ASK = re.compile(
+    r"^(?:what\s+can\s+(?:people|others|strangers)\s+see"
+    r"|what\s+(?:do\s+)?(?:people|others)\s+see\s+about\s+me"
+    r"|show\s+(?:me\s+)?(?:my\s+)?privacy(?:\s+settings)?"
+    r"|who\s+can\s+see\s+(?:my\s+)?(?:number|phone|photo|last\s+seen|profile))\s*[?!.]*$",
+    re.I,
+)
+_SECURITY_ASK = re.compile(
+    r"^(?:is\s+(?:my\s+)?(?:two[\s-]?step|2fa|two[\s-]?factor)(?:\s+(?:lock|password|protection|verification))?"
+    r"(?:\s+(?:on|enabled|set|active))?"
+    r"|do\s+i\s+have\s+(?:two[\s-]?step|2fa|two[\s-]?factor)(?:\s+(?:on|enabled))?"
+    r"|is\s+(?:my\s+)?account\s+(?:secure|locked)"
+    r"|show\s+(?:me\s+)?(?:my\s+)?security)\s*[?!.]*$",
+    re.I,
+)
 _VERSION_ASK = re.compile(
     r"^(?:what|which)\s+version\s+are\s+you(?:\s+running)?\s*[?!.]*$", re.I
 )
@@ -893,6 +908,12 @@ def _surface(text: str) -> Intent | None:
 
     if _ABILITIES_ASK.match(folded):
         return Intent(lines=("abilities",), label="self", detail="abilities")
+
+    if _PRIVACY_ASK.match(folded):
+        return Intent(lines=("privacy",), label="account", detail="privacy")
+
+    if _SECURITY_ASK.match(folded):
+        return Intent(lines=("security",), label="account", detail="security")
 
     if _BLOCKED_ASK.match(folded):
         return Intent(lines=("blocklist",), label="people", detail="blocklist")

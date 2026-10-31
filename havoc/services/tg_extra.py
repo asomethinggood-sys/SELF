@@ -445,3 +445,69 @@ class TelegramExtras:
 
     async def send_location(self, chat_id: Any, lat: float, lon: float) -> Any:
         return await self._send_media(chat_id, self.location_media(lat, lon))
+
+    # ------------------------------------------------------------------
+    # Privacy and the two-step lock (read-only)
+    # ------------------------------------------------------------------
+    #: The settings that actually mean something to a person, in the order they
+    #: appear in Telegram's own Privacy screen.
+    PRIVACY_KEYS = (
+        ("privacy.last_seen", "InputPrivacyKeyStatusTimestamp"),
+        ("privacy.photo", "InputPrivacyKeyProfilePhoto"),
+        ("privacy.phone", "InputPrivacyKeyPhoneNumber"),
+        ("privacy.calls", "InputPrivacyKeyPhoneCall"),
+        ("privacy.invites", "InputPrivacyKeyChatInvite"),
+        ("privacy.added_by", "InputPrivacyKeyAddedByPhone"),
+        ("privacy.birthday", "InputPrivacyKeyBirthday"),
+    )
+
+    @staticmethod
+    def rule_word(rules: Any) -> str:
+        """Telegram's rule list as one word: everyone, contacts, nobody, some."""
+        names = [type(rule).__name__ for rule in rules or []]
+        if "PrivacyValueDisallowAll" in names:
+            return "nobody"
+        if "PrivacyValueAllowAll" in names:
+            return "everyone"
+        if "PrivacyValueAllowCloseFriends" in names:
+            return "close_friends"
+        if "PrivacyValueAllowContacts" in names:
+            return "contacts"
+        if "PrivacyValueDisallowContacts" in names:
+            return "everyone_except_contacts"
+        if "PrivacyValueAllowUsers" in names:
+            return "selected"
+        return "unknown"
+
+    async def privacy(self) -> list[dict[str, str]]:
+        """Each of his privacy settings and what it currently allows."""
+        import telethon.tl.types as types
+        from telethon.tl.functions.account import GetPrivacyRequest
+
+        rows: list[dict[str, str]] = []
+        for label, class_name in self.PRIVACY_KEYS:
+            key_class = getattr(types, class_name, None)
+            if key_class is None:  # a layer without this setting
+                continue
+            result = await self._call(GetPrivacyRequest, key=key_class())
+            rows.append(
+                {
+                    "label": label,
+                    "value": self.rule_word(getattr(result, "rules", None)),
+                }
+            )
+        return rows
+
+    async def security(self) -> dict[str, Any]:
+        """Whether the two-step lock is on, and its hint — never the password."""
+        from telethon.tl.functions.account import GetPasswordRequest
+
+        result = await self._call(GetPasswordRequest)
+        if result is None:
+            raise ExtrasError("Telegram returned no password state", kind="refused")
+        return {
+            "two_factor": bool(getattr(result, "has_password", False)),
+            "hint": str(getattr(result, "hint", "") or ""),
+            "recovery": bool(getattr(result, "has_recovery", False)),
+            "pending_reset": bool(getattr(result, "pending_reset_date", None)),
+        }

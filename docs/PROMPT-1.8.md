@@ -1009,7 +1009,7 @@ admin     .settitle .setdesc .slowmode .kick .ban .unban .promote .demote
 people    .contacts .contact .block .unblock .blocklist
 profile   .profile .bio .clock .preset .away .counter .username .photo
 media     .poll .geo
-account   .sessions .endsession .privacy✚ .2fa✚
+account   .sessions .endsession .privacy .security
 time      .remind .reminders .tasks .schedule .scheduled .agenda .quiet-hours
 social    .autoreply .trigger .rules .detect .react .watch .template .suggest
         .ignore
@@ -1037,10 +1037,15 @@ yura      .yura .ai
   and `.search … in <chat>`;
 * **people** — `.contacts .contact .block .unblock .blocklist`;
 * **running a group** — `.settitle .setdesc .slowmode .kick .ban .unban
-  .promote .demote .leave`, with `.promote` granting only the rights he names.
+  .promote .demote .leave`, with `.promote` granting only the rights he names;
+* **what others see** — `.privacy` reads every privacy setting that matters and
+  `.security` reports whether the two-step lock is on. Both are **read-only**:
+  the password state is read, never changed, and the hint is shown but never the
+  secret, because a bot able to rewrite who may see his number is a worse risk
+  than the tap it saves.
 
 Every one of these also has plain-language routes in `havoc/services/intent.py`
-("remember that…", "who did i block", "rename this group to…", "slow mode 5m").
+("remember that…", "who did i block", "rename this group to…", "slow mode 5m", "what can people see", "is my two step on").
 
 **Tools she can reach without a dot** (14, `scripts/audit_live.py`): `recall`,
 `search`, `translate`, `remember`, `forget`, `remind`, `command`, `send_message`,

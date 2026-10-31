@@ -9,7 +9,7 @@ account other than the logged-in user.
 `.` in the usage column stands for the active prefix (default `.`).
 
 
-Total: **133 commands**.
+Total: **135 commands**.
 
 
 ## Account
@@ -17,6 +17,8 @@ Total: **133 commands**.
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
 | `.endsession` | Sign one of those devices out _(owner only; changes state; asks for confirmation)._ | `.endsession <number from .sessions>` | — |
+| `.privacy` | What other people can see: last seen, photo, number, calls _(owner only)._ | `.privacy` | — |
+| `.security` | Whether the two-step lock is on, and its hint _(owner only)._ | `.security` | — |
 | `.sessions` | Every device signed into this account _(owner only)._ | `.sessions` | `.devices` |
 
 ## Admin
