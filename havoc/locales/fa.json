@@ -1500,5 +1500,14 @@
   "export.send_failed": "فایل نوشته شد ولی فرستاده نشد — {detail}",
   "export.where": "◦ {name} · {file} — فایل در همین گفتگوست",
   "cmd.exportchat.description": "یک گفتگو را به فایل متنی تبدیل کن و همین‌جا بفرست.",
-  "cmd.exportchat.usage": "<گفتگو> [تعداد] [--limit n]"
+  "cmd.exportchat.usage": "<گفتگو> [تعداد] [--limit n]",
+  "stickers.usage": "چه استیکری؟ {prefix}sticker ❤️ — یا یک کلمه: عشق، خنده، گریه، جشن.",
+  "stickers.unknown_emoji": "برای «{word}» استیکری نمی‌شناسم.",
+  "stickers.none": "هیچ استیکری در پک‌هایت با {emoji} تگ نشده.",
+  "stickers.sent": "استیکر فرستاده شد · {emoji}",
+  "stickers.pack": "پک",
+  "stickers.pool": "هم‌معنی",
+  "stickers.more": "دوباره بگو تا یکی دیگر بیاید",
+  "cmd.sticker.description": "فرستادن استیکر از پک‌های خود حساب — با ایموجی یا با کلمه‌ای که همان معنی را می‌دهد",
+  "cmd.sticker.usage": "<ایموجی یا کلمه> [--to چت] [--silent] [--first] [--reply]"
 }

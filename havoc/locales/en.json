@@ -1500,5 +1500,14 @@
   "export.send_failed": "the file was written but not sent — {detail}",
   "export.where": "◦ {name} · {file} — the file is in this chat",
   "cmd.exportchat.description": "Save a conversation as a text file and send it back here.",
-  "cmd.exportchat.usage": "<chat> [count] [--limit n]"
+  "cmd.exportchat.usage": "<chat> [count] [--limit n]",
+  "stickers.usage": "Which sticker? {prefix}sticker ❤️ — or a word: love, laugh, cry, party.",
+  "stickers.unknown_emoji": "I don't know a sticker for {word}.",
+  "stickers.none": "No sticker in your packs is tagged {emoji}.",
+  "stickers.sent": "sticker sent · {emoji}",
+  "stickers.pack": "pack",
+  "stickers.pool": "matching",
+  "stickers.more": "say it again for another one",
+  "cmd.sticker.description": "Send a sticker from the account's own packs — by emoji or by a word for it",
+  "cmd.sticker.usage": "<emoji|word> [--to chat] [--silent] [--first] [--reply]"
 }

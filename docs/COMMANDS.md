@@ -9,7 +9,7 @@ account other than the logged-in user.
 `.` in the usage column stands for the active prefix (default `.`).
 
 
-Total: **144 commands**.
+Total: **145 commands**.
 
 
 ## Account
@@ -164,6 +164,7 @@ Total: **144 commands**.
 | `.geo` | Send a location point _(owner only; changes state)._ | `.geo <lat>, <lon>` | — |
 | `.pic` | Send a picture or file (path or URL); several files become an album _(owner only; changes state)._ | `.pic <path|url> [...] [--caption text] [--to chat] [--silent]` | `.image`, `.file`, `.sendfile`, `.عکس`, `.تصویر` |
 | `.poll` | Post a real poll in this chat _(owner only; changes state)._ | `.poll <question> | <option> | <option>` | — |
+| `.sticker` | Send a sticker from the account's own packs — by emoji or by a word for it _(owner only; changes state)._ | `.sticker <emoji|word> [--to chat] [--silent] [--first] [--reply]` | `.stikers`, `.stix` |
 
 ## Memory
 

@@ -225,7 +225,7 @@ def builtin_features(config: Any = None, *, ai_available: bool = False, translat
         Feature("summaries", "information", False, (), True, commands=("summarize",)),
         # Sends messages in the owner's own chat, so it is off until asked for.
         Feature("persona", "persona", False, (), False, commands=("yura",)),
-        Feature("media", "persona", False, (), False, commands=("pic",)),
+        Feature("media", "persona", False, (), False, commands=("pic", "sticker")),
         # Reading a poem or drawing a fal is always available offline; these
         # switches exist so the whole family can be turned off in one gesture.
         Feature("poetry", "fun", False, (), True, commands=("poem", "fal")),
