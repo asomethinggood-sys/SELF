@@ -247,3 +247,15 @@ async def test_saying_it_once_sends_it_once(runtime) -> None:
     ]
     assert len(delivered) == 1
     assert not any(row.text == "on my way" for row in runtime.client.sent if int(row.chat_id) == GROUP)
+
+
+async def test_the_send_tool_understands_this_group(runtime) -> None:
+    """"send hi in 10 different messages in this group" — the model has no id."""
+    turn = Turn(chat_id=GROUP, actor_id=OWNER, language="en", is_owner=True)
+    result = await _tool(runtime, "send_message").run(
+        turn, {"to": "this group", "text": "hi", "repeat": "10"}
+    )
+    assert result.ok, result.detail
+    here = [row for row in runtime.client.sent if row.text == "hi" and int(row.chat_id) == GROUP]
+    assert len(here) == 1, "one now, the other nine queued"
+    assert len(await _reach_jobs(runtime)) == 9

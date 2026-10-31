@@ -26,6 +26,24 @@ from .translation_provider import TranslationError
 __all__ = ["build_tools"]
 
 
+#: The ways a sentence says "the room I am standing in".
+_HERE_WORDS = {
+    "here",
+    "this chat",
+    "this group",
+    "this room",
+    "this channel",
+    "the group",
+    "the chat",
+    "current chat",
+    "this one",
+    "این گروه",
+    "همین گروه",
+    "اینجا",
+    "این چت",
+}
+
+
 def first_emoji(text: str) -> str:
     """The one emoji in a sentence — ``قلب`` is not one, ``❤️`` is.
 
@@ -364,7 +382,15 @@ def build_tools(runtime: Any) -> list[Tool]:
         body = (args.get("text") or "").strip()
         if not who or not body:
             return ActionResult(False, detail="both 'to' and 'text' are needed", kind="bad_args")
-        target = await runtime.reach.resolve(who)
+        target = None
+        if who.lower().strip(" .,!") in _HERE_WORDS:
+            # "send hi in 10 different messages in this group" — the model has no
+            # id to give, and the room it is speaking in is the answer.
+            from .reach import Target
+
+            target = Target(id=int(turn.chat_id), kind="unknown", title="this chat")
+        if target is None:
+            target = await runtime.reach.resolve(who)
         if target is None:
             near = await runtime.reach.candidates(who, limit=4)
             hint = ", ".join(f"{item.label} ({item.id})" for item in near) if near else ""
