@@ -529,7 +529,11 @@ async def cmd_plan(ctx: CommandContext) -> None:
         if plan.empty:
             raise CommandError("plan.unreadable")
         result = await ctx.runtime.plans.create(
-            plan, said=sentence, owner_id=getattr(ctx.event, "sender_id", None)
+            plan,
+            said=sentence,
+            owner_id=getattr(ctx.event, "sender_id", None),
+            # The room he is standing in, so a step that speaks "here" speaks here.
+            chat_id=int(ctx.chat_id or 0) or None,
         )
         if ctx.has_flag("json") and result.get("ok"):
             await ctx.reply(code(json.dumps(result["plan"], ensure_ascii=False)))

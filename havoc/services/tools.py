@@ -471,7 +471,10 @@ def build_tools(runtime: Any) -> list[Tool]:
         if plan.empty:
             return ActionResult(False, detail="could not read that as a timeline", kind="failed")
         result = await runtime.plans.create(
-            plan, said=sentence or steps, owner_id=turn.actor_id
+            plan,
+            said=sentence or steps,
+            owner_id=turn.actor_id,
+            chat_id=int(turn.chat_id or 0) or None,
         )
         return ActionResult(
             True,

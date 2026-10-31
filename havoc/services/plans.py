@@ -411,7 +411,14 @@ class PlanRunner:
     def store(self) -> Any:
         return self.runtime.store
 
-    async def create(self, plan: Plan, *, said: str = "", owner_id: int | None = None) -> dict[str, Any]:
+    async def create(
+        self,
+        plan: Plan,
+        *,
+        said: str = "",
+        owner_id: int | None = None,
+        chat_id: int | None = None,
+    ) -> dict[str, Any]:
         """Persist a plan and queue its steps. Returns the plan as a dict."""
         steps = plan.steps[:MAX_STEPS]
         if not steps:
@@ -419,7 +426,11 @@ class PlanRunner:
         label = plan.label or label_for(said or plan.said)
         plan.label = label
         plan_id = await self.store.add_plan(
-            owner_id=owner_id, label=label, said=said or plan.said, status="pending"
+            owner_id=owner_id,
+            label=label,
+            said=said or plan.said,
+            status="pending",
+            chat_id=chat_id,
         )
         for index, step in enumerate(steps):
             step_id = await self.store.add_plan_step(plan_id, index, iso(step.at), step.action)
@@ -455,7 +466,12 @@ class PlanRunner:
             return
         if not await self.store.step_fired(step_id, status="done"):
             return  # another runner claimed it
-        ok, why = await self._execute(str(step["action"]), plan_id=plan_id)
+        # The room he asked in, so "say hi here" is the room and not Saved
+        # Messages. A plan with no room (made from the console) runs as her.
+        room = plan["chat_id"] if "chat_id" in plan.keys() else None
+        ok, why = await self._execute(
+            str(step["action"]), plan_id=plan_id, chat_id=int(room or 0) or None
+        )
         if not ok:
             # A step that could not run must not look like one that did: the row
             # carries the reason, and the plan is closed as failed at the end —
@@ -464,7 +480,9 @@ class PlanRunner:
             await self.store.step_failed(step_id, why or "the step failed")
         await self._close_if_done(plan_id)
 
-    async def _execute(self, action: str, *, plan_id: int) -> tuple[bool, str]:
+    async def _execute(
+        self, action: str, *, plan_id: int, chat_id: int | None = None
+    ) -> tuple[bool, str]:
         from .self_console import run as run_command
 
         self_id = int(getattr(self.runtime.permissions, "self_id", 0) or 0)
@@ -478,7 +496,7 @@ class PlanRunner:
             reply = await run_command(
                 self.runtime,
                 action,
-                chat_id=self_id or 0,
+                chat_id=int(chat_id or self_id or 0),
                 sender_id=self_id,
             )
         finally:

@@ -698,6 +698,18 @@ def _lead(text: str) -> str:
     return re.sub(r"^(?:برو|برین|برو\s+و)\s+(?=\S)", "", out).strip()
 
 
+#: The words that name the room she is already in. They are an address, never
+#: the message: "say hi here" is "hi", not "hi here".
+_ROOM_WORD_SET = {
+    "here", "this chat", "this group", "this room", "this channel", "the group",
+    "the chat", "اینجا", "این گروه", "همین گروه", "این چت", "همین چت",
+}
+
+
+def _is_room_word(text: str) -> bool:
+    return str(text or "").strip().lower() in _ROOM_WORD_SET
+
+
 def _clean_body(raw: str) -> str:
     """The message he dictated, without the quotes a person wraps it in."""
     body = " ".join((raw or "").split()).strip()
@@ -1402,6 +1414,19 @@ _SAY_IN = re.compile(
 _SAY_INTO = re.compile(
     r"^(?:then\s+)?(?:in|into|to)\s+(?P<who>our saved messages|saved messages|my saved messages|saved)"
     r"\s*(?:,|and)?\s*(?:say|saying|write|put|post)?\s*(?P<body>.+)$",
+    re.I,
+)
+#: "say hi here" / "say hi in this group" — the room he is standing in is the
+#: address, so the order needs no name at all.
+_SAY_HERE_EN = re.compile(
+    r"^(?:please\s+)?(?:say|write|post|tell\s+(?:them|everyone))\s+(?P<body>.+?)\s+"
+    r"(?:here|in\s+(?:this|the)\s+(?:group|chat|room|channel)|to\s+(?:this|the)\s+(?:group|chat|room))\s*$",
+    re.I,
+)
+#: "اینجا بگو سلام" / "توی این گروه بگو سلام" — the same order in Persian order.
+_SAY_HERE_FA = re.compile(
+    r"^(?:توی|در|به)?\s*(?:این\s*گروه|همین\s*گروه|این\s*چت|همین\s*چت|اینجا)\s*"
+    r"(?:بگو|بنویس|بفرست|پست\s*کن)\s*[:،]?\s*(?P<body>.+)$",
     re.I,
 )
 #: "به سارا پیام بده که دیر می‌رسم" / "پیام بده به سارا دیر می‌رسم" — the Persian
@@ -2227,6 +2252,17 @@ def _reach(text: str, *, allow_plan: bool = True) -> Intent | None:
             detail=f"send · {count}×",
         )
 
+    for pattern in (_SAY_HERE_EN, _SAY_HERE_FA):
+        match = pattern.match(spoken_once)
+        if not match:
+            continue
+        body = _clean_body(match.group("body"))
+        if body and len(body) > 1 and body.lower() not in _NOISE and not _is_room_word(body):
+            return Intent(
+                lines=(f"send --here {body}",),
+                label="send",
+                detail="send · here",
+            )
     match = _SAY_INTO.match(original)
     if match:
         body, flags = _reach_options(match.group("body"))

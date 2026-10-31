@@ -399,3 +399,42 @@ async def test_the_model_builds_a_chain_end_to_end(runtime) -> None:
     assert len(plans) == 1, "a plan was made more than once"
     steps = await runtime.store.plan_steps(int(plans[0]["id"]))
     assert [row["action"] for row in steps] == ["send محمد سلام", "unsend last", "fal"]
+
+
+async def test_a_plan_remembers_the_room_it_was_asked_in(runtime) -> None:
+    """'say hi here' in a group must arrive in the group, not in Saved Messages."""
+    await _wire(runtime)
+    room = -1001234567890
+    reply = await run_console(
+        runtime, "plan do این گروه بگو سلام بعدش فال بگیر", chat_id=room, sender_id=OWNER
+    )
+    assert reply.ok, reply.note
+    plan = (await runtime.store.plans(1))[0]
+    assert int(plan["chat_id"]) == room
+
+
+async def test_here_means_the_room_and_the_step_arrives_there(runtime) -> None:
+    """A plan made in a group speaks in that group, hours later."""
+    await _wire(runtime)
+    room = -1001234567890
+    found = intent_module.detect("این گروه بگو سلام")
+    assert found is not None and found.lines == ("send --here سلام",)
+
+    reply = await run_console(
+        runtime, "plan do این گروه بگو سلام بعدش فال بگیر", chat_id=room, sender_id=OWNER
+    )
+    assert reply.ok, reply.note
+    plan_id = int((await runtime.store.plans(1))[0]["id"])
+    before = len(runtime.client.sent)
+    await _run_all(runtime, plan_id)
+    assert [(row.chat_id, row.text) for row in runtime.client.sent[before:]] == [(room, "سلام")]
+
+
+def test_say_hi_here_is_the_room_not_a_name() -> None:
+    assert intent_module.detect("say hi here").lines == ("send --here hi",)
+    assert intent_module.detect("say hi in this group").lines == ("send --here hi",)
+
+
+def test_a_bare_persian_say_is_conversation_not_an_order() -> None:
+    """"بگو یه چیزی" is "say something", a sentence — not a broadcast."""
+    assert intent_module.detect("بگو یه چیزی") is None

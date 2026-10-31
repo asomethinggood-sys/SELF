@@ -339,11 +339,20 @@ class Store:
 
     # -- plans ---------------------------------------------------------
     async def add_plan(
-        self, *, owner_id: int | None, label: str, said: str, status: str = "pending"
+        self,
+        *,
+        owner_id: int | None,
+        label: str,
+        said: str,
+        status: str = "pending",
+        chat_id: int | None = None,
     ) -> int:
         return await self.db.insert(
-            "INSERT INTO plans(owner_id, label, said, status, created_at) VALUES(?, ?, ?, ?, ?)",
-            (owner_id, label[:200], said[:2000], status, iso(utc_now())),
+            """
+            INSERT INTO plans(owner_id, label, said, status, created_at, chat_id)
+            VALUES(?, ?, ?, ?, ?, ?)
+            """,
+            (owner_id, label[:200], said[:2000], status, iso(utc_now()), chat_id),
         )
 
     async def add_plan_step(self, plan_id: int, idx: int, at: str, action: str) -> int:

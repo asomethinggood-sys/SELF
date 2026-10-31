@@ -558,6 +558,17 @@ MIGRATION_11_RULE_WINDOWS = Migration(
     ),
 )
 
+MIGRATION_12_PLAN_ROOM = Migration(
+    version=12,
+    name="plan_room",
+    statements=(
+        # A plan remembers the room it was asked in. Without it, "این گروه ساعت
+        # نه بگو سلام" scheduled a step that ran in Saved Messages, because the
+        # scheduler has no chat of its own and the plan never said which one.
+        "ALTER TABLE plans ADD COLUMN chat_id INTEGER",
+    ),
+)
+
 MIGRATIONS: tuple[Migration, ...] = (
     MIGRATION_1_FOUNDATION,
     MIGRATION_2_TIMESTAMPS,
@@ -570,6 +581,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     MIGRATION_9_TOOLBOX,
     MIGRATION_10_REPLY_RULES,
     MIGRATION_11_RULE_WINDOWS,
+    MIGRATION_12_PLAN_ROOM,
 )
 
 LATEST_VERSION = max(m.version for m in MIGRATIONS)

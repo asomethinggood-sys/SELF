@@ -148,7 +148,10 @@ The rules that make it work, in both languages:
   `unsend last`, and inside a plan it deletes *that plan's* send — the outbox row
   carries the plan id, so it can never reach outside the timeline;
 * a **named private chat** (`پیوی محمد`, `پیوی @ali`) resolves the way `send`
-  resolves anything else, and says so plainly when there is no such person.
+  resolves anything else, and says so plainly when there is no such person;
+* the **room is remembered**: a plan made in a group runs its "here" steps in
+  that group hours later, because the plan row carries the chat it was asked in
+  (migration 12) and the scheduler has no room of its own.
 
 **4.5 The model writes the timeline when it understood one.** `plan` takes either
 the sentence verbatim or the steps themselves:
