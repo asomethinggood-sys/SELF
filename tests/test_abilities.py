@@ -11,7 +11,8 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from conftest import invoke
+from conftest import FakeMessage, invoke
+from test_picture_reply import StubProvider
 
 from havoc.services import intent as intent_module
 from havoc.services.actions import Turn
@@ -278,3 +279,26 @@ def test_a_word_is_never_mistaken_for_a_reaction() -> None:
     assert emoji_in("قلب") == ""
     assert emoji_in("你好") == ""
     assert emoji_in("1️⃣") == "1️⃣"
+
+
+# ---------------------------------------------------------------------------
+# The whole path: he replies to someone in a group and tells her to react
+# ---------------------------------------------------------------------------
+async def test_reacting_through_the_persona_path_hits_the_bubble_he_answered(runtime) -> None:
+    """The sentence he actually types: her name, then the order.
+
+    It reaches her through `.yura`, because a prefix-less "یورا …" is a message to
+    her — so the console has to be handed the message he replied to, or she has
+    nothing to put a heart on.
+    """
+    await runtime.store.set_feature("persona", True)
+    await runtime.feature_manager.refresh()
+    runtime.ai = StubProvider(reply="fine, done")
+    target = FakeMessage(
+        id=733, chat_id=GROUP, sender_id=FRIEND, text="look at this", out=False, is_group=True
+    )
+    await invoke(runtime, ".yura به پیامش قلب واکنش بده", chat_id=GROUP, reply=target)
+    assert runtime.client.reactions, "she answered with words and never reacted"
+    chat_id, message_id, emoji = runtime.client.reactions[-1]
+    assert (chat_id, message_id) == (GROUP, 733)
+    assert emoji == "❤️"
