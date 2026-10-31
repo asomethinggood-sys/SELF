@@ -173,7 +173,12 @@ async def cmd_unread(ctx: CommandContext) -> None:
     for dialog in rows:
         entity = getattr(dialog, "entity", None) or dialog
         name = display_name(entity, str(getattr(dialog, "id", "?")))
-        stamp = format_short(parse_iso(_dialog_date(dialog)) or utc_now(), tz, ctx.language)
+        # A dialog hands back a real datetime; a stored row hands back text.
+        # `parse_iso` only understands the text, and calling it on the datetime
+        # was the AttributeError that turned the whole list into "unexpected".
+        raw_date = _dialog_date(dialog)
+        moment = raw_date if isinstance(raw_date, datetime) else parse_iso(raw_date)
+        stamp = format_short(moment or utc_now(), tz, ctx.language)
         lines.append(f"{name} — {_unread(dialog)} · {stamp}")
     await ctx.reply(
         ui.card(

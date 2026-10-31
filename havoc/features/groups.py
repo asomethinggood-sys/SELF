@@ -29,10 +29,23 @@ def _fail(exc: ExtrasError, *, key: str = "groups.failed") -> CommandError:
     return CommandError(key, detail=escape(truncate(str(exc), 200)))
 
 
+#: "this", "here", "همین گروه" — the room the order was given in. Reach has no
+#: way to know which one that is, because it is not a message.
+_HERE_WORDS = {
+    "this", "this chat", "this group", "this room", "this channel", "the chat",
+    "the group", "here", "current chat", "current group",
+    "این چت", "این گروه", "همین گروه", "همین چت", "اینجا",
+}
+
+
 async def _named_target(ctx: CommandContext, raw: str) -> Any:
     text = (raw or "").strip()
     if not text:
         raise CommandError("groups.usage_target", prefix=ctx.runtime.prefix)
+    if text.lower().strip(" .,!") in _HERE_WORDS:
+        from ..services.reach import Target
+
+        return Target(id=int(ctx.chat_id), kind="chat", title="this chat")
     try:
         return await ctx.runtime.reach.resolve_or_raise(text)
     except Exception as exc:  # noqa: BLE001 - ReachError carries the name

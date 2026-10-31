@@ -87,6 +87,8 @@ class SendReport:
     note: str = ""
     #: True when the same line had just been sent, so this one was skipped.
     duplicate: bool = False
+    #: The rest of a repeat: on the clock, not on the wire yet.
+    queued: int = 0
 
     @property
     def summary(self) -> str:
@@ -98,8 +100,11 @@ class SendReport:
             return f"scheduled for {self.scheduled_for}"
         if self.dry_run:
             return "dry run — nothing was sent"
-        if self.sent:
+        if self.sent or self.queued:
             base = f"sent ×{self.sent}" if self.sent > 1 else "sent"
+            if self.queued:
+                # "repeat 100 times" must never read as one message.
+                base = f"{base} + {self.queued} queued"
             return f"{base} · {self.note}" if self.note else base
         return "nothing to send"
 
@@ -421,9 +426,8 @@ class Reach:
                 {"chat_id": target.id, "message_id": report.message_ids[0], "outbox_id": result.get("outbox_id")},
             )
             report.deletes_at = iso(when)
-        report.sent = report.sent or (repeat if repeat > 1 else 0)
         if repeat > 1:
-            report.message_ids = report.message_ids  # the rest are queued
+            report.queued = repeat - 1
         return report
 
     async def _send_once(

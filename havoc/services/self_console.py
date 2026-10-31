@@ -110,6 +110,12 @@ class _CapturingSender:
     def __init__(self, inner: Any, lines: list[str]) -> None:
         self._inner = inner
         self._lines = lines
+        # A captured line is still an answer. The dispatcher decides "this
+        # handler said nothing, show it the usage" by watching this counter —
+        # and because this wrapper holds the text instead of sending it, the
+        # inner counter never moved, so every command that answered correctly
+        # was also scolded with its own usage line.
+        self.sent_count = int(getattr(inner, "sent_count", 0) or 0)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._inner, name)
@@ -124,17 +130,21 @@ class _CapturingSender:
         return kwargs
 
     async def respond(self, event: Any, text: str, **kwargs: Any) -> Any:
+        # Captured, not sent. The words are handed to her answer, which is the one
+        # message this trigger gets — sending them here as well is the duplicate
+        # message he photographed.
         self._lines.append(_plain(text)[:400])
-        return await self._inner.respond(event, text, **self._simulate(kwargs))
+        self.sent_count += 1
+        return None
 
     async def send(self, chat_id: Any, text: str, **kwargs: Any) -> Any:
         self._lines.append(_plain(text)[:400])
-        return await self._inner.send(chat_id, text, **self._simulate(kwargs))
+        self.sent_count += 1
+        return None
 
     async def send_media(self, chat_id: Any, media: Any, **kwargs: Any) -> Any:
         self._lines.append(f"[media] {getattr(media, 'name', media)}")
-        if getattr(self._inner, "dry_run", False):
-            kwargs["dry_run"] = True
+        kwargs = self._simulate(kwargs)
         try:
             return await self._inner.send_media(chat_id, media, **kwargs)
         except Exception as exc:  # noqa: BLE001 - a picture is not worth an answer

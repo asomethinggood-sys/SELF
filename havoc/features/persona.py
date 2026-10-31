@@ -589,6 +589,7 @@ async def _chat(ctx: CommandContext, text: str, *, greeting: bool = False) -> No
         quoted=quoted,
         audience=audience,
         reply_to=reply_id,
+        message_id=getattr(normalized, "message_id", None) if normalized is not None else None,
     )
     if answer.text:
         # `rich` for model text, not `escape`: she writes **bold** and > quotes
@@ -1426,6 +1427,7 @@ class PersonaReplies:
             lessons=rules,
             reminder=reminder,
             reply_to=reply_to,
+            message_id=getattr(event, "message_id", None),
         )
         self.logger.info(
             "yura: answering '%s' in %s%s",

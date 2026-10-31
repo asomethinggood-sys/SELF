@@ -358,7 +358,18 @@ def _reminder(text: str) -> Intent | None:
             # letter of "جلسه", which is how a reminder about a meeting became a
             # reminder about "جلس".
             what = folded[clock.end() :].strip(" .,!؟?؛:،")
-            what = re.sub(r"^(?:که|را|رو)\s+", "", what).strip() or "reminder"
+            said_fa = bool(re.search(r"[\u0600-\u06FF]", folded))
+            what = re.sub(r"^(?:که|را|رو)\s+", "", what).strip() or (
+                "یادآوری" if said_fa else "reminder"
+            )
+            # "فردا ساعت ۹ بهم یادآوری کن" is the *order*, not the subject: the
+            # reminder is about nothing he named, so it is a plain alarm.
+            what = re.sub(
+                r"\s*(?:به\s*م|به\s*من|برای\s*من)?\s*(?:یادآوری|یادم\s*بنداز|یاد\s*بیار)"
+                r"\s*(?:کن|بکن|بده)?\s*$",
+                "",
+                what,
+            ).strip(" .,!؟?؛:،") or ("یادآوری" if said_fa else "reminder")
             hour = int(clock.group("hour"))
             minute = int(clock.group("minute") or 0)
             if clock.group("evening") and hour < 12:
@@ -1335,6 +1346,33 @@ _REPEAT_AFTER_SAY = re.compile(
     r"\s*[.!]*$",
     re.I,
 )
+#: "say I'm a good girl and repeat 100 times" — the count is the instruction and
+#: "here" is where he is standing when no room is named.
+_REPEAT_AFTER_SAY = re.compile(
+    r"^(?:please\s+)?(?:say|tell\s+(?:them|him|her|everyone)|write|send|post)\s+(?P<body>.+?)\s+"
+    r"(?:and\s+)?(?:repeat(?:ing)?\s+(?:it\s+)?|send\s+it\s+(?:again\s+)?)?"
+    r"(?P<count>\d{1,3}|a\s+couple\s+of|three|five|ten|twice)\s+times?"
+    r"(?:\s+(?:in|to|into)\s+(?P<where>this\s+(?:group|chat|channel|room)|here|the\s+group|the\s+chat))?"
+    r"\s*[.!]*$",
+    re.I,
+)
+_REPEAT_FIRST = re.compile(
+    r"^(?:please\s+)?(?:repeat|send|say|post)\s+(?P<body>.+?)\s+"
+    r"(?P<count>\d{1,3}|a\s+couple\s+of|three|five|ten|twice)\s+times?"
+    r"(?:\s+(?:in|to|into)\s+(?P<where>this\s+(?:group|chat|channel|room)|here|the\s+group))?"
+    r"\s*[.!]*$",
+    re.I,
+)
+#: "send hi in 10 different messages in this group" — a burst, not a repeat of one.
+_BURST = re.compile(
+    r"^(?:please\s+)?(?:send|say|write|put|post)\s+(?P<body>.+?)\s+"
+    r"(?:in|as)\s+(?P<count>\d{1,3}|a\s+couple\s+of|three|five|ten)\s+"
+    r"(?:different\s+|separate\s+|new\s+|individual\s+)?messages?"
+    r"\s+(?:in|to|into)\s+(?P<where>this\s+(?:group|chat|channel|room)|here|the\s+group|the\s+chat)"
+    r"\s*[.!]*$",
+    re.I,
+)
+
 #: The Persian burst: "«من دختر خوبم» رو ۱۰۰ بار بگو", "۱۰ تا پیام جدا بفرست".
 #: The count comes after the words, and the room is named with "تو این گروه".
 _REPEAT_FA = re.compile(
@@ -1386,11 +1424,14 @@ _REACT = re.compile(
 #: word itself. Everything else in the sentence is noise, so the verb is the
 #: trigger and the remaining token is the reaction.
 #: The words that make "react" an *order* rather than a topic.
-_REACT_ORDER = re.compile(r"\b(?:react|reaction)\b|بده|بکن|\bکن\b|بذار|بگذار|بنداز", re.I)
+_REACT_ORDER = re.compile(
+    r"\b(?:react|reaction)\b|بده|بکن|\bکن\b|بذار|بگذار|بنداز|بگیر", re.I
+)
 _REACT_FA_VERB = re.compile(
     r"(?:واکنش|ری\s*[-\u200c]?\s*اکشن|راکشن|ریакشن)", re.I
 )
 """The words that are never the reaction: they are the sentence around it."""
+_MESSAGE_WORD = re.compile(r"پیام|پست|مسج|مسیج", re.I)
 _REACT_FA_NOISE = {
     "به", "بهش", "بهاش", "به‌ش", "این", "اینو", "اون", "اونو", "ایش", "اینا",
     "پیام", "پیامش", "پیامو", "پیام‌ش", "پست", "یورا", "لطفا", "لطفاً", "یه",
@@ -1444,6 +1485,22 @@ _COUNT_WORDS = {"a couple of": 2, "three": 3, "five": 5, "ten": 10}
 _READING_PLAN = False
 
 
+_COUNT_WORDS_LOCAL = {
+    "a couple of": 2, "twice": 2, "three": 3, "five": 5, "ten": 10,
+}
+
+
+def _count_of(raw: str) -> int:
+    """How many messages "repeat 100 times" asks for, clamped to her limit."""
+    text = " ".join(str(raw or "").lower().split())
+    if text in _COUNT_WORDS_LOCAL:
+        return _COUNT_WORDS_LOCAL[text]
+    try:
+        return max(0, min(int(text), 500))
+    except ValueError:
+        return 0
+
+
 def _repeat_count(raw: str) -> int:
     """The number in "repeat 40 times", clamped to what the sender allows."""
     text = str(raw or "").strip().lower()
@@ -1479,6 +1536,11 @@ def _reaction_from(raw: str) -> str:
         if phrase in joined:
             return emoji
     return ""
+
+
+def _points_at_message(text: str) -> bool:
+    """"این پیام …" with a verb: the sentence is about the message he replied to."""
+    return bool(_MESSAGE_WORD.search(text)) and bool(_REACT_ORDER.search(text))
 
 
 def _fa_reaction(text: str) -> str:
@@ -1614,12 +1676,25 @@ def _reach(text: str, *, allow_plan: bool = True) -> Intent | None:
         if emoji:
             return Intent(lines=(f"emoji {emoji}",), label="react", detail=f"react {emoji}")
 
+    # "ایموجی 🔥 بگیر" — the Persian word for emoji is the verb on its own.
+    if re.search(r"ایموجی|ایموجی\s*بده|اموجی", folded) and _REACT_ORDER.search(folded):
+        glyph = _fa_reaction(folded)
+        if glyph:
+            return Intent(lines=(f"emoji {glyph}",), label="react", detail=f"react {glyph}")
+
     if _REACT_FA_VERB.search(folded):
         # "به این پیام واکنش بده" names no glyph. A heart is the answer that is
         # never wrong, and doing nothing is the answer that always is.
         emoji = _fa_reaction(folded) or (
             "❤️" if _REACT_ORDER.search(folded) else ""
         )
+        if emoji:
+            return Intent(lines=(f"emoji {emoji}",), label="react", detail=f"react {emoji}")
+    elif _points_at_message(folded):
+        # "به این پیام ❤️ بده" never says the word *reaction* — the glyph is the
+        # verb. Only a real glyph or a word for one counts here, because
+        # "این پیام رو پاک کن" also points at a message.
+        emoji = _fa_reaction(folded)
         if emoji:
             return Intent(lines=(f"emoji {emoji}",), label="react", detail=f"react {emoji}")
 
@@ -1691,6 +1766,25 @@ def _reach(text: str, *, allow_plan: bool = True) -> Intent | None:
                 label="send",
                 detail=f"send · {count}×",
             )
+
+    for pattern in (_REPEAT_AFTER_SAY, _REPEAT_FIRST, _BURST):
+        match = pattern.match(original)
+        if not match:
+            continue
+        body = match.group("body").strip(" \"'«»“”")
+        count = _count_of(match.group("count"))
+        if not body or count < 2 or body.isdigit():
+            continue
+        target = "--here"
+        named = re.match(r"(@[\w.]+|saved messages?)\s+(?P<rest>.+)$", body, re.I)
+        if named:
+            target = named.group(1)
+            body = named.group("rest").strip()
+        return Intent(
+            lines=(f"send {target} {body} --repeat {count}",),
+            label="send",
+            detail=f"send · {count}×",
+        )
 
     match = _SAY_INTO.match(original)
     if match:
@@ -2019,6 +2113,12 @@ def _misc(text: str) -> Intent | None:
         (r"^(?:ping|پینگ)\s*[.!]*$", "ping"),
         (r"^(?:what'?s\s+the\s+date(?:\s+today)?|today'?s\s+date|امروز\s*(?:چندمه|چنده|چند\s*امه))\s*[.!؟]*$", "time"),
         (r"^(?:bookmark\s+(?:this|that|it)|save\s+(?:this|that|it)\s+as\s+a\s+bookmark)\s*[.!]*$", "bookmark save"),
+        # "از این چت خلاصه بگیر" — the Persian way of asking for a summary names
+        # the chat first and the verb last.
+        (r"^(?:از\s+)?(?:این\s+)?(?:چت|گروه|گفتگو|مکالمه)(?:\s+(?:رو|را))?\s*"
+         r"(?:خلاصه|جمع\s*بندی)\s*(?:بگیر|بکن|کن|بده)?\s*[.!؟]*$", "summarize"),
+        (r"^(?:خلاصه|جمع\s*بندی)\s*(?:این\s+)?(?:چت|گروه|گفتگو|مکالمه)"
+         r"(?:\s+(?:رو|را))?\s*(?:بگیر|بکن|کن|بده)?\s*[.!؟]*$", "summarize"),
     ]
     for pattern, line in rules:
         if re.search(pattern, folded):

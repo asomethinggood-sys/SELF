@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import replace
 from typing import Any
 
 from ..command_registry import Command, CommandContext, CommandError
@@ -40,6 +41,14 @@ BROADCAST_CONFIRM_OVER = 25
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+#: The words that mean "the chat I am standing in" rather than a name.
+_HERE_WORDS = {
+    "this", "this chat", "this group", "this room", "this channel", "the chat",
+    "the group", "here", "current chat", "current group",
+    "این چت", "این گروه", "همین گروه", "همین چت", "اینجا",
+}
+
+
 def _targets(ctx: CommandContext, raw: str) -> list[str]:
     """``@name,sara, amir`` → three names. Commas and "and" both separate."""
     text = str(raw or "").replace(" and ", ",").replace("\n", ",")
@@ -90,6 +99,9 @@ def _split_targets_and_text(ctx: CommandContext) -> tuple[list[str], str]:
     # The positional arguments are already free of flags, so the body survives
     # exactly as typed — including words that look like options in a sentence.
     targets = _targets(ctx, args[0])
+    if all(item.lower().strip(" .,!") in _HERE_WORDS for item in targets):
+        # "`.send this hi`" and "send hi in this group" are the same address.
+        targets = [str(ctx.chat_id)]
     text = " ".join(args[1:]).strip()
     return targets, text
 
@@ -102,9 +114,17 @@ async def _resolve_or_explain(ctx: CommandContext, raw: str) -> Any:
     should spend two lookups on for every message.
     """
     try:
-        return await ctx.runtime.reach.resolve_or_raise(raw)
+        target = await ctx.runtime.reach.resolve_or_raise(raw)
     except reach_module.ReachError:
-        pass
+        target = None
+    if target is not None:
+        if str(raw).strip() == str(ctx.chat_id) and target.title.strip() in {"", str(target.id)}:
+            # "this chat" read as a bare id in the receipt: "42 · sent" is a
+            # database row, not an answer. `Target` is frozen, so it is copied,
+            # not poked — the assignment was the FrozenInstanceError that turned
+            # a working send into an "unexpected error" card.
+            return replace(target, title="this chat")
+        return target
     near = await ctx.runtime.reach.candidates(raw, limit=5)
     if near:
         names = ", ".join(f"{escape(item.label)} ({item.id})" for item in near)

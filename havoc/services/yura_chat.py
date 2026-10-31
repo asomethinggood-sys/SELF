@@ -286,6 +286,7 @@ class YuraChat:
         lessons: tuple[str, ...] = (),
         reminder: str = "",
         reply_to: int | None = None,
+        message_id: int | None = None,
     ) -> Answer:
         """Reply to ``text``. Never raises for provider problems.
 
@@ -432,6 +433,7 @@ class YuraChat:
                     owner=owner,
                     person=person,
                     reply_to=reply_to,
+                    message_id=message_id,
                 )
                 if step is not None and step.waiting is not None:
                     # The only answer to a pending action is the question about it.
@@ -583,7 +585,6 @@ class YuraChat:
             # message he photographed.
             return
         lines: list[str] = []
-        ran_any = False
         for line in found.lines:
             if line in {"help", "commands"}:
                 # A menu is not "work", so the console refuses it — but "what can
@@ -604,10 +605,15 @@ class YuraChat:
                 continue
             if getattr(reply, "ok", False):
                 ran_any = True
-            said = getattr(reply, "said", None) or [getattr(reply, "note", "")]
+            said = getattr(reply, "said", None) or []
             if isinstance(said, str):
                 said = [said]
+            if not said:
+                said = [getattr(reply, "note", "")]
             for chunk in self._intent_lines([str(item) for item in said]):
+                if chunk.startswith("[media"):
+                    # The picture itself is the answer; a caption about it is noise.
+                    continue
                 lines.append(chunk)
                 if len(lines) >= 6:
                     break
@@ -722,6 +728,7 @@ class YuraChat:
         owner: bool = True,
         person: Any = None,
         reply_to: int | None = None,
+        message_id: int | None = None,
     ) -> Any:
         """Run the tool loop, or return ``None`` when there is nothing to run.
 
@@ -745,6 +752,8 @@ class YuraChat:
             # "react to it", "delete that": the message he pointed at, not the
             # sentence he typed. Without this, every aimed verb missed.
             reply_to=int(reply_to) if reply_to else None,
+            # ...and when he pointed at nothing, his own line is the target.
+            message_id=int(message_id) if message_id else None,
         )
         self.last_turn = turn
         return await agent.run(self.provider, messages, turn=turn, max_tokens=budget)
