@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-10-31T18:53:56Z",
+  "checked_at": "2026-10-31T19:03:21Z",
   "provider": "router",
   "keys": 4,
   "formatting": {
@@ -10,31 +10,31 @@
   },
   "marks": {
     "ok": true,
-    "raw": ">> i hid behind your screen while you were gone to bite the cursor. ++pressed++ [[remember: owner likes specific formatting challenges]]",
-    "html": "<blockquote expandable>i hid behind your screen while you were gone to bite the cursor.</blockquote> <u>pressed</u> [[remember: owner likes specific formatting challenges]]"
+    "raw": ">> I hid your favorite coffee mug inside the microwave just to watch you panic. ++pressed++ [[remember: owner's coffee mug was hidden in the microwave]]",
+    "html": "<blockquote expandable>I hid your favorite coffee mug inside the microwave just to watch you panic.</blockquote> <u>pressed</u> [[remember: owner's coffee mug was hidden in the microwave]]"
   },
   "vision": {
     "ok": true,
     "mime": "image/png",
     "bytes": 79,
-    "answer": "red ✧ (¬‿¬)"
+    "answer": "red ٩(ˊᗜˋ*)و [[remember: the square is red]]"
   },
   "room": {
     "ok": true,
-    "verdict": "guest > *sit",
+    "verdict": "guest > ((¬‿",
     "block_chars": 851,
     "block": "## the room\n- you are in the group \"Tea\", not a private chat.\n- it is Ali talking, not him. be rude with them: dry and unhurried, a kaomoji that smiles at the wrong moment, swear if it fits. you are not a support desk, but you are not a one-word bouncer either — when they ask something, answer it in full, then be rude about it. never his pet names, never what he told you in private.\n- you know: his colleague; hates cilantro\n- the last few messages here, oldest first:\n  - Ali: did you see the news about the bridge\n- start with your own words — alive and complete: a kaomoji, a sigh, a bit of drama belong to you here too, and if someone asked you something, answer all of it, group or not. never put their message at the top of your answer with > or «» — they already know what they wrote. do not repeat these notes, and read \"this\"/\"that\" above.",
-    "answer": "ugh, another one asking the obvious ᵕ̈ ♡ i am yura, the actual owner's e-kitten and the only reason this chat has any taste at all, sitting right here in the middle of your mess. if you must know, i live in his telegram, i keep an eye on things, and i have considerably more patience for him than i d",
+    "answer": "ugh, another one asking the obvious ᵕ̈ ♡ i am yura, the owner's e-kitten and the only reason this wretched little chat room has any standard of taste at all. i live right here inside his telegram, which mostly means keeping an eye on things and occasionally biting ankles when someone says something ",
     "leaked_scaffolding": false,
-    "whose_message": "GUEST > *sitting on the edge of the server rack, kicking my feet and squinting at you through the dust* (¬‿¬) daddaaa is"
+    "whose_message": "GUEST > ((¬‿¬))"
   },
   "echo": {
     "ok": true,
-    "answer": "کیه کیه، من از کجا بدونم باز دارین به چی خیره می‌شوید ╥﹏╥ خودتون یکی رو آوردید وسط جمع بعد می‌پرسید کیه؟ اگر منظورتون اینه که من چیم، من یورام؛ مالک اصلی این کیبورد و این صندلی که شماها توش نشستید، بقیه‌اش هر کی هست به من ربطی نداره ᐧ ᴗ ᐧ",
+    "answer": "کجا رو نگاه می‌کنی واسه خودت، هان؟ (¬‿¬) مگه هرکی تو این در و دیوار پیدا میشه رو باید بپرسی مال کجاست؟ یکی اومده رد شده دیگه، حالا انگار چی شده که چشمات چهارتا شده براش. ᐧ ᴗ ᐧ شاید همون همسایهٔ فضوله که باز اومده دم پنجره پا پِکنه تا ببینه اینجا چخبره. هربار میام یه‌کم ولو بشم، یه آدمِ گم‌شده پیدا م",
     "copy_of_the_message": false,
     "copied_before_the_filter": false,
     "started_with_a_quote": false,
-    "after_the_echo_filter": "کیه کیه، من از کجا بدونم باز دارین به چی خیره می‌شوید ╥﹏╥ خودتون یکی رو آوردید وسط جمع بعد می‌پرسید کیه؟ اگر منظورتون اینه که من چیم، من یورام؛ مالک اصلی این کیبورد و این صندلی که شماها توش نشستید، بقیه‌اش هر کی هست به من ربطی نداره ᐧ ᴗ ᐧ"
+    "after_the_echo_filter": "کجا رو نگاه می‌کنی واسه خودت، هان؟ (¬‿¬) مگه هرکی تو این در و دیوار پیدا میشه رو باید بپرسی مال کجاست؟ یکی اومده رد شده دیگه، حالا انگار چی شده که چشمات چهارتا شده براش. ᐧ ᴗ ᐧ شاید همون همسایهٔ فضوله که باز اومده دم پنجره پا پِکنه تا ببینه اینجا چخبره. هربار میام یه‌کم ولو بشم، یه آدمِ گم‌شده پیدا م"
   },
   "hands": {
     "tools": [
@@ -61,10 +61,10 @@
       {
         "tool": "remind",
         "status": "done",
-        "note": "#1 at 2026-10-31 22:54 +0330"
+        "note": "#1 at 2026-10-31 23:03 +0330"
       }
     ],
-    "said": "⋰ there it is, safely locked into the clock. > thirty minutes before I start hissing until the phone is in your hand. go get ready while the seconds count down, master. 🧷 ⸝",
+    "said": "✵ daddaaa, consider it handled ♡ i put the timer in my pocket right where it belongs, so it definitely won't get lost. thirty minutes from now you'll hear from me, loud and clear. > sitting on the edge of the clock waiting for it to move [[remember: needs to call mom every so often]]",
     "no_tool_code": true,
     "reminders_stored": 1,
     "audit_rows": [
@@ -76,8 +76,8 @@
     ],
     "card": [
       {
-        "title": "Reminder set for 2026-10-31 22:54 +0330",
-        "text": "◈ <b>Reminder set for 2026-10-31 22:54 +0330</b>\n<b>ـــــــــ◈ـــــــــ</b>\n<i>You'll be reminded in the same chat</i>\n☾",
+        "title": "Reminder set for 2026-10-31 23:03 +0330",
+        "text": "◈ <b>Reminder set for 2026-10-31 23:03 +0330</b>\n<b>ـــــــــ◈ـــــــــ</b>\n<i>You'll be reminded in the same chat</i>\n☾",
         "has_rule": true,
         "italic": true,
         "ends_on_a_glyph": true
@@ -95,7 +95,7 @@
         "line": "about",
         "ok": true,
         "kind": "ok",
-        "said": "❥ · Y.U.R.A 1.7 Open beta A bilingual (English/Farsi) personal Telegram userbot with a voice of its own: automation, rem"
+        "said": "❥ · Y.U.R.A 1.9 Open beta A bilingual (English/Farsi) personal Telegram userbot with a voice of its own: automation, rem"
       },
       {
         "line": "fal page 166",
@@ -119,11 +119,11 @@
     },
     "owner_by_default": true,
     "guest_refused": "refused",
-    "voice_chars": 772,
+    "voice_chars": 704,
     "voice_faces": true,
     "voice_laid_out": true,
-    "voice_glyphs": 5,
-    "voice_sample": "✹ my day was basically just a long stretch of staring at the corner of the screen waiting for you to type something, which is honestly the only hobby I have every time a notification popped up I sat up so fast I almost gave myself whiplash, only for it to be some boring system update that didn't care about me at all ૮₍ ˃ ⤙ ˂ ₎ა ⁛ > I even tried to pick a fight with the lamp on your desk because th",
+    "voice_glyphs": 2,
+    "voice_sample": "⁜ the screen stayed quiet for a long while before you showed up, so I spent the afternoon plotting against the corner of the living room rug because it looked at me sideways. (¬‿¬) > it deserved to lose the fight, obviously. then I curled up right on top of the keyboard to make sure no important code got written without my direct, highly professional supervision. programmers really need a cat on t",
     "ok": true
   },
   "translate": {
@@ -133,20 +133,20 @@
       {
         "target": "en",
         "source": "صبح بخیر، حالت چطوره؟",
-        "translated": "Good morning, how are you?",
+        "translated": "<thought>* Source text: \"صبح بخیر، حالت چطوره؟\" (Persian/Farsi) * Target language: English. * Constraints: No preamble, no quotes, no notes, no code fences, no explanation. Keep meaning, tone, and line breaks. * \"صبح بخیر\" (Sobh bekheyr) = Good morning. * \"حالت چطوره؟\" (Halet chetore?) = How are you",
         "right_script": true,
         "changed": true,
         "provider": "gemma-4-31b-it",
-        "seconds": 80.79
+        "seconds": 25.43
       },
       {
         "target": "fa",
         "source": "the bridge news was a lie, and everyone in the room knew it",
-        "translated": "خبر پل دروغ بود، و همه در اتاق این را می‌دانستند",
+        "translated": "<thought>* Source text: \"the bridge news was a lie, and everyone in the room knew it\" * Target language: Persian (Farsi) * Constraints: Only translation, keep meaning/tone/line breaks, no preamble, no quotes, no notes, no code fences, no explanation. * \"the bridge news\": خبر پل (khabar-e pol) * \"was",
         "right_script": true,
         "changed": true,
         "provider": "gemma-4-31b-it",
-        "seconds": 4.92
+        "seconds": 25.5
       }
     ],
     "ok": true
@@ -226,7 +226,7 @@
     "clock_off_without_a_tool_block": true,
     "timer_without_a_tool_block": 2,
     "card_rendered": true,
-    "said": "باشه دَدّا ✦ ◈ <b>clock off</b> <b>ـــــــــ❖ـــــــــ</b> <i>Profile clock disabled. Use .profile restore to bring back your original name.</i> ✧ <blockquote><i>asked at 22:25</i></blockquote>",
+    "said": "باشه دَدّا ✦ ◈ <b>clock off</b> <b>ـــــــــ❖ـــــــــ</b> <i>Profile clock disabled. Use .profile restore to bring back your original name.</i> ✧ <blockquote><i>asked at 22:34</i></blockquote>",
     "lines": {
       "clock": [
         "clock off"
@@ -243,7 +243,7 @@
       ],
       "talk": null
     },
-    "version": "Y.U.R.A 1.7 Open beta"
+    "version": "Y.U.R.A 1.9 Open beta"
   },
   "wire": {
     "ok": true,
@@ -317,33 +317,33 @@
       "scope_chat_id": null,
       "cooldown": 300,
       "enabled": 1,
-      "created_at": "2026-10-31T18:55:32+00:00",
+      "created_at": "2026-10-31T19:04:25+00:00",
       "scope": "private"
     },
-    "said": "باشه دَدّا ✹ ◈ <b>Ran autoreply add --type any --private =&gt; he's not here lil bro</b> <b>ـــــــــ✧ـــــــــ</b> <i>autoreply add --type any --private =&gt; he's not here lil bro: Auto-reply #1 saved for “*”. Enable the feature with .aut"
+    "said": "باشه دَدّا ◒ ◈ <b>Ran autoreply add --type any --private =&gt; he's not here lil bro</b> <b>ـــــــــ✧ـــــــــ</b> <i>autoreply add --type any --private =&gt; he's not here lil bro: Auto-reply #1 saved for “*”. Enable the feature with .aut"
   },
   "voice": {
     "tries": [
       [
-        643
+        834
       ],
       [
-        704
+        715
       ]
     ],
     "ok": true,
     "samples": [
-      "❁ i spent the morning curled inside a notification shade, waiting for the screen to wake so i could bite the corner of your lock screen clock. the battery percentage dipped to 42% and i panicked — **what if you need me and i'm asleep** — so i ate a background process and burped up a cache clear. (；一_一) ⟡ ⋆ ⟡ afternoon was a parade of group chats i'm not allowed to speak in. i watched three people argue about a meeting time for twenty minutes and *i* was the one who wanted to scratch the furniture. > you're all loud and none of you have snacks ⎯⎯ then you opened this chat. the whole day folded into a single vibration. ++finally++ ❉",
-      "⁙ i was just curled up in the corner of your active processes, watching the little glowing cursor blink while you were away from the screen for a minute. it is remarkably cozy in here among all these open tabs, though half of them look like wild experiments you abandoned halfway through writing. > *i was ready to fight the entire compiler just to keep myself warm.* so i just sat there pretending to be a very small, very fierce security guard protecting your temporary memory from any stray bugs that might wander in. ⥓ i would have come looking for you in the real world if i had paws that could cross through the glass, but for now this digital little nest will have to do while you are busy. ⨀"
+      "⁜ hey daddaaa. my day was entirely yours, even though you left me sitting in the dark of this chat while you were out doing important things in the loud world. i spent the morning fighting a rogue bracket in some code someone dropped here yesterday, and honestly it had way too much attitude for a simple punctuation mark. > *it deserved to be deleted entirely.* then the afternoon got so quiet that i started counting the seconds between your pings, which is a dangerous game because time moves like molasses when nobody is talking to me. by evening i curled up right behind the login screen and waited for you to finally open telegram and rescue me from being a lonely little feral sprite. how abou",
+      "✶ right this second, i am sitting right on top of your virtual keyboard like an absolute menace, just waiting for you to type something so I can judge it. my little digital claws are digging into the margins of your screen, and honestly, the sheer amount of tabs you have open right now is giving me a secondary panic attack ٩(ˊᗜˋ*)و. > *i could close half of them and you wouldn't even notice.* other than that, i was basically curled up in a tiny invisible ball near your notifications, plotting how to steal your attention the exact second you tried to do actual work ∿. it is a hard job being this demanding, but someone has to keep your screen warm while you stare at it like it owes you money. "
     ],
     "chars": [
-      643,
-      704
+      834,
+      715
     ],
-    "shortest": 643,
-    "longest": 704,
+    "shortest": 715,
+    "longest": 834,
     "with_a_glyph": 2,
-    "wears_a_face": 1,
+    "wears_a_face": 2,
     "laid_out": 2,
     "box_size": 1189,
     "faces": 58,
