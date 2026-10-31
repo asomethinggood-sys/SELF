@@ -90,6 +90,24 @@ PICTURE_SETTING = "yura.last_picture"
 AGENT_SETTING = "yura.agent"
 
 
+#: Telegram's caption ceiling is 1024 characters; leave room for the HTML tags
+#: a card draws with.
+CAPTION_LIMIT = 950
+
+
+def _fit_caption(text: str) -> str:
+    """The longest prefix of ``text`` a caption can hold, cut on a line."""
+    plain = str(text or "")
+    if len(plain) <= CAPTION_LIMIT:
+        return plain
+    cut = plain[:CAPTION_LIMIT]
+    for mark in ("\n", " "):
+        index = cut.rfind(mark)
+        if index > CAPTION_LIMIT // 2:
+            return cut[:index].rstrip()
+    return cut.rstrip()
+
+
 def _audience_block(audience: Any, language: str) -> str:
     """The room, in one block — speaker, tone, what she knows, what was said."""
     if audience is None or not getattr(audience, "usable", False):
@@ -113,6 +131,9 @@ class Answer:
 
     text: str
     files: list[Path] = field(default_factory=list)
+    #: Files a command wanted to send, each as ``(media, caption)``. Her answer
+    #: carries them so a picture and its sentence arrive as one message.
+    media: list[tuple[Any, str]] = field(default_factory=list)
     remembered: list[str] = field(default_factory=list)
     forgotten: int = 0
     source: str = "offline"  # "model" | "offline" | "action"
@@ -313,6 +334,9 @@ class YuraChat:
         # "daddaaa" would be both wrong and a leak.
         self._receipts = []
         self._cards = []
+        # What her hands made this turn, held until the answer is composed.
+        self._pending_media: list[tuple[Any, str]] = []
+        self._wrote_here = False
         fallback = self._fallback(chat_id, language, tone=tone, is_owner=owner)
         if not prompt and picture is None:
             return Answer(fallback)
@@ -518,7 +542,17 @@ class YuraChat:
             body = rich(answer.text) if source == "model" else answer.text
             answer.text = self._with_receipt(body, language)
             answer.rendered = True
-        if not answer.text and not answer.files:
+        if self._pending_media:
+            # A picture plus a sentence is one message with a caption, not two
+            # messages — this is the "I get two answers" he photographed.
+            answer.media = list(self._pending_media)
+            answer.text = _fit_caption(answer.text)
+        if self._wrote_here and not answer.media:
+            # The deed spoke in this chat; the receipt would be a second answer,
+            # and an offline line on top of it would be a third.
+            answer.text = ""
+            answer.rendered = False
+        if not answer.text and not answer.files and not answer.media and not self._wrote_here:
             answer.text = fallback
         if answer.text:
             self._remember_said(chat_id, answer.text)
@@ -529,6 +563,7 @@ class YuraChat:
         return Answer(
             text=answer.text,
             files=answer.files,
+            media=answer.media,
             remembered=answer.remembered,
             forgotten=answer.forgotten,
             source=source,
@@ -603,6 +638,20 @@ class YuraChat:
             except Exception as exc:  # noqa: BLE001 - a failed hand is a sentence
                 self.logger.warning("yura: intent %r failed: %s", line, exc)
                 continue
+            media = getattr(reply, "media", None) or []
+            if media:
+                self._pending_media.extend(media)
+            # "send hi in this chat" already put the words in the room: the deed
+            # is the message, and a receipt on top of it is the second answer.
+            # Only a deed that *worked* counts — a refused send must still be
+            # described, or he would be looking at silence.
+            words = line.split()
+            target = words[1] if len(words) > 1 else ""
+            wrote_here = bool(words) and words[0] == "send" and (
+                any(flag in line for flag in ("--here", "--this_chat")) or target == str(chat_id)
+            )
+            if wrote_here and getattr(reply, "ok", False):
+                self._wrote_here = True
             said = getattr(reply, "said", None) or []
             if isinstance(said, str):
                 said = [said]

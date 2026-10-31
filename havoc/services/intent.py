@@ -1404,15 +1404,48 @@ _BURST = re.compile(
     r"\s*[.!]*$",
     re.I,
 )
+#: The tail that ties a rule to the room he is standing in: "…in this group",
+#: "…here". Without it the rule follows him everywhere, which is usually wrong.
+_HERE_TAIL = (
+    r"(?:\s+(?:in\s+|to\s+)?(?:this\s+(?:group|chat|room|channel)|here"
+    r"|این\s*(?:گروه|چت)|همین\s*(?:گروه|چت)|اینجا))?"
+)
 _IGNORE = re.compile(
     r"^(?:please\s+)?(?:don'?t|do not|never)\s+(?:talk|answer|reply|respond)\s+"
-    r"(?:to\s+|back to\s+)?(?P<who>@[\w.]+|[\w][\w\s.-]{1,40})$",
+    r"(?:to\s+|back to\s+)?(?P<who>@[\w.]+|[\w][\w\s.'-]{1,40}?)"
+    + _HERE_TAIL
+    + r"$",
     re.I,
 )
 _UNIGNORE = re.compile(
-    r"^(?:please\s+)?(?:talk|answer|reply|respond)\s+(?:to\s+)?(?P<who>@[\w.]+|[\w][\w\s.-]{1,40})\s+again$"
-    r"|^(?:unignore|unblock|stop ignoring)\s+(?P<who2>@[\w.]+|[\w][\w\s.-]{1,40})$",
+    r"^(?:please\s+)?(?:talk|answer|reply|respond)\s+(?:to\s+)?(?P<who>@[\w.]+|[\w][\w\s.'-]{1,40}?)\s+again"
+    + _HERE_TAIL
+    + r"$|^(?:unignore|unblock|stop ignoring)\s+(?P<who2>@[\w.]+|[\w][\w\s.'-]{1,40})$",
     re.I,
+)
+#: "him", "her", "این شخص" — the person is whoever the message he replied to
+#: belongs to. The command resolves it from the reply, because the sentence
+#: cannot know an id.
+_PRONOUN_PEOPLE = {
+    "him", "her", "them", "this person", "that person", "this guy", "that guy",
+    "این", "اون", "این شخص", "اون شخص", "همین شخص", "ایشان", "این یارو",
+}
+#: "react to sara with a heart", "just heart sara's messages", "answer sara with
+#: an emoji instead of words".  A rule about a person, not a reaction to a line.
+_RULE_REACT_EN = re.compile(
+    r"^(?:please\s+)?(?:just\s+)?(?:react\s+to|respond\s+to|answer|heart|like)\s+"
+    r"(?P<who>@[\w.]+|[A-Za-z][\w-]*(?:\s+[A-Za-z][\w-]*){0,2}?)"
+    r"(?:'s)?(?:\s+(?:messages?|lines?|texts?|replies|words))?"
+    r"(?:\s+(?:with|using|by))?\s*(?:an?\s+|the\s+)?(?P<emoji>[^\s]+(?:\s+[^\s]+)*)?"
+    r"(?:\s+instead\s+of\s+(?:words|answers?|talking))?\s*[.!]*$",
+    re.I,
+)
+_RULE_REACT_FA = re.compile(
+    r"^(?:جواب\s+|پاسخ\s+)?(?P<who>@[\w.]+|[^\s،]+)(?:\s*(?:رو|را))?\s*"
+    r"(?:جواب\s*نده|پاسخ\s*نده)?[،,]?\s*"
+    r"(?:به\s*)?(?:پیام(?:هاش|هایش|های)?\s*)?"
+    r"(?:قلب|ری\s*[-\u200c]?\s*اکشن|ایموجی|واکنش|استیکر)?\s*"
+    r"(?:بده|بزن|کن|بفرست)\s*[.!؟]*$"
 )
 _REACT = re.compile(
     r"^(?:please\s+)?(?:react|put a reaction|leave a reaction|add a reaction)\s*"
@@ -1431,7 +1464,13 @@ _REACT_FA_VERB = re.compile(
     r"(?:واکنش|ری\s*[-\u200c]?\s*اکشن|راکشن|ریакشن)", re.I
 )
 """The words that are never the reaction: they are the sentence around it."""
-_MESSAGE_WORD = re.compile(r"پیام|پست|مسج|مسیج", re.I)
+#: A *definite* reference to one message ("this one", "his message"), never the
+#: plural that means "everything they say" — that is a rule about a person.
+_MESSAGE_WORD = re.compile(
+    r"(?:این|اون|همین|همون)\s*(?:پیام|پست|مسج|مسیج)"
+    r"|(?:پیام|پست|مسج|مسیج)(?:ش|م|تون|شون)\b",
+    re.I,
+)
 _REACT_FA_NOISE = {
     "به", "بهش", "بهاش", "به‌ش", "این", "اینو", "اون", "اونو", "ایش", "اینا",
     "پیام", "پیامش", "پیامو", "پیام‌ش", "پست", "یورا", "لطفا", "لطفاً", "یه",
@@ -1543,6 +1582,15 @@ def _points_at_message(text: str) -> bool:
     return bool(_MESSAGE_WORD.search(text)) and bool(_REACT_ORDER.search(text))
 
 
+def reaction_glyph(text: str) -> str:
+    """The emoji a phrase names — English, Persian, or the glyph itself.
+
+    Public because the rule command needs the same table: ``.rules react sara
+    heart`` and "به سارا قلب بده" must land on ❤️ by one set of words, not two.
+    """
+    return _reaction_from(text) or _fa_reaction(text)
+
+
 def _fa_reaction(text: str) -> str:
     """Pull the reaction out of a Persian order, or return nothing.
 
@@ -1579,6 +1627,111 @@ def _fa_reaction(text: str) -> str:
         if phrase in joined:
             return emoji
     return ""
+
+
+def _says_here(text: str) -> bool:
+    """True when the sentence ties the instruction to the room it was said in."""
+    return bool(
+        re.search(
+            r"\b(?:in\s+)?(?:this\s+(?:group|chat|room|channel)|here)\b"
+            r"|این\s*(?:گروه|چت)|همین\s*(?:گروه|چت)|اینجا",
+            text,
+            re.I,
+        )
+    )
+
+
+#: "به سارا جواب نده" / "جواب سارا نده" / "به سارا جواب بده" — the Persian way
+#: of writing a rule about a person. The verb pair is the trigger; the name sits
+#: either side of it.
+_RULE_IGNORE_FA = re.compile(
+    r"^(?:به\s+)?(?:(?:پیام(?:های|هاش|هایش|هاشون)?)\s*)?"
+    r"(?P<who1>@[\w.]+|[^\s،]+)\s*(?:رو|را)?\s*(?:جواب|پاسخ)\s*(?:نده|نمی\s*ده|نمی\s*دهم)\s*$"
+    r"|^(?:جواب|پاسخ)\s+(?P<who2>@[\w.]+|[^\s،]+)\s*(?:رو|را)?\s*نده\s*$",
+    re.I,
+)
+_RULE_ANSWER_FA = re.compile(
+    r"^(?:به\s+)?(?:(?:پیام(?:های|هاش|هایش|هاشون)?)\s*)?"
+    r"(?P<who>@[\w.]+|[^\s،]+)\s*(?:رو|را)?\s*(?:جواب|پاسخ)\s*(?:بده|بدید|بدهید)\s*$",
+    re.I,
+)
+_RULE_REACT_FA2 = re.compile(
+    r"^(?:به\s*)?(?:(?:پیام(?:هاش|هایش|های|هایشان|هاشون)?)\s*)?"
+    r"(?P<who>@[\w.]+|[^\s،]+)\s*(?:رو|را)?\s*"
+    r"(?:قلب|ری\s*[-\u200c]?\s*اکشن|ایموجی|واکنش|استیکر)\s*"
+    r"(?:بده|بزن|کن|بفرست)\s*[.!؟]*$",
+    re.I,
+)
+
+
+#: "heart sara", "just like her messages" — the verb is the emoji.
+_RULE_HEART_EN = re.compile(
+    r"^(?:please\s+)?(?:just\s+)?(?:heart|like)\s+"
+    r"(?P<who>@[\w.]+|[\w-]+)'?s?"
+    r"(?:\s+(?:messages?|lines?|texts?|replies|posts))?\s*[.!]*$",
+    re.I,
+)
+
+def _rule_react_order(text: str) -> Intent | None:
+    """"react to sara with a heart" → a *rule*, not a reaction to one message.
+
+    The difference is the target: "به پیامش قلب بده" points at a message, while
+    "به سارا قلب بده" points at a person and describes how she should treat
+    everything they say from now on.
+    """
+    said = text.strip()
+
+    match = _RULE_IGNORE_FA.match(said)
+    if match:
+        who = (match.group("who1") or match.group("who2") or "").strip(" ،,.:؛")
+        if who and who.lower() not in _PRONOUN_PEOPLE:
+            return Intent(lines=(f"policy ignore {who}",), label="policy", detail=f"ignore {who}")
+    match = _RULE_ANSWER_FA.match(said)
+    if match:
+        who = (match.group("who") or "").strip(" ،,.:؛")
+        if who and who.lower() not in _PRONOUN_PEOPLE:
+            return Intent(lines=(f"policy answer {who}",), label="policy", detail=f"answer {who}")
+
+    match = _RULE_HEART_EN.match(said)
+    if match:
+        who = (match.group("who") or "").strip()
+        if who and who.lower() not in _PRONOUN_PEOPLE:
+            return Intent(lines=(f"policy react {who} ❤️",), label="policy", detail=f"react to {who}")
+
+    match = _RULE_REACT_EN.match(said)
+    if match:
+        who = (match.group("who") or "").strip()
+        rest = (match.group("emoji") or "").strip()
+        verb = said.split(" ", 1)[0].lower()
+        # "heart sara" names the glyph with its own verb.
+        emoji = reaction_glyph(rest) if rest else ("❤️" if verb in {"heart", "like"} else "")
+        if who and who.lower() not in _PRONOUN_PEOPLE and emoji:
+            return Intent(
+                lines=(f"policy react {who} {emoji}",),
+                label="policy",
+                detail=f"react to {who}",
+            )
+    # "استیکر قلب بفرست" asks for a sticker; it is not a rule about "استیکر".
+    if re.match(r"^(?:یک\s+)?(?:استیکر|ایموجی|ری\s*[-\u200c]?\s*اکشن|قلب)\b", said):
+        return None
+    for pattern in (_RULE_REACT_FA, _RULE_REACT_FA2):
+        match = pattern.match(said)
+        if not match:
+            continue
+        who = (match.group("who") or "").strip(" ،,.:؛")
+        if (
+            who
+            and who.lower() not in _PRONOUN_PEOPLE
+            and not re.search(r"پیامش|پیامم|این\s*پیام|اون\s*پیام|همین\s*پیام", said)
+            and re.search(r"قلب|ری\s*[-\u200c]?\s*اکشن|ایموجی|واکنش|استیکر", said)
+        ):
+            emoji = reaction_glyph(said) or "❤️"
+            return Intent(
+                lines=(f"policy react {who} {emoji}",),
+                label="policy",
+                detail=f"react to {who}",
+            )
+    return None
 
 
 def _reach_options(body: str) -> tuple[str, list[str]]:
@@ -1658,14 +1811,39 @@ def _reach(text: str, *, allow_plan: bool = True) -> Intent | None:
     match = _IGNORE.match(original)
     if match:
         who = _who(match.group("who"))
+        here = _says_here(original)
+        if who and who.lower() in _PRONOUN_PEOPLE:
+            # "don't answer him": the id comes from the message he replied to.
+            line = "policy ignore --reply" + (" --here" if here else "")
+            return Intent(lines=(line,), label="ignore", detail="ignore the person he replied to")
+        if who and here:
+            return Intent(
+                lines=(f"policy ignore {who} --here",),
+                label="ignore",
+                detail=f"ignore {who} here",
+            )
         if who:
             return Intent(lines=(f"ignore on {who}",), label="ignore", detail=f"ignore {who}")
 
     match = _UNIGNORE.match(original)
     if match:
         who = _who(match.group("who") or match.group("who2") or "")
+        here = _says_here(original)
+        if who and who.lower() in _PRONOUN_PEOPLE:
+            line = "policy answer --reply" + (" --here" if here else "")
+            return Intent(lines=(line,), label="ignore", detail="answer him again")
+        if who and here:
+            return Intent(
+                lines=(f"policy answer {who} --here",),
+                label="ignore",
+                detail=f"answer {who} here",
+            )
         if who:
             return Intent(lines=(f"ignore off {who}",), label="ignore", detail=f"unignore {who}")
+
+    rule_react = _rule_react_order(original)
+    if rule_react is not None:
+        return rule_react
 
     match = _REACT.match(original)
     if match and not re.match(r"^(?:react|reaction)\b\s*$", folded, re.I):

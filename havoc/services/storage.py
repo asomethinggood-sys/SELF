@@ -402,28 +402,87 @@ class Store:
             (int(plan_id),),
         )
 
-    # -- people she must not answer ------------------------------------
-    async def ignore_person(self, user_id: int, name: str = "", reason: str = "") -> None:
+    # -- who she answers, and how ---------------------------------------
+    #: The three ways she can treat one person's messages.
+    MODES = ("answer", "ignore", "react")
+
+    async def set_person_rule(
+        self,
+        user_id: int,
+        mode: str,
+        *,
+        chat_id: int = 0,
+        emoji: str = "",
+        name: str = "",
+    ) -> None:
+        """Write one rule. ``chat_id=0`` is everywhere; a real id is that room."""
+        if mode not in self.MODES:
+            raise ValueError(f"unknown reply mode {mode!r}")
         await self.db.execute(
             """
-            INSERT INTO ignored(user_id, name, reason, created_at) VALUES(?, ?, ?, ?)
-            ON CONFLICT(user_id) DO UPDATE SET name = excluded.name, reason = excluded.reason
+            INSERT INTO reply_rules(user_id, chat_id, mode, emoji, name, created_at)
+            VALUES(?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, chat_id) DO UPDATE SET
+                mode = excluded.mode,
+                emoji = excluded.emoji,
+                name = CASE WHEN excluded.name = '' THEN reply_rules.name ELSE excluded.name END
             """,
-            (int(user_id), name[:120], reason[:200], iso(utc_now())),
+            (int(user_id), int(chat_id or 0), mode, emoji[:16], name[:120], iso(utc_now())),
         )
 
-    async def unignore_person(self, user_id: int) -> bool:
-        changed = await self.db.execute("DELETE FROM ignored WHERE user_id = ?", (int(user_id),))
-        return bool(changed)
+    async def clear_person_rule(self, user_id: int, chat_id: int | None = None) -> int:
+        """Remove a rule. ``None`` clears every scope for that person."""
+        if chat_id is None:
+            changed = await self.db.execute(
+                "DELETE FROM reply_rules WHERE user_id = ?", (int(user_id),)
+            )
+        else:
+            changed = await self.db.execute(
+                "DELETE FROM reply_rules WHERE user_id = ? AND chat_id = ?",
+                (int(user_id), int(chat_id)),
+            )
+        return int(changed or 0)
 
-    async def is_ignored(self, user_id: int | None) -> bool:
+    async def person_rule(self, user_id: int | None, chat_id: int | None = None) -> Any:
+        """The rule that governs this person *here*, or ``None``.
+
+        A rule written for this chat beats a global one, because the specific
+        instruction he gave while standing in the room is the one he meant.
+        """
         if user_id is None:
-            return False
-        row = await self.db.fetch_one("SELECT user_id FROM ignored WHERE user_id = ?", (int(user_id),))
-        return row is not None
+            return None
+        if chat_id:
+            row = await self.db.fetch_one(
+                "SELECT * FROM reply_rules WHERE user_id = ? AND chat_id = ?",
+                (int(user_id), int(chat_id)),
+            )
+            if row is not None:
+                return row
+        row = await self.db.fetch_one(
+            "SELECT * FROM reply_rules WHERE user_id = ? AND chat_id = 0", (int(user_id),)
+        )
+        return row
+
+    async def person_rules(self) -> list[Any]:
+        return await self.db.fetch_all(
+            "SELECT * FROM reply_rules ORDER BY chat_id = 0, created_at DESC"
+        )
+
+    # -- the old names, kept honest -------------------------------------
+    async def ignore_person(self, user_id: int, name: str = "", reason: str = "") -> None:
+        await self.set_person_rule(int(user_id), "ignore", name=name)
+
+    async def unignore_person(self, user_id: int) -> bool:
+        return bool(await self.clear_person_rule(int(user_id)))
+
+    async def is_ignored(self, user_id: int | None, chat_id: int | None = None) -> bool:
+        rule = await self.person_rule(user_id, chat_id)
+        return rule is not None and str(rule["mode"]) == "ignore"
 
     async def ignored_people(self) -> list[Any]:
-        return await self.db.fetch_all("SELECT * FROM ignored ORDER BY created_at DESC")
+        return await self.db.fetch_all(
+            "SELECT * FROM reply_rules WHERE mode = 'ignore' ORDER BY created_at DESC"
+        )
 
     async def add_autoreply(
         self,

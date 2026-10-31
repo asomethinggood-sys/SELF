@@ -133,6 +133,10 @@ async def test_the_floor_runs_what_the_model_only_talked_about(runtime) -> None:
     runtime.ai = WordsOnly()
     runtime.client.dialogs = []
     answer = await runtime.yura_chat.answer("یورا فال بگیر", chat_id=42, is_owner=True)
-    assert answer.text
-    # The fortune is drawn as a file, which is the deed; her sentence is the frame.
-    assert any(getattr(message, "kwargs", {}).get("file") for message in runtime.client.sent)
+    # The fortune is drawn, which is the deed; her sentence is the caption. The
+    # drawing travels *in the answer* so the two arrive as one message.
+    assert answer.text or answer.media
+    drawn = answer.media or any(
+        getattr(message, "kwargs", {}).get("file") for message in runtime.client.sent
+    )
+    assert drawn, "the order to draw a fortune produced no picture"

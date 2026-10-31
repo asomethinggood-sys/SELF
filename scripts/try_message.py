@@ -56,14 +56,15 @@ def _plain(text: str) -> str:
 
 
 def _describe(message: Any) -> str:
-    text = _plain(getattr(message, "text", "") or "")
+    text = _plain(getattr(message, "text", "") or "").strip()
     kind = ""
     media = getattr(message, "media", None) or (getattr(message, "kwargs", {}) or {}).get("file")
     if media:
-        kind = f" [file: {Path(str(media)).name}]"
-    if not text and not kind:
-        kind = " [no text]"
-    return f"chat {getattr(message, 'chat_id', '?')} · {text or ''}{kind}".rstrip()
+        kind = f"[file: {Path(str(media)).name}]"
+    parts = [part for part in (kind, text) if part]
+    if not parts:
+        parts = ["[no text]"]
+    return f"chat {getattr(message, 'chat_id', '?')} · " + " · ".join(parts).replace("\n", " / ")
 
 
 async def run(args: argparse.Namespace) -> int:

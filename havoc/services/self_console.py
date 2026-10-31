@@ -24,10 +24,12 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from ..event_engine import EventType, NormalizedEvent
 from ..utils.parsing import ParseError, parse_command
+from .sender import SendResult
 
 __all__ = ["BLOCKED", "ConsoleReply", "catalogue", "run"]
 
@@ -48,6 +50,10 @@ MAX_DESCRIPTION = 90
 MAX_CATALOGUE_CHARS = 6500
 
 
+#: Above this, a file is not carried to her answer — it is sent on its own.
+MAX_CAPTURED_MEDIA = 8 * 1024 * 1024
+
+
 @dataclass
 class ConsoleReply:
     """What a dispatched command did, as far as she can tell."""
@@ -58,6 +64,9 @@ class ConsoleReply:
     kind: str = "ok"
     #: What the command itself sent, so she can react to it instead of guessing.
     said: list[str] = field(default_factory=list)
+    #: Files the command wanted to send, held back so her answer can carry them
+    #: as one message (a picture with a caption) instead of two.
+    media: list[Any] = field(default_factory=list)
 
 
 @dataclass
@@ -110,6 +119,7 @@ class _CapturingSender:
     def __init__(self, inner: Any, lines: list[str]) -> None:
         self._inner = inner
         self._lines = lines
+        self._media: list[Any] = []
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._inner, name)
@@ -147,13 +157,25 @@ class _CapturingSender:
         return None
 
     async def send_media(self, chat_id: Any, media: Any, **kwargs: Any) -> Any:
-        self._lines.append(f"[media] {getattr(media, 'name', media)}")
-        kwargs = self._simulate(kwargs)
+        # Held, not sent. Her answer is the message; a picture she draws belongs
+        # *inside* it as the caption, because a file and a paragraph arriving as
+        # two messages is the double answer he kept photographing.
+        #
+        # The bytes are taken now, on purpose: a command often writes a temporary
+        # file and deletes it in the same breath (the fortune card does), so a
+        # path held for later is a path to nothing.
+        name = Path(str(media)).name
         try:
-            return await self._inner.send_media(chat_id, media, **kwargs)
-        except Exception as exc:  # noqa: BLE001 - a picture is not worth an answer
-            self._lines.append(f"[media failed: {type(exc).__name__}]")
-            return None
+            blob = Path(str(media)).read_bytes()
+        except OSError:
+            blob = b""
+        if not blob or len(blob) > MAX_CAPTURED_MEDIA:
+            # Too big to carry in memory: it goes now, and her words follow it.
+            self._lines.append(f"[media] {name} (sent directly)")
+            return await self._inner.send_media(chat_id, media, **self._simulate(kwargs))
+        self._media.append((blob, name, str(kwargs.get("caption") or "")))
+        self._lines.append(f"[media] {name}")
+        return SendResult(ok=True, dry_run=bool(getattr(self._inner, "dry_run", False)))
 
 
 class _Proxy:
@@ -271,7 +293,8 @@ async def run(
         return ConsoleReply(False, name, note="not a command", kind="bad_args")
 
     said: list[str] = []
-    proxy = _Proxy(runtime, _CapturingSender(runtime.sender, said))
+    capturer = _CapturingSender(runtime.sender, said)
+    proxy = _Proxy(runtime, capturer)
     # ``out=True`` is the truth: this is the account acting, not a stranger
     # typing. Without it the dispatcher asked "is this sender the owner?" about a
     # sender id of 0 and every command she ran for him answered "restricted to
@@ -313,4 +336,11 @@ async def run(
     except Exception as exc:  # noqa: BLE001 - a command that throws is a sentence
         return ConsoleReply(False, name, note=f"{type(exc).__name__}: {exc}", kind="error")
     note = " · ".join(said[:2]) if said else ("ran" if ran else "did not run")
-    return ConsoleReply(bool(ran), name, note=note[:400], kind="ok" if ran else "noop", said=said)
+    return ConsoleReply(
+        bool(ran),
+        name,
+        note=note[:400],
+        kind="ok" if ran else "noop",
+        said=said,
+        media=list(capturer._media),
+    )

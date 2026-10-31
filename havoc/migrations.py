@@ -518,6 +518,35 @@ MIGRATION_9_TOOLBOX = Migration(
     ),
 )
 
+MIGRATION_10_REPLY_RULES = Migration(
+    version=10,
+    name="reply_rules",
+    statements=(
+        # Who she answers, and how. Before this table the only instruction was
+        # "never answer him" — a binary, global, and invisible. A rule now has a
+        # *mode* (answer | ignore | react), an emoji for the reacting one, and a
+        # scope: chat 0 is everywhere, a real chat id is that room only, so "in
+        # this group, don't answer him" does not silence him everywhere.
+        """
+        CREATE TABLE IF NOT EXISTS reply_rules (
+            user_id     INTEGER NOT NULL,
+            chat_id     INTEGER NOT NULL DEFAULT 0,
+            mode        TEXT NOT NULL DEFAULT 'ignore',
+            emoji       TEXT NOT NULL DEFAULT '',
+            name        TEXT NOT NULL DEFAULT '',
+            created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (user_id, chat_id)
+        )
+        """,
+        # Every row he already had stays exactly as strong as it was.
+        """
+        INSERT OR IGNORE INTO reply_rules(user_id, chat_id, mode, name, created_at)
+        SELECT user_id, 0, 'ignore', name, created_at FROM ignored
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_reply_rules_chat ON reply_rules(chat_id, mode)",
+    ),
+)
+
 MIGRATIONS: tuple[Migration, ...] = (
     MIGRATION_1_FOUNDATION,
     MIGRATION_2_TIMESTAMPS,
@@ -528,6 +557,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     MIGRATION_7_ACTIONS,
     MIGRATION_8_AUTOREPLY_SCOPE,
     MIGRATION_9_TOOLBOX,
+    MIGRATION_10_REPLY_RULES,
 )
 
 LATEST_VERSION = max(m.version for m in MIGRATIONS)

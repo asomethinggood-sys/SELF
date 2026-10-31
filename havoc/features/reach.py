@@ -28,6 +28,7 @@ import re
 from dataclasses import replace
 from typing import Any
 
+from .. import ui
 from ..command_registry import Command, CommandContext, CommandError
 from ..services import reach as reach_module
 from ..utils.formatting import bold, code, escape, strip_html
@@ -41,6 +42,12 @@ BROADCAST_CONFIRM_OVER = 25
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+#: "don't answer him" — the person is whoever he replied to, not a word.
+_HIM_WORDS = {
+    "him", "her", "them", "this person", "that person", "this guy", "that guy",
+    "این", "اون", "این شخص", "اون شخص", "همین شخص", "ایشان", "این یارو",
+}
+
 #: The words that mean "the chat I am standing in" rather than a name.
 _HERE_WORDS = {
     "this", "this chat", "this group", "this room", "this channel", "the chat",
@@ -541,6 +548,142 @@ async def cmd_ignore(ctx: CommandContext) -> None:
     raise CommandError("ignore.usage", prefix=ctx.runtime.prefix)
 
 
+# ---------------------------------------------------------------------------
+# .rules — who she answers, and how
+# ---------------------------------------------------------------------------
+_RULE_MODES = {
+    "ignore": "ignore", "off": "ignore", "mute": "ignore", "never": "ignore", "silent": "ignore",
+    "react": "react", "heart": "react", "emoji": "react", "reaction": "react",
+    "answer": "answer", "on": "answer", "allow": "answer", "normal": "answer", "back": "answer",
+}
+_MODE_GLYPH = {"ignore": "⨯", "react": "❤", "answer": "✓"}
+
+
+async def cmd_rules(ctx: CommandContext) -> None:
+    """One instruction per person: answer, ignore, or react.
+
+    This is the reins. Before it, "never answer him" was the only way to shape
+    who she talks to, it applied to every room he shared with her, and it was
+    invisible — nothing listed it and nothing undid it but memory.
+    """
+    action = (ctx.sub or "list").lower()
+    if action in {"list", "ls", "show", ""}:
+        await _rules_list(ctx)
+        return
+    if action in {"clear", "remove", "delete", "forget", "reset"}:
+        found = await _rule_person(ctx, " ".join(ctx.args))
+        if found is None:
+            raise CommandError("policy.unknown", name=escape(" ".join(ctx.args)))
+        scope = _scope_of(ctx)
+        removed = await ctx.runtime.store.clear_person_rule(found[0], scope)
+        if not removed:
+            raise CommandError("policy.none", name=escape(found[1]))
+        await ctx.reply(
+            ui.card(
+                ctx.t("policy.cleared", name=escape(found[1])),
+                (ctx.t("policy.cleared_note"),),
+                icon="⌫",
+            )
+        )
+        return
+    mode = _RULE_MODES.get(action)
+    if mode is None:
+        raise CommandError("policy.usage", prefix=ctx.runtime.prefix)
+    raw = " ".join(ctx.args)
+    emoji = ""
+    if mode == "react":
+        # ".policy react sara heart" — the glyph is the last word, not part of
+        # the name. Only the tail is peeled, so a person actually called "Heart"
+        # is still reachable as the whole argument.
+        from ..services.intent import reaction_glyph
+
+        words = raw.split()
+        while words:
+            glyph = reaction_glyph(words[-1])
+            if not glyph:
+                break
+            emoji = emoji or glyph
+            words.pop()
+        raw = " ".join(words) or raw
+        emoji = emoji or str(ctx.flag("emoji") or "").strip() or "❤️"
+    found = await _rule_person(ctx, raw)
+    if found is None:
+        raise CommandError("policy.unknown", name=escape(" ".join(ctx.args)))
+    owner = int(getattr(ctx.runtime.permissions, "self_id", 0) or 0)
+    if found[0] == owner:
+        raise CommandError("policy.self")
+    scope = _scope_of(ctx)
+    await ctx.runtime.store.set_person_rule(found[0], mode, chat_id=scope, emoji=emoji, name=found[1])
+    where = ctx.t("policy.everywhere") if not scope else ctx.t("policy.this_chat")
+    if mode == "ignore":
+        title = ctx.t("policy.ignored", name=escape(found[1]))
+    elif mode == "react":
+        title = ctx.t("policy.reacted", name=escape(found[1]), emoji=escape(emoji))
+    else:
+        title = ctx.t("policy.answered", name=escape(found[1]))
+    await ctx.reply(
+        ui.card(
+            title,
+            (where, ctx.t("policy.id_note", id=found[0], prefix=ctx.runtime.prefix)),
+            icon=_MODE_GLYPH[mode],
+            footer=ctx.t("policy.undo", prefix=ctx.runtime.prefix),
+        )
+    )
+
+
+def _scope_of(ctx: CommandContext) -> int:
+    """``--here`` ties the rule to this room; otherwise it follows him anywhere."""
+    if ctx.has_flag("here") or ctx.has_flag("this_chat"):
+        return int(ctx.chat_id)
+    return 0
+
+
+async def _rule_person(ctx: CommandContext, raw: str) -> tuple[int, str] | None:
+    """``(user_id, name)`` from a name, a handle, an id — or the message he replied to."""
+    text = str(raw or "").strip()
+    # "don't answer him": the person is the sender of the message being answered.
+    if not text or text.lower().strip(" .,!") in _HIM_WORDS or ctx.has_flag("reply"):
+        replied = await ctx.reply_message()
+        if replied is not None:
+            sender = getattr(replied, "sender_id", None) or getattr(replied, "from_id", None)
+            if sender:
+                person = await ctx.runtime.people.get(int(sender))
+                name = str(getattr(person, "label", "") or sender) if person else str(sender)
+                return int(sender), name
+        if not text:
+            return None
+    return await _ignorable(ctx, text)
+
+
+async def _rules_list(ctx: CommandContext) -> None:
+    rows = await ctx.runtime.store.person_rules()
+    if not rows:
+        await ctx.reply(
+            ui.card(
+                ctx.t("policy.empty"),
+                (ctx.t("policy.empty_note", prefix=ctx.runtime.prefix),),
+                icon="⌘",
+            )
+        )
+        return
+    lines: list[str] = []
+    for row in rows:
+        mode = str(row["mode"] or "answer")
+        glyph = _MODE_GLYPH.get(mode, "•")
+        who = str(row["name"] or row["user_id"])
+        scope = ctx.t("policy.everywhere") if not int(row["chat_id"] or 0) else f"#{row['chat_id']}"
+        emoji = f" {row['emoji']}" if str(row["emoji"] or "") else ""
+        lines.append(f"{glyph} {who}{emoji} · {scope}")
+    await ctx.reply(
+        ui.card(
+            ctx.t("policy.header", count=len(rows)),
+            lines,
+            icon="⌘",
+            footer=ctx.t("policy.footer", prefix=ctx.runtime.prefix),
+        )
+    )
+
+
 async def _ignorable(ctx: CommandContext, raw: str) -> tuple[int, str] | None:
     """``(user_id, name)`` for a person he named, or ``None``.
 
@@ -614,6 +757,19 @@ def register(runtime: Any) -> None:
                 ".send @sara --compose wish her luck with the exam",
             ),
             subcommands=("list",),
+        )
+    )
+    runtime.registry.register(
+        Command(
+            "policy",
+            cmd_rules,
+            category="reach",
+            aliases=("rules-say", "replies", "whom"),
+            usage="[list|ignore ‹who›|react ‹who› [emoji]|answer ‹who›|clear ‹who›] [--here]",
+            description="Who she answers, and how: silence, answer, or a reaction instead.",
+            owner_only=True,
+            changes_state=True,
+            subcommands=("list", "ignore", "react", "answer", "clear", "remove"),
         )
     )
     runtime.registry.register(
@@ -696,6 +852,7 @@ def register(runtime: Any) -> None:
 
 __all__ = [
     "cmd_broadcast",
+    "cmd_rules",
     "cmd_emoji",
     "cmd_ignore",
     "cmd_outbox",

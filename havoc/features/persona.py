@@ -21,7 +21,7 @@ from __future__ import annotations
 import random
 import time
 from collections import Counter, deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from .. import identity, persona, ui
@@ -33,6 +33,7 @@ from ..services import yura_chat as yura_chat_module
 from ..services.context import build as build_context
 from ..services.vision import IMAGE_MEDIA_TYPES, Picture, looks_like_picture
 from ..services.vision import download as download_picture
+from ..utils.attachments import materialize
 from ..utils.formatting import escape, strip_html
 from ..utils.markup import rich
 from ..utils.mood import mood_line
@@ -591,6 +592,11 @@ async def _chat(ctx: CommandContext, text: str, *, greeting: bool = False) -> No
         reply_to=reply_id,
         message_id=getattr(normalized, "message_id", None) if normalized is not None else None,
     )
+    if answer.media:
+        # One message: the picture or document she drew, with her words as its
+        # caption. Sending the text beside it is the duplicate answer.
+        await _send_with_caption(ctx, answer)
+        answer = replace(answer, text="")
     if answer.text:
         # `rich` for model text, not `escape`: she writes **bold** and > quotes
         # because that is how a model writes, and escaping them shipped the
@@ -614,12 +620,27 @@ async def _chat(ctx: CommandContext, text: str, *, greeting: bool = False) -> No
             )
         except Exception:  # noqa: BLE001 - bookkeeping must never lose an answer
             pass
-    for path in answer.files:
+    for index, path in enumerate(answer.files):
         await ctx.runtime.sender.send_media(
             ctx.chat_id,
             str(path),
-            caption=escape(truncate(path.name, 90)),
+            # The first file carries her words; a file *and* a paragraph as two
+            # messages is the answer he should not have to read twice.
+            caption=(
+                _visible(answer) if index == 0 and answer.text else escape(truncate(path.name, 90))
+            ),
         )
+
+
+async def _send_with_caption(ctx: CommandContext, answer: Any) -> None:
+    """Her words ride on the file instead of arriving as a second message."""
+    caption = _visible(answer)
+    for blob, name, *_rest in answer.media:
+        path = materialize(blob, name)
+        try:
+            await ctx.runtime.sender.send_media(ctx.chat_id, str(path), caption=caption)
+        finally:
+            path.unlink(missing_ok=True)
 
 
 async def cmd_yura(ctx: CommandContext) -> None:
@@ -982,6 +1003,46 @@ class PersonaReplies:
         first = stripped.split(maxsplit=1)[0].lower() if stripped else ""
         return first in _INTERNAL_WORDS
 
+    async def _reply_rule(self, event: NormalizedEvent) -> Any:
+        """The rule he wrote about this person, in this room, or ``None``.
+
+        One read, three answers: ``answer`` (no rule, or an explicit one),
+        ``ignore`` (no model call at all) and ``react`` (a glyph instead of
+        words).  The owner is never subject to a rule: silencing him would be
+        the one instruction that breaks the account for him.
+        """
+        speaker = getattr(event, "sender_id", None)
+        if speaker is None or self.runtime.permissions.is_owner(speaker):
+            return None
+        try:
+            return await self.runtime.store.person_rule(speaker, getattr(event, "chat_id", None))
+        except Exception as exc:  # noqa: BLE001 - a rule table is not a lockout
+            self.logger.warning("yura: could not read the reply rule: %s", exc)
+            return None
+
+    async def _obey_rule(self, event: NormalizedEvent, rule: Any) -> bool:
+        """Act on ``rule``; ``True`` when it decided this message.
+
+        ``react`` is deliberately *not* a reaction to every line in a group — it
+        answers the messages the rule would otherwise have answered. A heart on
+        each of a hundred messages is a different feature, and a worse one.
+        """
+        mode = str(rule["mode"] or "")
+        if mode == "ignore":
+            # The reason `.why` reports is the plain one: "ignored" is what he
+            # asked for, and "rule:ignore" reads like a status code.
+            self._skip("ignored", event)
+            return True
+        if mode == "react":
+            target = getattr(event, "reply_to_id", None) or getattr(event, "message_id", None)
+            emoji = str(rule["emoji"] or "") or "❤️"
+            if target and await self.runtime.sender.react(event.chat_id, int(target), emoji):
+                self.reacted += 1
+                return True
+            self._skip("rule:react_failed", event)
+            return True
+        return False
+
     def _skip(self, reason: str, event: NormalizedEvent | None = None) -> None:
         """Note that a message went unanswered, and why.
 
@@ -1207,8 +1268,11 @@ class PersonaReplies:
         # ``mentioned`` flag for a mention **and for every reply to the account**,
         # so trusting it made her answer each person who replied to the owner, and
         # each person who tagged him. His name is not her name.
-        if event.sender_id is not None and await self.runtime.store.is_ignored(event.sender_id):
-            self._skip("ignored", event)
+        # A rule he wrote beats every other way of being addressed: "don't answer
+        # Sara" is an instruction, and a reply of hers is still Sara talking.
+        rule = await self._reply_rule(event)
+        if rule is not None and str(rule["mode"]) == "ignore":
+            await self._obey_rule(event, rule)
             return
         addressed = quote.hers or self._named(event.text)
         # "remember this" is itself aimed at her, even when the message is a reply
@@ -1219,6 +1283,8 @@ class PersonaReplies:
             addressed = True
         if not addressed:
             self._skip("not_addressed", event)
+            return
+        if rule is not None and await self._obey_rule(event, rule):
             return
         picture = await self._picture(event)
         if picture is None and not event.text.strip():
@@ -1353,10 +1419,10 @@ class PersonaReplies:
         if speaker is None or self.runtime.permissions.is_owner(speaker):
             self._skip("owner_chat", event)
             return
-        # "Don't answer him" is an instruction, not a preference: a name in this
-        # table beats every other rule, including a person he introduced earlier.
-        if await self.runtime.store.is_ignored(speaker):
-            self._skip("ignored", event)
+        # "Don't answer him" is an instruction, not a preference: a rule beats
+        # every other one, including a person he introduced earlier.
+        rule = await self._reply_rule(event)
+        if rule is not None and await self._obey_rule(event, rule):
             return
         # A read, not a touch: a row is only created for someone she actually
         # answers. A stranger messaging the account must not leave a file behind
@@ -1435,6 +1501,16 @@ class PersonaReplies:
             "Saved Messages" if is_private else f"chat {chat_id}",
             " (a picture)" if picture is not None else "",
         )
+        if answer.media:
+            # The deed and the words are one bubble: a photo with a caption.
+            caption = self._decorate(_visible(answer), is_private=is_private)
+            for blob, name, *_rest in answer.media:
+                path = materialize(blob, name)
+                try:
+                    await self.runtime.sender.send_media(chat_id, str(path), caption=caption)
+                finally:
+                    path.unlink(missing_ok=True)
+            return
         if answer.text:
             await self._deliver(
                 chat_id,
@@ -1447,6 +1523,17 @@ class PersonaReplies:
                     else None
                 ),
             )
+        if answer.files and answer.text:
+            # A file she wrote and the sentence about it are one bubble too: the
+            # first file carries the words, the rest keep their names.
+            caption = self._decorate(_visible(answer), is_private=is_private)
+            for index, path in enumerate(answer.files):
+                await self.runtime.sender.send_media(
+                    chat_id,
+                    str(path),
+                    caption=caption if index == 0 else escape(truncate(path.name, 90)),
+                )
+            return
         for path in answer.files:
             await self.runtime.sender.send_media(
                 chat_id, str(path), caption=escape(truncate(path.name, 90))
