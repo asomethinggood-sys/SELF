@@ -438,3 +438,31 @@ def test_say_hi_here_is_the_room_not_a_name() -> None:
 def test_a_bare_persian_say_is_conversation_not_an_order() -> None:
     """"بگو یه چیزی" is "say something", a sentence — not a broadcast."""
     assert intent_module.detect("بگو یه چیزی") is None
+
+
+async def test_the_chain_typed_to_her_name_in_saved_messages_works(runtime) -> None:
+    """The real router path: no dot, just her name and the whole sentence."""
+    from conftest import FakeEvent
+
+    await _wire(runtime)
+    runtime.permissions.set_self_id(OWNER)
+    text = f"yura {CHAIN}"
+    parsed = runtime.handlers._bare_command(text)
+    assert parsed is not None and parsed.name == "yura"
+
+    before = len(runtime.client.sent)
+    await runtime.handlers._handle_outgoing(
+        FakeEvent(FakeMessage(id=950, chat_id=OWNER, sender_id=OWNER, text=text, out=True), chat_id=OWNER, out=True)
+    )
+    answers = [row.text for row in runtime.client.sent[before:]]
+    assert answers, "calling her by name produced nothing"
+    assert any("4" in text or "۴" in text for text in answers), answers
+
+    plan = (await runtime.store.plans(1))[0]
+    assert int(plan["chat_id"]) == OWNER
+    assert [row["action"] for row in await runtime.store.plan_steps(int(plan["id"]))] == [
+        "policy ignore سارا --for 2h",
+        "send محمد سلام",
+        "unsend last",
+        "fal",
+    ]
