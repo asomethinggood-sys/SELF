@@ -329,15 +329,18 @@ async def cmd_schedule(ctx: CommandContext) -> None:
         created_by=getattr(ctx.event, "sender_id", None),
         meta={"language": ctx.language},
     )
+    # A card, like the reminder: "✉ Message scheduled (#2) for … in chat 42."
+    # was a log line wearing a glyph, and the chat id was not a thing he says.
+    lines = [
+        ctx.t("schedule.card_when", when=format_datetime(when, tz, ctx.language)),
+        ctx.t("schedule.card_relative", relative=humanize_delta(when - utc_now(), ctx.language)),
+    ]
+    if chat_id != ctx.chat_id:
+        lines.append(ctx.t("schedule.card_chat", chat=chat_id))
+    if recurrence:
+        lines.append(ctx.t("schedule.recurring", spec=recurrence))
     await ctx.reply(
-        ctx.t(
-            "schedule.created",
-            id=schedule_id,
-            when=escape(format_datetime(when, tz, ctx.language)),
-            relative=escape(humanize_delta(when - utc_now(), ctx.language)),
-            chat=chat_id,
-        )
-        + (("\n" + ctx.t("schedule.recurring", spec=escape(recurrence))) if recurrence else "")
+        ui.card(ctx.t("schedule.card_title", id=schedule_id), lines, footer=escape(truncate(body, 120)))
     )
     ctx.runtime.metrics.count("schedules_created")
 

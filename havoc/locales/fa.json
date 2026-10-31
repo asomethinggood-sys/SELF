@@ -1517,5 +1517,9 @@
   "quiet.off_title": "ساعت سکوت خاموش",
   "quiet.off_line": "صدا برگشت — دوباره جواب می‌دهد.",
   "actions.card_sticker": "استیکر · {what}",
-  "actions.card_sticker_line": "از پک‌های خودش برداشت"
+  "actions.card_sticker_line": "از پک‌های خودش برداشت",
+  "schedule.card_title": "زمان‌بندی · #{id}",
+  "schedule.card_when": "ارسال: {when}",
+  "schedule.card_relative": "یعنی {relative}",
+  "schedule.card_chat": "در چت {chat}"
 }

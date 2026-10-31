@@ -1517,5 +1517,9 @@
   "quiet.off_title": "Quiet hours off",
   "quiet.off_line": "Sound is back — she answers again.",
   "actions.card_sticker": "Sticker · {what}",
-  "actions.card_sticker_line": "picked from her own packs"
+  "actions.card_sticker_line": "picked from her own packs",
+  "schedule.card_title": "Scheduled · #{id}",
+  "schedule.card_when": "goes out {when}",
+  "schedule.card_relative": "that is {relative}",
+  "schedule.card_chat": "in chat {chat}"
 }
