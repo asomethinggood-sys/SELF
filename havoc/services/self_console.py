@@ -110,15 +110,21 @@ class _CapturingSender:
     def __init__(self, inner: Any, lines: list[str]) -> None:
         self._inner = inner
         self._lines = lines
-        # A captured line is still an answer. The dispatcher decides "this
-        # handler said nothing, show it the usage" by watching this counter —
-        # and because this wrapper holds the text instead of sending it, the
-        # inner counter never moved, so every command that answered correctly
-        # was also scolded with its own usage line.
-        self.sent_count = int(getattr(inner, "sent_count", 0) or 0)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._inner, name)
+
+    @property
+    def sent_count(self) -> int:
+        """How many answers this command gave — captured ones included.
+
+        The dispatcher decides "this handler said nothing, show it the usage" by
+        watching this counter. Because this wrapper holds the text instead of
+        sending it, the inner counter never moved for a text answer, so every
+        command that worked was also scolded with its own usage line. Files are
+        sent for real, and they count through the inner sender.
+        """
+        return int(getattr(self._inner, "sent_count", 0) or 0) + len(self._lines)
 
     def _simulate(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         # A command forces ``dry_run=False`` on its own reply (a command's answer
@@ -134,12 +140,10 @@ class _CapturingSender:
         # message this trigger gets — sending them here as well is the duplicate
         # message he photographed.
         self._lines.append(_plain(text)[:400])
-        self.sent_count += 1
         return None
 
     async def send(self, chat_id: Any, text: str, **kwargs: Any) -> Any:
         self._lines.append(_plain(text)[:400])
-        self.sent_count += 1
         return None
 
     async def send_media(self, chat_id: Any, media: Any, **kwargs: Any) -> Any:

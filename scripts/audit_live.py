@@ -305,7 +305,15 @@ def _dead_code(root: Path) -> dict[str, Any]:
                     if isinstance(sub, (ast.FunctionDef, ast.AsyncFunctionDef)):
                         defined.append((sub.name, str(path.relative_to(root)), f"{node.name}.method"))
     #: Public API a plugin or a test reaches by string, not by name.
-    hooks = {"register_command", "add_strings", "register_hook", "has_raqm"}
+    hooks = {
+        "register_command",
+        "add_strings",
+        "register_hook",
+        "has_raqm",
+        # Read by the dispatcher with getattr ("did this handler answer?"), so
+        # the AST never sees a plain attribute load for it.
+        "sent_count",
+    }
     orphans = []
     for name, where, kind in sorted(defined):
         if name.startswith("__") or name in hooks:

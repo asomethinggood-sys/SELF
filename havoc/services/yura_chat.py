@@ -603,8 +603,6 @@ class YuraChat:
             except Exception as exc:  # noqa: BLE001 - a failed hand is a sentence
                 self.logger.warning("yura: intent %r failed: %s", line, exc)
                 continue
-            if getattr(reply, "ok", False):
-                ran_any = True
             said = getattr(reply, "said", None) or []
             if isinstance(said, str):
                 said = [said]
@@ -617,7 +615,10 @@ class YuraChat:
                 lines.append(chunk)
                 if len(lines) >= 6:
                     break
-        if not lines and not ran_any:
+        if not lines:
+            # A card with no lines is a frame around nothing: a command that
+            # answered only with a file (a fortune, a picture) already said what
+            # it had to say.
             return
         title = self._intent_title(language, found.detail or found.label)
         # Under the tool's own card, never over it: the hand did the work, the
