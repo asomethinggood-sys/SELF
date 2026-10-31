@@ -21,6 +21,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from .. import ui
 from ..command_registry import Command, CommandContext, CommandError
 from ..utils.formatting import bold, code, escape
 from ..utils.text import truncate
@@ -164,16 +165,24 @@ async def cmd_unread(ctx: CommandContext) -> None:
     ]
     rows.sort(key=lambda dialog: _dialog_date(dialog) or "")
     if not rows:
-        await ctx.reply(ctx.t("inbox.nothing_unread"))
+        await ctx.reply(ui.card(ctx.t("inbox.unread_header", count=0), [ctx.t("inbox.nothing_unread")], icon="◍"))
         return
-    lines = [bold(ctx.t("inbox.unread_header", count=len(rows)))]
+    # One row, three facts, in the order the eye reads them: who, how many, when.
+    # The full date with its weekday was three facts where one was wanted.
+    lines = []
     for dialog in rows:
         entity = getattr(dialog, "entity", None) or dialog
-        lines.append(
-            f"• {escape(display_name(entity, str(getattr(dialog, 'id', '?'))))} — "
-            f"{code(str(_unread(dialog)))} · {escape(_when(_dialog_date(dialog), tz, ctx.language))}"
+        name = display_name(entity, str(getattr(dialog, "id", "?")))
+        stamp = format_short(parse_iso(_dialog_date(dialog)) or utc_now(), tz, ctx.language)
+        lines.append(f"{name} — {_unread(dialog)} · {stamp}")
+    await ctx.reply(
+        ui.card(
+            ctx.t("inbox.unread_header", count=len(rows)),
+            lines,
+            icon="◍",
+            footer=ctx.t("inbox.hint", prefix=ctx.runtime.prefix),
         )
-    await ctx.reply("\n".join(lines))
+    )
 
 
 # ---------------------------------------------------------------------------
