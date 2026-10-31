@@ -9,7 +9,7 @@ account other than the logged-in user.
 `.` in the usage column stands for the active prefix (default `.`).
 
 
-Total: **141 commands**.
+Total: **143 commands**.
 
 
 ## Account
@@ -55,6 +55,8 @@ Total: **141 commands**.
 | `.members` | Who is in a group, admins first _(owner only)._ | `.members <chat>` | — |
 | `.mute` | Silence a chat for a while, or forever _(owner only; changes state)._ | `.mute <chat> [1h|2d|forever]` | — |
 | `.peek` | What is behind an invite link, before joining _(owner only)._ | `.peek <t.me link>` | `.inviteinfo` |
+| `.topic` | Start, close, pin or rename a forum topic _(owner only; changes state)._ | `.topic [new <title> | close <id> | open <id> | pin <id> | unpin <id> | rename <id> <title>]` | — |
+| `.topics` | The forum topics of a group, with unread counts _(owner only)._ | `.topics [chat]` | `.threads` |
 | `.unarchive` | Bring a chat back out of the archive _(owner only; changes state)._ | `.unarchive <chat>` | — |
 | `.unmute` | Let a chat be loud again _(owner only; changes state)._ | `.unmute <chat>` | — |
 

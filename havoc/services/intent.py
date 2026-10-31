@@ -834,6 +834,16 @@ _WIPE_ASK = re.compile(
     r"(?P<what>history|conversation|chat\s+history)(?:\s+(?:of|with)\s+(?P<who>.+))?\s*[?!.]*$",
     re.I,
 )
+_TOPICS_ASK = re.compile(
+    r"^(?:show\s+(?:me\s+)?(?:the\s+)?topics|what\s+topics\s+are\s+there"
+    r"|list\s+(?:the\s+)?topics|topics\s+here)\s*[?!.]*$",
+    re.I,
+)
+_NEW_TOPIC_ASK = re.compile(
+    r"^(?:please\s+)?(?:start|open|make|create)\s+(?:a\s+)?(?:new\s+)?topic\s+"
+    r"(?:called\s+|named\s+|titled\s+)?(?P<title>.+)$",
+    re.I,
+)
 _VERSION_ASK = re.compile(
     r"^(?:what|which)\s+version\s+are\s+you(?:\s+running)?\s*[?!.]*$", re.I
 )
@@ -928,6 +938,17 @@ def _surface(text: str) -> Intent | None:
 
     if _ABILITIES_ASK.match(folded):
         return Intent(lines=("abilities",), label="self", detail="abilities")
+
+    if _TOPICS_ASK.match(folded):
+        return Intent(lines=("topics",), label="chats", detail="topics")
+
+    match = _NEW_TOPIC_ASK.match(original)
+    if match:
+        title = match.group("title").strip(" .,!?")
+        if title:
+            return Intent(
+                lines=(f"topic new {title}",), label="chats", detail=f"new topic · {title[:40]}"
+            )
 
     match = _PEEK_ASK.match(original)
     if match:

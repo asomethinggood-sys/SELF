@@ -35,6 +35,7 @@ MODULE_ORDER: tuple[str, ...] = (
     "group_admin",
     "privacy",
     "drafts",
+    "topics",
     "persona",
     "media",
     "detection",

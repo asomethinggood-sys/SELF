@@ -1004,7 +1004,7 @@ inbox     .inbox .unread .read .whois .people
 read      .diary .mentions
 chats     .chats .chatinfo .chatsettings .labels .media .groups .members
           .invite .join .peek .folder .mute .unmute .draft .drafts .archive
-          .unarchive
+          .unarchive .topics .topic
 admin     .settitle .setdesc .slowmode .kick .ban .unban .promote .demote
           .leave
 people    .contacts .contact .block .unblock .blocklist
@@ -1040,6 +1040,9 @@ yura      .yura .ai
 * **people** — `.contacts .contact .block .unblock .blocklist`;
 * **running a group** — `.settitle .setdesc .slowmode .kick .ban .unban
   .promote .demote .leave`, with `.promote` granting only the rights he names;
+* **forum topics** — `.topics` lists them with unread counts, and
+  `.topic new|close|open|pin|unpin|rename <id>` runs the thread itself; a group
+  without forums answers with Telegram's own refusal, not a guess;
 * **invites and histories** — `.peek` shows what is behind a private invite
   before joining (name, members, whether he is already in), and `.clearhistory`
   clears a conversation's history — his copy by default, both sides with

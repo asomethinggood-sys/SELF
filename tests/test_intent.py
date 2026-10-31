@@ -128,6 +128,11 @@ def test_a_lookup_that_asks_for_something_is_understood(text: str, line: str) ->
     assert _lines(text) == (line,)
 
 
+def test_topics_are_understood() -> None:
+    assert _lines("show the topics") == ("topics",)
+    assert _lines("start a new topic called Night Shift") == ("topic new Night Shift",)
+
+
 def test_peeking_and_wiping_are_understood() -> None:
     assert _lines("what is in this invite https://t.me/+AbCdEf") == ("peek https://t.me/+AbCdEf",)
     assert _lines("wipe this conversation") == ("clearhistory",)

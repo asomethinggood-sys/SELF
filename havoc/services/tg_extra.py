@@ -642,3 +642,74 @@ class TelegramExtras:
         await self._call(
             DeleteHistoryRequest, peer=peer, max_id=0, just_clear=False, revoke=bool(revoke)
         )
+
+    # ------------------------------------------------------------------
+    # Forum topics
+    # ------------------------------------------------------------------
+    async def topics(self, chat_id: Any, limit: int = 50) -> list[dict[str, Any]]:
+        """The topics of a forum, newest activity first."""
+        from telethon.tl.functions.messages import GetForumTopicsRequest
+
+        peer = await self._input_peer(chat_id)
+        result = await self._call(
+            GetForumTopicsRequest,
+            peer=peer,
+            offset_date=None,
+            offset_id=0,
+            offset_topic=0,
+            limit=max(1, min(int(limit), 100)),
+        )
+        rows: list[dict[str, Any]] = []
+        for topic in getattr(result, "topics", None) or []:
+            title = getattr(topic, "title", None)
+            if not title:
+                continue  # the "General" topic carries no title of its own
+            rows.append(
+                {
+                    "id": getattr(topic, "id", None),
+                    "title": str(title),
+                    "closed": bool(getattr(topic, "closed", False)),
+                    "pinned": bool(getattr(topic, "pinned", False)),
+                    "unread": int(getattr(topic, "unread_count", 0) or 0),
+                }
+            )
+        return rows
+
+    async def create_topic(self, chat_id: Any, title: str) -> dict[str, Any]:
+        from telethon.tl.functions.messages import CreateForumTopicRequest
+
+        peer = await self._input_peer(chat_id)
+        result = await self._call(
+            CreateForumTopicRequest,
+            peer=peer,
+            title=str(title)[:119],
+            random_id=int.from_bytes(__import__("os").urandom(8), "big", signed=True),
+        )
+        # Telegram answers with updates; the service message that created the
+        # topic carries its id. Anything else is not guessed at.
+        topic_id = None
+        for update in getattr(result, "updates", None) or []:
+            message = getattr(update, "message", None)
+            action = getattr(message, "action", None)
+            if action is not None and type(action).__name__ == "MessageActionTopicCreate":
+                topic_id = getattr(message, "id", None)
+                break
+        return {"title": str(title), "id": topic_id}
+
+    async def edit_topic(
+        self, chat_id: Any, topic_id: int, *, title: str | None = None, closed: bool | None = None
+    ) -> None:
+        from telethon.tl.functions.messages import EditForumTopicRequest
+
+        peer = await self._input_peer(chat_id)
+        await self._call(
+            EditForumTopicRequest, peer=peer, topic_id=int(topic_id), title=title, closed=closed
+        )
+
+    async def pin_topic(self, chat_id: Any, topic_id: int, *, pinned: bool = True) -> None:
+        from telethon.tl.functions.messages import UpdatePinnedForumTopicRequest
+
+        peer = await self._input_peer(chat_id)
+        await self._call(
+            UpdatePinnedForumTopicRequest, peer=peer, topic_id=int(topic_id), pinned=bool(pinned)
+        )
