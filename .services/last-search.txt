@@ -1,6 +1,6 @@
-search · run 41337881918 · 2026-11-01T18:41:39Z
+search · run 41338221644 · 2026-11-01T18:45:47Z
 -----------------------------------------------
-ok   gate /healthz without a token — 200 {"ok": true, "service": "search", "run_id": "41337881918", "started_at": "2026-1
+ok   gate /healthz without a token — 200 {"ok": true, "service": "search", "run_id": "41338221644", "started_at": "2026-1
   ok   upstream /search?q=ping&format=json directly — 200
   ok   the same path through the gate without a token — 401 
   ok   a wrong token is refused — 401
