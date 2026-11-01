@@ -745,8 +745,17 @@ class Host:
             answer = (reply or "").strip()
             checks.append(("a real reply through the gate", bool(answer), answer[:200] or "no answer"))
         if self.service == "comfy":
-            # `_probe` returned PNG bytes, not JSON, for this service.
-            checks.append(("a real PNG came back through the gate", body.startswith(b"\x89PNG"), f"{len(body)} bytes"))
+            # `_probe` returned the picture itself, not JSON, for this service.
+            from havoc.services.imagegen import _suffix_of
+
+            kind = _suffix_of(body)
+            checks.append(
+                (
+                    "a real image came back through the gate",
+                    kind in {"png", "jpg", "webp", "gif"} and len(body) > 1024,
+                    f"{len(body)} bytes, {kind}, starts {body[:4].hex()}",
+                )
+            )
 
         failures = 0
         lines: list[str] = []

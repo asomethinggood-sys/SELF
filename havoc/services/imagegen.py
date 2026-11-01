@@ -280,7 +280,11 @@ class ImageGenerator:
         data = await self._download(image, base=base, headers=headers)
         folder = Path(outdir) if outdir is not None else Path(os.environ.get("TMPDIR", "/tmp"))
         folder.mkdir(parents=True, exist_ok=True)
-        path = folder / f"havoc-draw-{int(time.time())}-{random.randint(100, 999)}.png"
+        # Name the file after what it actually is. ComfyUI normally answers PNG,
+        # but a build configured for webp answers RIFF — and a webp named `.png`
+        # is a file Telegram may refuse to show inline.
+        suffix = _suffix_of(data)
+        path = folder / f"havoc-draw-{int(time.time())}-{random.randint(100, 999)}.{suffix}"
         path.write_bytes(data)
         self.made += 1
         if self.logger is not None:
@@ -338,6 +342,19 @@ class ImageGenerator:
         except HttpError as exc:
             self.failures += 1
             raise ImageError(f"the picture was made but could not be fetched: {exc}", kind="network") from exc
+
+
+def _suffix_of(data: bytes) -> str:
+    """``png``, ``jpg``, ``webp`` or ``gif`` from the first bytes, never from a header."""
+    if data.startswith(b"\x89PNG"):
+        return "png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return "jpg"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "webp"
+    if data.startswith(b"GIF8"):
+        return "gif"
+    return "png"
 
 
 def _images_of(entry: dict[str, Any]) -> list[dict[str, Any]]:
