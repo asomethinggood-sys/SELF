@@ -72,6 +72,10 @@ class LocalModel:
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
 
     name = "local"
+    #: The directory to ask when ``base_url`` is empty; ``None`` means no hosting.
+    directory: Any = None
+    #: True when the endpoint came from ``.services/ollama.json`` behind a gate.
+    gated: bool = False
     #: The same words a credential uses in the UI, so `.ai` reads the same
     #: whether the answer came from a key or from this machine.
     active_label: str = "local"
@@ -80,13 +84,27 @@ class LocalModel:
     # Construction
     # ------------------------------------------------------------------
     @classmethod
-    def from_env(cls, *, logger: Any = None) -> LocalModel | None:
-        """Build one from the environment, or ``None`` when nothing is configured."""
+    def from_env(cls, *, logger: Any = None, directory: Any = None) -> LocalModel | None:
+        """Build one from the environment, or ``None`` when nothing is configured.
+
+        With nothing in the environment but a service directory, the endpoint is
+        whatever the last ``service-ollama`` run published — the same spare tyre,
+        reached through a gate instead of a local port.
+        """
         url = (os.environ.get("LOCAL_MODEL_URL") or "").strip()
         binary = (os.environ.get("LOCAL_MODEL_BIN") or "").strip()
         weights = (os.environ.get("LOCAL_MODEL_GGUF") or "").strip()
         if not url and not (binary and weights):
-            return None
+            if directory is None:
+                return None
+            return cls(
+                base_url="",
+                model=(os.environ.get("LOCAL_MODEL_NAME") or "").strip(),
+                timeout=float(os.environ.get("LOCAL_MODEL_TIMEOUT") or DEFAULT_TIMEOUT),
+                logger=logger,
+                directory=directory,
+                gated=True,
+            )
         model = (os.environ.get("LOCAL_MODEL_NAME") or "").strip()
         return cls(
             base_url=_normalise(url or DEFAULT_URL),
@@ -112,6 +130,11 @@ class LocalModel:
             if await self._healthy():
                 self._ready = True
                 return True
+            if self.directory is not None and not self.base_url:
+                # Hosted: there is no process for us to start. Not being there
+                # yet is a state (`between runs`), not a failure to report.
+                self.last_error = self.last_error or "the hosted model is between runs"
+                return False
             if self._process is not None:
                 return False
             if not (self.binary and Path(self.weights).exists()):
@@ -204,17 +227,33 @@ class LocalModel:
 
     async def _healthy(self) -> bool:
         """Cheap liveness check: does ``/models`` answer?"""
-        if not self.base_url:
+        base, headers, _reason = self._target()
+        if not base:
             return False
         try:
-            await request("GET", f"{self.base_url}/models", timeout=5.0)
-            return True
+            response = await request("GET", f"{base}/models", timeout=5.0, headers=headers)
+            return response.status == 200
         except (HttpError, Exception):  # noqa: BLE001
             return False
 
     # ------------------------------------------------------------------
     # AIProvider surface
     # ------------------------------------------------------------------
+    def _target(self) -> tuple[str, dict[str, str], str]:
+        """``(base_url, headers, reason)`` — re-resolved, so a restart is noticed."""
+        if self.base_url:
+            return self.base_url, ({"Authorization": f"Bearer {self._token}"} if self.gated and self._token else {}), ""
+        if self.directory is None:
+            return "", {}, "no local model is configured"
+        endpoint = self.directory.resolve("ollama")
+        if not getattr(endpoint, "ok", False):
+            return "", {}, getattr(endpoint, "note", "") or "the local model is between runs"
+        self._token = getattr(endpoint, "token", "")
+        self.model = self.model or str(getattr(endpoint, "model", "") or "local")
+        return endpoint.base_url, endpoint.headers(), ""
+
+    _token: str = ""
+
     @property
     def configured(self) -> bool:
         """True when the owner asked for a local model, whether or not it is up.
@@ -224,11 +263,24 @@ class LocalModel:
         request. Being configured and being ready are different questions and
         this pair keeps them apart.
         """
-        return bool(self.enabled and self.base_url)
+        if not self.enabled:
+            return False
+        if self.base_url:
+            return True
+        if self.directory is None:
+            return False
+        # Hosted: it counts only when a run has actually published an address
+        # that is still fresh. A directory with no published file is not a
+        # provider — it is a *place to look*, and saying otherwise would turn a
+        # missing service into "the AI is configured", which then fails at the
+        # first sentence instead of at the card.
+        return bool(getattr(self.directory.resolve("ollama"), "ok", False))
 
     @property
     def available(self) -> bool:
         """True when a request would actually be answered right now."""
+        if self.directory is not None and not self.base_url:
+            return bool(getattr(self.directory.resolve("ollama"), "ok", False))
         return bool(self.configured and self._ready)
 
     @property
@@ -258,8 +310,9 @@ class LocalModel:
         max_tokens: int = 400,
         temperature: float = 0.85,
     ) -> str:
-        if not self.available:
-            raise _error("the local model is not running", "disabled")
+        base, headers, reason = self._target()
+        if not base:
+            raise _error(reason or "the local model is not running", "disabled")
         thread = [
             {"role": str(getattr(message, "role", "user")), "content": str(getattr(message, "content", ""))}
             for message in messages
@@ -274,11 +327,13 @@ class LocalModel:
         started = time.monotonic()
         try:
             payload = await post_json(
-                f"{self.base_url}/chat/completions", body, timeout=self.timeout
+                f"{base}/chat/completions", body, timeout=self.timeout, headers=headers
             )
         except HttpError as exc:
             self.failures += 1
             self.last_error = str(exc)[:200]
+            if exc.status == 401:
+                raise _error("local model: the gate refused me", "unauthorized") from exc
             kind = "timeout" if exc.kind == "timeout" else "network"
             raise _error(f"local model: {exc}", kind) from exc
         except (TimeoutError, Exception) as exc:  # noqa: BLE001

@@ -26,6 +26,7 @@ from .. import ui
 from ..command_registry import Command, CommandContext, CommandError
 from ..services.imagegen import ImageError
 from ..services.sender import SendError
+from ..services.service_directory import STATE_BETWEEN_RUNS, STATE_EXPIRED, describe_age
 from ..utils.formatting import escape
 from ..utils.text import truncate
 
@@ -78,6 +79,10 @@ async def cmd_draw(ctx: CommandContext) -> None:
     if not prompt:
         raise CommandError("errors.missing_argument", usage=ctx.usage_text())
 
+    # ``--quality`` trades a minute for a better picture: 20 steps instead of 8.
+    # On a CPU runner that is 1-3 minutes, so it is asked for, never assumed.
+    quality = ctx.has_flag("quality") or ctx.has_flag("slow") or ctx.has_flag("careful")
+
     # Optional seeds: the same seed and the same words give the same picture,
     # which is the only way to say "that one again, but wider".
     seed: int | None = None
@@ -96,11 +101,13 @@ async def cmd_draw(ctx: CommandContext) -> None:
     folder = _outdir(ctx.runtime)
     _sweep(folder)
     ctx.runtime.limiter.touch(key)
+    working_key = "draw.quality" if quality else "draw.working"
+    steps = int(getattr(generator, "QUALITY_STEPS", 20) if quality else getattr(generator, "FAST_STEPS", 8))
     notice = await ctx.reply(
         "\n\n".join(
             [
                 ui.title("✎", ctx.t("draw.title")),
-                ui.note(ctx.t("draw.working", prompt=escape(truncate(prompt, 120)))),
+                ui.note(ctx.t(working_key, prompt=escape(truncate(prompt, 120)), steps=steps)),
             ]
         )
     )
@@ -108,7 +115,7 @@ async def cmd_draw(ctx: CommandContext) -> None:
 
     try:
         path = await asyncio.wait_for(
-            generator.generate(prompt, outdir=folder, seed=seed),
+            generator.generate(prompt, outdir=folder, seed=seed, quality=quality),
             timeout=float(getattr(generator, "timeout", 180.0)) + 30.0,
         )
     except TimeoutError:
@@ -167,6 +174,27 @@ async def _edit(ctx: CommandContext, message: Any, text: str) -> None:
 
 def _draw_info(ctx: CommandContext, generator: Any) -> str:
     if generator is None or not getattr(generator, "available", False):
+        # "Between runs" and "never configured" are different problems with
+        # different fixes, and a hosted service spends a few minutes a day in the
+        # first one. Saying "not configured" for that would send the owner
+        # hunting for a typo that does not exist.
+        state = _service_state(ctx, "comfy")
+        if state in {STATE_BETWEEN_RUNS, STATE_EXPIRED}:
+            endpoint = ctx.runtime.services.resolve("comfy")
+            return "\n\n".join(
+                [
+                    ui.title("✎", ctx.t("draw.title")),
+                    ui.note(
+                        ctx.t(
+                            "art.between_runs",
+                            age=describe_age(endpoint.age, ctx.language),
+                            fast=getattr(generator, "FAST_START_SECONDS", 45),
+                            slow="two minutes",
+                        )
+                    ),
+                    ui.footer(ctx.t("draw.setup_hint")),
+                ]
+            )
         return "\n\n".join(
             [
                 ui.title("✎", ctx.t("draw.title")),
@@ -193,6 +221,16 @@ def _draw_info(ctx: CommandContext, generator: Any) -> str:
     )
 
 
+def _service_state(ctx: CommandContext, name: str) -> str:
+    directory = getattr(ctx.runtime, "services", None)
+    if directory is None:
+        return ""
+    try:
+        return str(getattr(directory.resolve(name), "state", ""))
+    except Exception:  # noqa: BLE001 - a state lookup never blocks a command
+        return ""
+
+
 def _draw_error(ctx: CommandContext, reason: str) -> str:
     return "\n\n".join(
         [ui.title("✎", ctx.t("draw.title")), ui.note(reason), ui.footer(ctx.t("draw.retry_hint"))]
@@ -207,7 +245,7 @@ def register(runtime: Any) -> None:
                 cmd_draw,
                 category="media",
                 aliases=("paint", "imagine"),
-                usage="<prompt> [--seed n] | info",
+                usage="<prompt> [--seed n] [--quality] | info",
                 subcommands=("info", "status"),
                 changes_state=True,
             )

@@ -844,4 +844,59 @@ def build_tools(runtime: Any) -> list[Tool]:
         )
     )
 
+    async def services(turn: Turn, args: dict[str, str]) -> ActionResult:
+        """Where the hosted engines are, in the same words `.services` uses.
+
+        Plain language has to reach every command, and "why can't you search /
+        draw / talk without a key" is exactly the question a person asks in a
+        sentence rather than a dot-command. Running the command through the
+        dispatcher means the card cannot drift from the tool.
+        """
+        result = await run_command(
+            runtime,
+            "services",
+            chat_id=turn.chat_id,
+            sender_id=turn.actor_id or 0,
+            message_id=turn.message_id,
+            language=turn.language,
+            reply_to=turn.reply_to,
+        )
+        said = " ".join(str(item) for item in (result.said or [])).strip()
+        directory = getattr(runtime, "services", None)
+        wanted = (args.get("which") or "").strip().lower()
+        wanted = wanted if wanted in {"search", "comfy", "ollama"} else ""
+        rows: list[str] = []
+        if directory is not None:
+            for name in ((wanted,) if wanted else ("search", "comfy", "ollama")):
+                endpoint = directory.resolve(name)
+                # " · ".join of the parts that exist: an empty URL must not leave
+                # a double space in a sentence a person reads.
+                parts = [endpoint.state, endpoint.url, endpoint.note]
+                rows.append(f"{name}: " + " · ".join(part for part in parts if part))
+        if not result.ok and not rows:
+            return ActionResult(False, detail=result.note or "no service information", kind="failed")
+        # When the command refuses (a cooldown is the common one), the rows are
+        # still the truth; "please wait 3s" is not an answer to "where is it".
+        answer = said if (result.ok and said) else " | ".join(rows)
+        return ActionResult(
+            True,
+            note=answer[:400],
+            title=_t(runtime, turn, "services.title"),
+            lines=tuple(rows[:3]),
+        )
+
+    tools.append(
+        Tool(
+            name="services",
+            summary=(
+                "where the search engine, the picture server and the spare model are right "
+                "now, whether they answer, and why one of them might not — use it before "
+                "saying you cannot search, draw or think"
+            ),
+            properties={"which": "search | comfy | ollama; empty for all three (optional)"},
+            run=services,
+            scope="read",
+        )
+    )
+
     return tools

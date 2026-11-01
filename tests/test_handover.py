@@ -32,11 +32,28 @@ class FakeAPI:
         self.runs = runs or []
         self.dispatch_status = dispatch_status
         self.calls: list[tuple[str, str, dict | None]] = []
+        self.scoped_calls: list[str] = []
+
+    #: Workflow files that have never produced a run: the scoped endpoint 404s
+    #: for them, which is a real GitHub behaviour this fake has to model.
+    unknown: set[str] = set()
 
     def __call__(self, method, url, token, payload=None, *, timeout=20.0):
         assert token == "t0ken", "the token must be passed through, not rebuilt"
         self.calls.append((method, url, payload))
         if method == "GET":
+            # A workflow-scoped listing answers with that workflow's runs only —
+            # GitHub does the filtering, so the fake must too or the tests would
+            # prove nothing about isolation.
+            marker = "/actions/workflows/"
+            path = url.split("?", 1)[0].rstrip("/")
+            if marker in path and path.endswith("/runs") and "/dispatches" not in path:
+                name = path.split(marker, 1)[1].split("/runs", 1)[0]
+                if name in self.unknown:
+                    return 404, '{"message":"Not Found"}'
+                scoped = [run for run in self.runs if str(run.get("path", "")).endswith(name)]
+                self.scoped_calls.append(name)
+                return 200, json.dumps({"workflow_runs": scoped})
             return 200, json.dumps({"workflow_runs": self.runs})
         if method == "POST":
             return self.dispatch_status, "" if self.dispatch_status < 300 else '{"message":"nope"}'
@@ -49,8 +66,9 @@ class FakeAPI:
 
 @pytest.fixture
 def api(monkeypatch):
-    def install(runs=None, *, dispatch_status: int = 204) -> FakeAPI:
+    def install(runs=None, *, dispatch_status: int = 204, unknown=None) -> FakeAPI:
         fake = FakeAPI(runs, dispatch_status)
+        fake.unknown = set(unknown or ())
         monkeypatch.setattr(handover, "_request", fake)
         return fake
 
@@ -277,3 +295,55 @@ def test_a_dry_run_reap_stops_nothing(api) -> None:
     fake = api([_run(id=3, status="in_progress", run_started_at=_iso_ago(400))])
     assert handover.reap("t0ken", "me/repo", dry_run=True) == ["3"]
     assert not any("force-cancel" in url for _, url, _ in fake.calls)
+
+# ---------------------------------------------------------------------------
+# Four long-lived workflows on one branch must not see each other
+# ---------------------------------------------------------------------------
+def test_a_live_run_of_one_service_does_not_cover_another(api) -> None:
+    """The deadlock this guards against is silent and total.
+
+    Each service queues its own successor. If "is anything alive?" were asked
+    without scoping, search would see comfy's live run, decide it was covered,
+    dispatch nothing, and end — and the next restart would leave one of them
+    with no successor at all.
+    """
+    api(
+        [
+            _run(id=5, path=".github/workflows/service-comfy.yml"),
+            _run(id=6, path=".github/workflows/service-ollama.yml"),
+        ]
+    )
+    report = handover.ensure_successor("t0ken", "me/repo", "b", workflow="service-search.yml")
+    assert report["action"] == "dispatched", "another service's run must not count as ours"
+
+
+def test_a_service_sees_its_own_live_run_and_waits(api) -> None:
+    api([_run(id=7, path=".github/workflows/service-search.yml")])
+    report = handover.ensure_successor("t0ken", "me/repo", "b", workflow="service-search.yml")
+    assert report["action"] == "already-covered"
+    assert [run["id"] for run in report["live"]] == [7]
+
+
+def test_the_listing_is_asked_with_the_workflow_scope(api) -> None:
+    """Scoped at the API, not filtered afterwards.
+
+    The unscoped listing is the fifty most recent runs of the whole repository;
+    a service that restarts every six hours drifts out of it behind the bot's
+    deploys and the data snapshots, and then a second copy of a running service
+    gets queued.
+    """
+    fake = api([])
+    handover.ensure_successor("t0ken", "me/repo", "b", workflow="service-ollama.yml")
+    listing = [url for method, url, _ in fake.calls if method == "GET"]
+    assert any("/actions/workflows/service-ollama.yml/runs" in url for url in listing), listing
+    assert fake.scoped_calls == ["service-ollama.yml"]
+
+
+def test_a_workflow_that_never_ran_falls_back_to_the_listing(api) -> None:
+    """GitHub answers 404 for a file with no runs yet — a fresh service file."""
+    fake = api([_run(id=8, path=".github/workflows/service-comfy.yml")], unknown={"service-comfy.yml"})
+    report = handover.ensure_successor("t0ken", "me/repo", "b", workflow="service-comfy.yml")
+    assert report["action"] == "already-covered"
+    assert [run["id"] for run in report["live"]] == [8]
+    urls = [url for method, url, _ in fake.calls if method == "GET"]
+    assert any("/actions/runs?per_page=50" in url for url in urls), urls

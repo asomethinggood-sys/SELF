@@ -1,0 +1,26 @@
+{
+  "_readme": "Links, never weights. No file above 2 GB is committed. fetch_artifact.py tries drive_id first (gdown --id, the owner's own 5 TB drive), then hf_url, then each entry in hf_urls. On success it writes .services/assets.lock.json with the real byte count and sha256, and every later run verifies against that instead of trusting a manifest someone typed once. Set sha256 to null to accept whatever the first successful download produces, then copy the value from the lock into this file to pin it.",
+  "assets": {
+    "sd-turbo": {
+      "file": "sd-turbo.safetensors",
+      "why": "A single-file SD1.5-family checkpoint that ComfyUI loads as-is. Small enough to download in a CI job, light enough to render 512x512 in well under a minute on four CPU cores. Rename it to whatever COMFY_CKPT says.",
+      "drive_id": "",
+      "bytes": 0,
+      "sha256": null,
+      "hf_url": "https://huggingface.co/Lykon/DreamShaper/resolve/main/DreamShaper_8_pruned.safetensors",
+      "hf_urls": [
+        "https://huggingface.co/stablediffusionapi/dreamshaper-8/resolve/main/dreamshaper_8.safetensors",
+        "https://huggingface.co/digiplay/majicMIX_realistic_v6/resolve/main/majicmixRealistic_v6.safetensors"
+      ]
+    },
+    "sd-fast": {
+      "file": "sd-fast.safetensors",
+      "why": "Optional faster path: an LCM/turbo checkpoint, if one is uploaded to Drive. The built-in graph uses 4 steps when this is present.",
+      "drive_id": "",
+      "bytes": 0,
+      "sha256": null,
+      "hf_url": "",
+      "hf_urls": []
+    }
+  }
+}

@@ -16,6 +16,7 @@ from typing import Any
 
 from .. import ui
 from ..command_registry import Command, CommandContext, CommandError
+from ..services.service_directory import STATE_BETWEEN_RUNS, STATE_EXPIRED, describe_age
 from ..services.websearch import SearchError
 from ..utils.formatting import bold, code, escape, key_value_block, pre
 from ..utils.parsing import paginate
@@ -613,6 +614,17 @@ async def cmd_web(ctx: CommandContext) -> None:
 
 def _web_info(ctx: CommandContext, service: Any) -> str:
     if service is None or not getattr(service, "available", False):
+        directory = getattr(ctx.runtime, "services", None)
+        if directory is not None:
+            endpoint = directory.resolve("search")
+            if endpoint.state in {STATE_BETWEEN_RUNS, STATE_EXPIRED}:
+                return "\n\n".join(
+                    [
+                        ui.title("◎", ctx.t("web.title")),
+                        ui.note(ctx.t("web.between_runs", age=describe_age(endpoint.age, ctx.language))),
+                        ui.footer(ctx.t("web.usage_hint", prefix=ctx.runtime.prefix)),
+                    ]
+                )
         return "\n\n".join(
             [
                 ui.title("◎", ctx.t("web.title")),

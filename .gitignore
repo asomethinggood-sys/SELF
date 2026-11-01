@@ -64,3 +64,7 @@ google_drive/
 
 # probe output (regenerate with scripts/probe_everything.py)
 .probe.json
+
+# the services' own run directories and the integrity lock
+.runtime/
+.services/*.lock

@@ -84,3 +84,34 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           [ "$action" != "error" ]
+
+      - name: Start any service that is not running
+        # The same check the bot makes at start-up, repeated every five minutes so
+        # a service that died mid-run (its own successor dispatch can fail on a
+        # rate limit or a cancelled run) comes back on its own.
+        continue-on-error: true
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          python3 scripts/service_supervisor.py --json > services.json 2>services.err || cat services.err
+          cat services.json 2>/dev/null || true
+          {
+            echo ""
+            echo "### Services"
+            echo ""
+            python3 - <<'PY'
+          import json
+          try:
+              report = json.load(open("services.json"))
+          except Exception:
+              print("_could not read the service report_")
+          else:
+              for name, entry in report["services"].items():
+                  if entry.get("started"):
+                      print(f"- **{name}** — started ({entry.get('reason')})")
+                  else:
+                      print(f"- {name} — {entry.get('error') or entry.get('note') or entry['reason']}")
+          PY
+          } >> "$GITHUB_STEP_SUMMARY" || true

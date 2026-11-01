@@ -88,7 +88,36 @@ def live_runs(
     api: str = API,
     timeout: float = 20.0,
 ) -> list[dict]:
-    """Runs of ``workflow`` on ``branch`` that are queued or in progress."""
+    """Runs of ``workflow`` on ``branch`` that are queued or in progress.
+
+    Scoped by workflow at the API, not only by filtering afterwards. With one
+    workflow the difference did not matter; with four long-lived ones it does —
+    the unscoped listing is the **fifty most recent runs of the whole repository**,
+    and a search service that restarts every six hours drifts out of that window
+    behind the bot's own deploys, the data snapshots and the probes. When it
+    drifts out, this function reports "nothing is alive" and queues a *second*
+    copy of a service that is already running: duplicates, then a queue, then a
+    concurrency group full of ghosts.
+
+    The scoped endpoint 404s for a workflow file that has never produced a run
+    (measured on this repository: a freshly added file answers 404), so that one
+    case falls back to the old listing plus the path filter.
+    """
+    if workflow:
+        scoped = f"{api}/repos/{repo}/actions/workflows/{workflow}/runs?per_page=50"
+        if branch:
+            scoped += f"&branch={branch}"
+        status, body = _request("GET", scoped, token, timeout=timeout)
+        if status == 200:
+            try:
+                runs = json.loads(body).get("workflow_runs") or []
+            except ValueError as exc:  # pragma: no cover - GitHub always answers JSON
+                raise RuntimeError(f"list runs returned no JSON: {exc}") from exc
+            return [run for run in runs if str(run.get("status")) in LIVE_STATUSES]
+        if status != 404:
+            raise RuntimeError(f"list runs failed: HTTP {status} {body[:200]}")
+        # 404: the file exists but has never run. Fall through to the listing.
+
     url = f"{api}/repos/{repo}/actions/runs?per_page=50"
     if branch:
         url += f"&branch={branch}"
@@ -125,13 +154,12 @@ def stale_runs(
     import time as _time
 
     stamp = _time.time() if now is None else now
-    url = f"{api}/repos/{repo}/actions/runs?per_page=50"
-    if branch:
-        url += f"&branch={branch}"
-    status, body = _request("GET", url, token, timeout=timeout)
-    if status != 200:
-        raise RuntimeError(f"list runs failed: HTTP {status} {body[:200]}")
-    runs = json.loads(body).get("workflow_runs") or []
+    try:
+        runs = live_runs(token, repo, branch=branch, workflow=workflow or None, api=api)
+    except RuntimeError:
+        runs = []
+    if not runs:
+        return []
     stale: list[dict] = []
     for run in runs:
         if str(run.get("status")) not in {"in_progress"}:

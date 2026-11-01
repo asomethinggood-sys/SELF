@@ -32,12 +32,16 @@ import json
 import logging
 import os
 import socket
+import subprocess
 import sys
 import tempfile
 import threading
 import time
 import traceback
+import urllib.error
 import urllib.parse
+import urllib.request
+from datetime import UTC
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -364,18 +368,24 @@ async def probe_draw(comfy_url: str, verbose: bool) -> None:
         import havoc.services.imagegen as imagegen_module
 
         seen_seeds: list[int] = []
+        seen_steps: list[int] = []
         original = imagegen_module.ImageGenerator._graph
 
-        def spy(self, prompt, *, seed=None):
+        def spy(self, prompt, *, seed=None, steps=None):
             seen_seeds.append(-1 if seed is None else seed)
-            return original(self, prompt, seed=seed)
+            seen_steps.append(int(steps or 0))
+            return original(self, prompt, seed=seed, steps=steps)
 
         imagegen_module.ImageGenerator._graph = spy  # type: ignore[method-assign]
         try:
             await say(runtime, ".draw a cat --seed 1234")
+            await asyncio.sleep(DRAW_COOLDOWN + 0.4)
+            await say(runtime, ".draw a cat --quality")
         finally:
             imagegen_module.ImageGenerator._graph = original  # type: ignore[method-assign]
         record("draw · --seed reaches the graph", 1234 in seen_seeds, str(seen_seeds))
+        # The fast/quality split has to be real on the wire, not just a constant.
+        record("draw · the default is 8 steps and --quality is 20", seen_steps[:2] == [8, 20], str(seen_steps))
 
         # A server that refuses the job (model missing) must read like a sentence.
         await asyncio.sleep(DRAW_COOLDOWN + 0.4)
@@ -394,6 +404,181 @@ async def probe_draw(comfy_url: str, verbose: bool) -> None:
         record("draw · a dead server is a sentence", down.strip() != "" and "Traceback" not in down, down[:200])
     finally:
         await runtime.db.close()
+
+
+async def probe_gate(searx_url: str, verbose: bool) -> None:
+    """The gate, the resolver and a real 401 — over real sockets.
+
+    Everything here runs as it does on a runner: `scripts/service_gate.py` is
+    started as a **subprocess** in front of the SearXNG stub, the bot is pointed
+    at it through `.services/search.json` (an override, so no file is written),
+    and the token is derived the same way on both sides. What this proves that a
+    unit test cannot: the bytes that leave the bot are the bytes the gate accepts.
+    """
+    from datetime import datetime, timedelta
+
+    from havoc.services.service_directory import (
+        STATE_BETWEEN_RUNS,
+        STATE_EXPIRED,
+        ServiceDirectory,
+    )
+
+    secret = "probe-shared-secret"
+    run_id = "424242"
+    started_at = "2026-11-01T00:00:00Z"
+    port = int(_closed_port().rsplit(":", 1)[1])
+    upstream = searx_url.replace("http://", "")
+    env = dict(
+        os.environ,
+        SERVICE_NAME="search",
+        SERVICE_SECRET=secret,
+        SERVICE_RUN_ID=run_id,
+        SERVICE_STARTED_AT=started_at,
+    )
+    process = subprocess.Popen(
+        [sys.executable, "scripts/service_gate.py", "--port", str(port), "--upstream", upstream],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        cwd=str(ROOT),
+    )
+    first_line = ""
+    try:
+        deadline = time.time() + 15
+        while time.time() < deadline:
+            line = process.stdout.readline() if process.stdout else ""
+            if line:
+                first_line = line.strip()
+                if first_line.startswith("service_gate:"):
+                    break
+            if process.poll() is not None:
+                break
+            time.sleep(0.05)
+        record("gate · the gate started and said where it listens", "service_gate:" in first_line, first_line or "no output")
+
+        base = f"http://127.0.0.1:{port}"
+        now = datetime.now(UTC)
+        published = {
+            "service": "search",
+            "url": base,
+            "run_id": run_id,
+            "started_at": started_at,
+            "published_at": now.replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+            "expires_at": (now + timedelta(hours=6)).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+            "model": "",
+            "gated": True,
+        }
+
+        # 1. A wrong token is refused at the gate, in JSON, over a real socket.
+        wrong = urllib.request.Request(
+            f"{base}/search?q=transformers", headers={"Authorization": "Bearer " + "0" * 64}
+        )
+        code = 0
+        body = ""
+        try:
+            with urllib.request.urlopen(wrong, timeout=10) as response:
+                code = response.status
+                body = response.read().decode()
+        except urllib.error.HTTPError as error:
+            code = error.code
+            body = error.read().decode()
+        record("gate · a wrong token is a 401", code == 401, f"{code} {body[:120]}")
+        record("gate · the 401 is a readable JSON error", '"unauthorized"' in body, body[:160])
+
+        # 2. /healthz needs no token: that is what the tunnel check uses.
+        with urllib.request.urlopen(f"{base}/healthz", timeout=10) as response:
+            health = json.loads(response.read().decode())
+        record("gate · /healthz answers without a token", response.status == 200 and health.get("service") == "search", str(health)[:160])
+
+        # 3. The bot, told the same secret, gets results *through* the gate.
+        for key in ("SEARXNG_URL", "SEARXNG_ENGINES"):
+            os.environ.pop(key, None)
+        runtime = await build_runtime()
+        try:
+            directory = ServiceDirectory(override={"search": published}, secret=secret, branch="")
+            runtime.services = directory
+            if runtime.web_search is not None:
+                runtime.web_search.directory = directory
+                runtime.web_search.url = ""
+            record("gate · the directory resolves the published file", directory.resolve("search").ok,
+                   directory.resolve("search").note)
+            record("gate · the token is derived, not read", len(directory.resolve("search").token) == 64,
+                   str(len(directory.resolve("search").token)))
+
+            here = len(SearxngStub.seen)
+            answer = texts(await say(runtime, ".web a transformer, briefly"))
+            if verbose:
+                print(answer)
+            record("gate · .web answers through the gate", "transform" in answer.lower() or "attention" in answer.lower(), answer[:200])
+            record("gate · the query reached the upstream instance", len(SearxngStub.seen) > here, str(SearxngStub.seen[-1:]))
+
+            # 4. A checkout with the wrong secret is "the gate refused me", not a crash.
+            wrong_dir = ServiceDirectory(override={"search": published}, secret="not-the-secret", branch="")
+            runtime.services = wrong_dir
+            runtime.web_search.directory = wrong_dir
+            refused = texts(await say(runtime, ".web something else entirely"))
+            record("gate · a mismatched secret reads like a sentence", "gate refused" in refused.lower(), refused[:240])
+
+            # 5. Between runs and expired are different sentences, and neither is
+            #    "not configured". A service spends minutes a day in the first one.
+            between = dict(published, url="")
+            runtime.services = ServiceDirectory(override={"search": between}, secret=secret, branch="")
+            runtime.web_search.directory = runtime.services
+            runtime.web_search.url = ""
+            gap = texts(await say(runtime, ".web anything"))
+            record("gate · between runs says so, with the age", "between runs" in gap.lower(), gap[:240])
+            assert runtime.services.resolve("search").state == STATE_BETWEEN_RUNS
+
+            old = dict(
+                published,
+                published_at=(now - timedelta(hours=7)).isoformat().replace("+00:00", "Z"),
+                expires_at=(now - timedelta(minutes=30)).isoformat().replace("+00:00", "Z"),
+            )
+            runtime.services = ServiceDirectory(override={"search": old}, secret=secret, branch="")
+            runtime.web_search.directory = runtime.services
+            expired = texts(await say(runtime, ".web anything at all"))
+            record("gate · an expired address is named as expired", runtime.services.resolve("search").state == STATE_EXPIRED,
+                   runtime.services.resolve("search").state)
+            record("gate · an expired service still explains itself", "between runs" in expired.lower() or "past" in expired.lower(), expired[:240])
+
+            # 6. `.services` shows the truth about all three, reachable from help.
+            runtime.services = ServiceDirectory(override={"search": published, "comfy": between}, secret=secret, branch="")
+            card = texts(await say(runtime, ".services"))
+            if verbose:
+                print(card)
+            record("gate · .services names the reachable one", "search" in card.lower() and "up" in card.lower(), card[:240])
+            record("gate · .services names the one between runs", "between runs" in card.lower(), card[:240])
+            record("gate · .services names the one that never ran", "never" in card.lower() or "not" in card.lower(), card[:240])
+            help_text = texts(await say(runtime, ".help"))
+            record("gate · .services is in the help", "services" in help_text.lower())
+            # Plain language reaches it through the model's hands: the tool layer
+            # must offer a `services` tool whose answer is the same card.
+            layer = getattr(runtime, "actions", None)
+            offered = [tool.name for tool in layer.offered()] if layer is not None else []
+            record("gate · the model is offered a services tool", "services" in offered, str(offered)[:200])
+            tool = layer.get("services") if layer is not None else None
+            if tool is not None:
+                from havoc.services.actions import Turn
+
+                turn = Turn(chat_id=42, actor_id=42, message_id=1, language="en")
+                outcome = await tool.run(turn, {})
+                record(
+                    "gate · the tool answers with the same states",
+                    bool(outcome.ok) and "comfy" in (outcome.note or ""),
+                    (outcome.note or outcome.detail or "")[:200],
+                )
+            else:
+                record("gate · the tool answers with the same states", False, "no services tool")
+        finally:
+            await runtime.db.close()
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+        print(f"gate · stopped (exit {process.returncode})") if False else None
 
 
 async def probe_unconfigured() -> None:
@@ -772,6 +957,7 @@ async def main() -> int:
             ("lanes", probe_lanes(args.verbose)),
             ("lag", probe_lag(args.verbose)),
             ("unconfigured", probe_unconfigured()),
+            ("gate", probe_gate(searx_url, args.verbose)),
         ]
         for name, coro in scenarios:
             print(f"=== {name.upper()} ===")

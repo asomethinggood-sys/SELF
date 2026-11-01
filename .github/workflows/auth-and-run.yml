@@ -106,6 +106,33 @@ jobs:
           HANDOVER_WORKFLOW: auth-and-run.yml
         run: python scripts/handover.py
 
+      - name: Start the services that are not running
+        # All four restart in the same window. Each one queues its own successor,
+        # but none of them can see the others, so a service whose last-gasp
+        # dispatch failed would stay dead until somebody noticed. This notices:
+        # it reads `.services/<name>.json` and dispatches the workflow of anything
+        # missing or within an hour of its six-hour ceiling.
+        continue-on-error: true
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          python3 scripts/service_supervisor.py --json | tee service-supervisor.json
+          {
+            echo "### Services"
+            echo ""
+            python3 - <<'PY'
+          import json
+          report = json.load(open("service-supervisor.json"))
+          for name, entry in report["services"].items():
+              if entry.get("started"):
+                  print(f"- **{name}** — started ({entry.get('reason') or entry.get('dispatched')})")
+              else:
+                  print(f"- {name} — {entry.get('error') or entry.get('note') or entry.get('dispatched') or entry['reason']}")
+          PY
+          } >> "$GITHUB_STEP_SUMMARY" || true
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"

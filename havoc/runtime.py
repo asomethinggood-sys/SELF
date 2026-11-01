@@ -42,6 +42,7 @@ from .services.memory import MemoryStore
 from .services.people import PersonBook
 from .services.rate_limiter import RateLimiter
 from .services.sender import Sender
+from .services.service_directory import ServiceDirectory
 from .services.storage import Store
 from .services.translation_provider import build_translation_provider
 from .services.websearch import WebSearch
@@ -89,6 +90,8 @@ class Runtime:
     web_search: Any = None
     #: ComfyUI, when one is configured (``.draw``).
     image_gen: Any = None
+    #: Where the hosted services are (``.services``). Never ``None`` at runtime.
+    services: Any = None
     memory: MemoryStore = None  # type: ignore[assignment] - set in create()
     people: PersonBook = None  # type: ignore[assignment] - set in create()
     sent_ledger: Any = None
@@ -128,6 +131,10 @@ class Runtime:
         # network call to know who the owner is.
         await permissions.load()
 
+        # Where the hosted services are, and how to open their gate. Built before
+        # the services themselves: each of them asks it when its env var is unset.
+        directory = ServiceDirectory.from_env(logger=logger)
+
         # Several keys across several providers, rotated with persisted budgets
         # and health. The router duck-types AIProvider, so every feature that
         # asked `runtime.ai` for a sentence keeps working without knowing about
@@ -138,7 +145,9 @@ class Runtime:
         # so a spent daily allowance stops meaning "silent until midnight". With
         # no keys at all it is not a spare, it is the engine; the router stays in
         # place either way, because `.ai`, `.key` and `.models` all speak router.
-        local_model = LocalModel.from_env(logger=logger)
+        local_model = LocalModel.from_env(logger=logger, directory=directory)
+        if local_model is not None and getattr(local_model, "directory", None) is None:
+            local_model.directory = directory
         if local_model is not None and isinstance(ai, AIRouter):
             ai.local = local_model
         if not ai.available:
@@ -154,8 +163,11 @@ class Runtime:
                     timeout=config.ai_timeout,
                     enabled=True,
                 )
+            # With a service directory there is always somewhere to fall back to,
+            # so the router stays: its last step is the hosted model, and a
+            # router that becomes available the moment that service publishes is
+            # worth more than a snap decision made at boot.
             if not ai.available and local_model is not None and local_model.configured:
-                # No rotation to sit behind: the local model *is* the provider.
                 ai = local_model
         # Translation speaks through the same engine she does (Gemma 31B by
         # default), so `.translate` works on a clone with keys but no
@@ -232,8 +244,9 @@ class Runtime:
         # Services that are optional by nature: a search engine he runs, and a
         # picture generator he runs. Both say "not configured" in one sentence
         # rather than failing a command.
-        runtime.web_search = WebSearch.from_env()
-        runtime.image_gen = ImageGenerator.from_env(logger=logger)
+        runtime.web_search = WebSearch.from_env(directory)
+        runtime.image_gen = ImageGenerator.from_env(logger=logger, directory=directory)
+        runtime.services = directory
         runtime.memory = MemoryStore(db)
         # What this account sent as the bot, so a reply to her answer can be told
         # apart from a reply to the owner's own message.

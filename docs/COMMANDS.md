@@ -9,7 +9,7 @@ account other than the logged-in user.
 `.` in the usage column stands for the active prefix (default `.`).
 
 
-Total: **149 commands**.
+Total: **150 commands**.
 
 
 ## Account
@@ -133,6 +133,7 @@ Total: **149 commands**.
 | `.rtl` | Analyze direction and script balance of text _(owner only)._ | `.rtl` | `.راست‌به‌چپ` |
 | `.saved` | Saved Messages assistant overview _(owner only)._ | `.saved` | `.savedmessages`, `.ذخیره‌ها` |
 | `.search` | Search accessible message history _(owner only)._ | `.search ‹query› [--chat id] [--limit n]` | `.جستجو` |
+| `.services` | Where the hosted search engine, picture server and model are right now, and whether they answer _(owner only)._ | `.services` | `.service`, `.hosted` |
 | `.summarize` | Summarize the replied text or recent messages _(owner only)._ | `.summarize [count]` | `.summary`, `.خلاصه` |
 | `.textstats` | Count words, characters and sentences _(owner only)._ | `.textstats [text]` | `.stats`, `.آمارمتن` |
 | `.time` | Show the current time in cities or timezones _(owner only)._ | `.time [city...]` | `.clock-time`, `.زمان` |

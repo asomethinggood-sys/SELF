@@ -1,0 +1,204 @@
+name: Service · pictures
+
+# ComfyUI on CPU with a fast single-file checkpoint: 8 steps by default
+# (30-50 s a picture), 20 for `.draw --quality`.
+#
+# One service, one runner, its own six hours. It publishes
+# `.services/comfy.json` when it comes up — the address changes on every
+# restart, so the bot reads it instead of being configured with it (see
+# `havoc/services/service_directory.py`).
+#
+# In front of it: `scripts/service_gate.py`, a bearer-token gate with `/healthz`,
+# a per-minute cap and an 8 MB body cap. The token is derived per run from
+# `SERVICE_SHARED_SECRET` (`havoc/services/service_token.py`), so nothing secret
+# is committed and a leaked token dies with the run.
+#
+# Staying alive: same pattern as the bot. A successor is queued in the first
+# step, `scripts/handover.py` is asked once a minute whether it is still there,
+# and the concurrency group queues rather than cancels. `handover` is scoped by
+# workflow file, so four long-lived workflows on one branch do not starve each
+# other.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/service-comfy.yml"
+      - "scripts/service_host.py"
+      - "scripts/service_gate.py"
+      - "scripts/fetch_artifact.py"
+      - "havoc/services/service_token.py"
+      - ".services/assets.json"
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: havoc-comfy
+  cancel-in-progress: false
+
+jobs:
+  serve:
+    name: comfy
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Queue the successor
+        # First, before anything can fail: whatever ends this run, the next one
+        # is already waiting.
+        continue-on-error: true
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HANDOVER_WORKFLOW: service-comfy.yml
+        run: python scripts/handover.py
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        shell: bash
+        run: |
+          set -uo pipefail
+          python -m pip install -q -e ".[dev]"
+          python -c "import havoc.services.service_token; print('token module ok')"
+
+      - name: Check the token wiring
+        # A gate with no secret is an open proxy, and the host refuses to start
+        # one — so a run without the secret must not open a tunnel either.
+        #
+        # It still does everything else: installs, starts, puts the gate in front,
+        # and asks the service a real question with a real token over loopback.
+        # The run is then a *self-test*: nothing becomes public, and the job log
+        # says whether the service actually answers. That way a missing secret
+        # costs a green run with a transcript instead of a red run with nothing.
+        id: token
+        shell: bash
+        env:
+          SHARED: ${{ secrets.SERVICE_SHARED_SECRET }}
+        run: |
+          set -uo pipefail
+          if [ -z "${SHARED:-}" ]; then
+            echo "::warning::SERVICE_SHARED_SECRET is not set — this run will prove the service on loopback and will NOT open a tunnel. Add the secret (Settings → Secrets and variables → Actions) and the next run goes public."
+            {
+              echo "### Self-test run"
+              echo ""
+              echo "No \`SERVICE_SHARED_SECRET\` in this repository, so the gate would have no token and the tunnel"
+              echo "would be an open proxy. This run starts the service and proves it over loopback instead."
+              echo "Add the secret and the next run publishes a public address."
+            } >> "$GITHUB_STEP_SUMMARY"
+            # Ephemeral and loopback-only: nothing leaves this machine, so a
+            # random per-run secret is as safe as a stored one.
+            echo "SERVICE_SECRET=$(python -c 'import secrets;print(secrets.token_hex(32))')" >> "$GITHUB_ENV"
+            echo "self_test=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "token wiring ok"
+            echo "self_test=0" >> "$GITHUB_OUTPUT"
+          fi
+          python - <<'PY'
+          from havoc.services.service_token import token_for
+          print("token derivation ok, sample:", token_for("comfy", "1", "2026-01-01T00:00:00Z", "x")[:16] + "…")
+          PY
+
+      - name: Restore ComfyUI and the checkpoint
+        id: weights
+        uses: actions/cache@v4
+        with:
+          # The clone, the CPU wheels and a 2 GB checkpoint are the entire
+          # install time; without this every restart downloads them again.
+          path: |
+            .runtime/service-comfy/ComfyUI
+          key: comfy-${{ hashFiles('.services/assets.json') }}-${{ github.run_id }}
+          restore-keys: |
+            comfy-
+
+      - name: Report the cache
+        shell: bash
+        run: |
+          echo "cache hit: ${{ steps.weights.outputs.cache-hit }}"
+          du -sh .runtime/service-comfy/ComfyUI 2>/dev/null || echo "nothing restored"
+
+
+      - name: Pre-flight
+        # What is installed before we try to run anything, so a failure at minute
+        # four has a cause printed at minute zero.
+        shell: bash
+        run: |
+          set -uo pipefail
+          {
+            echo "### Service · pictures"
+            echo ""
+            echo "- runner: $(uname -sr) · $(nproc) cores · $(free -g | awk '/^Mem:/{print $2}') GB"
+            echo "- disk: $(df -h / | awk 'NR==2{print $4}') free"
+            echo "- checkpoint cache: ${{ steps.weights.outputs.cache-hit || 'miss' }}"
+            ls -la .runtime/service-comfy/ComfyUI/models/checkpoints 2>/dev/null || true
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Serve
+        id: serve
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SERVICE_SECRET: ${{ secrets.SERVICE_SHARED_SECRET }}
+          SERVICE_MINUTES: "335"
+          OLLAMA_MODEL: ${{ vars.OLLAMA_MODEL || 'qwen2.5:0.5b' }}
+          COMFY_CKPT: ${{ vars.COMFY_CKPT || 'sd-turbo.safetensors' }}
+          CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
+          CLOUDFLARE_HOSTNAME: ${{ vars.CLOUDFLARE_HOSTNAME }}
+        run: |
+          set -uo pipefail
+          extra=""
+          if [ "${{ steps.token.outputs.self_test }}" = "1" ]; then
+            extra="--self-test"
+            echo "no SERVICE_SHARED_SECRET: running the self-test, publishing nothing"
+          fi
+          echo "service=comfy minutes=$SERVICE_MINUTES extra=${extra:-none}"
+          python -u scripts/service_host.py --service comfy $extra
+          echo "host exited with $?"
+
+      - name: Stop everything
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          for pattern in service_gate.py service_host.py cloudflared "ollama serve"; do
+            if pgrep -f "$pattern" >/dev/null 2>&1; then
+              pkill -f "$pattern" && echo "killed: $pattern"
+            fi
+          done
+          docker rm -f havoc-searxng >/dev/null 2>&1 && echo "killed: searxng container" || true
+          echo "--- what is left ---"
+          pgrep -af "service_gate|service_host|cloudflared|ollama" || echo "nothing"
+
+      - name: Report
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          {
+            echo "### Service · pictures · finished"
+            echo ""
+            if [ -f .services/comfy.json ]; then
+              echo '```json'
+              cat .services/comfy.json
+              echo '```'
+            else
+              echo "_no address was published — the service never came up_"
+            fi
+            echo ""
+            echo "gate log tail:"
+            echo '```'
+            tail -n 20 .runtime/service-comfy/logs/gate.log 2>/dev/null || echo "(none)"
+            echo '```'
+            echo "service log tail:"
+            echo '```'
+            tail -n 25 .runtime/service-comfy/logs/comfy.log 2>/dev/null || echo "(none)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

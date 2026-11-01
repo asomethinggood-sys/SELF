@@ -348,6 +348,8 @@ included for that path — see [docs/INSTALL.md](docs/INSTALL.md#running-it-on-g
 Detailed setup, systemd unit and data locations: [docs/INSTALL.md](docs/INSTALL.md).
 Every environment variable: [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 Common problems: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+Search, pictures and a small model with no API key, on their own runners:
+[docs/HOSTED-SERVICES.md](docs/HOSTED-SERVICES.md).
 
 ## What is in here
 
@@ -372,7 +374,8 @@ havoc/
   utils/             text, time (Jalali), parsing, security, validation, math
   locales/           en.json + fa.json (724 keys each, verified in CI)
 tests/               435 tests: unit, integration through the real dispatcher
-docs/                install, configuration, security, troubleshooting, commands
+docs/                install, configuration, security, troubleshooting, commands,
+                     hosted services (a tunnel, a gate and one secret)
 scripts/             check_locales.py, generate_docs.py, create_api_app.py
 ```
 
