@@ -177,3 +177,15 @@ async def test_a_guest_still_gets_none_of_it(live) -> None:
     await runtime.memory.remember(SELF_ID, "he takes his coffee black")
     await say(runtime, "yura hello", sender=STRANGER)
     assert "coffee black" not in system_of(provider)
+
+
+async def test_a_fact_he_says_in_a_group_still_comes_home(live) -> None:
+    """He is one person: a memory made in a room must not die with the room."""
+    runtime, provider = live
+    provider.reply = "noted.\n\n[[remember: he hates coriander]]"
+    await say(runtime, "yura remember this", sender=SELF_ID, name="Owner")
+    provider.reply = "ok"
+    provider.calls.clear()
+    # ...and it is there when he talks to her in his own chat.
+    await runtime.yura_chat.answer("hi", chat_id=SELF_ID, is_owner=True, sender_id=SELF_ID)
+    assert "coriander" in system_of(provider)

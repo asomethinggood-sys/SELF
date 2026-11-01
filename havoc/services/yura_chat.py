@@ -925,12 +925,17 @@ class YuraChat:
         # On a guest's turn the directives are still stripped (they are machinery,
         # never shown), but nothing is written: a stranger must not be able to
         # plant a memory in his account by asking nicely.
+        # Facts he tells her are filed against *him*, not against the room he
+        # happened to say them in: something he tells her in a group must still be
+        # known in his own chat tomorrow. The chat is where the conversation
+        # lives; he is one person.
+        home = int(getattr(self.runtime.permissions, "self_id", 0) or 0) or chat_id
         if is_owner:
             for fact in _REMEMBER_RE.findall(reply):
-                if await self.memory.remember(chat_id, fact, kind=_kind_of(fact)):
+                if await self.memory.remember(home, fact, kind=_kind_of(fact)):
                     remembered.append(" ".join(fact.split()))
             for phrase in _FORGET_RE.findall(reply):
-                forgotten += await self.memory.forget_matching(chat_id, phrase)
+                forgotten += await self.memory.forget_matching(home, phrase)
 
         files: list[Path] = []
         if is_owner:

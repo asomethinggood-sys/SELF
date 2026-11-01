@@ -321,7 +321,9 @@ async def test_the_model_can_write_memory_and_files(runtime) -> None:
     await invoke(runtime, ".yura make me a shopping list")
     text = last_text(runtime)
     assert "[[remember" not in text and "[[file" not in text
-    memories = await runtime.memory.recall(100)
+    # Filed against him, not against the chat he happened to type in: what he
+    # tells her in one room is still true in the next.
+    memories = await runtime.memory.recall(runtime.permissions.self_id)
     assert any("12 May" in memory.content for memory in memories)
 
     files = [message for message in runtime.client.sent if "file" in message.kwargs]
