@@ -117,6 +117,32 @@ async def cmd_chats(ctx: CommandContext) -> None:
     )
 
 
+#: What a Telegram entity *is*, in words a person reads.
+def _entity_kind(entity: Any, self_id: int | None) -> str:
+    """``self`` / ``bot`` / ``user`` / ``group`` / ``channel`` / ``unknown``.
+
+    The card used to print ``type(entity).__name__`` — the Python class. His own
+    account came out as "Type: User", which reads as "you are a stranger to me".
+    Telegram has exactly three kinds of thing here, and the one that matters most
+    is "this is you".
+    """
+    if entity is None:
+        return "unknown"
+    identifier = getattr(entity, "id", None)
+    if self_id and identifier and int(identifier) == int(self_id):
+        return "self"
+    if getattr(entity, "bot", False):
+        return "bot"
+    name = type(entity).__name__
+    if name == "User" or getattr(entity, "first_name", None):
+        return "user"
+    if getattr(entity, "megagroup", False) or name.endswith("Chat") or name == "Chat":
+        return "group"
+    if name == "Channel" or getattr(entity, "title", None):
+        return "channel"
+    return "unknown"
+
+
 async def cmd_chatinfo(ctx: CommandContext) -> None:
     runtime = ctx.runtime
     entity = getattr(ctx.event, "chat", None)
@@ -130,17 +156,42 @@ async def cmd_chatinfo(ctx: CommandContext) -> None:
             entity = await runtime.client.get_entity(ctx.chat_id)
         except Exception:  # noqa: BLE001
             entity = None
-    pairs = [
-        (ctx.t("chatinfo.id"), getattr(entity, "id", ctx.chat_id)),
-        (ctx.t("chatinfo.type"), type(entity).__name__ if entity is not None else "—"),
-        (ctx.t("chatinfo.name"), display_name(entity)),
-        (ctx.t("chatinfo.username"), f"@{entity.username}" if getattr(entity, "username", None) else "—"),
-        (ctx.t("chatinfo.phone"), getattr(entity, "phone", "—") if entity is not None else "—"),
-        (ctx.t("chatinfo.bot"), ctx.t("common.yes" if getattr(entity, "bot", False) else "common.no")),
-        (ctx.t("chatinfo.labels"), ", ".join(await ctx.store.chat_labels(ctx.chat_id)) or "—"),
-        (ctx.t("chatinfo.link"), chat_link(entity) or "—"),
+    self_id = int(getattr(runtime.permissions, "self_id", 0) or 0) or None
+    identifier = getattr(entity, "id", None)
+    kind = _entity_kind(entity, self_id)
+    is_me = kind == "self"
+    # A phone number is somebody's private business. It is shown for his own
+    # account (it is his card, he knows it) and for nobody else, because this
+    # command answers whatever is replied to.
+    phone = getattr(entity, "phone", None) if is_me else None
+    # Plain words, not pre-built markup: ``ui.card`` italicises and escapes each
+    # line itself, so a ``ui.fact_line`` here arrived twice-escaped as
+    # ``<i>&lt;i&gt;◇ ·&lt;/i&gt;`` — the machinery he was never supposed to see.
+    rows = [
+        f"◇ {ctx.t('chatinfo.id')} · {identifier or ctx.chat_id}",
+        f"✦ {ctx.t('chatinfo.who')} {ctx.t(f'chatinfo.kind_{kind}')}",
+        f"✎ {display_name(entity)}",
     ]
-    await ctx.reply(bold(ctx.t("chatinfo.header")) + "\n" + key_value_block(pairs))
+    username = getattr(entity, "username", None)
+    rows.append(f"⌕ {'@' + str(username) if username else '—'}")
+    if phone:
+        rows.append(f"☎ {phone}")
+    if getattr(entity, "bot", False):
+        rows.append(f"⚙ {ctx.t('chatinfo.bot_yes')}")
+    labels = await ctx.store.chat_labels(ctx.chat_id)
+    if labels:
+        rows.append(f"❐ {', '.join(labels)}")
+    link = chat_link(entity)
+    if link:
+        rows.append(f"↗ {link}")
+    await ctx.reply(
+        ui.card(
+            ctx.t("chatinfo.header"),
+            rows,
+            icon="ℹ",
+            footer=ctx.t("chatinfo.is_you") if is_me else "",
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -466,7 +517,16 @@ def register(runtime: Any) -> None:
         [
             Command("search", cmd_search, category="information", usage="<query> [--chat id] [--limit n]"),
             Command("chats", cmd_chats, category="information", usage="[query]"),
-            Command("chatinfo", cmd_chatinfo, category="information", aliases=("chatinfo", "info")),
+            # Owner-only: a card with ids, links and a phone number is not
+            # something a member of a group gets to ask of another member
+            # through his account.
+            Command(
+                "chatinfo",
+                cmd_chatinfo,
+                category="information",
+                aliases=("chatinfo", "info"),
+                owner_only=True,
+            ),
             Command("bookmark", cmd_bookmark, category="information", aliases=("bm",), usage="[save|list|search|show|delete|export]", changes_state=True, subcommands=('save', 'add', 'list', 'ls', 'search', 'find', 'show', 'view', 'delete', 'rm', 'remove', 'export', 'import')),
             Command("note", cmd_note, category="information", aliases=("notes",), usage="[add|list|search|show|delete]", changes_state=True, subcommands=('add', 'new', 'list', 'ls', 'search', 'find', 'show', 'view', 'delete', 'rm')),
             Command("media", cmd_media, category="information", usage="[info|download]", requires_reply=False, subcommands=('info', 'show', 'download', 'save')),

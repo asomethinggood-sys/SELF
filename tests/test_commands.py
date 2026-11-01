@@ -417,6 +417,32 @@ async def test_labels_and_chatinfo(runtime) -> None:
     assert "100" in last_text(runtime)
 
 
+async def test_chatinfo_says_what_a_thing_is_not_its_python_class(runtime) -> None:
+    """"Type: User" about his own account read as "you are a stranger to me"."""
+    from conftest import FakeUser
+
+    runtime.client.me = FakeUser(user_id=42, first_name="Owner")
+    reply = FakeMessage(id=9, chat_id=42, sender=FakeUser(user_id=42, first_name="Owner"))
+    reply.sender = FakeUser(user_id=42, first_name="Owner")
+    await invoke(runtime, ".info", chat_id=42, reply=reply)
+    text = last_text(runtime)
+    assert "User" not in text and "Channel" not in text and "FakeUser" not in text
+    assert "your own account" in text
+    assert "<blockquote>" in text
+
+
+async def test_chatinfo_is_not_a_tool_for_reading_other_people(runtime) -> None:
+    """Ids, links and a phone number are not a group's business."""
+    from conftest import FakeUser
+
+    stranger = FakeUser(user_id=999, first_name="Reza")
+    reply = FakeMessage(id=10, chat_id=100, sender=stranger)
+    reply.sender = stranger
+    sent = await invoke(runtime, ".info", sender_id=999, out=False, reply=reply)
+    assert sent and "owner" in sent[-1].text.lower()
+    assert "Reza" not in sent[-1].text
+
+
 async def test_export_writes_file(runtime) -> None:
     await invoke(runtime, ".bookmark save Exported item")
     await invoke(runtime, ".export bookmarks")
