@@ -35,10 +35,37 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 CHECKS: list[tuple[str, bool, str]] = []
+ANSWERS: list[str] = []
+#: Set by ``main``; written by ``_finish`` whatever the outcome. A check that
+#: only writes its report on success is a check whose failures are invisible in
+#: a run log nobody can open.
+REPORT_PATH: Path | None = None
 
 
 def record(name: str, ok: bool, detail: str = "") -> None:
     CHECKS.append((name, ok, detail))
+
+
+def write_report() -> None:
+    """Publish the result — passed, failed, or never started."""
+    if REPORT_PATH is None:
+        return
+    try:
+        REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        REPORT_PATH.write_text(
+            json.dumps(
+                {
+                    "checks": [{"name": name, "ok": ok, "detail": detail} for name, ok, detail in CHECKS],
+                    "answers": ANSWERS,
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    except OSError as exc:  # pragma: no cover - a full disk, nothing to do
+        print(f"could not write {REPORT_PATH}: {exc}", file=sys.stderr)
 
 
 class Turn:
@@ -80,7 +107,6 @@ async def run(args: argparse.Namespace) -> int:
         "Write a single line of poetry about rain.",
         "Answer with one word: two plus two?",
     ]
-    answers: list[str] = []
     for question in questions:
         began = time.monotonic()
         try:
@@ -89,7 +115,7 @@ async def run(args: argparse.Namespace) -> int:
             record(f"local · answered: {question[:34]}", False, f"{type(exc).__name__}: {exc}")
             continue
         took = time.monotonic() - began
-        answers.append(reply)
+        ANSWERS.append({"question": question, "reply": reply})
         record(f"local · answered: {question[:34]}", bool(reply.strip()), f"{took:.1f}s · {reply.strip()[:80]}")
         if took > args.timeout:
             record("local · answered inside the timeout", False, f"{took:.1f}s > {args.timeout:.0f}s")
@@ -111,25 +137,11 @@ async def run(args: argparse.Namespace) -> int:
 
     await model.stop()
     record("local · the server stops cleanly", True, "stopped")
-    if args.json:
-        Path(args.json).write_text(
-            json.dumps(
-                {
-                    "checks": [{"name": name, "ok": ok, "detail": detail} for name, ok, detail in CHECKS],
-                    "answers": answers,
-                    "describe": description,
-                    "start_seconds": round(start_seconds, 2),
-                },
-                indent=2,
-                ensure_ascii=False,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
     return _finish(args)
 
 
 def _finish(args: argparse.Namespace) -> int:
+    write_report()
     for name, ok, detail in CHECKS:
         mark = "ok  " if ok else "FAIL"
         print(f"  {mark} {name}" + (f"\n       ↳ {detail}" if detail and not ok else ""))
@@ -148,7 +160,13 @@ def main() -> int:
     parser.add_argument("--flags", default=os.environ.get("LOCAL_MODEL_FLAGS", ""))
     parser.add_argument("--json", default="")
     args = parser.parse_args()
-    return asyncio.run(run(args))
+    global REPORT_PATH
+    REPORT_PATH = Path(args.json) if args.json else None
+    try:
+        return asyncio.run(run(args))
+    finally:
+        # Even a crash writes what it knew: "asyncio died here" is a finding.
+        write_report()
 
 
 if __name__ == "__main__":

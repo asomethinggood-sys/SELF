@@ -118,8 +118,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Fetch llama.cpp
-        # A failed download is not a failed job: the next step reports exactly
-        # what is missing, in words, and the report is what the owner reads.
+        # A failed download is not a failed job: the check step reports exactly
+        # what is missing, in words, and that report is committed.
         continue-on-error: true
         if: inputs.skip_download != 'true'
         shell: bash
@@ -130,25 +130,51 @@ jobs:
           set -uo pipefail
           LLAMA_TAG="${IN_TAG:-b12032}"
           mkdir -p "$KIT_DIR"
+          note="$KIT_DIR/fetch.txt"
           if [ -x "$KIT_DIR/llama-server" ]; then
-            echo "already have llama-server"; exit 0
+            echo "server · cached" >> "$note"; echo "already have llama-server"; exit 0
           fi
-          url="https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_TAG}/llama-${LLAMA_TAG}-bin-ubuntu-x64.tar.gz"
-          echo "::notice::fetching $url"
-          if ! curl -fsSL --retry 3 --max-time 900 -o "$KIT_DIR/llama.tar.gz" "$url"; then
-            echo "::warning::could not fetch the llama.cpp build $LLAMA_TAG"
+          # The asset name changes with every build, so ask the API which
+          # ubuntu-x64 tarball the requested tag (or the newest five) has. A
+          # hard-coded URL is a workflow that rots the week the tag rolls.
+          urls=()
+          for tag in "$LLAMA_TAG" ""; do
+            if [ -n "$tag" ]; then
+              api="https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/$tag"
+            else
+              api="https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=5"
+            fi
+            found=$(curl -fsS --max-time 60 -H "Authorization: Bearer ${GH_TOKEN}" "$api" \
+              | grep -o 'https://[^"]*bin-ubuntu-x64\.tar\.gz' | head -1) || true
+            if [ -n "${found:-}" ]; then urls+=("$found"); fi
+            [ "${#urls[@]}" -gt 0 ] && break
+          done
+          if [ "${#urls[@]}" -eq 0 ]; then
+            echo "llama.cpp · no ubuntu-x64 asset found (api said no)" >> "$note"
+            echo "::warning::no llama.cpp build found for $LLAMA_TAG"
             exit 0
           fi
-          tar xzf "$KIT_DIR/llama.tar.gz" -C "$KIT_DIR"
+          url="${urls[0]}"
+          echo "llama.cpp · $url" >> "$note"
+          echo "::notice::fetching $url"
+          if ! curl -fsSL --retry 2 --max-time 900 -o "$KIT_DIR/llama.tar.gz" "$url"; then
+            echo "llama.cpp · download failed" >> "$note"
+            echo "::warning::could not download $url"
+            exit 0
+          fi
+          tar xzf "$KIT_DIR/llama.tar.gz" -C "$KIT_DIR" || { echo "llama.cpp · unpack failed" >> "$note"; exit 0; }
           rm -f "$KIT_DIR/llama.tar.gz"
           # The archive unpacks into a build directory; flatten it so the path
-          # does not change with every tag.
+          # does not change with every tag, and keep the shared libraries beside
+          # the binary, which is where it looks for them.
           find "$KIT_DIR" -name llama-server -type f -exec cp {} "$KIT_DIR/llama-server" \; || true
+          find "$KIT_DIR" \( -name "libllama*.so*" -o -name "libggml*.so*" -o -name "libmtmd*.so*" \) -type f -exec cp {} "$KIT_DIR/" \; 2>/dev/null || true
           chmod +x "$KIT_DIR/llama-server" 2>/dev/null || true
-          # The shared libraries ship beside the binaries, and the server looks
-          # for them next to itself.
-          find "$KIT_DIR" -name "libllama*.so*" -o -name "libggml*.so*" -exec cp {} "$KIT_DIR/" \; 2>/dev/null || true
-          LD_LIBRARY_PATH="$KIT_DIR" "$KIT_DIR/llama-server" --version || echo "::warning::the binary does not run"
+          if LD_LIBRARY_PATH="$KIT_DIR" "$KIT_DIR/llama-server" --version 2>&1 | head -3; then
+            echo "llama.cpp · binary runs" >> "$note"
+          else
+            echo "llama.cpp · binary does not run on this runner" >> "$note"
+          fi
 
       - name: Fetch the weights
         continue-on-error: true
@@ -158,20 +184,35 @@ jobs:
           IN_MODEL: ${{ inputs.model_url }}
         run: |
           set -uo pipefail
-          MODEL_URL="${IN_MODEL:-https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf}"
           mkdir -p "$KIT_DIR"
-          gguf="$KIT_DIR/$(basename "${MODEL_URL%%\?*}")"
-          if [ -s "$gguf" ]; then
-            echo "already have $(basename "$gguf")"; exit 0
+          note="$KIT_DIR/fetch.txt"
+          touch "$note"
+          if ls "$KIT_DIR"/*.gguf >/dev/null 2>&1; then
+            echo "weights · cached ($(ls -1 "$KIT_DIR"/*.gguf | head -1))" >> "$note"
+            echo "already have a .gguf"; exit 0
           fi
-          echo "::notice::fetching ${MODEL_URL##*/}"
-          if ! curl -fL --retry 3 --max-time 1800 -o "$gguf.part" "$MODEL_URL"; then
-            echo "::warning::could not fetch the weights"
-            rm -f "$gguf.part"
-            exit 0
-          fi
-          mv "$gguf.part" "$gguf"
-          ls -lh "$gguf"
+          # First candidate wins. The extra entries are the same model published
+          # under a slightly different quant name, plus one tiny model so the
+          # path can still be proven on a day Hugging Face is unhappy.
+          candidates=(
+            "${IN_MODEL:-https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf}"
+            "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_0.gguf"
+            "https://huggingface.co/ggml-org/Qwen2.5-0.5B-Instruct-Q8_0-GGUF/resolve/main/qwen2.5-0.5b-instruct-q8_0.gguf"
+            "https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories260K.gguf"
+          )
+          for url in "${candidates[@]}"; do
+            name=$(basename "${url%%\?*}")
+            echo "::notice::trying ${name}"
+            if curl -fL --retry 1 --max-time 1800 -o "$KIT_DIR/$name.part" "$url"; then
+              mv "$KIT_DIR/$name.part" "$KIT_DIR/$name"
+              echo "weights · $name from $url" >> "$note"
+              ls -lh "$KIT_DIR/$name"
+              exit 0
+            fi
+            rm -f "$KIT_DIR/$name.part"
+            echo "weights · $name failed" >> "$note"
+          done
+          echo "::warning::no weights could be downloaded"
 
       - name: Serve it and ask it things
         id: ask
@@ -181,46 +222,67 @@ jobs:
           IN_MODEL: ${{ inputs.model_url }}
         run: |
           set -uo pipefail
-          MODEL_URL="${IN_MODEL:-https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf}"
+          mkdir -p "$KIT_DIR"
           bin="$KIT_DIR/llama-server"
           gguf=$(ls "$KIT_DIR"/*.gguf 2>/dev/null | head -1 || true)
           json_out="$KIT_DIR/local-model.json"
-          args=(--json "$json_out" --name "${MODEL_URL##*/}" --timeout 180)
+          log="$KIT_DIR/check.log"
+          args=(--json "$json_out" --timeout 180)
           if [ "${{ inputs.skip_download }}" = "true" ] || [ ! -x "$bin" ] || [ -z "$gguf" ]; then
             # Nothing to launch: check the endpoint the owner configured instead,
             # and say so rather than pretending the runner made a model.
-            echo "::notice::no binary or no weights on this runner; checking \$LOCAL_MODEL_URL only"
+            echo "::notice::no binary or no weights on this runner; checking LOCAL_MODEL_URL only"
             args+=(--url "${LOCAL_MODEL_URL:-http://127.0.0.1:8080/v1}" --binary /nonexistent --model "")
           else
-            args+=(--binary "$bin" --model "$gguf" --url http://127.0.0.1:8080/v1)
+            args+=(--binary "$bin" --model "$gguf" --url http://127.0.0.1:8080/v1 --name "${gguf##*/}")
           fi
           set +e
-          LD_LIBRARY_PATH="$KIT_DIR" python scripts/local_model_check.py "${args[@]}"
-          code=$?
+          LD_LIBRARY_PATH="$KIT_DIR" python scripts/local_model_check.py "${args[@]}" 2>&1 | tee "$log"
+          code=${PIPESTATUS[0]}
           set -e
-          echo "exit=$code" >> "$GITHUB_OUTPUT"
-          # The report is published even when the check failed: a failure with
-          # the reason in it is worth more than a red cross.
-          python - <<'PY'
-          import datetime, json, pathlib
-          src = pathlib.Path(".runtime/local-model/local-model.json")
+
+          # Fold the checker's report *and* the fetch notes into the file that
+          # gets committed: a run log is not always reachable, and "no report was
+          # written" tells the owner nothing.
+          python - "$code" <<'PY'
+          import datetime, json, pathlib, sys
+          kit = pathlib.Path(".runtime/local-model")
           data = {"at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
           try:
-              data.update(json.loads(src.read_text()))
+              data.update(json.loads((kit / "local-model.json").read_text()))
           except (OSError, ValueError):
-              data["checks"] = [{"name": "no report was written", "ok": False, "detail": "see the run log"}]
+              data["checks"] = []
+          checks = data.get("checks") or []
+          fetch = (kit / "fetch.txt").read_text().strip().splitlines() if (kit / "fetch.txt").exists() else []
+          tail = (kit / "check.log").read_text()[-1500:] if (kit / "check.log").exists() else ""
+          if not checks:
+              checks = [{"name": "the checker wrote nothing", "ok": False, "detail": tail or "no output"}]
+          data["checks"] = checks
+          data["fetch"] = fetch
+          data["exit"] = int(sys.argv[1])
+          data["log_tail"] = tail
           pathlib.Path(".local-model.json").write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
-          ok = sum(1 for c in data.get("checks", []) if c.get("ok"))
-          print(f"::notice::local model: {ok}/{len(data.get('checks', []))} checks passed")
+          ok = sum(1 for c in checks if c.get("ok"))
+          print(f"::notice::local model: {ok}/{len(checks)} checks passed")
           PY
           {
             echo "### Local model"
             echo ""
-            echo '```'
-            python -c "import json;d=json.load(open('.local-model.json'));[print(('ok  ' if c['ok'] else 'FAIL')+' '+c['name']+(' — '+c['detail'] if not c['ok'] else '')) for c in d.get('checks',[])]" || true
-            echo '```'
+            echo "\`\`\`"
+            sed -n '1,60p' "$log" || true
+            echo "\`\`\`"
+            if [ -s "$KIT_DIR/fetch.txt" ]; then
+              echo ""
+              echo "**What was fetched**"
+              echo ""
+              echo '```'
+              cat "$KIT_DIR/fetch.txt"
+              echo '```'
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
-          exit 0
+          # Red when the model could not answer: a green tick over a model that
+          # never started is the kind of quiet lie this workflow exists to catch.
+          exit "$code"
 
       - name: Stop the server
         # Without this the runner keeps the model resident and the job sits until
