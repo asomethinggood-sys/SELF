@@ -556,8 +556,12 @@ async def test_the_key_command_stores_the_key_and_deletes_the_message(
 ) -> None:
     runtime.client.sent.clear()
     await invoke(runtime, ".yura key sk-or-v1-testtesttest")
+    # Once a runner exists the router stays in place with no keys at all, so a
+    # pasted key joins the rotation (`ai.keys`) instead of the single-provider
+    # setting. Either home means "stored", which is what this pins.
     stored = await runtime.store.get_setting("ai.api_key", None)
-    assert stored == "sk-or-v1-testtesttest"
+    rotation = [credential.key for credential in getattr(runtime.ai, "credentials", [])]
+    assert "sk-or-v1-testtesttest" in rotation or stored == "sk-or-v1-testtesttest"
     assert runtime.ai.available is True
     # The message that carried it is gone, and the confirmation does not repeat it.
     assert runtime.client.deleted, "the key message was left in the chat"

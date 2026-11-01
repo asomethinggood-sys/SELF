@@ -250,7 +250,13 @@ class LocalModel:
             return "", {}, getattr(endpoint, "note", "") or "the local model is between runs"
         self._token = getattr(endpoint, "token", "")
         self.model = self.model or str(getattr(endpoint, "model", "") or "local")
-        return endpoint.base_url, endpoint.headers(), ""
+        # Ollama's OpenAI-compatible surface lives under `/v1`, and the published
+        # address is the root of the tunnel. Without this the client asks
+        # `/chat/completions` and gets a 404 that looks like "the model is down".
+        base = endpoint.base_url
+        if not base.rstrip("/").endswith("/v1"):
+            base = base.rstrip("/") + "/v1"
+        return base, endpoint.headers(), ""
 
     _token: str = ""
 

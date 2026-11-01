@@ -523,6 +523,12 @@ jobs:
           COMFY_CKPT: ${{ vars.COMFY_CKPT }}
           LOCAL_MODEL_URL: ${{ vars.LOCAL_MODEL_URL }}
           LOCAL_MODEL_NAME: ${{ vars.LOCAL_MODEL_NAME }}
+          # The hosted services' gate. The bot computes the same per-run token the
+          # gate does from this one value, so `.web` / `.imagegen` / row 14 work
+          # without a single URL being configured here. Unset means the hosted
+          # services are "between runs" in `.services`, and the commands say so.
+          SERVICE_SHARED_SECRET: ${{ secrets.SERVICE_SHARED_SECRET }}
+          SERVICE_BRANCH: ${{ github.ref_name }}
         run: |
           set -uo pipefail
           export SESSION_STRING="$(cat .auth/session.txt)"

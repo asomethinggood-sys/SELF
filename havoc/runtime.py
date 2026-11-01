@@ -153,22 +153,27 @@ class Runtime:
         if not ai.available:
             # A plain single-provider setup still works, and so does a lone key
             # pasted into the chat (`.yura key …`), which lives in the database.
-            ai = AIProvider.from_config(config)
+            fallback = AIProvider.from_config(config)
             stored_key = await store.get_setting("ai.api_key", None)
-            if not ai.available and stored_key and str(config.ai_provider) in {"openai_compatible", "none"}:
-                ai = AIProvider(
+            if not fallback.available and stored_key and str(config.ai_provider) in {"openai_compatible", "none"}:
+                fallback = AIProvider(
                     base_url=config.ai_base_url,
                     api_key=str(stored_key),
                     model=config.ai_model,
                     timeout=config.ai_timeout,
                     enabled=True,
                 )
-            # With a service directory there is always somewhere to fall back to,
-            # so the router stays: its last step is the hosted model, and a
-            # router that becomes available the moment that service publishes is
-            # worth more than a snap decision made at boot.
-            if not ai.available and local_model is not None and local_model.configured:
-                ai = local_model
+            # A runner in this checkout means row 14 exists whether or not a key
+            # does, and `.ai model 14` has to be reachable with *no keys at all* —
+            # that is the whole point of hosting a model. So the router stays for
+            # its card and its picker; `available` still answers honestly (nothing
+            # is pinned and nothing answers), which is what every other feature
+            # asks. A configured local model keeps the router for the same reason.
+            hosted_here = local_model is not None and (
+                local_model.configured or bool(getattr(directory, "has_workflow", lambda _n: False)("ollama"))
+            )
+            if fallback.available or not hosted_here:
+                ai = fallback
         # Translation speaks through the same engine she does (Gemma 31B by
         # default), so `.translate` works on a clone with keys but no
         # translation provider configured.

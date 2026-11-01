@@ -9,15 +9,33 @@ from __future__ import annotations
 from havoc import ai_models
 
 
-def test_the_catalogue_has_both_providers_and_unique_keys() -> None:
+def test_the_catalogue_has_every_provider_and_unique_keys() -> None:
     catalogue = ai_models.catalogue()
-    assert {spec.provider for spec in catalogue} == {"google", "openrouter"}
+    # `hosted` is not a key ring — it is the model on our own runner, reached
+    # through the same gate as everything else.
+    assert {spec.provider for spec in catalogue} == {"google", "openrouter", "hosted"}
     keys = [spec.key for spec in catalogue]
     assert len(keys) == len(set(keys))
 
 
+def test_the_hosted_model_is_row_fourteen_and_has_no_quota() -> None:
+    """`.ai model 14` is a number somebody types; it must not move."""
+    rows = ai_models.catalogue()
+    assert len(rows) == 14, [spec.key for spec in rows]
+    hosted = rows[13]
+    assert hosted.hosted and hosted.key == "hosted:runner"
+    assert ai_models.format_limits(hosted) == "no key, no quota"
+    # Not a rotation candidate: it is asked on its own path, never as a key.
+    assert hosted not in ai_models.auto_plan()
+
+
 def test_every_available_model_shows_its_limits_and_unavailable_ones_say_why() -> None:
     for spec in ai_models.catalogue():
+        if spec.hosted:
+            # Its "limit" is uptime, which the card asks the service directory
+            # about instead of printing a number.
+            assert ai_models.format_limits(spec) == "no key, no quota"
+            continue
         if spec.available:
             assert spec.rpm and spec.rpd, spec.key
             assert "no published limit" not in ai_models.format_limits(spec)
@@ -51,7 +69,7 @@ def test_auto_plan_starts_with_the_best_daily_budget_and_uses_every_model_once()
     plan = ai_models.auto_plan()
     assert plan[0].api_id == "gemini-3.5-flash-lite"
     assert plan[-1].provider == "openrouter"
-    assert len(plan) == len(ai_models.available_models())
+    assert len(plan) == len([spec for spec in ai_models.available_models() if not spec.hosted])
     assert len({spec.key for spec in plan}) == len(plan)
     # Everything in AUTO_ORDER that is available appears, and everything else follows.
     for key in ai_models.AUTO_ORDER:

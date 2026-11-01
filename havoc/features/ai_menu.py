@@ -76,22 +76,40 @@ async def _model_card(ctx: CommandContext, router: AIRouter) -> str:
     rows: list[str] = []
     index = 0
     numbered = {spec.key: position for position, spec in enumerate(listed_models(), 1)}
-    for provider in ("google", "openrouter"):
+    for provider in LISTED_PROVIDERS:
         specs = [spec for spec in listed_models() if spec.provider == provider]
         if not specs:
             continue
         keys = [row for row in router.status() if row["provider"] == provider]
-        budget = sum(row["budget"] for row in keys)
-        rows.append(
-            f"{ai_models.PROVIDER_ICONS[provider]} "
-            f"{ui.bold(ai_models.PROVIDER_LABELS[provider])} "
-            f"{ui.note(f'· {len(keys)} key(s) · {budget:,} left today')}"
-        )
+        if provider == "hosted":
+            # No keys and no allowance: the useful line is whether the runner is
+            # up and which model it has, not a budget of zero.
+            rows.append(
+                f"{ai_models.PROVIDER_ICONS[provider]} "
+                f"{ui.bold(ai_models.PROVIDER_LABELS[provider])} "
+                f"{ui.note(escape(hosted_state(runtime)))}"
+            )
+        else:
+            budget = sum(row["budget"] for row in keys)
+            rows.append(
+                f"{ai_models.PROVIDER_ICONS[provider]} "
+                f"{ui.bold(ai_models.PROVIDER_LABELS[provider])} "
+                f"{ui.note(f'· {len(keys)} key(s) · {budget:,} left today')}"
+            )
         for spec in specs[:MAX_MODEL_ROWS]:
             index = numbered[spec.key]
             used = 0
             for row in keys:
                 used = max(used, int(row["used"].get(spec.api_id) or 0))
+            if spec.hosted:
+                # Its "budget" is uptime, so the row says whether it is up
+                # instead of printing a number that would always look full.
+                mark = "◈" if selected is not None and selected.key == spec.key else spec.icon
+                rows.append(
+                    f"{ui.code(str(index))} {mark} {escape(spec.label)} "
+                    f"{ui.note('·')} {ui.note(escape(hosted_state(runtime)))}"
+                )
+                continue
             mark = "◈" if selected is not None and selected.key == spec.key else spec.icon
             if not spec.available:
                 rows.append(
@@ -124,7 +142,9 @@ async def _model_card(ctx: CommandContext, router: AIRouter) -> str:
     # "The AI has spent today's allowance" and "the bot is broken" look identical
     # from inside a chat, so the card says it out loud when it is the first one.
     offline_until = _offline_until(runtime)
-    if offline_until is not None:
+    if offline_until:
+        # An empty value is "it never went away", and a sentence ending in
+        # "until " is worse than no sentence.
         blocks.append(ui.note(ctx.t("ai.offline_until", when=escape(offline_until))))
     blocks.append(ui.footer(ctx.t("ai.models_footer", prefix=runtime.prefix)))
     return "\n\n".join(blocks)
@@ -173,10 +193,40 @@ async def _key_card(ctx: CommandContext, router: AIRouter) -> str:
     )
 
 
+#: The order the card prints, and therefore what its digits mean: twelve Google
+#: models, the gateway, then the model on our own runner as row 14.
+LISTED_PROVIDERS = ("google", "openrouter", "hosted")
+
+
+def hosted_state(runtime: Any) -> str:
+    """One clause about the runner: up with a model, or why it is not."""
+    local = getattr(getattr(runtime, "ai", None), "local", None)
+    if local is None:
+        return "not set up here"
+    directory = getattr(local, "directory", None)
+    # The published file is the truth about which model is served; the client's
+    # own field is only a fallback (it says "local" until something is asked).
+    model = str(getattr(local, "model", "") or "").strip()
+    if directory is not None:
+        try:
+            endpoint = directory.resolve("ollama")
+        except Exception:  # noqa: BLE001 - a card never fails over a lookup
+            endpoint = None
+        if endpoint is not None and not getattr(endpoint, "ok", False):
+            state = str(endpoint.state).replace("_", " ")
+            return f"between runs · {state}" if state.startswith(("between", "expired")) else state
+        if endpoint is not None:
+            model = str(getattr(endpoint, "model", "") or "") or model
+    name = model if model and model != "local" else "one small model"
+    if getattr(local, "available", False):
+        return f"up · {name}"
+    return str(getattr(local, "last_error", "") or "not answering")
+
+
 def listed_models() -> tuple[ai_models.ModelSpec, ...]:
     """The order the card prints — shared with the digit handler, deliberately."""
     rows: list[ai_models.ModelSpec] = []
-    for provider in ("google", "openrouter"):
+    for provider in LISTED_PROVIDERS:
         rows.extend(spec for spec in ai_models.catalogue() if spec.provider == provider)
     return tuple(rows)
 
@@ -209,11 +259,16 @@ async def _model_command(ctx: CommandContext, reference: str, router: AIRouter) 
     chosen = await router.select(reference)
     if chosen is None:
         return ctx.t("ai.model_unknown", reference=escape(reference))
-    return ctx.t(
+    answer = ctx.t(
         "ai.model_set",
         model=escape(chosen.label),
         limits=escape(ai_models.format_limits(chosen)),
     )
+    if chosen.hosted and not getattr(getattr(router, "local", None), "available", False):
+        # Pinning something that is between runs is allowed — the keys answer
+        # until it is back — but it must not look like a working choice.
+        answer += "\n\n" + ui.note(escape(ctx.t("ai.hosted_not_up", state=hosted_state(ctx.runtime).lstrip("· "))))
+    return answer
 
 
 async def _key_command(ctx: CommandContext, words: list[str], router: AIRouter) -> str:

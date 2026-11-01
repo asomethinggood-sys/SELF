@@ -588,10 +588,33 @@ async def probe_unconfigured() -> None:
     runtime = await build_runtime()
     try:
         record("unconfigured · no web service object", runtime.web_search is None or not runtime.web_search.available)
+        # Two different empty worlds, and they must not read the same:
+        #  * a checkout with no runner at all -> "set the environment variable";
+        #  * a checkout that HAS `service-search.yml` but has never published ->
+        #    "nothing to set, the runner publishes it" (this repository).
+        hosted = bool(getattr(runtime.services, "has_workflow", lambda _n: False)("search"))
         web = texts(await say(runtime, ".web what is a transformer"))
-        record("unconfigured · .web explains the setup", "SEARXNG_URL" in web, web[:160])
+        if hosted:
+            record("unconfigured · .web points at the runner, not at a variable", "never published" in web, web[:200])
+        else:
+            record("unconfigured · .web explains the setup", "SEARXNG_URL" in web, web[:160])
         draw = texts(await say(runtime, ".draw a castle"))
-        record("unconfigured · .draw explains the setup", "COMFY_URL" in draw, draw[:160])
+        if hosted:
+            record("unconfigured · .draw points at the runner, not at a variable", "never published" in draw, draw[:200])
+        else:
+            record("unconfigured · .draw explains the setup", "COMFY_URL" in draw, draw[:160])
+
+        # And the clone case, by pretending the runner is not in this checkout.
+        if hosted:
+            original = runtime.services.has_workflow
+            runtime.services.has_workflow = lambda _name: False
+            try:
+                web = texts(await say(runtime, ".web what is a transformer"))
+                record("unconfigured · with no runner, .web asks for SEARXNG_URL", "SEARXNG_URL" in web, web[:200])
+                draw = texts(await say(runtime, ".draw a castle"))
+                record("unconfigured · with no runner, .draw asks for COMFY_URL", "COMFY_URL" in draw, draw[:200])
+            finally:
+                runtime.services.has_workflow = original
         # Both must be reachable from the help screen, or nobody finds them.
         help_text = texts(await say(runtime, ".help"))
         record("unconfigured · .web is in the help", "web" in help_text)

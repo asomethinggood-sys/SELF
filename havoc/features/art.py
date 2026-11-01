@@ -179,20 +179,28 @@ def _draw_info(ctx: CommandContext, generator: Any) -> str:
         # first one. Saying "not configured" for that would send the owner
         # hunting for a typo that does not exist.
         state = _service_state(ctx, "comfy")
-        if state in {STATE_BETWEEN_RUNS, STATE_EXPIRED}:
+        directory = getattr(ctx.runtime, "services", None)
+        never_published = (
+            state == "not_found"
+            and directory is not None
+            and directory.has_workflow("comfy")
+        )
+        if state in {STATE_BETWEEN_RUNS, STATE_EXPIRED} or never_published:
             endpoint = ctx.runtime.services.resolve("comfy")
             return "\n\n".join(
                 [
                     ui.title("✎", ctx.t("draw.title")),
                     ui.note(
                         ctx.t(
-                            "art.between_runs",
+                            "art.never_published" if never_published else "art.between_runs",
                             age=describe_age(endpoint.age, ctx.language),
                             fast=getattr(generator, "FAST_START_SECONDS", 45),
                             slow="two minutes",
                         )
                     ),
-                    ui.footer(ctx.t("draw.setup_hint")),
+                    ui.footer(
+                        ctx.t("draw.hosted_hint" if never_published else "draw.setup_hint")
+                    ),
                 ]
             )
         return "\n\n".join(
@@ -244,7 +252,10 @@ def register(runtime: Any) -> None:
                 "draw",
                 cmd_draw,
                 category="media",
-                aliases=("paint", "imagine"),
+                # The names people actually type for "make me a picture". The
+                # owner said `.imagegen`, so it is the first alias and the one
+                # the help line shows.
+                aliases=("imagegen", "img", "imagine", "paint"),
                 usage="<prompt> [--seed n] [--quality] | info",
                 subcommands=("info", "status"),
                 changes_state=True,

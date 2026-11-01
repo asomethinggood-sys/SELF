@@ -33,11 +33,16 @@ PROVIDER_ENDPOINTS: dict[str, str] = {
 PROVIDER_LABELS: dict[str, str] = {
     "openrouter": "OpenRouter",
     "google": "Google AI Studio",
+    # Not a key ring: the model that runs on our own runner, behind the gate. It
+    # has no quota because nobody is billing it, which is exactly why it is the
+    # one model that cannot run out.
+    "hosted": "Hosted on our runner",
 }
 
 PROVIDER_ICONS: dict[str, str] = {
     "openrouter": "◇",
     "google": "✦",
+    "hosted": "❈",
 }
 
 #: A free OpenRouter account: 50 model requests a day, reset at 00:00 UTC.
@@ -66,6 +71,11 @@ class ModelSpec:
     def key(self) -> str:
         """Stable identifier used in settings and in the usage table."""
         return f"{self.provider}:{self.api_id}"
+
+    @property
+    def hosted(self) -> bool:
+        """A model that answers from our own runner, not from a key."""
+        return self.provider == "hosted"
 
     def budget(self, used: int) -> int:
         """Requests left today, or a large number when the limit is unknown."""
@@ -109,6 +119,22 @@ OPENROUTER_SPEC = ModelSpec(
     "asks the gateway which free model exists",
 )
 
+#: The model on our own runner — the last row of the card, so its number is
+#: stable: `.ai model 14`. It has no key, no quota and no vendor; when it answers,
+#: it answers from `service-ollama.yml` through the same gate everything else uses.
+HOSTED_SPEC = ModelSpec(
+    "hosted",
+    "runner",
+    "Hosted model (our runner)",
+    "❈",
+    rpm=0,
+    tpm=0,
+    rpd=0,
+    available=True,
+    note="no key, no quota — it can run out of nothing but uptime",
+    vision=False,
+)
+
 #: Ordering used when the owner has not chosen: cheap-to-burn first.
 AUTO_ORDER: tuple[str, ...] = (
     "google:gemini-3.5-flash-lite",
@@ -120,8 +146,12 @@ AUTO_ORDER: tuple[str, ...] = (
 
 
 def catalogue() -> tuple[ModelSpec, ...]:
-    """Every model this project knows how to talk to, available ones first."""
-    return (*GEMINI_MODELS, OPENROUTER_SPEC)
+    """Every model this project knows how to talk to, available ones first.
+
+    The hosted one is last on purpose: row 14 on the card, and a number that does
+    not move when a new Google model is added above it.
+    """
+    return (*GEMINI_MODELS, OPENROUTER_SPEC, HOSTED_SPEC)
 
 
 def find(reference: str) -> ModelSpec | None:
@@ -153,10 +183,16 @@ def auto_plan() -> tuple[ModelSpec, ...]:
     the whole account, so it is the last resort by design — a gateway call must
     never spend the budget that the *next* message needs.
     """
-    by_key = {spec.key: spec for spec in available_models()}
+    # The hosted model is not a keyed model: it is tried by the router on its own
+    # path (and preferred when the owner pinned it), never as a rotation candidate.
+    by_key = {spec.key: spec for spec in available_models() if not spec.hosted}
     curated = [by_key[key] for key in AUTO_ORDER if key in by_key]
     plan = [spec for spec in curated if spec.provider != "openrouter"]
-    rest = [spec for spec in available_models() if spec not in plan and spec.provider != "openrouter"]
+    rest = [
+        spec
+        for spec in available_models()
+        if spec not in plan and spec.provider != "openrouter" and not spec.hosted
+    ]
     rest.sort(key=lambda spec: -spec.rpd)
     gateway = [spec for spec in available_models() if spec.provider == "openrouter"]
     return tuple(plan + rest + gateway)
@@ -164,6 +200,10 @@ def auto_plan() -> tuple[ModelSpec, ...]:
 
 def format_limits(spec: ModelSpec) -> str:
     """``15/min · 500/day`` — the two numbers that decide whether it is usable."""
+    if spec.hosted:
+        # There is no limit to print, and "no published limit" would read like a
+        # missing number rather than the whole point of the row.
+        return "no key, no quota"
     parts: list[str] = []
     if spec.rpm:
         parts.append(f"{spec.rpm}/min")

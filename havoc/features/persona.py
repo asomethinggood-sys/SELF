@@ -493,7 +493,11 @@ async def _key_command(ctx: CommandContext, words: list[str]) -> str:
     value = " ".join(word for word in words if word).strip()
     chat = getattr(runtime, "yura_chat", None)
     if not value:
-        stored = bool(await ctx.store.get_setting("ai.api_key", None))
+        # Either store counts: a key pasted before the router took over lives in
+        # `ai.api_key`, one pasted since lives in the rotation.
+        stored = bool(await ctx.store.get_setting("ai.api_key", None)) or bool(
+            getattr(runtime.ai, "credentials", [])
+        )
         state = ctx.t("common.yes") if stored else ctx.t("common.no")
         answer = ctx.t("yura.key_state", state=state, prefix=runtime.prefix)
         if stored and chat is not None and chat.last_error:

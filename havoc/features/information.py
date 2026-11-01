@@ -617,12 +617,20 @@ def _web_info(ctx: CommandContext, service: Any) -> str:
         directory = getattr(ctx.runtime, "services", None)
         if directory is not None:
             endpoint = directory.resolve("search")
-            if endpoint.state in {STATE_BETWEEN_RUNS, STATE_EXPIRED}:
+            never_published = endpoint.state == "not_found" and directory.has_workflow("search")
+            if endpoint.state in {STATE_BETWEEN_RUNS, STATE_EXPIRED} or never_published:
                 return "\n\n".join(
                     [
                         ui.title("◎", ctx.t("web.title")),
-                        ui.note(ctx.t("web.between_runs", age=describe_age(endpoint.age, ctx.language))),
-                        ui.footer(ctx.t("web.usage_hint", prefix=ctx.runtime.prefix)),
+                        ui.note(
+                            ctx.t(
+                                "web.never_published" if never_published else "web.between_runs",
+                                age=describe_age(endpoint.age, ctx.language),
+                            )
+                        ),
+                        ui.footer(
+                            ctx.t("web.hosted_hint" if never_published else "web.usage_hint", prefix=ctx.runtime.prefix)
+                        ),
                     ]
                 )
         return "\n\n".join(

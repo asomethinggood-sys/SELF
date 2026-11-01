@@ -128,7 +128,11 @@ async def run(args: argparse.Namespace) -> int:
     try:
         reply = await router.converse([Turn("user", "say hello, briefly")], max_tokens=60)
         record("local · the router answers with zero keys", bool(reply.strip()), reply.strip()[:80])
-        record("local · the router labels it local", router.active_label == "local", str(router.active_label))
+        record(
+            "local · the router labels it local",
+            router.active_label in {"local", "hosted"},
+            str(router.active_label),
+        )
     except Exception as exc:  # noqa: BLE001
         record("local · the router answers with zero keys", False, f"{type(exc).__name__}: {exc}")
 

@@ -358,6 +358,26 @@ class AIRouter:
     def model(self) -> str:
         return self.active_model or self.selection
 
+    def prefers_hosted(self) -> bool:
+        """True when the owner pinned the model that runs on our own runner."""
+        spec = self.selected_spec()
+        return spec is not None and spec.hosted
+
+    def hosted_note(self) -> str:
+        """One sentence about why the hosted model is not answering."""
+        local = self.local
+        if local is None:
+            return "no model on this machine — `.services` says where it should be"
+        directory = getattr(local, "directory", None)
+        if directory is not None:
+            try:
+                endpoint = directory.resolve("ollama")
+            except Exception:  # noqa: BLE001 - a note is never worth a crash
+                endpoint = None
+            if endpoint is not None and not getattr(endpoint, "ok", False):
+                return f"the hosted model is {endpoint.state.replace('_', ' ')} — {endpoint.note or 'no address published'}"
+        return getattr(local, "last_error", "") or "the hosted model did not answer"
+
     def selected_spec(self) -> ModelSpec | None:
         if self.selection and self.selection != "auto":
             return find(self.selection)
@@ -381,8 +401,13 @@ class AIRouter:
         """
         now = utc_now()
         chosen = self.selected_spec()
-        if chosen is not None:
+        if chosen is not None and not chosen.hosted:
             specs = [chosen] if (chosen.vision or not vision) else []
+        elif chosen is not None:
+            # A pinned hosted model still leaves the keys in place for what it
+            # cannot do (a tool call, a picture): falling through to them is why
+            # pinning row 14 does not turn `.image` or the tools off.
+            specs = list(auto_plan())
         else:
             specs = list(auto_plan())
         if vision:
@@ -428,6 +453,19 @@ class AIRouter:
         only: str | None = None,
     ) -> str:
         """Try credentials in order until one answers. Raises the last AIError."""
+        if self.prefers_hosted():
+            # The owner pinned row 14, so the runner is the voice, not the spare.
+            # If it is between runs the keys answer instead — a pinned model that
+            # silently makes the bot mute is worse than an unpinned one.
+            hosted = await self._ask_local(messages, max_tokens=max_tokens, temperature=temperature)
+            if hosted is not None:
+                self.requests += 1
+                self.last_attempts = [Attempt(self.active_label or "hosted", self.active_model, True)]
+                self.last_error = ""
+                return hosted
+            if not self.credentials:
+                raise AIError(self.hosted_note(), kind="hosted_down")
+            self.logger.info("ai: row 14 is pinned but did not answer (%s); using the keys", self.hosted_note())
         if not self.credentials:
             # A machine with a local model and no keys is not "not configured" —
             # it is a machine whose provider is on the same disk. Asking it here,
@@ -515,7 +553,11 @@ class AIRouter:
         if not reply:
             return None
         self.active_model = getattr(local, "active_model", "local")
-        self.active_label = "local"
+        # The label is *where* it came from, the way a key label is: "local" for
+        # something on this disk, "hosted" for the runner behind the gate. The
+        # model's own name is `active_model`, and the card prints both.
+        on_this_disk = bool(getattr(local, "base_url", "")) or getattr(local, "directory", None) is None
+        self.active_label = "local" if on_this_disk else "hosted"
         self.logger.info("ai: answered by the local model")
         return reply
 

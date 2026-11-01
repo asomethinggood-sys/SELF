@@ -172,6 +172,15 @@ class ServiceDirectory:
     def _path_for(self, name: str) -> Path:
         return Path(self.root) / ".services" / f"{name}.json"
 
+    def has_workflow(self, name: str) -> bool:
+        """Does this checkout have a runner for ``name``?
+
+        It separates two states that read the same from a file that is not there:
+        "the workflow exists and has not published yet" (wait, or dispatch it) and
+        "this checkout has no such workflow at all" (configure it by hand).
+        """
+        return (Path(self.root) / ".github" / "workflows" / f"service-{name}.yml").exists()
+
     def raw(self, name: str) -> dict[str, Any]:
         """The published file's contents, or ``{}``. Never raises."""
         if self.override is not None:

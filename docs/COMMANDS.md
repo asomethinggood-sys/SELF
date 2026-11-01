@@ -164,7 +164,7 @@ Total: **150 commands**.
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
 | `.download` | Fetch the video behind a YouTube, TikTok or Instagram link: thumbnail, title, quality picked by number _(owner only; changes state)._ | `.download ‹link› | ‹number› | info` | `.dl`, `.grab`, `.vid` |
-| `.draw` | Draw a picture on the ComfyUI/Stable Diffusion server you run and send it back _(owner only; changes state)._ | `.draw ‹prompt› [--seed n] | info` | `.paint`, `.imagine` |
+| `.draw` | Draw a picture on the ComfyUI/Stable Diffusion server you run and send it back _(owner only; changes state)._ | `.draw ‹prompt› [--seed n] | info` | `.imagegen`, `.img`, `.imagine`, `.paint` |
 | `.geo` | Send a location point _(owner only; changes state)._ | `.geo ‹lat›, ‹lon›` | — |
 | `.pic` | Send a picture or file (path or URL); several files become an album _(owner only; changes state)._ | `.pic ‹path|url› [...] [--caption text] [--to chat] [--silent]` | `.image`, `.file`, `.sendfile`, `.عکس`, `.تصویر` |
 | `.poll` | Post a real poll in this chat _(owner only; changes state)._ | `.poll ‹question› | ‹option› | ‹option›` | — |

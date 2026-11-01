@@ -155,6 +155,27 @@ dispatch every five minutes: that burns the queue and hides the reason.
 
 ---
 
+## Using them from the bot
+
+Nothing to configure. With a published address the three commands answer:
+
+| you type | what happens |
+|---|---|
+| `.web what is a transformer` | SearXNG through the gate; the card says which engine refused if one did, and falls back to an in-process engine before saying "nothing to show" |
+| `.imagegen a lighthouse in fog` (also `.img`, `.imagine`, `.paint`, `.draw`) | one 8-step picture through the gate; `--quality` is 20 steps and a minute or three |
+| `.ai model 14` | pins the model on our own runner — **row 14** of the `.ai` card, under *Hosted on our runner* |
+| `.ai` | the card, with row 14's state (`up · qwen2.5:0.5b`, or `between runs`) |
+| `.ai test` | one real question, through whatever is answering |
+| `.services` | where all three are, and why one might not answer |
+
+Row 14 is the last row on purpose: its number does not move when a Google model
+is added above it. Pinning it makes the runner the voice; if the runner is
+between runs the keys answer instead, and `.ai` says so when you pick it — a
+pinned model that silently muted the bot would be worse than an unpinned one.
+
+The `OLLAMA_MODEL` repository variable changes which model row 14 serves, and
+`COMFY_CKPT` / `COMFY_TAG` do the same for pictures and for the ComfyUI checkout.
+
 ## Reading the states
 
 `.services` (owner only, aliases `.service`, `.hosted`) answers "where are they":
