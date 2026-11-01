@@ -120,6 +120,12 @@ jobs:
       - name: Fetch llama.cpp
         # A failed download is not a failed job: the check step reports exactly
         # what is missing, in words, and that report is committed.
+        #
+        # The extracted directory is kept as it came out of the tarball and the
+        # server is run *from there*, with its own directory on LD_LIBRARY_PATH.
+        # Flattening the archive into one folder was the first version, and it
+        # failed on a runner with "libllama-server-impl.so: cannot open shared
+        # object file" — the library exists, the flattened copy did not.
         continue-on-error: true
         if: inputs.skip_download != 'true'
         shell: bash
@@ -131,9 +137,30 @@ jobs:
           LLAMA_TAG="${IN_TAG:-b12032}"
           mkdir -p "$KIT_DIR"
           note="$KIT_DIR/fetch.txt"
-          if [ -x "$KIT_DIR/llama-server" ] && ls "$KIT_DIR"/*.so* >/dev/null 2>&1; then
-            echo "server · cached (binary and libraries)" >> "$note"; echo "already have llama-server"; exit 0
+          touch "$note"
+          marker="$KIT_DIR/server.path"
+          # The one honest test: does it run?
+          works() {
+            local candidate="$1"
+            [ -x "$candidate" ] || return 1
+            LD_LIBRARY_PATH="$(dirname "$candidate")" "$candidate" --version >/dev/null 2>&1
+          }
+          if [ -f "$marker" ]; then
+            cached=$(cat "$marker")
+            if works "$cached"; then
+              echo "server · cached and runs ($cached)" >> "$note"
+              echo "using cached $cached"; exit 0
+            fi
+            echo "server · cached copy does not run, fetching again" >> "$note"
+            rm -f "$marker"
           fi
+          found=$(find "$KIT_DIR" -name llama-server -type f 2>/dev/null | head -1 || true)
+          if [ -n "$found" ] && works "$found"; then
+            echo "$found" > "$marker"
+            echo "server · already unpacked and runs ($found)" >> "$note"
+            exit 0
+          fi
+
           # The asset name changes with every build, so ask the API which
           # ubuntu-x64 tarball the requested tag (or the newest five) has. A
           # hard-coded URL is a workflow that rots the week the tag rolls.
@@ -144,41 +171,44 @@ jobs:
             else
               api="https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=5"
             fi
-            found=$(curl -fsS --max-time 60 -H "Authorization: Bearer ${GH_TOKEN}" "$api" \
+            picked=$(curl -fsS --max-time 60 -H "Authorization: Bearer ${GH_TOKEN}" "$api" \
               | grep -o 'https://[^"]*bin-ubuntu-x64\.tar\.gz' | head -1) || true
-            if [ -n "${found:-}" ]; then urls+=("$found"); fi
+            if [ -n "${picked:-}" ]; then urls+=("$picked"); fi
             [ "${#urls[@]}" -gt 0 ] && break
           done
           if [ "${#urls[@]}" -eq 0 ]; then
-            echo "llama.cpp · no ubuntu-x64 asset found (api said no)" >> "$note"
+            echo "server · no ubuntu-x64 build found" >> "$note"
             echo "::warning::no llama.cpp build found for $LLAMA_TAG"
             exit 0
           fi
           url="${urls[0]}"
-          echo "llama.cpp · $url" >> "$note"
+          echo "server · $url" >> "$note"
           echo "::notice::fetching $url"
-          if ! curl -fsSL --retry 2 --max-time 900 -o "$KIT_DIR/llama.tar.gz" "$url"; then
-            echo "llama.cpp · download failed" >> "$note"
+          dir="$KIT_DIR/build-$(date +%s)"
+          mkdir -p "$dir"
+          if ! curl -fsSL --retry 2 --max-time 900 -o "$dir/llama.tar.gz" "$url"; then
+            echo "server · download failed" >> "$note"
             echo "::warning::could not download $url"
             exit 0
           fi
-          tar xzf "$KIT_DIR/llama.tar.gz" -C "$KIT_DIR" || { echo "llama.cpp · unpack failed" >> "$note"; exit 0; }
-          rm -f "$KIT_DIR/llama.tar.gz"
-          # The archive unpacks into a build directory; flatten it so the path
-          # does not change with every tag, and keep the shared libraries beside
-          # the binary, which is where it looks for them.
-          find "$KIT_DIR" -name llama-server -type f -exec cp {} "$KIT_DIR/llama-server" \; || true
-          # *Every* shared library, not a guessed list: the server needs
-          # libllama-server-impl.so, libmtmd.so and whatever the next build adds,
-          # and a missing one reads as "the model exited while loading" (measured
-          # on a runner: exactly that, with the file named in the log).
-          find "$KIT_DIR" -name "*.so*" -type f -exec cp -a {} "$KIT_DIR/" \; 2>/dev/null || true
-          find "$KIT_DIR" -name "*.so*" -type l -exec cp -a {} "$KIT_DIR/" \; 2>/dev/null || true
-          chmod +x "$KIT_DIR/llama-server" 2>/dev/null || true
-          if LD_LIBRARY_PATH="$KIT_DIR" "$KIT_DIR/llama-server" --version 2>&1 | head -3; then
-            echo "llama.cpp · binary runs" >> "$note"
+          if ! tar xzf "$dir/llama.tar.gz" -C "$dir"; then
+            echo "server · unpack failed" >> "$note"
+            exit 0
+          fi
+          rm -f "$dir/llama.tar.gz"
+          bin=$(find "$dir" -name llama-server -type f | head -1 || true)
+          if [ -z "$bin" ]; then
+            echo "server · no llama-server in the archive" >> "$note"
+            exit 0
+          fi
+          chmod +x "$bin" 2>/dev/null || true
+          if works "$bin"; then
+            echo "$bin" > "$marker"
+            echo "server · unpacked and runs ($bin)" >> "$note"
+            LD_LIBRARY_PATH="$(dirname "$bin")" "$bin" --version 2>&1 | head -2 | sed 's/^/  /' || true
           else
-            echo "llama.cpp · binary does not run on this runner" >> "$note"
+            echo "server · unpacked but does not run here" >> "$note"
+            LD_LIBRARY_PATH="$(dirname "$bin")" "$bin" --version 2>&1 | head -5 | sed 's/^/  /' || true
           fi
 
       - name: Fetch the weights
@@ -227,15 +257,19 @@ jobs:
         run: |
           set -uo pipefail
           mkdir -p "$KIT_DIR"
-          # Every directory the archive unpacked into, plus the flattened copy.
-          LD_LIBRARY_PATH="$KIT_DIR$(printf ':%s' "$KIT_DIR"/llama-*/ 2>/dev/null)"
-          export LD_LIBRARY_PATH
-          bin="$KIT_DIR/llama-server"
+          # Run the server from inside its own build directory: that is where its
+          # libraries are.
+          bin=""
+          if [ -f "$KIT_DIR/server.path" ]; then bin=$(cat "$KIT_DIR/server.path"); fi
+          if [ -z "$bin" ] || [ ! -x "$bin" ]; then bin=$(find "$KIT_DIR" -name llama-server -type f 2>/dev/null | head -1 || true); fi
+          if [ -n "$bin" ]; then
+            LD_LIBRARY_PATH="$(dirname "$bin")"; export LD_LIBRARY_PATH
+          fi
           gguf=$(ls "$KIT_DIR"/*.gguf 2>/dev/null | head -1 || true)
           json_out="$KIT_DIR/local-model.json"
           log="$KIT_DIR/check.log"
           args=(--json "$json_out" --timeout 180)
-          if [ "${{ inputs.skip_download }}" = "true" ] || [ ! -x "$bin" ] || [ -z "$gguf" ]; then
+          if [ "${{ inputs.skip_download }}" = "true" ] || [ -z "${bin:-}" ] || [ ! -x "${bin:-/nonexistent}" ] || [ -z "$gguf" ]; then
             # Nothing to launch: check the endpoint the owner configured instead,
             # and say so rather than pretending the runner made a model.
             echo "::notice::no binary or no weights on this runner; checking LOCAL_MODEL_URL only"
