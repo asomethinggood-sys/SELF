@@ -229,6 +229,15 @@ def start_ollama(port: int, workdir: Path) -> subprocess.Popen | None:
         if _run(["bash", "-c", "curl -fsSL https://ollama.com/install.sh | sh"]) != 0:
             log("could not install ollama")
             return None
+    # ollama's installer registers a systemd unit that starts a server on 11434
+    # immediately. Binding the same port then fails with "address already in use",
+    # which is exactly what the first run on a real runner reported. Take the port
+    # back: our server is the one with the models directory in the workdir, so it
+    # is the one that survives the run.
+    if os.environ.get("GITHUB_ACTIONS"):
+        _run(["bash", "-c", "sudo systemctl stop ollama >/dev/null 2>&1 || true; sudo systemctl disable ollama >/dev/null 2>&1 || true"])
+    _run(["bash", "-c", "pkill -f 'ollama serve' >/dev/null 2>&1 || true"])
+    time.sleep(2)
     env = dict(os.environ, OLLAMA_HOST=f"127.0.0.1:{port}", OLLAMA_MODELS=str(workdir / "ollama-models"), OLLAMA_KEEP_ALIVE="30m")
     process = _spawn(["ollama", "serve"], log_path=workdir / "logs" / "ollama.log", env=env)
     # The pull is the slow part (2 GB for a 3B); it must finish before the gate
@@ -471,7 +480,9 @@ class Host:
         )
         if not env.get("SERVICE_SECRET"):
             log("SERVICE_SECRET is unset: the gate would be an open proxy, so there is no gate")
+            self._gate_reason = "SERVICE_SECRET was not in the environment"
             return False
+        self._gate_reason = ""
         self.gate = _spawn(
             [sys.executable, str(ROOT / "scripts" / "service_gate.py"),
              "--port", str(self.gate_port),
@@ -556,8 +567,10 @@ class Host:
                     [
                         "the gate never came up, so the upstream was stopped rather than exposed",
                         "",
+                        f"reason: {getattr(self, '_gate_reason', '') or 'the gate exited'}",
+                        "",
                         "--- gate log ---",
-                        tail(self.workdir / "logs" / "gate.log", 25) or "(no log)",
+                        tail(self.workdir / "logs" / "gate.log", 25) or "(no log: the gate never started)",
                     ]
                 )
             )

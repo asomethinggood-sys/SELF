@@ -109,6 +109,7 @@ jobs:
             echo "self_test=1" >> "$GITHUB_OUTPUT"
           else
             echo "token wiring ok"
+            echo "SERVICE_SECRET=$SHARED" >> "$GITHUB_ENV"
             echo "self_test=0" >> "$GITHUB_OUTPUT"
           fi
           python - <<'PY'
@@ -156,7 +157,9 @@ jobs:
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SERVICE_SECRET: ${{ secrets.SERVICE_SHARED_SECRET }}
+          # SERVICE_SECRET is set by the step above, through $GITHUB_ENV: a
+          # step-level entry here would shadow the ephemeral self-test secret
+          # with the empty repository one, and the gate would have no token.
           SERVICE_MINUTES: "335"
           OLLAMA_MODEL: ${{ vars.OLLAMA_MODEL || 'qwen2.5:0.5b' }}
           COMFY_CKPT: ${{ vars.COMFY_CKPT || 'sd-turbo.safetensors' }}
