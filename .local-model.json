@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-01T17:05:02Z",
+  "at": "2026-11-01T17:06:03Z",
   "checks": [
     {
       "name": "local · something is configured",
@@ -8,15 +8,43 @@
     },
     {
       "name": "local · start() reaches the endpoint",
-      "ok": false,
-      "detail": "1.0s · the local model exited while loading: /home/runner/work/SELF/SELF/.runtime/local-model/llama-server: error while loading shared libraries: libllama-server-impl.so: cannot open shared object file: No such file or directory"
+      "ok": true,
+      "detail": "1.0s · http://127.0.0.1:8080/v1"
+    },
+    {
+      "name": "local · answered: In one sentence: what are you?",
+      "ok": true,
+      "detail": "1.0s · I am an artificial intelligence created by Alibaba Cloud, designed to assist use"
+    },
+    {
+      "name": "local · answered: Write a single line of poetry abou",
+      "ok": true,
+      "detail": "0.7s · Rain falls upon the earth,\nA gentle whisper in the still night,\nIt paints the la"
+    },
+    {
+      "name": "local · answered: Answer with one word: two plus two",
+      "ok": true,
+      "detail": "0.2s · four"
     }
   ],
-  "answers": [],
+  "answers": [
+    {
+      "question": "In one sentence: what are you?",
+      "reply": "I am an artificial intelligence created by Alibaba Cloud, designed to assist users with various tasks and provide information and services."
+    },
+    {
+      "question": "Write a single line of poetry about rain.",
+      "reply": "Rain falls upon the earth,\nA gentle whisper in the still night,\nIt paints the landscape with hues,\nA symphony of colors that dance."
+    },
+    {
+      "question": "Answer with one word: two plus two?",
+      "reply": "four"
+    }
+  ],
   "fetch": [
-    "server · cached (binary and libraries)",
+    "server · already unpacked and runs (/home/runner/work/SELF/SELF/.runtime/local-model/llama-b12032/llama-server)",
     "weights · cached (/home/runner/work/SELF/SELF/.runtime/local-model/qwen2.5-0.5b-instruct-q4_k_m.gguf)"
   ],
   "exit": 1,
-  "log_tail": "  ok   local · something is configured\n  FAIL local · start() reaches the endpoint\n       ↳ 1.0s · the local model exited while loading: /home/runner/work/SELF/SELF/.runtime/local-model/llama-server: error while loading shared libraries: libllama-server-impl.so: cannot open shared object file: No such file or directory\n\nsummary: 1/2 checks passed\n"
+  "log_tail": "Traceback (most recent call last):\n  File \"/home/runner/work/SELF/SELF/scripts/local_model_check.py\", line 173, in <module>\n    raise SystemExit(main())\n                     ^^^^^^\n  File \"/home/runner/work/SELF/SELF/scripts/local_model_check.py\", line 166, in main\n    return asyncio.run(run(args))\n           ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.11.17/x64/lib/python3.11/asyncio/runners.py\", line 190, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.11.17/x64/lib/python3.11/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.11.17/x64/lib/python3.11/asyncio/base_events.py\", line 654, in run_until_complete\n    return future.result()\n           ^^^^^^^^^^^^^^^\n  File \"/home/runner/work/SELF/SELF/scripts/local_model_check.py\", line 126, in run\n    router = AIRouter()\n             ^^^^^^^^^^\nTypeError: AIRouter.__init__() missing 1 required positional argument: 'credentials'\n"
 }
