@@ -507,7 +507,11 @@ def test_the_persona_is_on_by_default_but_media_is_not() -> None:
 
     assert DEFAULT_FEATURES["persona"] is True
     assert DEFAULT_FEATURES["media"] is False
-    assert set(FEATURE_GROUPS["persona"]) == {"persona", "media"}
+    # The downloader belongs to the same family: it is *her* handling the media
+    # he points at, and it is the one member of the group that ships on because
+    # it never speaks to anybody.
+    assert DEFAULT_FEATURES["downloader"] is True
+    assert set(FEATURE_GROUPS["persona"]) == {"persona", "media", "downloader"}
 
 
 async def test_features_command_lists_the_persona_group(runtime) -> None:

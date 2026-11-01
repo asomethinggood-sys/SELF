@@ -36,6 +36,14 @@ media = [
 voice = [
     "edge-tts>=6.1",
 ]
+# The downloader: a YouTube/TikTok/Instagram link in Saved Messages becomes the
+# video itself. `yt-dlp` grows a new site extractor every week, so it is pinned
+# only at the floor — a ceiling here would mean a site that stops working the day
+# it adds a new page shape. ffmpeg is not a Python package; `docs/INSTALL.md`
+# names it, and the command says plainly when merging is unavailable.
+download = [
+    "yt-dlp>=2024.8.6",
+]
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.23",

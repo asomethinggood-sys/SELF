@@ -61,6 +61,7 @@ def _request_sync(
     data: bytes | None,
     headers: Mapping[str, str],
     timeout: float,
+    max_bytes: int = MAX_RESPONSE_BYTES,
 ) -> HttpResponse:
     request = urllib.request.Request(url, data=data, method=method.upper())
     request.add_header("User-Agent", USER_AGENT)
@@ -68,8 +69,8 @@ def _request_sync(
         request.add_header(key, value)
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 - explicit http(s) only
-            body = response.read(MAX_RESPONSE_BYTES + 1)
-            if len(body) > MAX_RESPONSE_BYTES:
+            body = response.read(max_bytes + 1)
+            if len(body) > max_bytes:
                 raise HttpError("response too large", kind="too_large", status=response.status)
             return HttpResponse(response.status, body, dict(response.headers))
     except urllib.error.HTTPError as exc:
@@ -94,6 +95,7 @@ async def request(
     form: Mapping[str, str] | None = None,
     headers: Mapping[str, str] | None = None,
     timeout: float = 15.0,
+    max_bytes: int = MAX_RESPONSE_BYTES,
 ) -> HttpResponse:
     if not url.lower().startswith(("http://", "https://")):
         raise HttpError("only http(s) URLs are allowed", kind="bad_url")
@@ -110,7 +112,13 @@ async def request(
     try:
         return await asyncio.wait_for(
             asyncio.to_thread(
-                _request_sync, method, url, data=data, headers=merged_headers, timeout=timeout
+                _request_sync,
+                method,
+                url,
+                data=data,
+                headers=merged_headers,
+                timeout=timeout,
+                max_bytes=max_bytes,
             ),
             timeout=timeout + 5,
         )
@@ -129,3 +137,26 @@ async def get_json(url: str, *, params: Mapping[str, str] | None = None, timeout
 async def post_json(url: str, body: Any, *, timeout: float = 30.0, headers: Mapping[str, str] | None = None) -> Any:
     response = await request("POST", url, json_body=body, timeout=timeout, headers=headers)
     return response.json()
+
+
+async def get_bytes(
+    url: str,
+    *,
+    timeout: float = 20.0,
+    max_bytes: int = 10 * 1024 * 1024,
+    headers: Mapping[str, str] | None = None,
+) -> bytes:
+    """Fetch a binary body (a picture, a thumbnail) with a hard size ceiling.
+
+    JSON is not the only thing on the wire: the downloader wants the preview
+    picture of a video before it fetches the video itself. The ceiling is the
+    point — an unbounded read of a stream is how a runner fills its disk.
+    """
+    response = await request(
+        "GET",
+        url,
+        timeout=timeout,
+        headers={"Accept": "*/*", **(headers or {})},
+        max_bytes=max_bytes,
+    )
+    return response.body

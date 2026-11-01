@@ -52,13 +52,19 @@ async def test_feature_defaults_match_the_declaration(store: Store) -> None:
     features = await store.features()
     for name, enabled in DEFAULT_FEATURES.items():
         assert features[name] is enabled
-    # Two deliberate exceptions, both harmless without a nudge from him: the
-    # companion speaks in the owner's own chat, and the offline verse/fortune
-    # corpora are content rather than automation. Everything that talks to
+    # Three deliberate exceptions, all harmless without a nudge from him: the
+    # companion speaks in the owner's own chat, the offline verse/fortune
+    # corpora are content rather than automation, and the downloader only ever
+    # acts on a link he dropped into his own chat. Everything that talks to
     # *other people* still ships off.
     assert DEFAULT_FEATURES["persona"] is True
     assert DEFAULT_FEATURES["poetry"] is True
-    assert set(name for name, on in DEFAULT_FEATURES.items() if on) == {"persona", "poetry"}
+    assert DEFAULT_FEATURES["downloader"] is True
+    assert set(name for name, on in DEFAULT_FEATURES.items() if on) == {
+        "persona",
+        "poetry",
+        "downloader",
+    }
     await store.set_feature("autoreply", True)
     assert await store.feature_enabled("autoreply") is True
 

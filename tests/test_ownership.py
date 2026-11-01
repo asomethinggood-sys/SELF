@@ -117,7 +117,13 @@ async def test_the_owner_is_still_the_owner(live) -> None:
     prompt = system_of(provider)
     assert "this turn is not his" not in prompt
     assert "The hands you have" in prompt
-    assert "talking: him" in prompt or "خودِ او" in prompt
+    # The room block used to say "it is <name> talking: him", and the model read
+    # "him" as a name and answered with it: "..., him, and i am not going
+    # anywhere". The pronoun is gone; the instruction is now about *how* to
+    # address him, because a third-person label in a prompt becomes a vocative
+    # in a reply.
+    assert "talking: the owner" in prompt or "صاحبِ چت" in prompt
+    assert "never about him in the third person" in prompt or "سوم‌شخص" in prompt
     # ...and the account is named as his, which is how she recognises him in a
     # room full of other people.
     assert "## whose account this is" in prompt or "## صاحب این حساب" in prompt

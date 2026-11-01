@@ -362,6 +362,68 @@ def parse_recurrence(text: str | None) -> str | None:
     return None
 
 
+#: Weekday names for a human sentence. Persian starts the week on Saturday and
+#: English on Monday, so the *index* is the Python one (0 = Monday) and the lists
+#: are written in the order that reads naturally in each language.
+_WEEKDAY_NAMES: dict[str, dict[int, str]] = {
+    "en": {0: "Monday", 1: "Tuesday", 2: "Wednesday", 3: "Thursday", 4: "Friday", 5: "Saturday", 6: "Sunday"},
+    "fa": {5: "شنبه", 6: "یکشنبه", 0: "دوشنبه", 1: "سه‌شنبه", 2: "چهارشنبه", 3: "پنجشنبه", 4: "جمعه"},
+}
+
+_NICE_RECURRENCE: dict[str, dict[str, str]] = {
+    "en": {
+        "daily": "day",
+        "weekdays": "weekday",
+        "weekends": "weekend",
+        "weekly": "week",
+        "monthly": "month",
+    },
+    "fa": {
+        "daily": "روز",
+        "weekdays": "روز کاری",
+        "weekends": "آخر هفته",
+        "weekly": "هفته",
+        "monthly": "ماه",
+    },
+}
+
+
+def humanize_recurrence(recurrence: str | None, language: str = "en") -> str:
+    """``weekly:4`` → ``Friday`` / ``هر جمعه``.
+
+    The raw spec is a storage format — it leaked to the owner as
+    "and again every weekly:4", which is a database row wearing a sentence.
+    """
+    if not recurrence:
+        return ""
+    lang = language if language in _NICE_RECURRENCE else "en"
+    words = _NICE_RECURRENCE[lang]
+    if recurrence.startswith("weekly:"):
+        try:
+            index = int(recurrence.split(":", 1)[1])
+        except ValueError:
+            return words["weekly"]
+        name = _WEEKDAY_NAMES[lang].get(index % 7, words["weekly"])
+        return f"هر {name}" if lang == "fa" else name
+    if recurrence.startswith("interval:"):
+        try:
+            seconds = int(recurrence.split(":", 1)[1])
+        except ValueError:
+            return ""
+        for unit, size in (("d", 86400), ("h", 3600), ("m", 60)):
+            if seconds % size == 0:
+                count = seconds // size
+                if lang == "fa":
+                    return f"هر {count} {_UNIT_FA[unit]}"
+                return f"{count} {_UNIT_EN[unit]}" if count > 1 else f"1 {_UNIT_EN[unit][:-1]}"
+        return f"{seconds}s"
+    return words.get(recurrence, recurrence)
+
+
+_UNIT_EN = {"d": "days", "h": "hours", "m": "minutes"}
+_UNIT_FA = {"d": "روز", "h": "ساعت", "m": "دقیقه"}
+
+
 def next_occurrence(current: datetime, recurrence: str | None, tz_name: str | None = "UTC") -> datetime | None:
     """Compute the next fire time for a recurrence spec.
 

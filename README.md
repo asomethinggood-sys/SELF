@@ -45,6 +45,14 @@ sentences (`>_<`, `(¬‿¬)`, `ᵕ̈`), and answers in whichever language you u
 - Without a key, or when the network is down, she answers from her offline line
   bank instead of going quiet. A companion that sulks because the API dropped is
   not a companion.
+- **Two voices, one creature.** `.yura mode` shows the switch, `.yura mode
+  assistant` / `.yura mode egirl` flips it, and the choice is remembered. The
+  egirl voice is the default — clingy, kaomoji, pet names. The assistant voice is
+  the same mind doing a job: first line is the answer, no pet names, no
+  possessiveness, `code` for anything you might copy. It is a swap of the
+  *instructions*, not a filter over the output, so nothing has to be scrubbed out
+  afterwards — and the safety rules (no insults, no self-harm encouragement, "yes
+  i am a bot") are shared by both, because a tone is not a moral system.
 - **Variety is structural, not a promise.** The bank is *composed* — an opener, a
   body, a tail and a face drawn from separate pools — so the same greeting does
   not get the same answer twice: **983,500 lines per language (1,967,000 total)**,
@@ -262,6 +270,29 @@ Full command reference: [docs/COMMANDS.md](docs/COMMANDS.md).
 
 ---
 
+## The downloader: a link is an order
+
+Drop a YouTube, TikTok or Instagram link into Saved Messages and she does not
+comment on it — she fetches it. The exchange has a shape, because picking a
+quality blind is how the wrong file arrives:
+
+1. the **thumbnail** arrives as a picture;
+2. then the **title**, the channel, the length, and the qualities *the site
+   actually reported* — a different ladder for every video, never a fake
+   "high/medium/low";
+3. you answer with a **number** (`1`, `2`, …), or `0` to cancel. The last row is
+   always **sound only**;
+4. the file arrives with the title under it, the working message is deleted, and
+   the temporary directory is removed. **No AI reply**: the message is claimed, so
+   the model never sees the link.
+
+`.download <link>` does the same thing by hand, `.download <number>` picks from an
+open menu, `.download info` says whether `yt-dlp` and `ffmpeg` are present and
+what the size ceiling is. It needs `pip install -e ".[download]"`; without it the
+feature says so in one line rather than failing. It only acts on **your** links
+in **your own** chat — a link in a group is somebody sharing something, not an
+order.
+
 ## Why a userbot (and what that means for you)
 
 A userbot authenticates as a person, not as a bot account. That buys things the
@@ -422,6 +453,13 @@ live account from this environment.
   means a big chat may return partial results fast.
 - **Media**: `.media download` refuses files above the configured cap and never
   leaves the data directory.
+- **The downloader needs its extra.** `pip install -e ".[download]"` brings
+  `yt-dlp`; `ffmpeg` is a system package. Without `ffmpeg` a site that serves
+  video and audio as separate streams (YouTube usually does) degrades to the best
+  single-file format, and *sound only* is unavailable. Ceiling: 700 MB by
+  default, `DOWNLOADER_MAX_MB` to move it. Instagram and TikTok change their
+  pages constantly — when one of them breaks it is `yt-dlp` that needs updating,
+  which is why the pin is a floor and not a ceiling.
 - **Notifications go to `OWNER_IDS[0]`, or Saved Messages when unset.**
 
 ### Not implemented

@@ -226,6 +226,10 @@ def builtin_features(config: Any = None, *, ai_available: bool = False, translat
         # Sends messages in the owner's own chat, so it is off until asked for.
         Feature("persona", "persona", False, (), False, commands=("yura",)),
         Feature("media", "persona", False, (), False, commands=("pic", "sticker")),
+        # Fetches the video behind a link in Saved Messages. The library is
+        # optional (`pip install 'havoc-userbot[download]'`), so the switch is
+        # listed always and the command says plainly when it is missing.
+        Feature("downloader", "persona", False, (), False, commands=("download",)),
         # Reading a poem or drawing a fal is always available offline; these
         # switches exist so the whole family can be turned off in one gesture.
         Feature("poetry", "fun", False, (), True, commands=("poem", "fal")),

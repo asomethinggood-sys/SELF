@@ -25,6 +25,7 @@ from ..utils.time import (
     day_bounds,
     format_datetime,
     humanize_delta,
+    humanize_recurrence,
     iso,
     parse_clock,
     parse_iso,
@@ -157,7 +158,12 @@ async def cmd_remind(ctx: CommandContext) -> None:
         ),
     ]
     if recurrence:
-        lines.append(ctx.t("remind.card_repeat", spec=escape(recurrence)))
+        lines.append(
+            ctx.t(
+                "remind.card_repeat",
+                spec=escape(humanize_recurrence(recurrence, ctx.language)),
+            )
+        )
     await ctx.reply(
         ui.card(
             ctx.t("remind.card_title", when=escape(format_datetime(when, tz, ctx.language))),
@@ -186,7 +192,11 @@ async def cmd_reminders(ctx: CommandContext) -> None:
         for row in items:
             when = parse_iso(row["remind_at"])
             stamp = format_datetime(when, tz, ctx.language) if when else "—"
-            repeat = f" ↻ {ui.note(escape(str(row['recurrence'])))}" if row["recurrence"] else ""
+            repeat = (
+                f" ↻ {ui.note(escape(humanize_recurrence(row['recurrence'], ctx.language)))}"
+                if row["recurrence"]
+                else ""
+            )
             rows_out.append(
                 f"{code('#' + str(row['id']))} {ui.bold(escape(stamp))}{repeat}\n"
                 f"  {escape(truncate(row['text'], 80))}"

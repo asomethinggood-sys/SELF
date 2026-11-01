@@ -418,9 +418,13 @@ async def cmd_outbox(ctx: CommandContext) -> None:
     sent = await store.count_sent()
     midnight = utc_now().replace(hour=0, minute=0, second=0, microsecond=0)
     today = await store.count_sent(since=iso(midnight))
+    # Twenty-four hours, not "today": a rollup someone asks about at 02:00 is
+    # about the last day, and a calendar boundary in the middle of it read as a
+    # sudden drop in volume that never happened.
+    day = await store.count_outbox()
     here = await store.count_sent(chat_id=ctx.chat_id)
     counts = ctx.t(
-        "reach.outbox_counts", total=total, sent=sent, today=today, here=here
+        "reach.outbox_counts", total=total, sent=sent, today=today, day=day, here=here
     )
     if not rows:
         await ctx.reply(ui.card(ctx.t("reach.outbox_title"), [counts, ctx.t("reach.outbox_empty")], icon="⟡"))

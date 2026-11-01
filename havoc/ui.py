@@ -64,7 +64,7 @@ def title(*parts: object) -> str:
 #: Symbols a translated header may start with. Stripping one keeps
 #: ``title(icon, header)`` from printing the same glyph twice.
 _LEADING_SYMBOLS = set(
-    "❥♡✦✧❦☾☀⚙⚔⚗⚯⛁✚✎✉▣▤▦▫◈◐◉◎●○◍◔◫◷⌖⌕⌾⌫⌬⋮⊕⊗⊞⊹∑№⟐⟰↩↪↻❀❐❏❝❞⚠■□▶▷◆◇⌘⌬ϟ✹❧≋⏚⧉ᴀ"
+    "⟡⯑❋⁘⋆⭒⭑✦❥♡✦✧❦☾☀⚙⚔⚗⚯⛁✚✎✉▣▤▦▫◈◐◉◎●○◍◔◫◷⌖⌕⌾⌫⌬⋮⊕⊗⊞⊹∑№⟐⟰↩↪↻❀❐❏❝❞⚠■□▶▷◆◇⌘⌬ϟ✹❧≋⏚⧉ᴀ"
 )
 
 
@@ -266,7 +266,11 @@ def card(
     a signature: it should look like it was drawn for this one message.
     """
     mark = glyph or _pick(RULE_GLYPHS, recent=_recent_rules)
-    body = [f"{escape(icon)} {bold(title)}" if icon else bold(title)]
+    # A translated title often carries its own glyph ("⟡ outbox"), and the icon
+    # is added in front of it: the card printed "⟡ ⟡ outbox". Strip the copy in
+    # the title instead of asking every locale to be written twice.
+    heading = _strip_leading_symbol(str(title)) if icon else str(title)
+    body = [f"{escape(icon)} {bold(heading)}" if icon else bold(heading)]
     body.append(drawn_rule(width=9, glyph=mark))
     body.extend(italic(line) for line in lines if str(line).strip())
     tail = closing(end)

@@ -157,6 +157,10 @@ class YuraChat:
         self.turns = 0
         self.fallbacks = 0
         self.last_error = ""
+        #: Which voice she is in. Read from the store on every prompt build (it is
+        #: one settings read) and cached here so the synchronous fallback path can
+        #: answer in the same voice without making itself async.
+        self.mode = persona.DEFAULT_MODE
         # What she has said in each chat, in this process. Two jobs: stop the
         # offline bank repeating itself, and make the loop guard airtight now
         # that lines are composed rather than listed.
@@ -278,6 +282,8 @@ class YuraChat:
             hour = to_local(utc_now(), self.runtime.config.timezone).hour
         except Exception:  # pragma: no cover - a bad zone must not break a reply
             hour = None
+        mode = await persona.current_mode(self.runtime.store)
+        self.mode = mode
         system = persona.system_prompt(
             language,
             memories=facts,
@@ -287,6 +293,7 @@ class YuraChat:
             hour=hour,
             is_owner=is_owner,
             speaker=speaker,
+            mode=mode,
         )
         # Whose account this is, spelled out: her own name for him and the ids the
         # permission layer actually checks, so recognition and authority agree.
@@ -295,6 +302,7 @@ class YuraChat:
         if is_owner:
             owner_block = persona.owner_prompt(
                 language=language,
+                mode=mode,
                 names=(owner_name,) if owner_name else (),
                 ids=tuple(sorted(getattr(self.runtime.permissions, "owner_ids", set())))[:4],
                 handle=(getattr(self.runtime.config, "owner_usernames", ()) or ("",))[0],
@@ -420,6 +428,7 @@ class YuraChat:
         block = _audience_block(audience, language)
         relationship = persona.relationship_prompt(
             language=language,
+            mode=self.mode,
             name=str(getattr(who, "name", "") or getattr(audience, "speaker", "") or ""),
             is_owner=owner,
             tone=tone,
@@ -1169,6 +1178,13 @@ class YuraChat:
         used |= set(self._recent.get(chat_id, ()))
         used |= set(self._said_bodies.get(chat_id, ()))
         used |= set(self._sent.get(chat_id, ()))
+        if self.mode == "assistant":
+            # Assistant mode is a promise about *how* she answers. A kaomoji
+            # babyspeak fallback would break that promise in the one moment the
+            # owner cannot be told what went wrong, so the fallback is plain too.
+            line = persona.assistant_line(language, avoid=used)
+            self._remember_said(chat_id, line)
+            return line
         line = persona.build_line(language, avoid=used)
         for _attempt in range(12):
             if not self.was_sent(chat_id, line):

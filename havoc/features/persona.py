@@ -132,6 +132,8 @@ async def _card(ctx: CommandContext) -> str:
         f"{ui.bold(ctx.t('yura.memory_count'))} {ui.code(str(facts))}",
         f"{ui.bold(ctx.t('yura.turns'))} {ui.code(str(getattr(chat, 'turns', 0)))}",
         f"{ui.bold(ctx.t('yura.bank'))} {ui.code(str(persona.capacity()))}",
+        f"{ui.bold(ctx.t('yura.persona_row'))} "
+        + ui.code(escape(ctx.t(f"yura.mode_{await persona.current_mode(runtime.store)}"))),
         f"{ui.bold(ctx.t('yura.reply_row'))} {ui.code(style)}",
     ]
     if replies is not None and replies.last_skip:
@@ -304,6 +306,43 @@ async def _tone_command(ctx: CommandContext, tone: str, words: list[str]) -> Non
     await ctx.reply_ok(
         ctx.t("yura.tone_set", name=who, tone=escape(ctx.t(f"yura.tone_{tone}")))
     )
+
+
+async def _mode_command(ctx: CommandContext, words: list[str]) -> None:
+    """``.yura mode`` / ``.yura mode assistant`` — which voice answers him.
+
+    Two rows, not a menu with a number: this is a switch he flips when he wants
+    a different *her*, and a switch that needs a second round trip is a switch he
+    stops using. ``.yura assistant`` and ``.yura egirl`` do the same thing
+    without the word "mode".
+    """
+    asked = (words[0].lower() if words else "").strip()
+    if not asked:
+        current = await persona.current_mode(ctx.store)
+        rows = [
+            f"{ui.code('1')} {ui.italic(ui.DOT)} {escape(ctx.t(f'yura.mode_{name}'))}"
+            + (f" {ui.state(True, on=ctx.t('common.on'))}" if name == current else "")
+            for name in persona.MODES
+        ]
+        await ctx.reply(
+            "\n\n".join(
+                [
+                    ui.title("♡", ctx.t("yura.mode_title")),
+                    ui.panel(rows),
+                    ui.footer(ctx.t("yura.mode_hint", prefix=ctx.runtime.prefix)),
+                ]
+            )
+        )
+        return
+    chosen = persona.normalize_mode(asked)
+    if not chosen:
+        raise CommandError("yura.mode_unknown", prefix=ctx.runtime.prefix)
+    await persona.set_mode(ctx.store, chosen)
+    voice = getattr(ctx.runtime, "yura_chat", None)
+    if voice is not None:
+        voice.mode = chosen
+    await ctx.reply_ok(ctx.t("yura.mode_set", mode=escape(ctx.t(f"yura.mode_{chosen}"))))
+    await ctx.reply(ctx.t(f"yura.mode_{chosen}_hint"))
 
 
 async def _note_command(ctx: CommandContext, words: list[str]) -> None:
@@ -747,6 +786,13 @@ async def cmd_yura(ctx: CommandContext) -> None:
         return
     if action in {"neutral", "normal", "tone"}:
         await _tone_command(ctx, "neutral", list(words))
+        return
+    if action in {"mode", "personality", "persona-mode", "voice-mode"}:
+        await _mode_command(ctx, list(words))
+        return
+    if action in {"assistant", "egirl", "helpful"}:
+        # `.yura assistant` is a sentence, not a subcommand people look up.
+        await _mode_command(ctx, [action])
         return
     if action in {"note", "about", "facts"}:
         await _note_command(ctx, list(words))
@@ -1299,6 +1345,23 @@ class PersonaReplies:
             return False
         return found is not None
 
+    def _claimed(self, event: NormalizedEvent) -> bool:
+        """True when another feature already answered this message.
+
+        A YouTube link in Saved Messages is an order to the downloader, and the
+        owner made the expectation explicit: the video comes back, nothing is
+        said about it. Without this check both handlers fire, and the reply
+        arrives a second after the file, describing the thing he is already
+        watching.
+        """
+        claims = getattr(self.runtime, "claims", None)
+        if claims is None:
+            return False
+        try:
+            return bool(claims.claimed_event(event))
+        except Exception:  # noqa: BLE001 - a broken claim store must not mute her
+            return False
+
     def _named(self, text: str) -> bool:
         """True when the message says her name, in any spelling or alphabet."""
         # One list, in identity: "yura", "یورا", and the displayed "Y.U.R.A 1.9"
@@ -1309,6 +1372,9 @@ class PersonaReplies:
     # -- the owner's own chat --------------------------------------------
     async def on_self_message(self, event: NormalizedEvent) -> None:
         if not event.is_outgoing:
+            return
+        if self._claimed(event):
+            self._skip("claimed", event)
             return
         picture = await self._picture(event)
         if picture is None and not event.text.strip():
@@ -1368,6 +1434,9 @@ class PersonaReplies:
         # hers. Replying to her is an *outgoing* message here, which is why the
         # first version of this handler never fired — and why her own answers
         # have to be recognised by id, not by who "sent" them.
+        if self._claimed(event):
+            self._skip("claimed", event)
+            return
         if await self._is_own(event.chat_id, event.message_id, event.text):
             self._skip("own_message", event)
             return
@@ -1479,6 +1548,19 @@ class PersonaReplies:
         * **their** incoming line goes to :meth:`on_private_message`, which is
           opt-in per person, exactly as before.
         """
+        if self._claimed(event):
+            self._skip("claimed", event)
+            return
+        # Saved Messages is *not* a DM with somebody else. Both this handler and
+        # `on_self_message` are subscribed to the owner's outgoing messages, and
+        # without this line both answered: two cards, two sentences, interleaved.
+        # One message, one answer.
+        self_id = self.runtime.permissions.self_id
+        if self_id is not None and event.chat_id == self_id:
+            # Not a skip: this handler simply is not the one for that chat, and
+            # counting it as "she decided not to answer" would overwrite the real
+            # reason (stale, cooldown, a permission) in `.yura status`.
+            return
         if event.is_outgoing:
             await self.on_owner_in_dm(event)
         else:
@@ -1964,7 +2046,7 @@ def register(runtime: Any) -> None:
             cmd_yura,
             category="persona",
             aliases=("person", "self"),
-            usage="[on|off|status|memory|log|clear|recap|diary|faces|speak|voice|poster|caption|react|nice|rude|neutral|note|dm|reply|teach|rules|people|person|tools|agent|actions|yes|no|<anything>]",
+            usage="[on|off|status|mode|assistant|egirl|memory|log|clear|recap|diary|faces|speak|voice|poster|caption|react|nice|rude|neutral|note|dm|reply|teach|rules|people|person|tools|agent|actions|yes|no|<anything>]",
             changes_state=True,
             subcommands=(
                 "on", "off", "enable", "disable", "status", "card", "who", "state",
@@ -1972,7 +2054,8 @@ def register(runtime: Any) -> None:
                 "key", "apikey", "token", "recap", "today", "diary", "journal", "faces",
                 "face", "kaomoji", "speak", "voice", "tts", "poster", "caption",
                 "react", "reaction", "nice", "kind", "polite", "rude", "mean", "savage",
-                "neutral", "normal", "tone", "note", "about", "facts", "people", "humans",
+                "neutral", "normal", "tone", "mode", "personality", "assistant", "egirl",
+                "note", "about", "facts", "people", "humans",
                 "known", "person", "them", "whois", "dm", "privates", "dms", "teach",
                 "learn-this", "lesson", "rules", "lessons", "unteach",
                 "reply", "thread", "plain", "quote", "bubble", "bubbles",

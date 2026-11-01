@@ -51,6 +51,10 @@ DEFAULT_FEATURES: dict[str, bool] = {
     # is not an answer. `.feature poetry off` still silences the whole family.
     "poetry": True,
     "roasts": False,
+    # A link he sends himself is a request, and it works with no key and no
+    # network beyond the site itself. Off is still the default for anything that
+    # touches another chat.
+    "downloader": True,
 }
 
 #: Human-readable grouping used by ``.features`` and the docs.
@@ -59,7 +63,7 @@ FEATURE_GROUPS: dict[str, tuple[str, ...]] = {
     "detection": ("watches", "notifications", "reminder_intent"),
     "profile": ("clock", "bio_rotation", "profile_scheduler"),
     "operations": ("backups", "summaries"),
-    "persona": ("persona", "media"),
+    "persona": ("persona", "media", "downloader"),
     "fun": ("poetry", "roasts"),
 }
 

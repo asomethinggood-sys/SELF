@@ -293,6 +293,24 @@ Without them the bot still runs — `.fal` notices at runtime, says so in one
 quiet line, and sends the reading as text instead of failing. The fonts and the
 divination table ship inside the package, so there is nothing else to install.
 
+## The downloader
+
+A YouTube, TikTok or Instagram link dropped into Saved Messages comes back as the
+video itself — thumbnail, title, then the qualities the site actually has, picked
+by typing a number. It needs one Python package and one binary:
+
+```bash
+pip install -e ".[download]"   # yt-dlp
+sudo apt install -y ffmpeg     # optional, but needed to merge a stream pair
+```
+
+The runtime workflow installs the extra already. Without `yt-dlp` the feature
+says so in one line and nothing else happens; without `ffmpeg`, a site that
+serves video and audio separately (YouTube usually does) falls back to a
+single-file format instead of a merged one, and *sound only* is unavailable.
+`.download info` reports both, plus the size ceiling (`DOWNLOADER_MAX_MB`,
+default 700).
+
 ## Her voice
 
 `.yura speak <text>` needs one of two things, and the first needs nothing:

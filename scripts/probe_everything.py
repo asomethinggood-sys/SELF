@@ -1090,6 +1090,8 @@ async def probe_delivery(runtime: Any) -> list[dict[str, Any]]:
 
     from conftest import FakeMessage
 
+    from havoc.features.persona import MIN_INTERVAL_SECONDS
+
     class _Sink(logging.Handler):
         def __init__(self) -> None:
             super().__init__()
@@ -1143,12 +1145,49 @@ async def probe_delivery(runtime: Any) -> list[dict[str, Any]]:
         )
 
         sink.lines.clear()
+        # Past the two-second valve between unsolicited answers. Forty messages in
+        # a row is a firehose nobody types; waiting is what a person does.
+        await asyncio.sleep(MIN_INTERVAL_SECONDS + 0.2)
         fresh = await _say("hey yura are you up")
         results.append(
             {
                 "case": "a fresh line to her",
                 "answered": fresh,
                 "findings": [] if fresh else ["not answered"],
+            }
+        )
+
+        # One message, one answer. His own chat is routed by two subscribers (the
+        # self-chat handler and the private-chat one) and for a while both of them
+        # spoke: two cards, two sentences, interleaved.
+        await asyncio.sleep(MIN_INTERVAL_SECONDS + 0.2)
+        ones = await _say("nothing much, just thinking out loud")
+        results.append(
+            {
+                "case": "one message, one answer",
+                "answered": ones,
+                "findings": [] if ones == 1 else [f"{ones} answers to one message"],
+            }
+        )
+
+        # An order with no name in it still executes. "how many messages have i
+        # sent" is an instruction, not a remark, and it must not depend on her
+        # being called first.
+        await asyncio.sleep(MIN_INTERVAL_SECONDS + 0.2)
+        before = len(runtime.client.sent)
+        ordered = await _say("how many messages have i sent")
+        said_order = " ".join(message.text for message in runtime.client.sent[before:]).lower()
+        findings = []
+        if "outbox" not in said_order:
+            findings.append("the order did not run")
+        if ordered != 1:
+            findings.append(f"{ordered} answers")
+        results.append(
+            {
+                "case": "an unnamed order in his own chat",
+                "answered": ordered,
+                "said": said_order[:120],
+                "findings": findings,
             }
         )
 
@@ -1300,6 +1339,238 @@ async def probe_limits() -> list[dict[str, Any]]:
     results.append({"case": "a command while the model is spent", "did": ran, "findings": findings})
     return results
 
+async def probe_downloader() -> list[dict[str, Any]]:
+    """A link in Saved Messages, walked through the real subscriber.
+
+    The feature's whole promise is behavioural — the video arrives and nothing
+    else does — so this drives the account's own event path with the network
+    stubbed at the boundary, then reads what the chat would have seen.
+    """
+    from conftest import FakeMessage
+
+    from havoc.event_engine import normalize_message
+    from havoc.services import downloader as service
+    from havoc.services.downloader import Item, Quality
+
+    def _item(url: str) -> Item:
+        return Item(
+            url=url,
+            site="youtube",
+            title="a probe video",
+            uploader="probe",
+            duration=90,
+            thumbnail="https://img.example/t.jpg",
+            qualities=[
+                Quality(index=1, label="1080p", height=1080, filesize=50 * 1024 * 1024),
+                Quality(index=2, label="720p", height=720, filesize=20 * 1024 * 1024),
+                Quality(index=3, label="sound only", audio_only=True),
+            ],
+        )
+
+    original = {name: getattr(service, name) for name in ("installed", "inspect", "fetch", "thumbnail", "discard")}
+    state: dict[str, Any] = {"fetched": [], "asked": 0, "calls": 0}
+
+    class Model:
+        model = "probe-model"
+        available = True
+        active_model = "probe-model"
+
+        async def converse(self, *args: Any, **kwargs: Any) -> str:
+            state["asked"] += 1
+            return "i would have described that video for you."
+
+        async def complete(self, *args: Any, **kwargs: Any) -> str:
+            state["asked"] += 1
+            return "i would have described that video for you."
+
+    async def _inspect(url: str, **_kwargs: Any) -> Item:
+        return _item(url)
+
+    async def _fetch(url: str, quality: Quality, **_kwargs: Any) -> Any:
+        state["fetched"].append(quality.label)
+        return f"/tmp/probe-{quality.index}.mp4"
+
+    async def _thumb(url: str, **_kwargs: Any) -> bytes:
+        return b"\x89PNG probe"
+
+    service.installed = lambda: True  # type: ignore[assignment]
+    service.inspect = _inspect  # type: ignore[assignment]
+    service.fetch = _fetch  # type: ignore[assignment]
+    service.thumbnail = _thumb  # type: ignore[assignment]
+    service.discard = lambda path: None  # type: ignore[assignment]
+
+    results: list[dict[str, Any]] = []
+    try:
+        runtime = await build_runtime()
+        runtime.ai = Model()
+        await runtime.feature_manager.set_enabled("downloader", True)
+        await runtime.feature_manager.set_enabled("persona", True)
+        owner = Harness.OWNER
+        try:
+            def _line(text: str, index: int) -> Any:
+                message = FakeMessage(
+                    id=9700 + index,
+                    chat_id=owner,
+                    sender_id=owner,
+                    text=text,
+                    out=True,
+                    is_private=True,
+                    is_group=False,
+                )
+                return normalize_message(message, self_id=owner, prefix=".")
+
+            async def _push(text: str, index: int) -> None:
+                await runtime.event_engine.emit(_line(text, index))
+
+            # 1 — a link becomes a picture and a menu
+            await _push("https://www.youtube.com/watch?v=probe1", 0)
+            sent = [message.text for message in runtime.client.sent]
+            files = [message for message in runtime.client.sent if "file" in message.kwargs]
+            findings: list[str] = []
+            joined = " ".join(sent)
+            if not files:
+                findings.append("no thumbnail")
+            if "a probe video" not in joined:
+                findings.append("no title")
+            for expected in ("1080p", "720p", "sound only"):
+                if expected not in joined:
+                    findings.append(f"missing {expected}")
+            if state["asked"]:
+                findings.append("the model was asked about the link")
+            results.append({"case": "a link in Saved Messages", "findings": findings, "said": joined[:160]})
+
+            # 2 — the number is an order
+            before = len(runtime.client.sent)
+            await _push("2", 1)
+            delivered = [
+                message for message in runtime.client.sent[before:] if "file" in message.kwargs
+            ]
+            findings = []
+            if state["fetched"] != ["720p"]:
+                findings.append(f"fetched {state['fetched']}")
+            if not delivered:
+                findings.append("no file")
+            if state["asked"]:
+                findings.append("the model was asked about the pick")
+            results.append(
+                {"case": "the quality picked by number", "findings": findings, "said": str(state["fetched"])}
+            )
+
+            # 3 — a stranger's link is not an order
+            state["fetched"].clear()
+            stranger = FakeMessage(
+                id=9799,
+                chat_id=8899,
+                sender_id=8899,
+                text="https://www.youtube.com/watch?v=probe2",
+                out=False,
+                is_private=True,
+            )
+            await runtime.event_engine.emit(normalize_message(stranger, self_id=owner, prefix="."))
+            findings = []
+            if state["fetched"]:
+                findings.append("downloaded for a stranger")
+            if runtime.downloader.sessions:
+                findings.append("a stranger opened a menu")
+            results.append({"case": "a link from a stranger", "findings": findings})
+
+            # 4 — cancel leaves nothing behind
+            await _push("https://www.youtube.com/watch?v=probe3", 2)
+            await _push("0", 3)
+            findings = [] if not runtime.downloader.sessions else ["the menu outlived the cancel"]
+            results.append({"case": "0 cancels", "findings": findings})
+        finally:
+            await runtime.db.close()
+    finally:
+        for name, value in original.items():
+            setattr(service, name, value)
+    return results
+
+
+async def probe_voices() -> list[dict[str, Any]]:
+    """The two personalities, seen from the outside.
+
+    A switch that only changes a stored string is theatre. This asks the same
+    question twice, once in each voice, and looks at what the model was actually
+    told — plus the one path that must change with it: the answer when there is
+    no model at all.
+    """
+    from conftest import FakeMessage
+
+    from havoc import persona
+    from havoc.event_engine import normalize_message
+
+    class Model:
+        model = "probe-model"
+        available = True
+        active_model = "probe-model"
+
+        def __init__(self) -> None:
+            self.prompts: list[str] = []
+
+        async def converse(self, messages: Any, **_kwargs: Any) -> str:
+            self.prompts.append(str(getattr(messages[0], "content", messages[0])))
+            return "fine."
+
+        async def complete(self, messages: Any, **_kwargs: Any) -> str:
+            return await self.converse(messages)
+
+    results: list[dict[str, Any]] = []
+    prompts: dict[str, str] = {}
+    for mode in persona.MODES:
+        runtime = await build_runtime()
+        model = Model()
+        runtime.ai = model
+        await runtime.feature_manager.set_enabled("persona", True)
+        try:
+            await persona.set_mode(runtime.store, mode)
+            message = FakeMessage(
+                id=9800,
+                chat_id=Harness.OWNER,
+                sender_id=Harness.OWNER,
+                text="how do i center a div",
+                out=True,
+                is_private=True,
+            )
+            await runtime.event_engine.emit(
+                normalize_message(message, self_id=Harness.OWNER, prefix=".")
+            )
+            prompts[mode] = model.prompts[-1] if model.prompts else ""
+            findings: list[str] = []
+            if not model.prompts:
+                findings.append("the model was never asked")
+            if mode == "assistant":
+                if "assistant mode" not in prompts[mode]:
+                    findings.append("the prompt is not the assistant voice")
+                if 'a little feral for him' in prompts[mode]:
+                    findings.append("the egirl block leaked in")
+            else:
+                if "e-kitten" not in prompts[mode]:
+                    findings.append("the prompt is not the egirl voice")
+                if "assistant mode" in prompts[mode]:
+                    findings.append("the assistant block leaked in")
+            # The safety lines must survive both voices: a tone switch is not a
+            # moral system.
+            if "Never insult" not in prompts[mode]:
+                findings.append("the safety rules are missing")
+            results.append({"case": f"{mode} voice reaches the model", "findings": findings})
+        finally:
+            await runtime.db.close()
+
+    if len(prompts) == 2 and prompts.get("assistant") == prompts.get("egirl"):
+        results.append({"case": "the two voices differ", "findings": ["identical prompts"]})
+
+    # The offline voice follows the switch too.
+    plain = persona.assistant_line("en")
+    findings = []
+    if not plain:
+        findings.append("assistant mode has no offline line")
+    if any(glyph in plain for glyph in ("ᵕ", "╰", "♡", ">_<")):
+        findings.append("the assistant fallback is wearing kaomoji")
+    results.append({"case": "the offline answer keeps the voice", "findings": findings, "said": plain[:120]})
+    return results
+
+
 async def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--json", default=".probe.json")
@@ -1330,6 +1601,8 @@ async def main() -> int:
         ownership = await probe_ownership()
         delivery = await probe_delivery(await build_runtime())
         limits = await probe_limits()
+        downloader = await probe_downloader()
+        voices = await probe_voices()
     finally:
         await runtime.db.close()
 
@@ -1346,6 +1619,8 @@ async def main() -> int:
         "ownership": ownership,
         "delivery": delivery,
         "limits": limits,
+        "downloader": downloader,
+        "voices": voices,
     }
     Path(args.json).write_text(json.dumps(report, ensure_ascii=False, indent=2))
 
@@ -1361,6 +1636,8 @@ async def main() -> int:
     bad_ownership = [v for v in ownership if v.get("findings") or v.get("crash")]
     bad_delivery = [v for v in delivery if v.get("findings") or v.get("crash")]
     bad_limits = [v for v in limits if v.get("findings") or v.get("crash")]
+    bad_downloader = [v for v in downloader if v.get("findings") or v.get("crash")]
+    bad_voices = [v for v in voices if v.get("findings") or v.get("crash")]
 
     for title, rows, key in (
         ("COMMANDS", bad_commands, "command"),
@@ -1375,6 +1652,8 @@ async def main() -> int:
         ("OWNERSHIP", bad_ownership, "turn"),
         ("DELIVERY", bad_delivery, "case"),
         ("LIMITS", bad_limits, "case"),
+        ("DOWNLOADER", bad_downloader, "case"),
+        ("VOICES", bad_voices, "case"),
     ):
         print(f"\n=== {title}: {len(rows)} with findings")
         for row in rows:
@@ -1395,7 +1674,9 @@ async def main() -> int:
         f"{len(bad_surfaces)}/{len(surfaces)} surfaces, {len(bad_groups)}/{len(groups)} group cases, "
         f"{len(bad_ownership)}/{len(ownership)} ownership turns, "
         f"{len(bad_delivery)}/{len(delivery)} delivery cases, "
-        f"{len(bad_limits)}/{len(limits)} limit cases"
+        f"{len(bad_limits)}/{len(limits)} limit cases, "
+        f"{len(bad_downloader)}/{len(downloader)} downloader cases, "
+        f"{len(bad_voices)}/{len(voices)} voice cases"
     )
     return (
         1
@@ -1412,6 +1693,8 @@ async def main() -> int:
             or bad_ownership
             or bad_delivery
             or bad_limits
+            or bad_downloader
+            or bad_voices
         )
         else 0
     )
