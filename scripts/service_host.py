@@ -809,8 +809,19 @@ class Host:
         path = SERVICES_DIR / f"last-{self.service}.txt"
         SERVICES_DIR.mkdir(parents=True, exist_ok=True)
         header = f"{self.service} · run {self.run_id} · {stamp}"
-        path.write_text(f"{header}\n{'-' * len(header)}\n{body}\n", encoding="utf-8")
-        log(f"wrote {path.relative_to(ROOT)}")
+        if append and path.exists():
+            # A later line about the same run (the public check, a restart) must
+            # not throw away the self-test that came before it — that is exactly
+            # how the comfy run lost its 6/6 picture transcript.
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write(f"\n{body}\n")
+        else:
+            path.write_text(f"{header}\n{'-' * len(header)}\n{body}\n", encoding="utf-8")
+        try:
+            shown = path.relative_to(ROOT)
+        except ValueError:  # a patched SERVICES_DIR in a test, or a symlinked checkout
+            shown = path
+        log(f"wrote {shown}")
         if os.environ.get("GITHUB_ACTIONS"):
             commit(f"services: {self.service} run report [skip ci]", str(path))
 

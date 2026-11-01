@@ -77,8 +77,11 @@ async def test_feature_unknown_name(runtime) -> None:
     assert "nonsense" in text
 
 
-async def test_feature_dependency_is_enforced(runtime) -> None:
-    # "auto_translate" needs a translation provider, which is not configured.
+async def test_feature_dependency_is_enforced(runtime, monkeypatch) -> None:
+    # "auto_translate" needs a translation provider. Forced off here: a checkout
+    # that has a published hosted model *does* have one now, so "not configured"
+    # is a property of this test, not of the machine it runs on.
+    monkeypatch.setattr(runtime.feature_manager, "translation_available", False)
     await invoke(runtime, ".feature auto_translate on")
     text = last_text(runtime)
     assert "translation" in text.lower()
@@ -268,7 +271,10 @@ async def test_joke_in_persian(runtime) -> None:
     assert any("\u0600" <= ch <= "\u06FF" for ch in last_text(runtime))
 
 
-async def test_translate_without_provider_explains(runtime) -> None:
+async def test_translate_without_provider_explains(runtime, monkeypatch) -> None:
+    from havoc.services.translation_provider import DisabledTranslationProvider
+
+    monkeypatch.setattr(runtime, "translator", DisabledTranslationProvider(timeout=5))
     await invoke(runtime, ".translate fa hello")
     assert "TRANSLATE_PROVIDER" in last_text(runtime) or "not configured" in last_text(runtime).lower()
 
