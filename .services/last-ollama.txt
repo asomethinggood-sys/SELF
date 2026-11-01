@@ -1,10 +1,10 @@
-ollama · run 41338221657 · 2026-11-01T18:46:30Z
+ollama · run 41346546377 · 2026-11-01T20:23:47Z
 -----------------------------------------------
-ok   gate /healthz without a token — 200 {"ok": true, "service": "ollama", "run_id": "41338221657", "started_at": "2026-1
+ok   gate /healthz without a token — 200 {"ok": true, "service": "ollama", "run_id": "41346546377", "started_at": "2026-1
   ok   upstream /api/tags directly — 200
   ok   the same path through the gate without a token — 401 
   ok   a wrong token is refused — 401
-  ok   /api/tags through the gate with the real token — 200 {"models":[{"name":"qwen2.5:0.5b","model":"qwen2.5:0.5b","modified_at":"2026-11-01T18:46:28.460844909Z","size":397821319
-  ok   the model is listed — {"models":[{"name":"qwen2.5:0.5b","model":"qwen2.5:0.5b","modified_at":"2026-11-01T18:46:28.460844909Z","size":397821319,"digest":"a8b0c51577010a279d933d14c2a8ab4b268079d44c5c8830c0a93900f1827c67","de
-  ok   a real reply through the gate — A transformer is a deep learning model that uses pre-trained language models as input to learn and generate text.
+  ok   /api/tags through the gate with the real token — 200 {"models":[{"name":"qwen2.5:0.5b","model":"qwen2.5:0.5b","modified_at":"2026-11-01T20:23:46.063092113Z","size":397821319
+  ok   the model is listed — {"models":[{"name":"qwen2.5:0.5b","model":"qwen2.5:0.5b","modified_at":"2026-11-01T20:23:46.063092113Z","size":397821319,"digest":"a8b0c51577010a279d933d14c2a8ab4b268079d44c5c8830c0a93900f1827c67","de
+  ok   a real reply through the gate — A transformer is a type of neural network architecture that uses self-attention mechanisms to process sequential data.
 self-test: 7/7 checks passed
