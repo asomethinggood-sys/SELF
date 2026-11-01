@@ -56,7 +56,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HANDOVER_WORKFLOW: service-search.yml
-        run: python scripts/handover.py
+        run: |
+          set -uo pipefail
+          if [ -z "${{ secrets.SERVICE_SHARED_SECRET }}" ]; then
+            # A run with no secret is a self-test: it installs, proves the service
+            # on loopback and exits in minutes. Queuing a successor for that would
+            # be a self-test every few minutes forever, which is not a service.
+            echo "no SERVICE_SHARED_SECRET: this is a self-test, so no successor is queued"
+            exit 0
+          fi
+          python scripts/handover.py
 
       - uses: actions/setup-python@v5
         with:

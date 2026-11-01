@@ -164,7 +164,10 @@ def start_search(port: int, workdir: Path) -> subprocess.Popen | None:
         [
             "docker", "run", "--rm", "--name", "havoc-searxng",
             "-p", f"127.0.0.1:{port}:8080",
-            "-v", f"{settings.parent}:/etc/searxng:rw",
+            # One file, not the directory: the image keeps uwsgi.ini and the rest
+            # of its config in /etc/searxng, and mounting over the directory hides
+            # them — the container then exits before it ever listens.
+            "-v", f"{settings}:/etc/searxng/settings.yml:rw",
             "-e", "SEARXNG_BASE_URL=http://127.0.0.1:8080/",
             "searxng/searxng:latest",
         ],
@@ -532,9 +535,32 @@ class Host:
     def run(self) -> int:
         if not self.start_upstream():
             log("the upstream never came up; publishing nothing (a wrong URL is worse than none)")
+            self.report(
+                "\n".join(
+                    [
+                        f"the {self.service} upstream never came up",
+                        "",
+                        "--- log tail ---",
+                        tail(self.workdir / "logs" / f"{self.service}.log", 25)
+                        or tail(self.workdir / "logs" / "searxng.log", 25)
+                        or "(the starter produced no log)",
+                    ]
+                )
+            )
+            self.stop()
             return 1
         if not self.start_gate():
             log("the gate never came up; stopping the upstream rather than exposing it")
+            self.report(
+                "\n".join(
+                    [
+                        "the gate never came up, so the upstream was stopped rather than exposed",
+                        "",
+                        "--- gate log ---",
+                        tail(self.workdir / "logs" / "gate.log", 25) or "(no log)",
+                    ]
+                )
+            )
             self.stop()
             return 1
         if self.self_test_only:
@@ -588,6 +614,27 @@ class Host:
         log(f"deadline reached after {self.restarts} restart(s)")
         return 0
 
+    # -- evidence -----------------------------------------------------
+    def report(self, text: str) -> None:
+        """Write what happened to a file in the repo, and commit it from CI.
+
+        GitHub's job logs are not readable from this sandbox (`gh run view --log`
+        and the logs API both answer EOF), and "it worked on the runner" is worth
+        nothing without a transcript. So a run leaves one in the repository:
+        `.services/last-<name>.txt`, a few kilobytes, `[skip ci]`.
+        """
+        body = text.strip()
+        if not body:
+            return
+        stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        path = SERVICES_DIR / f"last-{self.service}.txt"
+        SERVICES_DIR.mkdir(parents=True, exist_ok=True)
+        header = f"{self.service} · run {self.run_id} · {stamp}"
+        path.write_text(f"{header}\n{'-' * len(header)}\n{body}\n", encoding="utf-8")
+        log(f"wrote {path.relative_to(ROOT)}")
+        if os.environ.get("GITHUB_ACTIONS"):
+            commit(f"services: {self.service} run report [skip ci]", str(path))
+
     # -- self-test ----------------------------------------------------
     def self_test(self) -> int:
         """Prove the gate and the upstream work, on this machine, without publishing.
@@ -630,10 +677,25 @@ class Host:
             checks.append(("the server reports system stats", '"system"' in text or '"devices"' in text, text[:200]))
 
         failures = 0
+        lines: list[str] = []
         for label, ok, detail in checks:
-            print(f"  {'ok  ' if ok else 'FAIL'} {label} — {detail}", flush=True)
+            line = f"  {'ok  ' if ok else 'FAIL'} {label} — {detail}"
+            print(line, flush=True)
+            lines.append(line)
             failures += 0 if ok else 1
-        print(f"self-test: {len(checks) - failures}/{len(checks)} checks passed", flush=True)
+        summary = f"self-test: {len(checks) - failures}/{len(checks)} checks passed"
+        print(summary, flush=True)
+        lines.append(summary)
+        if failures:
+            for name, path in (
+                ("upstream", self.workdir / "logs" / f"{self.service}.log"),
+                ("gate", self.workdir / "logs" / "gate.log"),
+            ):
+                tail_text = tail(path, 12)
+                if tail_text:
+                    lines.append(f"--- {name} log tail ---")
+                    lines.append(tail_text)
+        self.report("\n".join(lines))
         return 1 if failures else 0
 
     def _probe(self, probe: tuple[str, str], base: str, token: str) -> tuple[int, bytes]:
