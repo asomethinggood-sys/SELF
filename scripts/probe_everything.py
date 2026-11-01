@@ -693,13 +693,22 @@ SENTENCES: tuple[tuple[str, str | None], ...] = (
     ("yura remind me to stretch in 20 minutes and then turn the clock off", "plan do"),
     ("yura ignore sara for 2 hours then remind me to sleep", "plan do"),
     ("yura what do you remember about me", "recall"),
-    ("yura remember that i like tea", "note · i like tea"),
+    ("remember that i like tea", "note · i like tea"),
     ("yura unsend your last message", "unsend last"),
     ("yura mute this chat for an hour", "mute here 1h"),
     ("yura archive this chat", "archive here"),
     ("yura what can you do", "abilities"),
     ("یورا ساعت رو خاموش کن", "clock off"),
     ("یورا یادم بنداز ده دقیقه دیگه چای دم کنم", "remind 10m"),
+    # The ones the audit found doing nothing at all: an order said out loud in a
+    # chat with somebody else, with no name in it. Each must leave a trace.
+    ("clear the history here", "clearhistory"),
+    ("how many messages have i sent", "outbox"),
+    ("who am i", "chatinfo"),
+    ("make sara an admin", "promote · sara"),
+    ("ban this person", "ban"),
+    ("what did sara say yesterday", "read · sara"),
+    ("every friday at 18:00 remind me to stretch", "remind weekly"),
 )
 
 
@@ -716,7 +725,7 @@ async def probe_sentences(_runtime: Any = None) -> list[dict[str, Any]]:
     Each sentence gets a fresh runtime: a conversation probe run in one runtime
     measures the anti-flood timers, not the sentence.
     """
-    from conftest import FakeMessage, incoming
+    from conftest import FakeEvent, FakeMessage
 
     results: list[dict[str, Any]] = []
     for index, (sentence, must) in enumerate(SENTENCES):
@@ -724,18 +733,22 @@ async def probe_sentences(_runtime: Any = None) -> list[dict[str, Any]]:
         try:
             before = len(runtime.client.sent)
             crash = None
+            # Through the router, not straight into the engine: these are the
+            # owner's *own* messages (that is how they arrive — the account is
+            # his), and the bare-name conversion, the command path and the
+            # persona gates only exist on the router's road.
             try:
-                await incoming(
-                    runtime,
-                    FakeMessage(
-                        id=700 + index,
-                        chat_id=100,
-                        sender_id=Harness.OWNER,
-                        text=sentence,
-                        out=False,
-                        is_private=True,
-                    ),
+                message = FakeMessage(
+                    id=700 + index,
+                    chat_id=100,
+                    sender_id=Harness.OWNER,
+                    text=sentence,
+                    out=True,
+                    is_private=True,
+                    is_group=False,
                 )
+                await runtime.handlers.on_outgoing(FakeEvent(message, out=True))
+                await runtime.handlers.on_incoming(FakeEvent(message, out=False))
             except Exception:  # noqa: BLE001 - the crash is the result
                 crash = traceback.format_exc(limit=3)
             sent = runtime.client.sent[before:]
@@ -772,6 +785,13 @@ async def probe_sentences(_runtime: Any = None) -> list[dict[str, Any]]:
             elif must.startswith("remind"):
                 if not reminders:
                     findings.append("no_reminder")
+                elif must == "remind weekly":
+                    # A weekday on the sentence must survive as a weekday on the
+                    # row: a one-shot reminder on the right day is still wrong,
+                    # and so is a weekly one that drifts off Friday.
+                    repeat = str(dict(reminders[0]).get("recurrence") or "")
+                    if not repeat.startswith("weekly:"):
+                        findings.append(f"recurrence:{repeat or 'none'}")
             elif not any(must in item for item in did):
                 findings.append("not_executed")
             entry["trace"] = trace[:200]

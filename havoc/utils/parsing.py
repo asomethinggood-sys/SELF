@@ -134,6 +134,9 @@ VALUE_FLAGS: frozenset[str] = frozenset(
         # --run "clock on"``. As a boolean flag the whole instruction became the
         # string "true", so every morning she ran a command called "true".
         "run", "cmd", "command", "line",
+        # "what did sara say yesterday": the day is a value. As a boolean flag the
+        # word "yesterday" stayed in the arguments and the filter became "true".
+        "since", "until_date",
     }
 )
 

@@ -2379,6 +2379,16 @@ def _reach(text: str, *, allow_plan: bool = True) -> Intent | None:
     return None
 
 
+#: "remind me to stretch" / "یادم بنداز که کشش بدم" — the reminder words in front
+#: of the thing to be reminded about, with no time of its own.
+_RECURRING_REMIND = re.compile(
+    r"^(?:remind\s+me\s+(?:to\s+|about\s+|that\s+)?"
+    r"|remind\s+(?:me\s+)?:?\s*"
+    r"|یادم\s+بنداز(?:ی)?\s*(?:که\s*)?|یادآوری\s+کن\s*(?:که\s*)?)"
+    r"(?P<what>.{1,200})$",
+    re.I,
+)
+
 #: "every day at 9 …", "every friday at 18:00 …", "هر روز ساعت ۹ …".
 _RECURRING = re.compile(
     r"^(?:please\s+|لطفا\s+)?"
@@ -2455,6 +2465,25 @@ def _recurring(folded: str) -> Intent | None:
         when_words = f"every day at {stamp}"
     else:
         when_words = f"every {_WEEKDAY_FULL.get(recurrence.split(':')[-1], 'week')} at {stamp}"
+    # "every friday at 18:00 remind me to stretch" is a reminder with a weekday on
+    # it, and it used to die twice: the inner sentence has no time of its own, so
+    # `detect` returned nothing, and the fall-through made a *one-shot* reminder
+    # whose body was the words "remind me to stretch" — a reminder to remember.
+    reminder = _RECURRING_REMIND.match(body)
+    if reminder is not None:
+        what = reminder.group("what").strip(" .,!?؛،")
+        if what:
+            repeat = "daily" if recurrence == "daily" else recurrence.split(":", 1)[-1]
+            # The weekday goes into the *time*, not only into the repeat: a first
+            # fire tomorrow followed by "every friday" is a reminder that drifts a
+            # day further from Friday every week.
+            when = f"{day} {stamp}" if day else stamp
+            return Intent(
+                lines=(f"remind {when} {what} --repeat {repeat}",),
+                label="remind",
+                detail=f"{when_words} · {what[:40]}",
+            )
+
     inner = detect(body, allow_plan=False)
     if inner is not None and len(inner.lines) == 1 and not inner.lines[0].startswith("plan"):
         line = inner.lines[0]
@@ -2828,6 +2857,165 @@ def _sticker(text: str) -> Intent | None:
     return None
 
 
+
+#: "make sara an admin", "give @sara admin rights": the person is the variable.
+_PROMOTE_ORDER = re.compile(
+    r"^(?:please\s+)?(?:make|set|give|appoint|promote)\s+(?P<who>.{2,60}?)\s+"
+    r"(?:an?\s+)?(?:admin|administrator|moderator|mod)\b"
+    r"(?:\s+(?:rights|right|access|powers))?\s*[.!?]*$"
+    r"|^(?:please\s+)?(?:give|grant)\s+(?P<who2>.{2,60}?)\s+admin"
+    r"(?:\s+(?:rights|right|access|powers))?\s*[.!?]*$",
+    re.I,
+)
+_BAN_ORDER = re.compile(
+    r"^(?:please\s+)?(?P<verb>ban|kick|remove|throw\s+out|get\s+rid\s+of)\s+"
+    r"(?:this\s+|that\s+|the\s+)?(?:person|user|guy|one|account|them|him|her|everyone)"
+    r"\s*[.!]*$",
+    re.I,
+)
+_HISTORY_ORDER = re.compile(
+    r"^(?:please\s+)?(?:delete|clear|wipe|purge|erase|nuke)\s+"
+    r"(?:(?:this|the)\s+(?:(?:chat|group|conversation)'?s?\s+)?)?"
+    r"(?:history|messages|everything)"
+    r"(?:\s+(?:here|in\s+this\s+chat|in\s+this\s+group|from\s+this\s+chat))?"
+    r"\s*[.!]*$",
+    re.I,
+)
+_BROADCAST_ORDER = re.compile(
+    r"^(?:please\s+)?(?:broadcast|announce|blaster|mass[-\s]?send)\s+(?P<body>.{1,300})$",
+    re.I,
+)
+_TELL_EVERYONE = re.compile(
+    r"^(?:please\s+)?(?:tell|say\s+to|send\s+to|message)\s+everyone\s+(?P<body>.{1,300})$",
+    re.I,
+)
+_SENT_COUNT = re.compile(
+    r"^(?:so\s+)?how\s+many\s+(?:messages|msgs|things|texts)\s+"
+    r"(?:have\s+i\s+sent|did\s+i\s+send|i\s+sent|has\s+(?:she|the\s+bot|it)\s+sent)"
+    r"(?:\s+(?:here|in\s+this\s+chat|so\s+far|today))?\s*[?]*$"
+    r"|^(?:چند(?:\s*تا)?\s*پیام\s*(?:فرستادم|دادم|فرستاده\s*ام))\s*[؟?]*$",
+    re.I,
+)
+
+#: The rooms that "everyone" means. A category word is read by ``.broadcast``
+#: itself, so the sentence passes through as "who" and the command does the rest.
+_EVERYONE_WORDS = ("everyone", "everybody", "all my chats", "every chat", "همه")
+
+#: A pronoun is not a name: "what did they say yesterday" is about a conversation
+#: he can see, and guessing who "they" are would search the wrong person.
+_PRONOUN_TARGETS = frozenset(
+    {"he", "she", "they", "them", "him", "her", "you", "i", "me", "we", "us", "it", "everyone"}
+)
+
+
+def _handed(folded: str, original: str = "") -> Intent | None:
+    """Orders about the account and the room: broadcast, purge, promote, ban.
+
+    These are the ones whose failure looks the same as her being broken: he says
+    "make sara an admin", she answers warmly, and nothing happens. Every rule is a
+    whole sentence, and every one of them lands on a command that already knows
+    how to be careful — ``.broadcast`` paces and confirms, ``.promote`` and
+    ``.ban`` ask "run?" first, so routing a sentence here does not make anything
+    happen without his yes.
+    """
+    if not folded:
+        return None
+
+    order = _BROADCAST_ORDER.match(folded) or _TELL_EVERYONE.match(folded)
+    if order is not None:
+        body = order.group("body").strip(" .,!?:;")
+        # "broadcast hi to everyone": the audience is the tail, not the message.
+        # "to everyone", "to all of them" and a bare "everyone" are the same tail.
+        body = re.sub(
+            r"\s+(?:to\s+)?(?:everyone|everybody|all(?:\s+of\s+them)?|همه)"
+            r"(?:\s+(?:in\s+my\s+chats|in\s+all\s+chats))?\s*[.!]*$",
+            "",
+            body,
+            flags=re.I,
+        ).strip(" .,!?:;")
+        if body:
+            # "broadcast groups good morning" already says who: only a message
+            # with no audience in it needs "everyone" spelling out.
+            if re.match(r"^(?:groups?|dms?|privates?|channels?|chats)\b", body, re.I):
+                line = f"broadcast {body}"
+            else:
+                line = f"broadcast chats {body}"
+            return Intent(
+                lines=(line,),
+                label="broadcast",
+                detail=f"broadcast · {body[:40]}",
+            )
+
+    if _HISTORY_ORDER.match(folded):
+        return Intent(lines=("clearhistory",), label="clearhistory", detail="clearhistory")
+
+    ban = _BAN_ORDER.match(folded)
+    if ban is not None:
+        verb = ban.group("verb").lower()
+        line = "kick" if verb.startswith("kick") else "ban"
+        return Intent(lines=(line,), label="admin", detail=line)
+
+    promote = _PROMOTE_ORDER.match(folded)
+    if promote is not None:
+        who = (promote.group("who") or promote.group("who2") or "").strip(" .,!?:;")
+        # "an admin" is every right an admin can have; the command asks "run?"
+        # before it touches Telegram, so this cannot promote anyone by accident.
+        if who:
+            return Intent(
+                lines=(f"promote {who} --manage --delete --pin --invite --ban",),
+                label="admin",
+                detail=f"promote · {who}",
+            )
+
+    if _SENT_COUNT.match(folded):
+        return Intent(lines=("outbox",), label="outbox", detail="outbox")
+
+    # "what did sara say yesterday" — a person and a day, no keyword. This is the
+    # shape the reader already had for "what did Sara say" (it opens `.read`), so
+    # the day is the only new part.
+    # The name keeps the case he typed: "read Sara" is a person, "read sara" is a
+    # name the resolver has to guess at, and the command he sees should look like
+    # the sentence he wrote.
+    spoken = re.sub(r"\s+", " ", _lead(original or folded)).strip()
+    said = re.match(
+        r"^(?:so\s+|and\s+)?(?:what\s+did|what\s+has|what\s+does)\s+(?P<who>.{1,40}?)\s+"
+        r"(?:say|said|write|wrote|text|sent)\b(?P<rest>.*)$",
+        spoken,
+        re.I,
+    )
+    if said is not None:
+        who = said.group("who").strip(" .,!?:;")
+        rest = (said.group("rest") or "").strip()
+        # "what did the doctor say about my back" is a question about a
+        # conversation he had, not an order to open a chat: a tail that is more
+        # than a day word means he is talking, not asking her to look.
+        if rest and not re.fullmatch(
+            r"(?:to\s+(?:me|you)\s*)?(?:yesterday|today|last\s+night)?\s*[.!?]*", rest, re.I
+        ):
+            said = None
+    if said is not None:
+        who = said.group("who").strip(" .,!?:;")
+        rest = (said.group("rest") or "").strip()
+        if who and who.lower() not in _PRONOUN_TARGETS and " in my " not in f" {who} ":
+            day = re.search(r"\b(yesterday|today|last\s+night)\b", rest, re.I)
+            since = ""
+            if day is not None:
+                since = "today" if day.group(1).lower() == "today" else "yesterday"
+            line = f"read {who}" + (f" --since {since}" if since else "")
+            return Intent(lines=(line,), label="lookup", detail=f"read · {who}")
+
+    if re.match(
+        r"^(?:who\s+am\s+i|what(?:'s|\s+is)\s+my\s+(?:id|info|information)"
+        r"|my\s+(?:id|chat\s*info)|who\s+is\s+this\s+account|من\s+کی\s*ام)"
+        r"\s*[.!?؟]*$",
+        folded,
+        re.I,
+    ):
+        return Intent(lines=("chatinfo",), label="lookup", detail="chatinfo")
+
+    return None
+
+
 def _misc(text: str) -> Intent | None:
     """The read-only shapes: a question opener, or an order to show something.
 
@@ -2978,6 +3166,12 @@ def _detect(
     housekeeping = _housekeeping(text)
     if housekeeping is not None:
         return housekeeping
+
+    # Orders about the room and the account: "make sara an admin" is a command
+    # said out loud, and every one of them used to fall through to conversation.
+    handed = _handed(_lead(folded), original=text)
+    if handed is not None:
+        return handed
 
     surface = _surface(text)
     if surface is not None:

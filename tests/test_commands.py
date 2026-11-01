@@ -768,3 +768,62 @@ async def test_template_duplicate_is_explained(runtime) -> None:
     templates = await runtime.store.list_templates()
     greet = next(row for row in templates if row["name"] == "greet")
     assert greet["body"] == "Hi {name}"
+
+
+# ---------------------------------------------------------------------------
+# "how many messages have i sent" — the number is the answer
+# ---------------------------------------------------------------------------
+async def test_outbox_answers_the_count_and_not_only_the_list(runtime) -> None:
+    from datetime import UTC, datetime
+
+    from conftest import invoke
+
+    mine = FakeMessage(id=1, chat_id=100, sender_id=42, text="one", out=True)
+    mine.date = datetime.now(UTC)
+    runtime.client.history[:] = [mine]
+    await runtime.store.add_outbox(chat_id=100, message_id=1, kind="text", text="one", status="sent")
+    sent = await invoke(runtime, ".outbox")
+    text = "\n".join(message.text for message in sent)
+    assert "outbox" in text.lower()
+    # The counts line carries all four numbers he could mean by the question.
+    assert "1" in text
+    assert "today" in text.lower()
+
+
+async def test_outbox_still_answers_when_nothing_was_ever_sent(runtime) -> None:
+    from conftest import invoke
+
+    sent = await invoke(runtime, ".outbox")
+    text = "\n".join(message.text for message in sent)
+    assert "outbox" in text.lower()
+
+
+# ---------------------------------------------------------------------------
+# A read with a floor: "what did sara say yesterday"
+# ---------------------------------------------------------------------------
+async def test_read_can_be_limited_to_a_day(runtime) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from conftest import invoke
+
+    now = datetime.now(UTC)
+    fresh = FakeMessage(id=11, chat_id=100, sender_id=42, text="fresh line", out=False)
+    fresh.date = now - timedelta(minutes=5)
+    old = FakeMessage(id=12, chat_id=100, sender_id=42, text="ancient line", out=False)
+    old.date = now - timedelta(days=3)
+    runtime.client.history[:] = [fresh, old]
+    sent = await invoke(runtime, ".read 42 --since yesterday")
+    text = "\n".join(message.text for message in sent)
+    # The old line is three days old: the day he asked about holds exactly one.
+    assert "last 1" in text.lower(), text
+    assert "last 2" not in text.lower(), text
+
+
+async def test_search_can_be_asked_for_one_person(runtime) -> None:
+    from conftest import invoke
+
+    message = FakeMessage(id=21, chat_id=100, sender_id=42, text="a line from her", out=False)
+    runtime.client.history[:] = [message]
+    sent = await invoke(runtime, ".search --from 42")
+    text = "\n".join(item.text for item in sent)
+    assert "from" in text.lower() or "no results" in text.lower()

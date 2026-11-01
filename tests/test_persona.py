@@ -974,3 +974,57 @@ async def test_the_stale_gate_covers_groups_and_dms_too(runtime) -> None:
     await runtime.persona_replies.on_group_message(event)
     assert runtime.client.sent == []
     assert runtime.persona_replies.last_skip == "stale"
+
+
+# ---------------------------------------------------------------------------
+# An order is aimed at her even without her name in it
+# ---------------------------------------------------------------------------
+def _group_event(runtime, text: str, *, sender_id: int = 42, outgoing: bool = True):
+    from havoc.event_engine import normalize_message
+
+    runtime.permissions.set_self_id(42)
+    message = FakeMessage(
+        id=910,
+        chat_id=-1001234,
+        sender_id=sender_id,
+        text=text,
+        out=outgoing,
+        is_private=False,
+        is_group=True,
+    )
+    return normalize_message(message, self_id=42, prefix=".", event_type=None)
+
+
+async def test_an_order_without_her_name_still_runs_in_a_chat_with_someone_else(
+    runtime,
+) -> None:
+    """The sentence he says in a chat with Sara is still about the chat.
+
+    "Make sara an admin" carries no name of hers and is not a reply to her, so
+    the addressing gate used to drop it — the exact shape of "she just talks".
+    """
+    await _enable(runtime)
+    runtime.client.sent.clear()
+    await runtime.persona_replies.on_group_message(_group_event(runtime, "make sara an admin"))
+    assert runtime.client.sent, "an order from his own account must not be swallowed"
+    assert runtime.persona_replies.last_skip != "not_addressed"
+
+
+async def test_ordinary_talk_with_someone_else_is_still_ignored(runtime) -> None:
+    # The gate is not gone — only orders pass it without her name.
+    await _enable(runtime)
+    runtime.client.sent.clear()
+    await runtime.persona_replies.on_group_message(_group_event(runtime, "see you at nine"))
+    assert runtime.client.sent == []
+    assert runtime.persona_replies.last_skip == "not_addressed"
+
+
+async def test_a_strangers_order_is_never_executed(runtime) -> None:
+    """A sentence that is an order from him is only a sentence from anybody else."""
+    await _enable(runtime)
+    runtime.client.sent.clear()
+    await runtime.persona_replies.on_group_message(
+        _group_event(runtime, "make sara an admin", sender_id=6714832104, outgoing=False)
+    )
+    assert runtime.client.sent == []
+    assert runtime.persona_replies.last_skip == "not_addressed"

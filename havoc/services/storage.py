@@ -337,6 +337,34 @@ class Store:
         )
         return int(row["n"]) if row else 0
 
+    async def count_sent(
+        self,
+        *,
+        chat_id: int | None = None,
+        since: str | None = None,
+        status: str | None = "sent",
+    ) -> int:
+        """How many messages this account has actually sent.
+
+        One query, three questions: all time, since a timestamp, in one chat.
+        The outbox is the record of "did it send" — a counter in memory would be
+        reset by every deploy, and the number he asks for is not about this run.
+        """
+        clauses: list[str] = []
+        values: list[Any] = []
+        if status:
+            clauses.append("status = ?")
+            values.append(status)
+        if since:
+            clauses.append("sent_at >= ?")
+            values.append(since)
+        if chat_id is not None:
+            clauses.append("chat_id = ?")
+            values.append(int(chat_id))
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        row = await self.db.fetch_one(f"SELECT COUNT(*) AS n FROM outbox{where}", tuple(values))
+        return int(row["n"]) if row else 0
+
     # -- plans ---------------------------------------------------------
     async def add_plan(
         self,

@@ -1276,6 +1276,29 @@ class PersonaReplies:
             return False
         return persona.is_own_line(text) or self.runtime.yura_chat.was_sent(chat_id, text)
 
+    def _instruction(self, text: str) -> bool:
+        """True when the sentence is a command said in words, not conversation.
+
+        "Make sara an admin" typed into a chat with somebody else is an order, and
+        the addressing gate was reading it as small talk with a stranger: no name,
+        no reply to her, so nothing happened at all. Only a sentence the intent
+        reader recognises counts, which is the same list of whole-sentence rules
+        the floor runs — "sara is such an admin type" is still conversation.
+        """
+        if not str(text or "").strip():
+            return False
+        try:
+            from ..services import intent as intent_module
+
+            found = intent_module.detect(
+                identity.strip_address(text) or text,
+                features=frozenset(self.runtime.feature_manager.names()),
+                commands=frozenset(self.runtime.registry.reserved_names()),
+            )
+        except Exception:  # noqa: BLE001 - an unreadable sentence is not an order
+            return False
+        return found is not None
+
     def _named(self, text: str) -> bool:
         """True when the message says her name, in any spelling or alphabet."""
         # One list, in identity: "yura", "یورا", and the displayed "Y.U.R.A 1.9"
@@ -1381,6 +1404,12 @@ class PersonaReplies:
         # answers about it.
         if learned or taught:
             addressed = True
+        if not addressed and event.is_outgoing and self._instruction(event.text):
+            # The same rule as his own chat: an order from his account is aimed at
+            # her. A stranger's identical sentence is not — ``_run_intent`` refuses
+            # every sender who is not the owner, and this gate never lets them this
+            # far.
+            addressed = True
         if not addressed:
             self._skip("not_addressed", event)
             return
@@ -1475,6 +1504,11 @@ class PersonaReplies:
         learned = await self._learn_from_owner(event, quote)
         taught = await self._learn_correction(event, quote)
         addressed = quote.hers or self._named(event.text) or learned or taught
+        if not addressed and event.is_outgoing and self._instruction(event.text):
+            # An order is aimed at her even without her name in it: this is his
+            # own account typing, and "make sara an admin" in a chat with sara is
+            # still an order about the room.
+            addressed = True
         if not addressed:
             self._skip("not_addressed", event)
             return

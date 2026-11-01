@@ -20,7 +20,7 @@ from ..utils.formatting import bold, code, escape, key_value_block, pre
 from ..utils.parsing import paginate
 from ..utils.security import ensure_within, safe_filename
 from ..utils.text import truncate
-from ..utils.time import iso, utc_now
+from ..utils.time import TimeParseError, iso, parse_when, utc_now
 from .helpers import (
     chat_link,
     display_name,
@@ -51,7 +51,13 @@ async def cmd_search(ctx: CommandContext) -> None:
     # for scripts. Either way the words before ``in`` are the query.
     query, _, inline_chat = raw_query.partition(" in ")
     query = query.strip()
-    if not query:
+    # "what did sara say yesterday" has no words to search for: the *person* and
+    # the *day* are the query. Both are filters, and either one alone is enough
+    # to be worth running — refusing it because there is no keyword turned a
+    # perfectly clear question into a syntax error.
+    from_arg = (ctx.flag("from") or "").strip()
+    since_arg = (ctx.flag("since") or "").strip()
+    if not query and not from_arg:
         raise CommandError("errors.missing_argument", usage=ctx.usage_text())
     limit = min(50, max(1, int(ctx.flag("limit") or 10)))
     chat_arg = ctx.flag("chat") or inline_chat.strip()
@@ -61,15 +67,43 @@ async def cmd_search(ctx: CommandContext) -> None:
         if error or chat_id is None:
             raise CommandError(error or "errors.entity_not_found")
         entity = entity or chat_id
+
+    sender: Any = None
+    if from_arg:
+        sender_id, sender_entity, error = await resolve_target(ctx, from_arg)
+        if error or sender_id is None:
+            raise CommandError(error or "errors.entity_not_found")
+        sender = getattr(sender_entity, "id", None) or sender_id
+    since: datetime | None = None
+    if since_arg:
+        try:
+            since = parse_when(since_arg, tz_for(ctx))
+        except TimeParseError as exc:
+            raise CommandError(
+                "errors.invalid_time", detail=escape(since_arg), example="yesterday | 2 hours ago"
+            ) from exc
+
     try:
-        messages = await runtime.client.get_messages(entity, search=query, limit=limit)
+        if sender is None and since is None:
+            messages = await runtime.client.get_messages(entity, search=query, limit=limit)
+        else:
+            # Filtered reads need a window to look at, not "the ten most recent":
+            # the person's last ten messages may all be older than yesterday.
+            fetched = await _filtered_messages(
+                runtime.client, entity, query=query, sender=sender, since=since, limit=max(limit * 6, 60)
+            )
+            messages = list(fetched)[:limit]
     except Exception as exc:  # noqa: BLE001
         raise CommandError("errors.search_failed", detail=escape(str(exc)[:150])) from exc
 
     if not messages:
-        await ctx.reply(ctx.t("search.empty", query=escape(query)))
+        await ctx.reply(ctx.t("search.empty", query=escape(query or from_arg or since_arg)))
         return
-    lines = [bold(ctx.t("search.header", count=len(messages), query=escape(query)))]
+    if query:
+        header = ctx.t("search.header", count=len(messages), query=escape(query))
+    else:
+        header = ctx.t("search.header_from", count=len(messages), who=escape(from_arg or "—"))
+    lines = [bold(header)]
     for message in messages:
         text = reply_text(message)
         link = chat_link(getattr(message, "chat", None))
@@ -78,6 +112,41 @@ async def cmd_search(ctx: CommandContext) -> None:
         prefix = "⚯ " if link else ""
         lines.append(f"{prefix}{code(stamp)} — {snippet(text, 100) or '[media]'}")
     await ctx.reply("\n".join(lines))
+
+
+async def _filtered_messages(
+    client: Any,
+    entity: Any,
+    *,
+    query: str,
+    sender: Any,
+    since: datetime | None,
+    limit: int,
+) -> list[Any]:
+    """Messages that match a keyword, a person and a day — whichever were asked for.
+
+    ``from_user`` and ``offset_date`` are Telethon arguments, and the chat is the
+    one being read: a filtered search never wanders into another conversation.
+    """
+    kwargs: dict[str, Any] = {"limit": limit}
+    if query:
+        kwargs["search"] = query
+    if sender is not None:
+        kwargs["from_user"] = sender
+    rows = await client.get_messages(entity, **kwargs)
+    out: list[Any] = []
+    for message in rows or []:
+        if sender is not None:
+            who = getattr(message, "sender_id", None) or getattr(message, "from_id", None)
+            who = getattr(who, "user_id", who)
+            if who is not None and int(who) != int(sender):
+                continue
+        if since is not None:
+            when = getattr(message, "date", None)
+            if when is not None and when < since:
+                continue
+        out.append(message)
+    return out
 
 
 async def cmd_chats(ctx: CommandContext) -> None:

@@ -34,6 +34,7 @@ from ..services import reach as reach_module
 from ..utils.formatting import bold, code, escape, strip_html
 from ..utils.security import redact_text
 from ..utils.text import truncate
+from ..utils.time import iso, utc_now
 
 #: A broadcast is not a conversation. Past this many targets it needs `--yes`.
 BROADCAST_CONFIRM_OVER = 25
@@ -400,16 +401,31 @@ async def _category(ctx: CommandContext, word: str) -> list[Any]:
 # .outbox / .unsend / .emoji
 # ---------------------------------------------------------------------------
 async def cmd_outbox(ctx: CommandContext) -> None:
+    """The last messages this account sent — and how many there have been.
+
+    "How many messages have i sent" is the same command asked as a number, so the
+    number is always here: all time, today, and in this chat. Counting the whole
+    table is one indexed query, and a count that only appears when it happens to
+    exceed the page is a count that is missing exactly when it is the answer.
+    """
     try:
         wanted = int(ctx.arg(0) or 10)
     except ValueError:
         wanted = 10
-    rows = await ctx.runtime.store.outbox(limit=max(1, min(wanted, 30)))
-    total = await ctx.runtime.store.count_outbox()
+    store = ctx.runtime.store
+    rows = await store.outbox(limit=max(1, min(wanted, 30)))
+    total = await store.count_sent(status=None)
+    sent = await store.count_sent()
+    midnight = utc_now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = await store.count_sent(since=iso(midnight))
+    here = await store.count_sent(chat_id=ctx.chat_id)
+    counts = ctx.t(
+        "reach.outbox_counts", total=total, sent=sent, today=today, here=here
+    )
     if not rows:
-        await ctx.reply(ctx.t("reach.outbox_empty"))
+        await ctx.reply(ui.card(ctx.t("reach.outbox_title"), [counts, ctx.t("reach.outbox_empty")], icon="⟡"))
         return
-    lines = [bold(ctx.t("reach.outbox_header", count=len(rows)))]
+    lines = [bold(ctx.t("reach.outbox_header", count=len(rows))), counts]
     if total > len(rows):
         lines.append(ctx.t("reach.outbox_total", count=len(rows), total=total))
     for row in rows:

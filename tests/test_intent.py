@@ -602,3 +602,72 @@ def test_a_recurring_sentence_is_a_schedule_that_runs_it(said: str, expected: st
 )
 def test_a_sentence_that_is_not_a_daily_order_stays_a_sentence(said: str) -> None:
     assert detect(said) is None
+
+
+# ---------------------------------------------------------------------------
+# The orders that used to fall through to a warm answer
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "text, expected",
+    (
+        ("broadcast hi to everyone", ("broadcast chats hi",)),
+        ("tell everyone dinner is ready", ("broadcast chats dinner is ready",)),
+        ("broadcast groups good morning", ("broadcast groups good morning",)),
+        ("clear the history here", ("clearhistory",)),
+        ("delete this chat's history", ("clearhistory",)),
+        ("how many messages have i sent", ("outbox",)),
+        ("who am i", ("chatinfo",)),
+        ("ban this person", ("ban",)),
+        ("kick this person", ("kick",)),
+        (
+            "make sara an admin",
+            ("promote sara --manage --delete --pin --invite --ban",),
+        ),
+        ("what did sara say yesterday", ("read sara --since yesterday",)),
+        ("what did Sara say", ("read Sara",)),
+    ),
+)
+def test_an_order_about_the_room_becomes_a_command(text: str, expected: tuple[str, ...]) -> None:
+    assert _lines(text) == expected
+
+
+def test_an_order_that_names_a_person_keeps_the_case_he_typed() -> None:
+    # The command he sees should look like the sentence he wrote.
+    assert _lines("what did Sara say about her trip") == ()
+
+
+@pytest.mark.parametrize(
+    "text",
+    (
+        "what did the doctor say about my back",
+        "what did they say yesterday",
+        "sara is such an admin type",
+        "i banter with him all day",
+        "who am i kidding",
+        "the history of that chat is wild",
+    ),
+)
+def test_a_sentence_that_is_only_shaped_like_an_order_stays_conversation(text: str) -> None:
+    assert _lines(text) == ()
+
+
+# ---------------------------------------------------------------------------
+# A weekday on a reminder is a weekday on the row
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "text, expected",
+    (
+        (
+            "every friday at 18:00 remind me to stretch",
+            ("remind friday 18:00 stretch --repeat fri",),
+        ),
+        (
+            "every day at 9 remind me to take pills",
+            ("remind 09:00 take pills --repeat daily",),
+        ),
+    ),
+)
+def test_a_recurring_reminder_is_a_reminder_that_repeats(
+    text: str, expected: tuple[str, ...]
+) -> None:
+    assert _lines(text) == expected

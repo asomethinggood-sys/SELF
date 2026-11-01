@@ -198,11 +198,35 @@ async def _fetch(ctx: CommandContext, chat_id: Any, limit: int) -> list[Any]:
     getter = getattr(client, "get_messages", None)
     if getter is None:
         return []
+    # "what did sara say yesterday" is a read with a floor on it. Fetch a wider
+    # window than the answer needs — her last ten messages may all be older than
+    # the day he asked about — and cut it down by date afterwards.
+    since = _since(ctx)
+    wanted = limit * 6 if since is not None else limit
     try:
-        rows = await getter(chat_id, limit=limit)
+        rows = await getter(chat_id, limit=max(1, min(wanted, 300)))
     except Exception as exc:  # noqa: BLE001
         raise CommandError("inbox.read_failed", detail=escape(str(exc)[:150])) from exc
-    return list(rows or [])
+    rows = list(rows or [])
+    if since is not None:
+        rows = [row for row in rows if (getattr(row, "date", None) or since) >= since]
+    return rows[:limit]
+
+
+def _since(ctx: CommandContext) -> datetime | None:
+    """The ``--since yesterday`` floor, or ``None`` when the read is unfiltered."""
+    raw = (ctx.flag("since") or "").strip()
+    if not raw:
+        return None
+    from ..utils.time import TimeParseError, parse_when
+    from .helpers import tz_for
+
+    try:
+        return parse_when(raw, tz_for(ctx))
+    except TimeParseError as exc:
+        raise CommandError(
+            "errors.invalid_time", detail=escape(raw), example="yesterday | today"
+        ) from exc
 
 
 def _speaker(message: Any, ctx: CommandContext) -> str:
