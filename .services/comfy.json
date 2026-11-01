@@ -1,0 +1,14 @@
+{
+  "service": "comfy",
+  "url": "https://cash-tampa-lows-created.trycloudflare.com",
+  "run_id": "41359070533",
+  "started_at": "2026-11-01T22:50:15Z",
+  "expires_at": "2026-11-02T04:50:15Z",
+  "gate_port": 9002,
+  "upstream_port": 8188,
+  "model": "sd-turbo.safetensors",
+  "version": "comfyui/cpu/sd-turbo.safetensors",
+  "published_at": "2026-11-01T22:55:42Z",
+  "gated": true,
+  "public": false
+}
