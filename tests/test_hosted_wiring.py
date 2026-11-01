@@ -323,6 +323,31 @@ def test_the_host_never_signs_the_picture_with_an_empty_secret() -> None:
     assert "secret=secret_for()" in text
 
 
+def test_the_host_leaves_a_progress_file(tmp_path: Path, monkeypatch) -> None:
+    """A run stuck in the middle has to look different from one that is serving."""
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    service_host = __import__("service_host")
+    monkeypatch.setattr(service_host, "SERVICES_DIR", tmp_path)
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+
+    host = service_host.Host("comfy", deadline=0)
+    host.run_id = "4242"
+    host.status("proving it through the gate with a real request")
+
+    text = (tmp_path / "status-comfy.txt").read_text()
+    assert "4242" in text and "proving it through the gate" in text
+
+
+def test_a_failed_publish_is_tried_again_while_serving() -> None:
+    """A push that lost the race must not leave the address only on the runner."""
+    root = Path(__file__).resolve().parents[1]
+    text = (root / "scripts" / "service_host.py").read_text()
+    assert "self.published_committed = self.publish(self.published_url)" in text
+    assert "if url and url == self.published_url and self.published_committed:" in text
+
+
 def test_the_service_workflows_always_publish() -> None:
     """No `if [ -z "${{ secrets.… }}" ]` guard may stand between a run and its tunnel."""
     root = Path(__file__).resolve().parents[1]

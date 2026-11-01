@@ -37,7 +37,11 @@ permissions:
   actions: write
 
 concurrency:
-  group: havoc-comfy
+  # `havoc-comfy-2`: the 21:53 run wedged before it published anything and holds
+  # `havoc-comfy` until its six hours are up. GitHub will not let this account
+  # cancel a run (403), so the group is renamed once rather than leaving pictures
+  # dead for an evening. Future runs queue here as before.
+  group: havoc-comfy-2
   cancel-in-progress: false
 
 jobs:

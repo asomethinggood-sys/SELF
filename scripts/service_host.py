@@ -531,6 +531,7 @@ class Host:
         self.tunnel: Tunnel | None = None
         self.published_url = ""
         self.restarts = 0
+        self.published_committed = False
         self.upstream_port = PORTS[service]
         self.gate_port = GATE_PORTS[service]
         self.model_name = (
@@ -636,9 +637,10 @@ class Host:
         log(f"public URL: {self.tunnel.url}")
         return self.tunnel.url
 
-    def publish(self, url: str) -> None:
-        if url == self.published_url:
-            return
+    def publish(self, url: str) -> bool:
+        """Write the address, and say whether it actually left this runner."""
+        if url and url == self.published_url and self.published_committed:
+            return True
         version = ""
         if self.service == "search":
             version = "searxng"
@@ -657,13 +659,13 @@ class Host:
         )
         path = write_local(self.service, body)
         log(f"wrote {path.relative_to(ROOT)} → {url or '(local only)'}")
-        if commit(f"services: {self.service} up on run {self.run_id} [skip ci]", str(path)):
-            self.published_url = url
-        else:
-            self.published_url = url
+        self.published_url = url
+        self.published_committed = commit(f"services: {self.service} up on run {self.run_id} [skip ci]", str(path))
+        return self.published_committed
 
     # -- the loop -----------------------------------------------------
     def run(self) -> int:
+        self.status(f"starting {self.service} on this runner")
         if not self.start_upstream():
             log("the upstream never came up; publishing nothing (a wrong URL is worse than none)")
             self.report(
@@ -680,6 +682,7 @@ class Host:
             )
             self.stop()
             return 1
+        self.status(f"{self.service} is up behind the gate")
         if not self.start_gate():
             log("the gate never came up; stopping the upstream rather than exposing it")
             self.report(
@@ -703,6 +706,7 @@ class Host:
         # less than a minute.
         if not self.no_self_test:
             log("self-test before going public (a real request through the gate)")
+            self.status("proving it through the gate with a real request")
             if self.self_test() != 0:
                 log("the self-test failed; not publishing an address for something that does not answer")
                 self.stop()
@@ -712,11 +716,13 @@ class Host:
             self.stop()
             return 0
         url = self.start_tunnel()
-        self.publish(url)
+        published = self.publish(url)
+        self.status(f"published {url or '(loopback only)'}" if published else f"the address did not reach the branch yet: {url or '(loopback only)'}")
         if url and self.published_url:
             self._confirm_public(url)
 
         checked_upstream = checked_public = time.monotonic()
+        checked_publish = time.monotonic()
         while time.monotonic() < self.deadline:
             time.sleep(20.0)
 
@@ -743,6 +749,15 @@ class Host:
                 url = self.start_tunnel()
                 self.publish(url)
 
+            if self.published_url and not self.published_committed and time.monotonic() - checked_publish > 120:
+                # The address is written locally but the push lost its race with
+                # a data snapshot. Without this the service serves for six hours
+                # and the repository says it never started.
+                checked_publish = time.monotonic()
+                self.published_committed = self.publish(self.published_url)
+                if self.published_committed:
+                    self.status(f"published {self.published_url} (second attempt)")
+
             if self.published_url and time.monotonic() - checked_public > 90:
                 checked_public = time.monotonic()
                 if not self.public_healthy():
@@ -760,6 +775,25 @@ class Host:
         return 0
 
     # -- evidence -----------------------------------------------------
+    def status(self, line: str) -> None:
+        """One timestamped line of progress, in the repository, while it happens.
+
+        `.services/last-<name>.txt` only appears when something fails or when a
+        run publishes, so a run that hangs in the middle — a picture that never
+        comes back, a push that keeps losing the race — looks identical to a run
+        that is serving happily. This file says where it is right now, in one
+        commit per step, which is cheap and answers "is it stuck?" without a job
+        log nobody can read.
+        """
+        path = SERVICES_DIR / f"status-{self.service}.txt"
+        SERVICES_DIR.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(UTC).strftime("%H:%M:%SZ")
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(f"{stamp} run {self.run_id} · {line}\n")
+        log(line)
+        if os.environ.get("GITHUB_ACTIONS"):
+            commit(f"services: {self.service} {line[:60]} [skip ci]", str(path))
+
     def report(self, text: str, *, append: bool = False) -> None:
         """Write what happened to a file in the repo, and commit it from CI.
 
