@@ -1,6 +1,6 @@
-comfy · run 41335566624 · 2026-11-01T18:20:23Z
+comfy · run 41336326484 · 2026-11-01T18:34:40Z
 ----------------------------------------------
-the gate never came up, so the upstream was stopped rather than exposed
+the comfy upstream never came up
 
---- gate log ---
-(no log)
+--- log tail ---
+=== /opt/hostedtoolcache/Python/3.11.17/x64/bin/python main.py --cpu --listen 127.0.0.1 --port 8188 --disable-auto-launch --dont-print-server === | Traceback (most recent call last): | File "/home/runner/work/SELF/SELF/.runtime/service-comfy/ComfyUI/main.py", line 27, in <module> | from app.database.db import dependencies_available, get_database_url, get_db_path, init_db, lock_holder_db_path, missing_dependencies | File "/home/runner/work/SELF/SELF/.runtime/service-comfy/ComfyUI/app/database/db.py", line 9, in <module> | from filelock import FileLock, Timeout | ModuleNotFoundError: No module n
