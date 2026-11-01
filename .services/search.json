@@ -8,7 +8,7 @@
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-01T21:29:23Z",
+  "published_at": "2026-11-01T21:31:29Z",
   "gated": true,
   "public": false
 }
