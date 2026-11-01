@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-01T17:07:03Z",
+  "at": "2026-11-01T18:11:44Z",
   "checks": [
     {
       "name": "local · something is configured",
@@ -14,12 +14,12 @@
     {
       "name": "local · answered: In one sentence: what are you?",
       "ok": true,
-      "detail": "0.6s · I am a large language model created by Alibaba Cloud."
+      "detail": "0.8s · I am an AI language model developed by Alibaba Cloud, capable of providing text "
     },
     {
       "name": "local · answered: Write a single line of poetry abou",
       "ok": true,
-      "detail": "1.0s · Rain falls like a silver thread, a gentle breeze,\nWhispers through the leaves, a"
+      "detail": "0.6s · Rain falls on the earth, a gentle whisper through the night, breaking the silenc"
     },
     {
       "name": "local · answered: Answer with one word: two plus two",
@@ -50,11 +50,11 @@
   "answers": [
     {
       "question": "In one sentence: what are you?",
-      "reply": "I am a large language model created by Alibaba Cloud."
+      "reply": "I am an AI language model developed by Alibaba Cloud, capable of providing text generation, translation, and summarization services."
     },
     {
       "question": "Write a single line of poetry about rain.",
-      "reply": "Rain falls like a silver thread, a gentle breeze,\nWhispers through the leaves, a gentle whisper.\nNature's melody, a joyful harmony,\nLies in the gentle rain, a sweet reminder."
+      "reply": "Rain falls on the earth, a gentle whisper through the night, breaking the silence with its silent, sweet melody."
     },
     {
       "question": "Answer with one word: two plus two?",
@@ -63,6 +63,8 @@
   ],
   "fetch": [
     "server · already unpacked and runs (/home/runner/work/SELF/SELF/.runtime/local-model/llama-b12032/llama-server)",
+    "weights · cached (/home/runner/work/SELF/SELF/.runtime/local-model/qwen2.5-0.5b-instruct-q4_k_m.gguf)",
+    "server · cached and runs (/home/runner/work/SELF/SELF/.runtime/local-model/llama-b12032/llama-server)",
     "weights · cached (/home/runner/work/SELF/SELF/.runtime/local-model/qwen2.5-0.5b-instruct-q4_k_m.gguf)"
   ],
   "exit": 0,
