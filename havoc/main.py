@@ -323,11 +323,20 @@ async def _snapshot_loop(runtime: Any, logger: Any) -> None:
 
 
 async def _watch_connection(runtime: Runtime, telegram: TelegramService, bridge: Any) -> None:
-    """Turn connection state changes into events (best effort)."""
-    was_connected = telegram.connected
+    """Turn connection state changes into events (best effort).
+
+    The state comes from the live socket (``TelegramService.refresh_connection``),
+    not from the cached flag: Telethon has no disconnect event to keep that flag
+    honest, and a stale flag here synthesised disconnect/reconnect events for a
+    connection that never moved.
+    """
+    refresh = getattr(telegram, "refresh_connection", None)
+    was_connected = refresh() if callable(refresh) else bool(getattr(telegram, "connected", False))
     while True:
         await asyncio.sleep(5)
-        now_connected = bool(getattr(telegram, "connected", False))
+        now_connected = (
+            refresh() if callable(refresh) else bool(getattr(telegram, "connected", False))
+        )
         if was_connected and not now_connected:
             await bridge.disconnected()
         elif not was_connected and now_connected:

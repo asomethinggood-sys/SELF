@@ -913,3 +913,64 @@ def test_a_short_message_is_not_shredded_out_of_her_answer() -> None:
 def test_her_own_quote_is_still_allowed() -> None:
     text = "> بیتی از حافظ\n\nخوش است"
     assert persona.strip_echo(text, "یورا این کیه") == text
+
+
+# ---------------------------------------------------------------------------
+# A catch-up replay is not a conversation
+# ---------------------------------------------------------------------------
+def _old_event(runtime, text: str, *, minutes: int):
+    """A message that was sent ``minutes`` ago, as a catch-up replay delivers it."""
+    from datetime import UTC, datetime, timedelta
+
+    runtime.permissions.set_self_id(42)
+    message = FakeMessage(
+        id=901,
+        chat_id=42,
+        sender_id=42,
+        text=text,
+        out=True,
+        date=datetime.now(UTC) - timedelta(minutes=minutes),
+    )
+    return normalize_message(message, self_id=42, prefix=".", event_type=EventType.OUTGOING)
+
+
+async def test_a_message_from_yesterday_is_not_answered_now(runtime) -> None:
+    """``catch_up`` hands back what arrived while she was offline.
+
+    That is what makes a restart answer the line he sent during it — and also
+    what would make her answer yesterday if the window were unbounded.
+    """
+    await _enable(runtime)
+    runtime.client.sent.clear()
+    await runtime.persona_replies.on_self_message(_old_event(runtime, "hey are you up", minutes=90))
+    assert runtime.client.sent == []
+    assert runtime.persona_replies.last_skip == "stale"
+
+
+async def test_a_message_from_a_minute_ago_is_still_answered(runtime) -> None:
+    await _enable(runtime)
+    runtime.client.sent.clear()
+    await runtime.persona_replies.on_self_message(_old_event(runtime, "hey are you up", minutes=1))
+    assert runtime.client.sent, "a restart must not swallow the line he sent during it"
+    assert runtime.persona_replies.last_skip != "stale"
+
+
+async def test_the_stale_gate_covers_groups_and_dms_too(runtime) -> None:
+    """A late replay in a room is the loudest version of the same mistake."""
+    await _enable(runtime)
+    runtime.client.sent.clear()
+    from datetime import UTC, datetime, timedelta
+
+    message = FakeMessage(
+        id=902,
+        chat_id=-1001234,
+        sender_id=42,
+        text="yura what do you think about all this",
+        is_private=False,
+        is_group=True,
+        date=datetime.now(UTC) - timedelta(hours=6),
+    )
+    event = normalize_message(message, self_id=42, prefix=".", event_type=EventType.MESSAGE)
+    await runtime.persona_replies.on_group_message(event)
+    assert runtime.client.sent == []
+    assert runtime.persona_replies.last_skip == "stale"

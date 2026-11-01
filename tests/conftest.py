@@ -103,7 +103,11 @@ class FakeMessage:
         self.media = media if media is None or isinstance(media, FakeMedia) else FakeMedia(document=media)
         self.document = getattr(self.media, "document", None) if self.media is not None else None
         self.sender = sender
-        self.date = date or datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+        # "now", not a frozen date from last year: a message that is ten months
+        # old is dropped by the freshness gate, so a fake with a stale clock
+        # would test the gate instead of the behaviour the test is about.
+        # Tests that need an old message pass `date=` explicitly.
+        self.date = date or datetime.now(UTC)
         self.edit_date = edit_date
         self.mentioned = mentioned
         self._reply = reply

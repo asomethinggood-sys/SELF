@@ -48,6 +48,14 @@ MIN_INTERVAL_SECONDS = 2.0
 #: Safety valve, not a conversation budget: a stuck loop cannot flood forever.
 MAX_PER_HOUR = 300
 
+#: How late is too late. The client asks Telegram for what arrived while it was
+#: not listening (``catch_up``), which is the difference between "she answers
+#: the message you sent during a restart" and silence — but a catch-up after a
+#: long outage hands back a pile of old messages, and answering one from an hour
+#: ago lands in a conversation that has moved on while answering a day of them
+#: is a flood at a room that forgot her. Ten minutes still reads as a reply.
+MAX_AGE_SECONDS = 600
+
 #: Commands that belong to the dispatcher — never answered by the persona path.
 _INTERNAL_WORDS = frozenset({"yura", "یورا", "stop", "بسه", "off"})
 
@@ -1109,6 +1117,23 @@ class PersonaReplies:
             return False
         return True
 
+    def _stale(self, event: NormalizedEvent) -> bool:
+        """True when this message is too old for a reply to make sense.
+
+        Only the persona path uses this: a command is still a command, and a
+        reminder that fires late still fires. Comparison is against the moment
+        the message was *sent*, so a clock that jumps cannot make a fresh line
+        look ancient.
+        """
+        stamp = getattr(event, "timestamp", None)
+        if not stamp:
+            return False
+        try:
+            age = time.time() - float(stamp)
+        except (TypeError, ValueError):  # pragma: no cover - a fake without a date
+            return False
+        return age > MAX_AGE_SECONDS
+
     def _skip(self, reason: str, event: NormalizedEvent | None = None) -> None:
         """Note that a message went unanswered, and why.
 
@@ -1275,6 +1300,9 @@ class PersonaReplies:
         if self._is_command(event.text):
             self._skip("command")
             return
+        if self._stale(event):
+            self._skip("stale", event)
+            return
         quote = await self._quote(event)
         await self._learn_from_owner(event, quote)
         await self._learn_correction(event, quote)
@@ -1328,6 +1356,10 @@ class PersonaReplies:
         taught = await self._learn_correction(event, quote)
         if event.is_outgoing and self._is_command(event.text):
             self._skip("command", event)
+            return
+        # Answered from a catch-up replay: too late to be part of the room.
+        if self._stale(event):
+            self._skip("stale", event)
             return
         # Addressed means aimed at *her*, and only two things count now: a reply
         # to a message she sent, or her name in the text.
@@ -1434,6 +1466,9 @@ class PersonaReplies:
         if self._is_command(event.text):
             self._skip("command", event)
             return
+        if self._stale(event):
+            self._skip("stale", event)
+            return
         quote = await self._quote(event)
         # Teaching happens before every gate: "remember this" in a DM is both a
         # lesson and a sentence, and the lesson must not depend on the gate.
@@ -1492,6 +1527,9 @@ class PersonaReplies:
             return
         if await self._is_own(event.chat_id, event.message_id, event.text):
             self._skip("own_message", event)
+            return
+        if self._stale(event):
+            self._skip("stale", event)
             return
         speaker = event.sender_id
         if speaker is None or self.runtime.permissions.is_owner(speaker):

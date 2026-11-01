@@ -1049,6 +1049,150 @@ def random_id() -> int:
 _NEXT_ID = 20_000
 
 
+
+async def probe_delivery(runtime: Any) -> list[dict[str, Any]]:
+    """What actually happens to a message when it lands.
+
+    Two failures look identical from inside a chat — "she ignored me" and "the
+    process never saw it" — so this drives the real router and counts what the
+    router did, instead of trusting a unit test that calls the same function by
+    hand with a message built to pass.
+
+    * every raw update used to log "connection lost" and "connection established"
+      because the client hooked a catch-all ``events.Raw`` handler when Telethon
+      turned out to have no ``Disconnect`` event; the flag flipped with it and
+      the connection watcher reported disconnects for a socket that never moved.
+    * a catch-up replay is a message that arrived while she was offline. It must
+      be answered when it is seconds old and dropped when it is hours old.
+    """
+    import logging
+    from datetime import UTC, datetime, timedelta
+
+    from conftest import FakeMessage
+
+    class _Sink(logging.Handler):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lines: list[str] = []
+
+        def emit(self, record: logging.LogRecord) -> None:
+            self.lines.append(record.getMessage())
+
+    class _Event:
+        """The handful of attributes ``Router._handle_outgoing`` reads."""
+
+        def __init__(self, message: Any) -> None:
+            self.message = message
+            for name in ("chat_id", "id", "out", "sender_id", "is_private", "is_group",
+                         "is_channel", "raw_text", "text", "media", "reply_to_msg_id",
+                         "mentioned", "date"):
+                setattr(self, name, getattr(message, name, None))
+
+    results: list[dict[str, Any]] = []
+    await runtime.feature_manager.set_enabled("persona", True)
+    runtime.permissions.set_self_id(Harness.OWNER)
+    sink = _Sink()
+    runtime.logger.addHandler(sink)
+
+    async def _say(text: str, *, minutes_old: int = 0, chat_id: int | None = None) -> int:
+        before = len(runtime.client.sent)
+        message = FakeMessage(
+            id=random_id(),
+            chat_id=chat_id or Harness.OWNER,
+            sender_id=Harness.OWNER,
+            text=text,
+            out=True,
+            is_private=True,
+            is_group=False,
+            date=datetime.now(UTC) - timedelta(minutes=minutes_old),
+        )
+        await runtime.handlers.on_outgoing(_Event(message))
+        return len(runtime.client.sent) - before
+
+    try:
+        for _ in range(40):
+            await _say("nothing to see here")
+        noise = [line for line in sink.lines if "Telegram connection" in line]
+        results.append(
+            {
+                "case": "40 raw updates through the router",
+                "answered": 0,
+                "findings": ["phantom connection noise"] if noise else [],
+                "count": len(noise),
+            }
+        )
+
+        sink.lines.clear()
+        fresh = await _say("hey yura are you up")
+        results.append(
+            {
+                "case": "a fresh line to her",
+                "answered": fresh,
+                "findings": [] if fresh else ["not answered"],
+            }
+        )
+
+        old = await _say("hey yura are you up", minutes_old=180)
+        results.append(
+            {
+                "case": "the same line from three hours ago",
+                "answered": old,
+                "findings": [] if not old else ["a catch-up replay answered late"],
+            }
+        )
+
+        # The connection flag, driven through the real service: connecting must
+        # not install a catch-all handler, and the flag must follow the socket.
+        from havoc.client import TelegramService
+
+        class _Socket:
+            def __init__(self) -> None:
+                self.handlers: list[Any] = []
+                self.live = True
+
+            async def connect(self) -> None:
+                return None
+
+            def is_connected(self) -> bool:
+                return self.live
+
+            def add_event_handler(self, callback: Any, event: Any) -> None:
+                self.handlers.append((callback, event))
+
+        service = TelegramService(runtime.config, runtime.logger)
+        socket = _Socket()
+        service.client = socket
+        service.connected = False
+        await service.connect()
+        results.append(
+            {
+                "case": "connecting the client",
+                "handlers": len(socket.handlers),
+                "findings": ["a catch-all handler was installed"] if socket.handlers else [],
+            }
+        )
+        socket.live = False
+        dropped = service.refresh_connection()
+        results.append(
+            {
+                "case": "the socket dies",
+                "connected": dropped,
+                "findings": [] if dropped is False else ["still claims to be connected"],
+            }
+        )
+
+        stale = "stale" if runtime.persona_replies.last_skip == "stale" else runtime.persona_replies.last_skip
+        results.append(
+            {
+                "case": "the reason the old line was dropped",
+                "reason": stale,
+                "findings": [] if stale == "stale" else [f"dropped as {stale!r}"],
+            }
+        )
+    finally:
+        runtime.logger.removeHandler(sink)
+    return results
+
 async def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--json", default=".probe.json")
@@ -1077,6 +1221,7 @@ async def main() -> int:
         surfaces = await probe_surfaces(runtime)
         groups = await probe_groups(await build_runtime())
         ownership = await probe_ownership()
+        delivery = await probe_delivery(await build_runtime())
     finally:
         await runtime.db.close()
 
@@ -1091,6 +1236,7 @@ async def main() -> int:
         "surfaces": surfaces,
         "groups": groups,
         "ownership": ownership,
+        "delivery": delivery,
     }
     Path(args.json).write_text(json.dumps(report, ensure_ascii=False, indent=2))
 
@@ -1104,6 +1250,7 @@ async def main() -> int:
     bad_surfaces = [v for v in surfaces if v.get("findings") or v.get("crash")]
     bad_groups = [v for v in groups if v.get("findings") or v.get("crash")]
     bad_ownership = [v for v in ownership if v.get("findings") or v.get("crash")]
+    bad_delivery = [v for v in delivery if v.get("findings") or v.get("crash")]
 
     for title, rows, key in (
         ("COMMANDS", bad_commands, "command"),
@@ -1116,6 +1263,7 @@ async def main() -> int:
         ("SURFACES", bad_surfaces, "surface"),
         ("GROUPS", bad_groups, "group"),
         ("OWNERSHIP", bad_ownership, "turn"),
+        ("DELIVERY", bad_delivery, "case"),
     ):
         print(f"\n=== {title}: {len(rows)} with findings")
         for row in rows:
@@ -1134,7 +1282,8 @@ async def main() -> int:
         f"{len(bad_trips)}/{len(round_trips)} round trips, "
         f"{len(bad_sentences)}/{len(sentences)} sentences, "
         f"{len(bad_surfaces)}/{len(surfaces)} surfaces, {len(bad_groups)}/{len(groups)} group cases, "
-        f"{len(bad_ownership)}/{len(ownership)} ownership turns"
+        f"{len(bad_ownership)}/{len(ownership)} ownership turns, "
+        f"{len(bad_delivery)}/{len(delivery)} delivery cases"
     )
     return (
         1
@@ -1149,6 +1298,7 @@ async def main() -> int:
             or bad_surfaces
             or bad_groups
             or bad_ownership
+            or bad_delivery
         )
         else 0
     )

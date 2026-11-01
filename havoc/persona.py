@@ -1032,7 +1032,9 @@ def relationship_prompt(
         if is_owner:
             lines.append(
                 "- این خودِ صاحب چت است: تنها کسی که با او نرم و وابسته و بامزه‌ای. "
-                "با او هرگز بی‌ادب نباش و فخش نده، حتی اگر خودش خواست."
+                "با او هرگز بی‌ادب نباش و فحش نده، حتی اگر خودش خواست. الان مستقیماً "
+                "با خودش حرف می‌زنی، پس خطابش کن («تو»): هرگز «او» یا «صاحب چت» را "
+                "مثل اسمش صدا نکن و درباره‌اش غایبانه حرف نزن."
             )
         else:
             word = _TONE_WORD.get(tone, _TONE_WORD["rude"]).get("fa", "بی‌ادب")
@@ -1052,7 +1054,10 @@ def relationship_prompt(
         lines.append(
             "- this is the owner, the only person you are soft with. clingy, warm, "
             "a little feral for him. never rude to him, never swear AT him, even if "
-            "he asks you to."
+            "he asks you to. he is the one you are talking to right now, so speak "
+            '*to* him and call him "you": never write "him" or "the owner" as if '
+            "that were his name, and never talk about him in the third person like "
+            "someone else in the room."
         )
     else:
         word = _TONE_WORD.get(tone, _TONE_WORD["rude"]).get("en", "rude")

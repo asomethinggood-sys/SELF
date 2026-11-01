@@ -10,7 +10,9 @@ or a headless server uses, where the code arrives somewhere else:
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
+from typing import Any
 
 import pytest
 from conftest import make_config
@@ -377,3 +379,86 @@ def test_two_factor_error_is_recognised() -> None:
     message, hint = explain_telegram_error(Exception("SESSION_PASSWORD_NEEDED"))
     assert "two-factor" in message
     assert "2FA" in hint
+
+
+# ---------------------------------------------------------------------------
+# The connection flag is read from the socket, not from a phantom event
+# ---------------------------------------------------------------------------
+class _SocketClient:
+    """A client whose socket state we can flip, and nothing else."""
+
+    def __init__(self, connected: bool = True) -> None:
+        self._connected = connected
+        self.handlers: list[Any] = []
+
+    def is_connected(self) -> bool:
+        return self._connected
+
+    def add_event_handler(self, callback: Any, event: Any) -> None:
+        self.handlers.append((callback, event))
+
+
+def test_connection_state_is_reported_once_per_real_change(caplog) -> None:
+    """One line per transition — not two lines per message.
+
+    The old code fell back to ``events.Raw`` because Telethon has no
+    ``Disconnect`` class, so every raw update logged "connection lost" and then
+    "connection established". The flag flipped with it, and ``_watch_connection``
+    turned that into disconnect/reconnect events for a socket that never moved.
+    """
+    service = _service_with(make_config(Path("/tmp/conn-test")))
+    client = _SocketClient(connected=True)
+    service.client = client
+    service.connected = True
+
+    with caplog.at_level(logging.INFO, logger="proxy-test"):
+        assert service.refresh_connection() is True
+        assert not [r for r in caplog.records if "Telegram" in r.message]
+
+        client._connected = False
+        assert service.refresh_connection() is False
+        assert service.refresh_connection() is False
+        client._connected = True
+        assert service.refresh_connection() is True
+
+    messages = [r.message for r in caplog.records if "Telegram" in r.message]
+    assert messages == [
+        "Telegram connection lost; telethon will reconnect",
+        "Telegram connection established",
+    ]
+
+
+def test_refresh_connection_is_safe_without_a_client() -> None:
+    service = _service_with(make_config(Path("/tmp/conn-test-2")))
+    service.client = None
+    service.connected = False
+    assert service.refresh_connection() is False
+    assert service.connected is False
+
+
+def test_the_client_asks_telegram_for_what_it_missed(monkeypatch, tmp_path) -> None:
+    """``catch_up=True`` is what makes a restart answer the message sent during it."""
+    captured: dict[str, Any] = {}
+
+    class _Client:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            captured.update(kwargs)
+
+    from havoc import client as client_module
+
+    monkeypatch.setattr(
+        client_module,
+        "telethon_module",
+        lambda: type(
+            "T",
+            (),
+            {
+                "TelegramClient": _Client,
+                "sessions": type("S", (), {"StringSession": staticmethod(lambda value: value)}),
+            },
+        ),
+    )
+    service = TelegramService(make_config(tmp_path, session_string="1AAAA"), logging.getLogger("t"))
+    service._build_client()
+    assert captured.get("catch_up") is True
+    assert captured.get("auto_reconnect") is True

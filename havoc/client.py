@@ -226,6 +226,13 @@ class TelegramService:
             auto_reconnect=True,
             request_retries=3,
             timeout=15,
+            # Fetch what arrived while she was not listening. Without this the
+            # gap is silent: every restart (and every dropped socket) discards
+            # the updates Telegram held for that time, so a message he sent
+            # while the new run was booting was answered by nobody at all.
+            # `persona` skips messages that are too old to answer, so a long
+            # outage does not turn into a burst of replies to yesterday.
+            catch_up=True,
         )
         self.session_kind = kind
         return client
@@ -287,26 +294,36 @@ class TelegramService:
                 ),
             ) from exc
         self.connected = bool(client.is_connected())
-        self._register_disconnect_hooks(client)
         return client
 
-    def _register_disconnect_hooks(self, client: Any) -> None:
-        """Track disconnects/reconnects for health reporting."""
-        try:
-            from telethon import events
+    # Telethon has no ``Disconnect``/``Connect`` event classes (checked against
+    # 1.45: ``hasattr(events, "Disconnect")`` is False), and the old code quietly
+    # fell back to ``events.Raw``. That fallback fired the "connection lost"
+    # handler and then the "connection established" handler for *every single
+    # raw update*, so the log was two lines of connection noise per message, the
+    # ``connected`` flag was inverted several times a second, and
+    # ``_watch_connection`` turned that noise into disconnect/reconnect events.
+    # The real socket state is cheap to ask for, so ask for it instead.
+    def refresh_connection(self) -> bool:
+        """Re-read the live socket state, logging only genuine transitions.
 
-            async def _on_disconnect(_event: Any) -> None:
-                self.connected = False
-                self.logger.warning("Telegram connection lost; telethon will reconnect")
-
-            async def _on_connect(_event: Any) -> None:
-                self.connected = True
+        Returns the current state. Safe to call from a poll loop and safe when
+        the client was never built or has been torn down.
+        """
+        client = self.client
+        current = False
+        if client is not None:
+            try:
+                current = bool(client.is_connected())
+            except Exception:  # noqa: BLE001 - a dead socket must not raise here
+                current = False
+        if current != self.connected:
+            if current:
                 self.logger.info("Telegram connection established")
-
-            client.add_event_handler(_on_disconnect, events.Disconnect if hasattr(events, "Disconnect") else events.Raw)
-            client.add_event_handler(_on_connect, events.Connect if hasattr(events, "Connect") else events.Raw)
-        except Exception:  # pragma: no cover - older telethon versions
-            self.logger.debug("disconnect hooks unavailable on this Telethon version")
+            else:
+                self.logger.warning("Telegram connection lost; telethon will reconnect")
+            self.connected = current
+        return current
 
     # ------------------------------------------------------------------
     # Authentication
