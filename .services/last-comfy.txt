@@ -1,13 +1,9 @@
-comfy · run 41337404268 · 2026-11-01T18:38:26Z
+comfy · run 41337881837 · 2026-11-01T18:44:36Z
 ----------------------------------------------
-ok   gate /healthz without a token — 200 {"ok": true, "service": "comfy", "run_id": "41337404268", "started_at": "2026-11
+ok   gate /healthz without a token — 200 {"ok": true, "service": "comfy", "run_id": "41337881837", "started_at": "2026-11
   ok   upstream /system_stats directly — 200
   ok   the same path through the gate without a token — 401 
   ok   a wrong token is refused — 401
-  ok   /system_stats through the gate with the real token — 200 {"system": {"os": "linux", "ram_total": 16760344576, "ram_free": 15063810048, "comfyui_version": "0.43.0", "required_fro
-  FAIL a real PNG came back through the gate — 1116 bytes
-self-test: 5/6 checks passed
---- upstream log tail ---
-[32m[INFO][0m comfyui-workflow-templates version: 0.11.100 | [32m[INFO][0m comfyui-embedded-docs version: 0.5.15 | [32m[INFO][0m comfy-aimdo version: 0.6.0 | [32m[INFO][0m comfy-kitchen version: 0.2.40 | [32m[INFO][0m [Prompt Server] web root: /opt/hostedtoolcache/Python/3.11.17/x64/lib/python3.11/site-packages/comfyui_frontend_package/static | [32m[INFO][0m Asset seeder disabled | [32m[INFO][0m No OpenGL_accelerate module loaded: No module named 'OpenGL_accelerate' | [32m[INFO][0m | Import times for custom nodes: | [32m[INFO][0m    0.0 seconds: /home/runner/work/SELF/SELF/.r
---- gate log tail ---
-=== /opt/hostedtoolcache/Python/3.11.17/x64/bin/python /home/runner/work/SELF/SELF/scripts/service_gate.py --port 9002 --upstream 127.0.0.1:8188 === | service_gate: comfy on 127.0.0.1:9002 -> http://127.0.0.1:8188 (rate 600/min, body cap 8 MB, run 41337404268) | 18:38:26 GET /healthz "GET /healthz HTTP/1.1" 200 - | 18:38:26 GET /healthz "GET /healthz HTTP/1.1" 200 - | 18:38:26 GET /system_stats "GET /system_stats HTTP/1.1" 401 - | 18:38:26 GET /system_stats "GET /system_stats HTTP/1.1" 401 - | 18:38:26 GET /system_stats "GET /system_stats HTTP/1.1" 200 -
+  ok   /system_stats through the gate with the real token — 200 {"system": {"os": "linux", "ram_total": 16760344576, "ram_free": 15057276928, "comfyui_version": "0.43.0", "required_fro
+  ok   a real image came back through the gate — 1116 bytes, png, starts 7b227379
+self-test: 6/6 checks passed
