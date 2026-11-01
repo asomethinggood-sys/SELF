@@ -1,1 +1,2 @@
 22:50:15Z run 41359070533 · starting comfy on this runner
+22:53:05Z run 41359070533 · comfy is up behind the gate
