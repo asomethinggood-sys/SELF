@@ -130,6 +130,10 @@ VALUE_FLAGS: frozenset[str] = frozenset(
         # A rule's lifespan: ``.policy ignore sara --for 2h``. Without this the
         # word "for" became a boolean and the lifespan landed in the name.
         "for",
+        # The line a schedule runs: ``.schedule --at 09:00 --repeat daily
+        # --run "clock on"``. As a boolean flag the whole instruction became the
+        # string "true", so every morning she ran a command called "true".
+        "run", "cmd", "command", "line",
     }
 )
 

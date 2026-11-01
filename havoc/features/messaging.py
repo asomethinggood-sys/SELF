@@ -309,8 +309,8 @@ async def _template_values(ctx: CommandContext) -> dict[str, Any]:
 # Scheduled messages
 # ---------------------------------------------------------------------------
 async def cmd_schedule(ctx: CommandContext) -> None:
-    if not ctx.args:
-        raise CommandError("errors.missing_argument", usage=ctx.usage_text())
+    # No positional check yet: ``--run`` carries the whole instruction, so an
+    # argument-less call is a valid schedule of a command.
     tz = tz_for(ctx)
     # ``--run "send sara good morning"`` is a *command* on a schedule, not a
     # message: "every day at 9 send sara good morning" is an instruction, and
@@ -330,6 +330,8 @@ async def cmd_schedule(ctx: CommandContext) -> None:
         kind = "command"
     else:
         kind = "message"
+        if not ctx.args:
+            raise CommandError("errors.missing_argument", usage=ctx.usage_text())
         # Same split as `.remind`: "in 2 hours", "tomorrow 9am" are one phrase,
         # not one word, and the rest of the line is the message.
         when, body, _raw = split_when(ctx, example="in 2h | 2026-11-01 09:00")
@@ -712,7 +714,7 @@ def register(runtime: Any) -> None:
             Command("autoreply", cmd_autoreply, category="messaging", aliases=("ar",), usage="[list|add|on|off|remove|clear]", changes_state=True, subcommands=('list', 'ls', 'add', 'on', 'off', 'remove', 'delete', 'rm', 'enable', 'disable', 'clear')),
             Command("away", cmd_away, category="messaging", usage="[on <text>|off|status]", changes_state=True, subcommands=('on', 'off', 'status', 'show')),
             Command("template", cmd_template, category="messaging", usage="[list|add|show|send|delete]", changes_state=True, subcommands=('list', 'ls', 'add', 'show', 'preview', 'send', 'delete', 'rm')),
-            Command("schedule", cmd_schedule, category="messaging", usage="<when> <text> [--to chat] [--repeat daily]", changes_state=True),
+            Command("schedule", cmd_schedule, category="messaging", usage="<when> <text> [--to chat] [--repeat daily] | --at <time> --run \"<command>\"", changes_state=True),
             Command("scheduled", cmd_scheduled, category="messaging", usage="[list|cancel|reschedule]", changes_state=True, subcommands=('list', 'ls', 'cancel', 'delete', 'rm', 'reschedule', 'move')),
             Command("fight", cmd_fight, category="fun", usage="[style|intensity|instant|stop|send|styles]", requires_reply=False, changes_state=True, subcommands=("send", "styles", "help", "stop", "instant", "repeat", "repeated", "loop", "nonstop", "every", "low", "medium", "high", "intense", "unhinged", "ملایم", "متوسط", "شدید", "سنگین", "دیوانه", "blunt", "brutal", "clever", "direct", "dramatic", "dry", "fun", "harsh", "playful", "sarcasm", "sarcastic", "savage", "smart", "احساسی", "بازیگوش", "بی‌رحم", "خشن", "خشک", "دراماتیک", "رک", "زیرکانه", "شوخ", "صریح", "طعنه", "هوشمند", "وحشی", "کنایه")),
             Command("suggest", cmd_suggest, category="messaging", aliases=("suggest_reply", "suggest_draft"), usage="[tone]", requires_reply=False, subcommands=('friendly', 'formal', 'funny', 'supportive', 'direct')),

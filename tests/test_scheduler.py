@@ -199,3 +199,46 @@ async def test_recover_ask_holds_a_reminder_and_reports_a_job(runtime) -> None:
     assert [row["status"] for row in await runtime.store.db.fetch_all("SELECT status FROM jobs")] == ["skipped"]
     # "ask" does not silently discard a job: it says so.
     assert runtime.client.sent, "the owner was never told about the dropped job"
+
+
+# ---------------------------------------------------------------------------
+# A schedule that runs a command, not one that reads one out
+# ---------------------------------------------------------------------------
+async def test_a_command_schedule_runs_the_command(runtime) -> None:
+    """``--run "clock on"`` must switch the clock on at nine, not say the words.
+
+    The bug this holds: ``--run`` was not a value flag, so the instruction was
+    stored as the literal string ``true`` and every morning she ran a command
+    called "true".
+    """
+    await runtime.store.add_schedule(
+        306,
+        "clock on",
+        utc_now() - timedelta(seconds=1),
+        recurrence="daily",
+        kind="command",
+    )
+    fired = await runtime.scheduler.tick()
+    assert fired["schedules"] == 1
+    assert await runtime.store.get_bool("clock.enabled", False) is True
+    # The schedule is a *command*: it sends no copy of its own text.
+    assert not [m for m in runtime.client.sent if (m.text or "").strip() == "clock on"]
+
+
+async def test_a_command_schedule_that_fails_says_so_on_the_row(runtime) -> None:
+    schedule_id = await runtime.store.add_schedule(
+        307, "there is no such command", utc_now() - timedelta(seconds=1), kind="command"
+    )
+    await runtime.scheduler.tick()
+    row = await runtime.store.get_schedule(schedule_id)
+    assert row["last_error"], "a schedule that failed must not look like one that ran"
+
+
+def test_run_is_a_value_flag_so_the_instruction_is_not_true() -> None:
+    from havoc.utils.parsing import parse_command
+
+    parsed = parse_command('.schedule --at 09:00 --repeat daily --run "clock on"')
+    assert parsed is not None
+    assert parsed.flags["run"] == "clock on"
+    assert parsed.flags["at"] == "09:00"
+    assert parsed.flags["repeat"] == "daily"

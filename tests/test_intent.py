@@ -555,3 +555,50 @@ def test_no_step_of_a_timeline_is_silently_dropped(said: str, expected: list[str
 
     plan = build_plan(said, intent=intent_module)
     assert [step.action for step in plan.steps] == expected
+
+
+# ---------------------------------------------------------------------------
+# "every day at 9 …" — a recurrence, not a one-off
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("said", "expected"),
+    [
+        (
+            "every day at 9 send sara good morning",
+            'schedule --at 09:00 --repeat daily --run "send sara good morning"',
+        ),
+        (
+            "every day at 9 turn the clock on",
+            'schedule --at 09:00 --repeat daily --run "clock on"',
+        ),
+        (
+            "everyday at 9pm good night everyone",
+            'schedule --at 21:00 --repeat daily --run "send --here "good night everyone""',
+        ),
+        (
+            "هر روز ساعت ۹ ساعت رو روشن کن",
+            'schedule --at 09:00 --repeat daily --run "clock on"',
+        ),
+    ],
+)
+def test_a_recurring_sentence_is_a_schedule_that_runs_it(said: str, expected: str) -> None:
+    """``every day at 9 …`` used to be dropped, or read as tonight's reminder.
+
+    The instruction underneath decides whether the schedule runs a command or
+    sends words: "turn the clock on" is not a message to deliver every morning.
+    """
+    found = detect(said)
+    assert found is not None, said
+    assert found.lines == (expected,)
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "every time i sneeze say bless you",
+        "every week at 9 hi",
+        "every day at 9 i am at work",
+    ],
+)
+def test_a_sentence_that_is_not_a_daily_order_stays_a_sentence(said: str) -> None:
+    assert detect(said) is None

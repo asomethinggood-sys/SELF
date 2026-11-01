@@ -75,7 +75,7 @@ async def deliver_schedule(runtime: Any, row: Any) -> None:
     if kind != "command":
         await runtime.sender.send(chat_id, row["text"])
         return
-    from .self_console import run as run_command
+    from ..services.self_console import run as run_command
 
     self_id = int(getattr(runtime.permissions, "self_id", 0) or 0) or chat_id
     reply = await run_command(
