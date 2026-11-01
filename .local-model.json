@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-01T17:02:18Z",
+  "at": "2026-11-01T17:03:46Z",
   "checks": [
     {
       "name": "local · something is configured",
@@ -9,7 +9,7 @@
     {
       "name": "local · start() reaches the endpoint",
       "ok": false,
-      "detail": "1.2s · the local model exited while loading"
+      "detail": "1.0s · the local model exited while loading: /home/runner/work/SELF/SELF/.runtime/local-model/llama-server: error while loading shared libraries: libllama-server-impl.so: cannot open shared object file: No such file or directory"
     }
   ],
   "answers": [],
@@ -18,5 +18,5 @@
     "weights · cached (/home/runner/work/SELF/SELF/.runtime/local-model/qwen2.5-0.5b-instruct-q4_k_m.gguf)"
   ],
   "exit": 1,
-  "log_tail": "  ok   local · something is configured\n  FAIL local · start() reaches the endpoint\n       ↳ 1.2s · the local model exited while loading\n\nsummary: 1/2 checks passed\n"
+  "log_tail": "  ok   local · something is configured\n  FAIL local · start() reaches the endpoint\n       ↳ 1.0s · the local model exited while loading: /home/runner/work/SELF/SELF/.runtime/local-model/llama-server: error while loading shared libraries: libllama-server-impl.so: cannot open shared object file: No such file or directory\n\nsummary: 1/2 checks passed\n"
 }
