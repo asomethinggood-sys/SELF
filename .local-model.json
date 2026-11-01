@@ -1,0 +1,22 @@
+{
+  "at": "2026-11-01T17:02:18Z",
+  "checks": [
+    {
+      "name": "local · something is configured",
+      "ok": true,
+      "detail": "http://127.0.0.1:8080/v1"
+    },
+    {
+      "name": "local · start() reaches the endpoint",
+      "ok": false,
+      "detail": "1.2s · the local model exited while loading"
+    }
+  ],
+  "answers": [],
+  "fetch": [
+    "server · cached",
+    "weights · cached (/home/runner/work/SELF/SELF/.runtime/local-model/qwen2.5-0.5b-instruct-q4_k_m.gguf)"
+  ],
+  "exit": 1,
+  "log_tail": "  ok   local · something is configured\n  FAIL local · start() reaches the endpoint\n       ↳ 1.2s · the local model exited while loading\n\nsummary: 1/2 checks passed\n"
+}
