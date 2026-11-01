@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-01T18:11:44Z",
+  "at": "2026-11-01T20:22:17Z",
   "checks": [
     {
       "name": "local · something is configured",
@@ -14,17 +14,17 @@
     {
       "name": "local · answered: In one sentence: what are you?",
       "ok": true,
-      "detail": "0.8s · I am an AI language model developed by Alibaba Cloud, capable of providing text "
+      "detail": "0.9s · I am a large language model created by Alibaba Cloud, able to interact with user"
     },
     {
       "name": "local · answered: Write a single line of poetry abou",
       "ok": true,
-      "detail": "0.6s · Rain falls on the earth, a gentle whisper through the night, breaking the silenc"
+      "detail": "0.8s · In the rain, the world is bathed in a soft, warm glow, as the drops gently fall,"
     },
     {
       "name": "local · answered: Answer with one word: two plus two",
       "ok": true,
-      "detail": "0.2s · four"
+      "detail": "0.2s · Four"
     },
     {
       "name": "local · the router answers with zero keys",
@@ -50,15 +50,15 @@
   "answers": [
     {
       "question": "In one sentence: what are you?",
-      "reply": "I am an AI language model developed by Alibaba Cloud, capable of providing text generation, translation, and summarization services."
+      "reply": "I am a large language model created by Alibaba Cloud, able to interact with users and provide assistance with various topics and tasks."
     },
     {
       "question": "Write a single line of poetry about rain.",
-      "reply": "Rain falls on the earth, a gentle whisper through the night, breaking the silence with its silent, sweet melody."
+      "reply": "In the rain, the world is bathed in a soft, warm glow, as the drops gently fall, creating a symphony of colors and sounds."
     },
     {
       "question": "Answer with one word: two plus two?",
-      "reply": "four"
+      "reply": "Four"
     }
   ],
   "fetch": [
