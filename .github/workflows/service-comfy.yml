@@ -10,8 +10,10 @@ name: Service · pictures
 #
 # In front of it: `scripts/service_gate.py`, a bearer-token gate with `/healthz`,
 # a per-minute cap and an 8 MB body cap. The token is derived per run from
-# `SERVICE_SHARED_SECRET` (`havoc/services/service_token.py`), so nothing secret
-# is committed and a leaked token dies with the run.
+# `SERVICE_SHARED_SECRET` (`havoc/services/service_token.py`) and dies with the
+# run. Nothing has to be configured: with no secret the gate falls back to the
+# committed default, and `SERVICE_PUBLIC=1` (repository variable) drops the token
+# entirely — the owner's choice, since the services are free anyway.
 #
 # Staying alive: same pattern as the bot. A successor is queued in the first
 # step, `scripts/handover.py` is asked once a minute whether it is still there,
@@ -56,16 +58,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HANDOVER_WORKFLOW: service-comfy.yml
-        run: |
-          set -uo pipefail
-          if [ -z "${{ secrets.SERVICE_SHARED_SECRET }}" ]; then
-            # A run with no secret is a self-test: it installs, proves the service
-            # on loopback and exits in minutes. Queuing a successor for that would
-            # be a self-test every few minutes forever, which is not a service.
-            echo "no SERVICE_SHARED_SECRET: this is a self-test, so no successor is queued"
-            exit 0
-          fi
-          python scripts/handover.py
+        run: python scripts/handover.py
 
       - uses: actions/setup-python@v5
         with:
@@ -79,42 +72,38 @@ jobs:
           python -m pip install -q -e ".[dev]"
           python -c "import havoc.services.service_token; print('token module ok')"
 
-      - name: Check the token wiring
-        # A gate with no secret is an open proxy, and the host refuses to start
-        # one — so a run without the secret must not open a tunnel either.
-        #
-        # It still does everything else: installs, starts, puts the gate in front,
-        # and asks the service a real question with a real token over loopback.
-        # The run is then a *self-test*: nothing becomes public, and the job log
-        # says whether the service actually answers. That way a missing secret
-        # costs a green run with a transcript instead of a red run with nothing.
+      - name: Which mode is this?
+        # No secret to add: without `SERVICE_SHARED_SECRET` the gate uses the
+        # committed default, which keeps drive-by scanners out but is no defence
+        # against anyone who reads this repository — the owner's explicit choice.
+        # `SERVICE_PUBLIC=1` (repository variable) drops the token entirely.
         id: token
         shell: bash
         env:
           SHARED: ${{ secrets.SERVICE_SHARED_SECRET }}
+          PUBLIC: ${{ vars.SERVICE_PUBLIC }}
         run: |
           set -uo pipefail
-          if [ -z "${SHARED:-}" ]; then
-            echo "::warning::SERVICE_SHARED_SECRET is not set — this run will prove the service on loopback and will NOT open a tunnel. Add the secret (Settings → Secrets and variables → Actions) and the next run goes public."
-            {
-              echo "### Self-test run"
-              echo ""
-              echo "No \`SERVICE_SHARED_SECRET\` in this repository, so the gate would have no token and the tunnel"
-              echo "would be an open proxy. This run starts the service and proves it over loopback instead."
-              echo "Add the secret and the next run publishes a public address."
-            } >> "$GITHUB_STEP_SUMMARY"
-            # Ephemeral and loopback-only: nothing leaves this machine, so a
-            # random per-run secret is as safe as a stored one.
-            echo "SERVICE_SECRET=$(python -c 'import secrets;print(secrets.token_hex(32))')" >> "$GITHUB_ENV"
-            echo "self_test=1" >> "$GITHUB_OUTPUT"
-          else
-            echo "token wiring ok"
+          if [ "${PUBLIC:-}" = "1" ]; then
+            mode="public — no token at all (SERVICE_PUBLIC=1)"
+          elif [ -n "${SHARED:-}" ]; then
+            mode="gated — the token comes from SERVICE_SHARED_SECRET"
             echo "SERVICE_SECRET=$SHARED" >> "$GITHUB_ENV"
-            echo "self_test=0" >> "$GITHUB_OUTPUT"
+          else
+            mode="gated with the committed default secret (no setup needed)"
+            echo "::notice::No SERVICE_SHARED_SECRET: using the committed default. The token keeps scanners out, not people who read the repository. Set the secret to change that, or SERVICE_PUBLIC=1 for a fully open service."
           fi
+          echo "mode=$mode"
+          {
+            echo "### Gate mode"
+            echo ""
+            echo "$mode"
+          } >> "$GITHUB_STEP_SUMMARY"
           python - <<'PY'
-          from havoc.services.service_token import token_for
-          print("token derivation ok, sample:", token_for("comfy", "1", "2026-01-01T00:00:00Z", "x")[:16] + "…")
+          import sys
+          sys.path.insert(0, ".")
+          from havoc.services.service_token import secret_for, token_for
+          print("token derivation ok, sample:", token_for("comfy", "1", "2026-01-01T00:00:00Z", secret_for() or "x")[:16] + "…")
           PY
 
       - name: Restore ComfyUI and the checkpoint
@@ -156,24 +145,22 @@ jobs:
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # SERVICE_SECRET is set by the step above, through $GITHUB_ENV: a
-          # step-level entry here would shadow the ephemeral self-test secret
-          # with the empty repository one, and the gate would have no token.
+          # SERVICE_SECRET is set by the "Which mode is this?" step above, through
+          # $GITHUB_ENV: a step-level entry here would shadow it with the empty
+          # repository value.
           SERVICE_MINUTES: "335"
           OLLAMA_MODEL: ${{ vars.OLLAMA_MODEL || 'qwen2.5:0.5b' }}
           COMFY_CKPT: ${{ vars.COMFY_CKPT || 'sd-turbo.safetensors' }}
           COMFY_TAG: ${{ vars.COMFY_TAG || 'v0.43.2' }}
           CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
           CLOUDFLARE_HOSTNAME: ${{ vars.CLOUDFLARE_HOSTNAME }}
+          SERVICE_PUBLIC: ${{ vars.SERVICE_PUBLIC }}
         run: |
           set -uo pipefail
-          extra=""
-          if [ "${{ steps.token.outputs.self_test }}" = "1" ]; then
-            extra="--self-test"
-            echo "no SERVICE_SHARED_SECRET: running the self-test, publishing nothing"
-          fi
-          echo "service=comfy minutes=$SERVICE_MINUTES extra=${extra:-none}"
-          python -u scripts/service_host.py --service comfy $extra
+          echo "service=comfy minutes=$SERVICE_MINUTES mode=${{ steps.token.outputs.mode }}"
+          # The host proves the service on loopback (a real picture, a real
+          # completion) and only then opens the tunnel.
+          python -u scripts/service_host.py --service comfy
           echo "host exited with $?"
 
       - name: Stop everything

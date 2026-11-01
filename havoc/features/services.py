@@ -90,11 +90,11 @@ async def cmd_services(ctx: CommandContext) -> None:
         ui.panel(rows),
         ui.footer(ctx.t(footer_key, prefix=ctx.runtime.prefix)),
     ]
-    if not getattr(directory, "secret", "") and any(not endpoint.ok for endpoint in endpoints):
-        # The one configuration that makes three healthy runners invisible: with
-        # no gate secret they run as self-tests on loopback and publish nothing.
-        # Saying it here is the difference between "broken" and "one secret".
-        blocks.insert(2, ui.note(ctx.t("services.no_secret")))
+    if any(endpoint.ok and not endpoint.gated for endpoint in endpoints):
+        # A public address with no token: true by the owner's choice, and worth
+        # saying once — an open endpoint on the internet is found by crawlers
+        # within hours, not days.
+        blocks.insert(2, ui.note(ctx.t("services.open")))
     text = "\n\n".join(blocks)
     await ctx.reply(text)
 

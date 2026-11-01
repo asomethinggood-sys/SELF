@@ -218,3 +218,106 @@ async def test_between_runs_carries_the_age(runtime) -> None:
     assert "between runs" in body
     # The age is a sentence, not a timestamp: "40 minutes", "1h05m".
     assert any(unit in body for unit in ("minute", "hour", "m ago", "h")), body[:240]
+
+
+# -- no configuration required --------------------------------------------
+#
+# The owner's call: the endpoints are public, nothing has to be set up, and
+# "it needs a secret" is not allowed to be the answer. These pin the three
+# ways the token can be decided, and the workflow wiring that keeps them
+# reachable without anyone touching repository settings.
+
+
+def test_the_secret_falls_back_to_the_committed_default(monkeypatch) -> None:
+    from havoc.services import service_token
+
+    monkeypatch.delenv("SERVICE_SHARED_SECRET", raising=False)
+    monkeypatch.delenv("SERVICE_PUBLIC", raising=False)
+    assert service_token.secret_for() == service_token.DEFAULT_SECRET
+    assert service_token.is_public() is False
+    # A token is still derived, and it is still per run.
+    secret = service_token.secret_for()
+    first = service_token.token_for("search", "1", "2026-01-01T00:00:00Z", secret)
+    second = service_token.token_for("search", "2", "2026-01-01T00:00:00Z", secret)
+    assert len(first) == 64 and first != second
+
+
+def test_a_real_secret_still_wins(monkeypatch) -> None:
+    from havoc.services import service_token
+
+    monkeypatch.setenv("SERVICE_SHARED_SECRET", "chosen")
+    monkeypatch.delenv("SERVICE_PUBLIC", raising=False)
+    assert service_token.secret_for() == "chosen"
+
+
+def test_service_secret_is_what_the_gate_is_handed(monkeypatch) -> None:
+    """The gate is started with ``SERVICE_SECRET``; both names must agree.
+
+    Reading only ``SERVICE_SHARED_SECRET`` in the gate made it sign with the
+    committed default while the bot signed with the chosen secret: every call
+    a 401, and the probe said "the gate refused me".
+    """
+    from havoc.services import service_token
+
+    monkeypatch.delenv("SERVICE_PUBLIC", raising=False)
+    monkeypatch.setenv("SERVICE_SHARED_SECRET", "chosen")
+    assert service_token.secret_for() == "chosen"
+    monkeypatch.delenv("SERVICE_SHARED_SECRET")
+    monkeypatch.setenv("SERVICE_SECRET", "chosen")
+    assert service_token.secret_for() == "chosen"
+
+
+def test_public_means_no_token_at_all(monkeypatch) -> None:
+    from havoc.services import service_token
+
+    monkeypatch.setenv("SERVICE_PUBLIC", "1")
+    monkeypatch.delenv("SERVICE_SHARED_SECRET", raising=False)
+    assert service_token.is_public() is True
+    assert service_token.secret_for() == ""
+    assert service_token.token_for("search", "1", "2026-01-01T00:00:00Z", service_token.secret_for()) == ""
+
+
+def test_the_gate_starts_with_no_secret_configured(tmp_path: Path, monkeypatch) -> None:
+    """The old behaviour — exit 2 — would have left every runner unpublished."""
+    import subprocess
+    import sys
+
+    monkeypatch.delenv("SERVICE_SECRET", raising=False)
+    monkeypatch.delenv("SERVICE_PUBLIC", raising=False)
+    env = {
+        "SERVICE_NAME": "search",
+        "SERVICE_RUN_ID": "1",
+        "SERVICE_STARTED_AT": "2026-01-01T00:00:00Z",
+        "PATH": "/usr/bin:/bin",
+    }
+    gate = subprocess.Popen(
+        [sys.executable, "scripts/service_gate.py", "--port", "9099", "--upstream", "127.0.0.1:9"],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    try:
+        line = ""
+        for _ in range(40):
+            if gate.poll() is not None:
+                line = gate.stdout.read() if gate.stdout else ""
+                break
+            time.sleep(0.2)
+        assert gate.poll() is None, line
+    finally:
+        gate.terminate()
+        gate.wait(timeout=10)
+
+
+def test_the_service_workflows_always_publish() -> None:
+    """No `if [ -z "${{ secrets.… }}" ]` guard may stand between a run and its tunnel."""
+    root = Path(__file__).resolve().parents[1]
+    for name in ("search", "comfy", "ollama"):
+        text = (root / ".github" / "workflows" / f"service-{name}.yml").read_text()
+        assert "which mode is this" in text.lower()
+        assert "SERVICE_PUBLIC" in text
+        assert "publishing nothing" not in text
+        assert "self_test" not in text
+        if name == "ollama":
+            assert "SERVICE_PUBLIC: ${{ vars.SERVICE_PUBLIC }}" in text

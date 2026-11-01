@@ -63,26 +63,36 @@ bot ──► https://<run>.trycloudflare.com ──► service_gate ──► S
 * **`502` with the reason** when the upstream is down, instead of a hang.
 * **`Cache-Control: private, max-age=600` on `image/*`**, so a picture that is asked
   for twice is not generated twice.
-* **The gate refuses to start without `SERVICE_SHARED_SECRET`.** A gate with no
-  secret is an open proxy, so the failure is at startup, not in a log nobody reads.
+* **It works with nothing configured.** The secret is optional. Unset, the gate and
+  the bot both use the committed default in `havoc/services/service_token.py`, so a
+  run opens a tunnel, publishes an address, and `.web` / `.imagegen` / `.ai model 14`
+  answer immediately. That default stops drive-by scanners — a bare `GET /prompt` on
+  a random `trycloudflare.com` host gets `401` — and it does **not** stop anyone who
+  reads this repository. That is the owner's explicit call: the services are free and
+  there is nothing to steal. Do not mistake it for security.
 
-### The one secret you have to add
+### Configuration, in order of preference
 
-`SERVICE_SHARED_SECRET` — any long random string, the same one for all three
-services. In GitHub: **Settings → Secrets and variables → Actions → New repository
-secret**. Locally:
+1. **Nothing.** Recommended. The committed default is used, and the run's summary
+   says so: `gated with the committed default secret (no setup needed)`.
+2. **`SERVICE_SHARED_SECRET`** (repository secret) — only if the address ever needs
+   to be genuinely private. Same value for all three services:
+   ```bash
+   python -c "import secrets; print(secrets.token_hex(32))" | gh secret set SERVICE_SHARED_SECRET
+   ```
+3. **`SERVICE_PUBLIC=1`** (repository *variable*) — no token at all. The gate serves
+   anyone, `"gated": false` goes into `.services/<name>.json`, the bot sends no
+   `Authorization` header, and the `.services` card says once that an endpoint is
+   open. `.healthz` was never gated anyway.
 
-```bash
-python -c "import secrets; print(secrets.token_hex(32))" | gh secret set SERVICE_SHARED_SECRET
-```
+The per-minute cap (600) and the 8 MB body cap stay in every mode: they protect the
+runner from a runaway client, not the data from a reader.
 
-Once it is there, every service run opens a tunnel and publishes an address.
+### The self-test runs before every publish
 
-### Without it, the run is a self-test
-
-A run with no secret does not fail and does not go public. It installs everything,
-starts the service, puts the gate in front, and asks it a real question over
-loopback with a real token — then prints the transcript and exits:
+Whether or not anything is configured, the host asks the gate a real question over
+loopback with the token it just derived — a real search, a real 512×512 PNG, a real
+completion — and only opens the tunnel if the answer is real:
 
 ```
   ok   gate /healthz without a token — 200
@@ -94,8 +104,17 @@ loopback with a real token — then prints the transcript and exits:
 self-test: 6/6 checks passed
 ```
 
-That is a green run with evidence, not a red run with nothing. It also proves the
-install path works on a runner — which is the part that breaks.
+Then it publishes, and calls the tunnel's own hostname from the outside. The report
+in `.services/last-<service>.txt` ends with the answer:
+
+```
+public: https://something-something.trycloudflare.com
+reachable from the internet: yes — GET /healthz through the tunnel answered 200
+the bot needs no configuration: it reads .services/search.json
+```
+
+`--self-test` runs the same checks and exits without publishing anything;
+`--no-self-test` is the escape hatch for a service whose real check is too expensive.
 
 Each run commits its transcript to `.services/last-<service>.txt` (`[skip ci]`),
 because GitHub's job logs cannot be read from everywhere and "it worked on the
@@ -222,8 +241,7 @@ Nothing is gated in that case (`gated: false`): the gate is for what is public.
   cloud API when a hosted one is down: it names the state.
 * **The service files are committed** — one small JSON per service, one commit per
   start, `[skip ci]`. They are the only thing those workflows write.
-* **The publish path is unproven until the secret exists.** Everything up to and
-  including a real answer through the gate has run on a real runner; opening the
-  tunnel and committing `.services/<name>.json` has not, because a gate cannot be
-  exposed without `SERVICE_SHARED_SECRET` and that is a repository secret only the
-  owner can add.
+* **A publish needs a tunnel token, not a secret.** Everything up to and including a
+  real answer through the gate runs on every runner. Opening a *stable* hostname
+  needs `CLOUDFLARE_TUNNEL_TOKEN` + `CLOUDFLARE_HOSTNAME`; without them the host uses
+  a quick `trycloudflare.com` tunnel, whose address changes every run.

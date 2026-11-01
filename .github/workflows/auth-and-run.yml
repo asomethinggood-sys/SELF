@@ -524,10 +524,11 @@ jobs:
           LOCAL_MODEL_URL: ${{ vars.LOCAL_MODEL_URL }}
           LOCAL_MODEL_NAME: ${{ vars.LOCAL_MODEL_NAME }}
           # The hosted services' gate. The bot computes the same per-run token the
-          # gate does from this one value, so `.web` / `.imagegen` / row 14 work
-          # without a single URL being configured here. Unset means the hosted
-          # services are "between runs" in `.services`, and the commands say so.
+          # gate does — from this value, or from the committed default when it is
+          # unset, so `.web` / `.imagegen` / row 14 work with nothing configured
+          # here. `SERVICE_PUBLIC=1` means the services carry no token at all.
           SERVICE_SHARED_SECRET: ${{ secrets.SERVICE_SHARED_SECRET }}
+          SERVICE_PUBLIC: ${{ vars.SERVICE_PUBLIC }}
           SERVICE_BRANCH: ${{ github.ref_name }}
         run: |
           set -uo pipefail

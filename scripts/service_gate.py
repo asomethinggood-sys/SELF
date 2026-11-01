@@ -10,7 +10,9 @@ So each service runs on loopback and this gate is the only thing the tunnel
 points at:
 
 * **Bearer token**, derived per run (``havoc/services/service_token.py``), never
-  stored in the repository. Wrong or missing → ``401`` with a sentence.
+  stored in the repository; a wrong or missing one → ``401`` with a sentence.
+  With `SERVICE_PUBLIC=1` there is no token at all, by the owner's request — the
+  rate limit and the body cap stay, because they protect the runner.
 * **``/healthz``** with no auth, so the bot can ask "are you there" without
   spending a token or a slot.
 * **A per-minute request cap** and an **8 MB body cap**, so a mistake in the bot
@@ -47,8 +49,10 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from havoc.services.service_token import (  # noqa: E402  (path set up above)
+    is_public,
     matches,
     parse_authorization,
+    secret_for,
     token_for,
 )
 
@@ -77,9 +81,14 @@ class GateState:
         upstream: str,
         rate: int = DEFAULT_RATE,
         timeout: float = DEFAULT_TIMEOUT,
+        public: bool = False,
     ) -> None:
         self.name = name
         self.secret = secret
+        #: No token at all. The owner asked for a public service; the gate still
+        #: rate-limits and still caps the body, because those protect the *runner*
+        #: from a runaway loop rather than the endpoint from strangers.
+        self.public = public
         self.run_id = run_id
         self.started_at = started_at
         self.upstream = upstream.rstrip("/")
@@ -95,6 +104,8 @@ class GateState:
 
     @property
     def token(self) -> str:
+        if self.public:
+            return ""
         return token_for(self.name, self.run_id, self.started_at, self.secret)
 
     def allow(self) -> bool:
@@ -112,6 +123,10 @@ class GateState:
 
     def check(self, header: str | None) -> bool:
         """Does this request carry the token for *this* run?"""
+        if self.public:
+            with self.lock:
+                self.authorised += 1
+            return True
         offered = parse_authorization(header)
         ok = matches(self.token, offered)
         with self.lock:
@@ -268,16 +283,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     name = (os.environ.get("SERVICE_NAME") or "").strip()
-    secret = (os.environ.get("SERVICE_SECRET") or "").strip()
+    public = is_public()
+    secret = "" if public else secret_for()
     run_id = (os.environ.get("SERVICE_RUN_ID") or "local").strip()
     started_at = (os.environ.get("SERVICE_STARTED_AT") or "local").strip()
     if not name:
         print("service_gate: SERVICE_NAME is not set", file=sys.stderr)
-        return 2
-    if not secret:
-        # Refusing to start is the safe failure: an unauthenticated gate on a
-        # public tunnel is exactly what this file exists to prevent.
-        print("service_gate: SERVICE_SECRET is not set — refusing to expose an open proxy", file=sys.stderr)
         return 2
     upstream = args.upstream
     if not upstream.startswith("http"):
@@ -291,13 +302,24 @@ def main(argv: list[str] | None = None) -> int:
         upstream=upstream,
         rate=args.rate,
         timeout=args.timeout,
+        public=public,
     )
     server = serve(state, port=args.port, host=args.host)
+    how = "PUBLIC, no token" if public else f"token for run {run_id}"
     print(
         f"service_gate: {name} on {args.host}:{args.port} -> {upstream} "
-        f"(rate {state.rate}/min, body cap {MAX_BODY // 1024 // 1024} MB, run {run_id})",
+        f"(rate {state.rate}/min, body cap {MAX_BODY // 1024 // 1024} MB, {how})",
         flush=True,
     )
+    if not public and not (os.environ.get("SERVICE_SECRET") or "").strip():
+        # Loud, because it is a deliberate trade: nothing has to be configured,
+        # and anyone who reads the repository can compute the token.
+        print(
+            "service_gate: SERVICE_SHARED_SECRET is not set — using the committed default "
+            "(keeps scanners out, not readers of this repository; set the secret, or "
+            "SERVICE_PUBLIC=1 for a genuinely open service)",
+            flush=True,
+        )
     try:
         server.serve_forever(poll_interval=0.5)
     except KeyboardInterrupt:

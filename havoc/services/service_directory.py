@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .service_token import SERVICES, token_for
+from .service_token import SERVICES, is_public, secret_for, token_for
 
 #: How long a resolved answer is reused. See the module docstring for why 60.
 CACHE_SECONDS = 60.0
@@ -162,7 +162,11 @@ class ServiceDirectory:
         return cls(
             root=root or Path(__file__).resolve().parent.parent.parent,
             branch=(os.environ.get("SERVICE_BRANCH") or os.environ.get("GITHUB_REF_NAME") or "").strip(),
-            secret=(os.environ.get("SERVICE_SHARED_SECRET") or "").strip(),
+            # Same fallback as the gate: the committed default when nothing is
+            # configured, and nothing at all when the owner asked for a public
+            # service. Without this the bot computed HMAC(…, "") and every
+            # published address read as "the gate will refuse me".
+            secret=secret_for(),
             logger=logger,
         )
 
@@ -354,9 +358,14 @@ class ServiceDirectory:
                 note="its published address is past its six hours; the next run has not started",
             )
 
-        gated = bool(run_id and started_at)
-        token = token_for(name, run_id, started_at, self.secret) if gated else ""
-        if gated and not token:
+        # `gated` comes from the published file when it says so; otherwise a file
+        # with a run id predates the field and was gated. A public service says
+        # `"gated": false` and gets no header.
+        announced = body.get("gated")
+        gated = bool(run_id and started_at) if announced is None else bool(announced)
+        public = bool(body.get("public")) or is_public()
+        token = token_for(name, run_id, started_at, self.secret) if (gated and not public) else ""
+        if gated and not public and not token:
             # A gate exists but we have no secret to open it with. Saying so here
             # is far better than a 401 from inside a feature that cannot explain
             # it.
@@ -367,7 +376,7 @@ class ServiceDirectory:
                 run_id=run_id,
                 started_at=started_at,
                 age=age,
-                note="the route is published but SERVICE_SHARED_SECRET is not set, so the gate will refuse me",
+                note="the route is published but there is no secret to open its gate with",
             )
         return Endpoint(
             name=name,
@@ -380,7 +389,7 @@ class ServiceDirectory:
             version=str(body.get("version") or ""),
             published_at=published_at,
             age=age,
-            gated=gated,
+            gated=gated and not public,
             token=token,
         )
 

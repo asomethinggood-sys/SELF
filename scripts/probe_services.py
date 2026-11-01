@@ -41,6 +41,7 @@ import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from datetime import UTC
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -506,12 +507,22 @@ async def probe_gate(searx_url: str, verbose: bool) -> None:
             record("gate · the token is derived, not read", len(directory.resolve("search").token) == 64,
                    str(len(directory.resolve("search").token)))
 
+            # A unique word per run: the search cache answers a repeated query
+            # without touching the upstream, and then "did the query arrive?"
+            # is a coin toss. The stub echoes the words it was asked for, so the
+            # nonce riding back proves the whole path.
+            nonce = "z" + uuid.uuid4().hex[:8]
             here = len(SearxngStub.seen)
-            answer = texts(await say(runtime, ".web a transformer, briefly"))
+            answer = texts(await say(runtime, f".web a transformer {nonce}"))
             if verbose:
                 print(answer)
-            record("gate · .web answers through the gate", "transform" in answer.lower() or "attention" in answer.lower(), answer[:200])
-            record("gate · the query reached the upstream instance", len(SearxngStub.seen) > here, str(SearxngStub.seen[-1:]))
+            record("gate · .web answers through the gate", nonce in answer.lower(), answer[:200])
+            arrived = [entry.get("q", [""])[0] for entry in SearxngStub.seen[here:]]
+            record(
+                "gate · the query reached the upstream instance",
+                any(nonce in query for query in arrived),
+                str(arrived[-1:] or SearxngStub.seen[-1:]),
+            )
 
             # 4. A checkout with the wrong secret is "the gate refused me", not a crash.
             wrong_dir = ServiceDirectory(override={"search": published}, secret="not-the-secret", branch="")

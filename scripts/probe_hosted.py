@@ -47,6 +47,8 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
 RESULTS: list[tuple[str, bool, str]] = []
+#: The command cooldown, taken from the feature so the probe and the bot agree.
+DRAW_COOLDOWN = 60.0
 SECRET = "hosted-probe-secret"
 RUN_ID = "481516"
 
@@ -210,14 +212,21 @@ def serve(handler: type[BaseHTTPRequestHandler]) -> tuple[ThreadingHTTPServer, i
     return server, server.server_address[1]
 
 
-def start_gate(name: str, upstream_port: int, gate_port: int, secret: str = SECRET) -> subprocess.Popen:
+def start_gate(
+    name: str, upstream_port: int, gate_port: int, secret: str | None = SECRET, public: bool = False
+) -> subprocess.Popen:
     env = dict(
         os.environ,
         SERVICE_NAME=name,
-        SERVICE_SECRET=secret,
         SERVICE_RUN_ID=RUN_ID,
         SERVICE_STARTED_AT="2026-11-01T00:00:00Z",
     )
+    env.pop("SERVICE_SECRET", None)
+    env.pop("SERVICE_PUBLIC", None)
+    if secret is not None:
+        env["SERVICE_SECRET"] = secret
+    if public:
+        env["SERVICE_PUBLIC"] = "1"
     process = subprocess.Popen(
         [sys.executable, str(ROOT / "scripts" / "service_gate.py"),
          "--port", str(gate_port), "--upstream", f"127.0.0.1:{upstream_port}"],
@@ -256,6 +265,10 @@ def publish(name: str, gate_port: int, model: str = "") -> None:
 
 async def build_runtime():
     from conftest import FakeTelegram, make_config
+
+    from havoc.features.art import DRAW_COOLDOWN as cooldown
+
+    globals()["DRAW_COOLDOWN"] = cooldown
 
     from havoc.runtime import Runtime
 
@@ -388,6 +401,56 @@ async def main() -> int:
             # .services agrees with all of it.
             card = texts(await say(runtime, ".services"))
             record("services · the card shows search and ollama up", "up" in card.lower(), card[:300])
+
+            # ------------------------------------------------ no secret at all
+            # The point of this turn: nothing configured, and it still works.
+            # Both sides fall back to the committed default, so the token is
+            # computed rather than communicated.
+            for key in ("SERVICE_SECRET",):
+                os.environ.pop(key, None)
+            os.environ.pop("SERVICE_PUBLIC", None)
+            gates["search"].terminate()
+            gates["search"].wait(timeout=10)
+            gates["search"] = start_gate("search", searx_port, 9101, secret=None)
+            publish("search", 9101)
+            runtime.services = _directory()
+            runtime.web_search.directory = runtime.services
+            runtime.web_search.url = ""
+            record(
+                "no-secret · the bot still derives a token",
+                len(runtime.services.resolve("search").token) == 64,
+                str(len(runtime.services.resolve("search").token)),
+            )
+            unauth = _get("http://127.0.0.1:9101/search?q=x")
+            record("no-secret · the gate still refuses a request with no token", unauth[0] == 401, str(unauth[0]))
+            plain = texts(await say(runtime, ".web a transformer"))
+            if args.verbose:
+                print(plain)
+            record("no-secret · .web answers with nothing configured", "survey" in plain.lower() or "attention" in plain.lower(), plain[:200])
+
+            # ------------------------------------------------------ fully public
+            # SERVICE_PUBLIC=1: no token at all. The bot must not send a header
+            # and the gate must not ask for one.
+            os.environ["SERVICE_PUBLIC"] = "1"
+            gates["comfy"].terminate()
+            gates["comfy"].wait(timeout=10)
+            gates["comfy"] = start_gate("comfy", comfy_port, 9102, secret=None, public=True)
+            publish("comfy", 9102, model="sd-turbo.safetensors")
+            runtime.services = _directory()
+            runtime.image_gen.directory = runtime.services
+            runtime.image_gen.url = ""
+            endpoint = runtime.services.resolve("comfy")
+            record("public · the published file says public", endpoint.gated is False, str(endpoint.snapshot()))
+            record("public · the bot sends no Authorization header", endpoint.headers() == {}, str(endpoint.headers()))
+            code, _body = _get("http://127.0.0.1:9102/system_stats")
+            record("public · the gate answers without a token", code == 200, str(code))
+            # The command's cooldown is real; wait it out rather than bypass it.
+            await asyncio.sleep(DRAW_COOLDOWN + 1.0)
+            os.environ["HAVOC_DRAW_DIR"] = tempfile.mkdtemp()
+            sent = await say(runtime, ".imagegen a public castle")
+            paths = files(sent)
+            record("public · .imagegen still draws", bool(paths), texts(sent)[:160])
+            os.environ.pop("SERVICE_PUBLIC", None)
         finally:
             await runtime.db.close()
     except Exception:  # noqa: BLE001 - a crash is the finding
@@ -411,6 +474,23 @@ async def main() -> int:
     for label, _ok, detail in failures:
         print(f"  failed: {label} — {detail}")
     return 1 if failures else 0
+
+
+def _directory():
+    """A directory reading the real `.services` files, with whatever env is set."""
+    from havoc.services.service_directory import ServiceDirectory
+
+    return ServiceDirectory.from_env(root=ROOT)
+
+
+def _get(url: str) -> tuple[int, bytes]:
+    try:
+        with urllib.request.urlopen(url, timeout=10) as response:
+            return response.status, response.read()
+    except urllib.error.HTTPError as error:
+        return error.code, error.read()
+    except (urllib.error.URLError, OSError) as error:
+        return 0, str(error).encode()
 
 
 def _steps(graph: dict) -> int | None:

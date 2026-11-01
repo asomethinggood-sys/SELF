@@ -36,6 +36,7 @@ import os
 import re
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -46,6 +47,15 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from havoc.services.service_token import (  # noqa: E402 - path set up above
+    is_public,
+    secret_for,
+    token_for,
+)
+
 SERVICES_DIR = ROOT / ".services"
 
 #: Ports chosen once and never moved: `.services/<name>.json` publishes them and
@@ -96,6 +106,12 @@ def _run(command: list[str], *, env: dict[str, str] | None = None, cwd: Path | N
     except FileNotFoundError:
         log(f"not installed: {command[0]}")
         return 127
+
+
+def _port_taken(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.settimeout(0.5)
+        return probe.connect_ex(("127.0.0.1", port)) == 0
 
 
 def _spawn(command: list[str], *, log_path: Path, env: dict[str, str] | None = None, cwd: Path | None = None) -> subprocess.Popen:
@@ -401,8 +417,23 @@ def open_tunnel(gate_port: int, workdir: Path) -> Tunnel | None:
 # ---------------------------------------------------------------------------
 # Publishing
 # ---------------------------------------------------------------------------
-def payload_for(service: str, *, url: str, run_id: str, started_at: str, gate_port: int, model: str, version: str) -> dict[str, Any]:
-    """Exactly what goes into ``.services/<name>.json``. Nothing secret."""
+def payload_for(
+    service: str,
+    *,
+    url: str,
+    run_id: str,
+    started_at: str,
+    gate_port: int,
+    model: str,
+    version: str,
+) -> dict[str, Any]:
+    """Exactly what goes into ``.services/<name>.json``. Nothing secret.
+
+    ``gated`` says whether a caller needs the token for this run, and ``public``
+    whether the owner asked for a service without one at all. The bot reads both:
+    a header on a public service is harmless, but a *missing* header on a gated one
+    is a 401 that reads like a bug.
+    """
     started = datetime.fromisoformat(started_at.replace("Z", "+00:00")) if started_at else datetime.now(UTC)
     expires = started + timedelta(hours=6)
     return {
@@ -416,6 +447,8 @@ def payload_for(service: str, *, url: str, run_id: str, started_at: str, gate_po
         "model": model,
         "version": version,
         "published_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "gated": not is_public(),
+        "public": is_public(),
     }
 
 
@@ -436,6 +469,13 @@ def commit(message: str, *paths: str, attempts: int = 3) -> bool:
     branch = os.environ.get("GITHUB_REF_NAME") or "arena/b9a136e7-self"
     if not os.environ.get("GITHUB_TOKEN") and os.environ.get("HOST_DRY_RUN") != "1":
         log("no GITHUB_TOKEN: publishing locally only")
+        return False
+    if not os.environ.get("GITHUB_ACTIONS") and os.environ.get("SERVICE_LOCAL_PUSH") != "1":
+        # A local run must not push to the branch the bot is serving from: the
+        # address it would commit is 127.0.0.1, and the bot would then believe
+        # a service is up and knock on its own loopback. Twice that happened
+        # before this guard existed.
+        log("not in CI: writing the address locally, not committing it")
         return False
     _run(["git", "config", "user.name", "Yura service host"])
     _run(["git", "config", "user.email", "services@users.noreply.github.com"])
@@ -473,11 +513,13 @@ class Host:
         no_tunnel: bool = False,
         tunnel_url: str = "",
         self_test_only: bool = False,
+        no_self_test: bool = False,
     ) -> None:
         self.service = service
         self.deadline = deadline
         self.no_tunnel = no_tunnel or self_test_only
         self.self_test_only = self_test_only
+        self.no_self_test = no_self_test
         self.forced_url = tunnel_url
         self.run_id = (os.environ.get("GITHUB_RUN_ID") or "local").strip()
         self.started_at = (os.environ.get("SERVICE_STARTED_AT") or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")).strip()
@@ -502,7 +544,20 @@ class Host:
         return _http(f"http://127.0.0.1:{self.upstream_port}{HEALTH[self.service]}", timeout=10.0)[0] == 200
 
     def gate_healthy(self) -> bool:
-        return _http(f"http://127.0.0.1:{self.gate_port}/healthz", timeout=5.0)[0] == 200
+        """Is *our* gate answering on the port — not somebody's leftovers?
+
+        A stale gate from a killed run answers `/healthz` too, and then proxies
+        to an upstream that died with it: every request 502s while the host
+        happily reports "gate is up". So the run id has to match as well.
+        """
+        status, payload = _http(f"http://127.0.0.1:{self.gate_port}/healthz", timeout=5.0)
+        if status != 200:
+            return False
+        try:
+            body = json.loads(payload.decode("utf-8", "replace") or "{}")
+        except ValueError:
+            return False
+        return str(body.get("run_id", "")) == self.run_id
 
     def public_healthy(self) -> bool:
         if not self.published_url:
@@ -535,11 +590,19 @@ class Host:
             SERVICE_STARTED_AT=self.started_at,
             SERVICE_GATE_PORT=str(self.gate_port),
         )
-        if not env.get("SERVICE_SECRET"):
-            log("SERVICE_SECRET is unset: the gate would be an open proxy, so there is no gate")
-            self._gate_reason = "SERVICE_SECRET was not in the environment"
-            return False
+        # No secret is not a failure any more: `service_token.secret_for` falls
+        # back to the committed default (so nothing has to be configured), and
+        # `SERVICE_PUBLIC=1` means no token at all.
+        secret = secret_for()
+        env["SERVICE_SECRET"] = secret
         self._gate_reason = ""
+        if _port_taken(self.gate_port):
+            # Binding after the check is not atomic, but it turns the common
+            # case — a previous run's gate still holding the port — into a
+            # sentence instead of a mystery 502 twenty minutes later.
+            log(f"port {self.gate_port} already has something listening on it")
+            self._gate_reason = f"port {self.gate_port} is already in use"
+            return False
         self.gate = _spawn(
             [sys.executable, str(ROOT / "scripts" / "service_gate.py"),
              "--port", str(self.gate_port),
@@ -633,13 +696,25 @@ class Host:
             )
             self.stop()
             return 1
+        # Prove it before publishing it. This is a real picture, a real search
+        # and a real completion, through the gate, on this runner — so the run's
+        # committed transcript says "it works" rather than "it started". It costs
+        # a minute; a service that publishes without ever having answered is worth
+        # less than a minute.
+        if not self.no_self_test:
+            log("self-test before going public (a real request through the gate)")
+            if self.self_test() != 0:
+                log("the self-test failed; not publishing an address for something that does not answer")
+                self.stop()
+                return 1
         if self.self_test_only:
-            log("self-test mode: nothing will be published and no tunnel will be opened")
-            code = self.self_test()
+            log("--self-test: nothing will be published and no tunnel will be opened")
             self.stop()
-            return code
+            return 0
         url = self.start_tunnel()
         self.publish(url)
+        if url and self.published_url:
+            self._confirm_public(url)
 
         checked_upstream = checked_public = time.monotonic()
         while time.monotonic() < self.deadline:
@@ -685,7 +760,7 @@ class Host:
         return 0
 
     # -- evidence -----------------------------------------------------
-    def report(self, text: str) -> None:
+    def report(self, text: str, *, append: bool = False) -> None:
         """Write what happened to a file in the repo, and commit it from CI.
 
         GitHub's job logs are not readable from this sandbox (`gh run view --log`
@@ -715,8 +790,7 @@ class Host:
         with a real token. The transcript lands in the job log, so "it installed"
         and "it answered" are different lines.
         """
-        secret = (os.environ.get("SERVICE_SECRET") or "").strip()
-        from havoc.services.service_token import token_for
+        secret = secret_for()
 
         token = token_for(self.service, self.run_id, self.started_at, secret)
         base = f"http://127.0.0.1:{self.gate_port}"
@@ -872,6 +946,41 @@ class Host:
             return None
         return path.read_bytes()
 
+    def _confirm_public(self, url: str) -> None:
+        """Ask the tunnel itself, from the outside, and put the answer in the report.
+
+        `public_healthy()` goes out to the tunnel hostname and back into the gate,
+        so a pass means the address really works from the internet — not that a
+        process is listening on loopback. That line is the difference between
+        "published" and "reachable", and it is the one worth reading later.
+        """
+        deadline = time.monotonic() + 90.0
+        while time.monotonic() < deadline:
+            if self.public_healthy():
+                body = "\n".join(
+                    [
+                        "",
+                        f"public: {url}",
+                        "reachable from the internet: yes — GET /healthz through the tunnel answered 200",
+                        f"the bot needs no configuration: it reads .services/{self.service}.json",
+                    ]
+                )
+                log(f"public and answering: {url}")
+                self.report(body, append=True)
+                return
+            time.sleep(5.0)
+        log(f"{url} did not answer /healthz publicly within 90s (it may have just rotated)")
+        self.report(
+            "\n".join(
+                [
+                    "",
+                    f"public: {url}",
+                    "reachable from the internet: no — /healthz through the tunnel did not answer within 90s",
+                ]
+            ),
+            append=True,
+        )
+
     # -- teardown -----------------------------------------------------
     def stop_upstream_only(self) -> None:
         if self.upstream is not None and self.upstream.poll() is None:
@@ -916,6 +1025,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="start everything on loopback, prove it through the gate, publish nothing",
     )
+    parser.add_argument(
+        "--no-self-test",
+        action="store_true",
+        help="publish without proving the service first (not recommended)",
+    )
     args = parser.parse_args(argv)
 
     def _stop(signum: int, _frame: Any) -> None:
@@ -930,6 +1044,7 @@ def main(argv: list[str] | None = None) -> int:
         deadline=time.monotonic() + args.deadline_minutes * 60,
         no_tunnel=args.no_tunnel,
         self_test_only=args.self_test,
+        no_self_test=args.no_self_test,
         tunnel_url=args.tunnel_url,
     )
     try:
