@@ -123,7 +123,7 @@ async def run(args: argparse.Namespace) -> int:
     # The router's fallback, with no credentials at all: the whole point.
     from havoc.services.ai_router import AIRouter
 
-    router = AIRouter()
+    router = AIRouter([])
     router.local = model
     try:
         reply = await router.converse([Turn("user", "say hello, briefly")], max_tokens=60)
