@@ -27,6 +27,7 @@ import asyncio
 import os
 import shutil
 import subprocess
+import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -62,6 +63,10 @@ class LocalModel:
     failures: int = 0
     last_error: str = ""
     _process: Any = field(default=None, repr=False)
+    #: The server's own words, kept because "exited while loading" is not a
+    #: diagnosis. A llama-server that dies on a missing shared library or an
+    #: unknown flag says so on stderr, and that line is the whole fix.
+    _log: Any = field(default=None, repr=False)
     _ready: bool = False
     _checked_at: float = 0.0
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
@@ -127,10 +132,15 @@ class LocalModel:
             ]
             command.extend(self.flags.split())
             try:
+                # A file, not a pipe: an unread pipe fills and deadlocks the
+                # server mid-load, which would look exactly like a hang.
+                self._log = tempfile.NamedTemporaryFile(  # noqa: SIM115 - closed in stop()
+                    prefix="havoc-llama-", suffix=".log", delete=False
+                )
                 self._process = subprocess.Popen(  # noqa: S603 - our own binary, our own args
                     command,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
+                    stdout=self._log,
+                    stderr=subprocess.STDOUT,
                 )
             except Exception as exc:  # noqa: BLE001 - a missing server is not fatal
                 self.last_error = f"could not start the local model: {exc}"
@@ -139,7 +149,8 @@ class LocalModel:
             deadline = time.monotonic() + START_TIMEOUT
             while time.monotonic() < deadline:
                 if self._process.poll() is not None:
-                    self.last_error = "the local model exited while loading"
+                    self.last_error = f"the local model exited while loading: {self._tail()}"
+                    self._close_log()
                     self._process = None
                     return False
                 if await self._healthy():
@@ -154,9 +165,31 @@ class LocalModel:
             await self.stop()
             return False
 
+    def _tail(self, lines: int = 4) -> str:
+        """The last few lines the server wrote, or a plain 'no output'."""
+        path = getattr(self._log, "name", "")
+        if not path:
+            return "no output"
+        try:
+            with open(path, encoding="utf-8", errors="replace") as handle:
+                body = handle.read()
+        except OSError:
+            return "no output"
+        kept = [line.strip() for line in body.strip().splitlines() if line.strip()][-lines:]
+        return " · ".join(kept)[:400] or "no output"
+
+    def _close_log(self) -> None:
+        handle, self._log = self._log, None
+        if handle is not None:
+            try:
+                handle.close()
+            except Exception:  # noqa: BLE001 - teardown never raises
+                pass
+
     async def stop(self) -> None:
         process, self._process = self._process, None
         self._ready = False
+        self._close_log()
         if process is None:
             return
         try:

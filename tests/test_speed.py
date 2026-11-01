@@ -253,3 +253,30 @@ def test_no_local_model_means_no_change() -> None:
     model = LocalModel(base_url="")
     assert model.configured is False
     assert model.available is False
+
+
+async def test_a_local_server_that_dies_says_why(tmp_path) -> None:
+    """'exited while loading' is not a diagnosis; the server's own words are.
+
+    The first runner run reported exactly that sentence and nothing else, and
+    the fix was three commits away in a log nobody could open. A llama-server
+    that dies on a missing shared library or an unknown flag writes the reason
+    on stderr, so that line is what ``last_error`` has to carry.
+    """
+    from havoc.services.local_model import LocalModel
+
+    binary = tmp_path / "llama-server"
+    binary.write_text(
+        "#!/bin/sh\n"
+        "echo 'error while loading shared libraries: libllama.so.0: cannot open shared object file' >&2\n"
+        "exit 127\n"
+    )
+    binary.chmod(0o755)
+    weights = tmp_path / "w.gguf"
+    weights.write_bytes(b"not really a model")
+
+    model = LocalModel(base_url="http://127.0.0.1:9/v1", binary=str(binary), weights=str(weights))
+    assert await model.start() is False
+    assert "libllama.so.0" in model.last_error
+    assert model.available is False
+    await model.stop()
