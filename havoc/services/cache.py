@@ -150,6 +150,11 @@ class RateCounter:
         self._events.append(self._clock())
         return True
 
+    def used(self) -> int:
+        """How many slots are in use in the current window."""
+        self._trim()
+        return len(self._events)
+
     def retry_after(self) -> float:
         self._trim()
         if len(self._events) < self.limit:

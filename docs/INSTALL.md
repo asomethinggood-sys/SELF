@@ -326,3 +326,131 @@ default 700).
 If neither is available, `.yura speak` says what is missing instead of half-working.
 `.yura say <text>` is always a conversation: a word does not change meaning depending
 on which package happens to be installed.
+
+## Optional: a search engine of his own (`.web`)
+
+`.web <query>` asks the open internet. It talks to a **SearXNG** instance —
+metasearch, no account, no key, no per-query bill — and never to a search API
+that wants one. `.search` is a different command: it searches *your own chats*
+and needs no network at all.
+
+```bash
+# Docker, the short way
+docker run -d --name searxng -p 8080:8080 \
+  -v "$PWD/searxng:/etc/searxng" searxng/searxng
+
+# or from source
+git clone https://github.com/searxng/searxng && cd searxng
+python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
+# in searxng/settings.yml, under `search:`, set:  formats: [html, json]
+python -m searx.webapp           # listens on 8888 by default
+```
+
+Then, in the environment the bot runs in:
+
+```bash
+SEARXNG_URL=http://127.0.0.1:8080        # or 8888 for the source install
+SEARXNG_ENGINES=duckduckgo,brave          # optional, comma-separated
+SEARXNG_TIMEOUT=20                        # optional, seconds
+```
+
+**The `json` format has to be enabled** in the instance's `settings.yml`
+(`search: formats: [html, json]`). Without it SearXNG answers `403` to the JSON
+request, and `.web` says exactly that rather than "no results". That single line
+is the whole setup mistake people hit.
+
+`.web info` shows the endpoint in use; `.web a question` returns a card with the
+titles, the links and a line of each snippet. Everything is escaped, so a page
+whose title contains `<b>` cannot break the message.
+
+## Optional: pictures on his own GPU (`.draw`)
+
+`.draw a lighthouse in fog, pen and ink` runs a text-to-image graph on a
+**ComfyUI** server he runs and sends the PNG back as a photo. No key, no
+per-image bill. A CPU-only box will take minutes; a modest GPU takes seconds.
+
+```bash
+git clone https://github.com/comfyanonymous/ComfyUI && cd ComfyUI
+python -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+# put a checkpoint in models/checkpoints, e.g. sd-v1-5 or sdxl
+python main.py --listen 127.0.0.1 --port 8188
+```
+
+```bash
+COMFY_URL=http://127.0.0.1:8188
+COMFY_CKPT=v1-5-pruned-emaonly.safetensors   # must match a file in models/checkpoints
+COMFY_WIDTH=512 COMFY_HEIGHT=512 COMFY_STEPS=20
+COMFY_WORKFLOW=~/my-workflow.json             # optional, see below
+COMFY_TIMEOUT=180
+```
+
+With only `COMFY_URL` set, a small built-in graph is used (checkpoint, 20 steps,
+512×512) — enough to prove the path. For anything serious, export a workflow
+from the ComfyUI UI (**Save (API format)**), put `__PROMPT__` where the words go
+(and optionally `__NEGATIVE__`), and point `COMFY_WORKFLOW` at the file. Your
+model, sampler and resolution are then exactly what you set up, and the bot only
+fills in the text.
+
+`.draw info` shows the server, the workflow in use, the checkpoint and the last
+error. `--seed 1234` reproduces a picture; finished files are swept after six
+hours so a runner's disk does not fill.
+
+## Optional: a brain on this machine (no key at all)
+
+When every key has refused — a spent daily allowance, a rate limit, an offline
+network — the router asks a model running *here* instead of going silent. On a
+clone with no keys at all, that model is the engine rather than the spare.
+
+```bash
+# 1. the server (one binary, no Python build)
+curl -LO https://github.com/ggml-org/llama.cpp/releases/download/b12032/llama-b12032-bin-ubuntu-x64.tar.gz
+tar xzf llama-b12032-bin-ubuntu-x64.tar.gz
+./build/bin/llama-server --version
+
+# 2. the weights (any GGUF works; this one is 400 MB and answers in seconds)
+curl -LO https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf
+
+# 3. let the bot start it itself
+export LOCAL_MODEL_BIN="$PWD/llama-server"
+export LOCAL_MODEL_GGUF="$PWD/qwen2.5-0.5b-instruct-q4_k_m.gguf"
+export LOCAL_MODEL_NAME=qwen2.5-0.5b
+```
+
+Or point it at a server you already run — Ollama, LM Studio, vLLM, anything
+OpenAI-compatible — and it starts nothing:
+
+```bash
+export LOCAL_MODEL_URL=http://127.0.0.1:8080/v1     # llama-server default
+export LOCAL_MODEL_URL=http://127.0.0.1:11434/v1    # Ollama
+```
+
+`LOCAL_MODEL_TIMEOUT` (seconds, default 60) and `LOCAL_MODEL_FLAGS` (extra
+`llama-server` arguments, e.g. `--ctx-size 4096 --threads 4`) are the other two
+knobs. `.ai models` shows it, `.diagnose` reports whether it answered last time,
+and `.local-model.json` in the repository is the report the dedicated workflow
+commits every six hours.
+
+The `Local model` workflow is separate from the bot's on purpose: it downloads
+weights, starts a server and asks it three questions, then kills it — work that
+would delay every deploy if it sat in front of a login. Verify a local setup
+without starting the bot at all:
+
+```bash
+python scripts/local_model_check.py --binary ./llama-server --model ./q.gguf
+```
+
+**On GitHub's runners** the CPU is shared and there is no persistent process
+between runs, so the workflow above is a *check*, not a server the bot can talk
+to. The bot itself only gets a local model if `LOCAL_MODEL_URL` points at
+something it can reach — a machine of yours, a tunnel, or a container beside it.
+
+## Optional: what the runtime workflow installs
+
+`auth-and-run.yml` installs `.[media,voice,download]`, keeps `ffmpeg` present and
+refreshes `yt-dlp` on every deploy (site extractors change weekly). It also reads
+four repository *variables* through to the bot, so a self-hosted setup needs no
+code change: `SEARXNG_URL`, `COMFY_URL`, `LOCAL_MODEL_URL`, `LOCAL_MODEL_NAME`
+(plus `SEARXNG_ENGINES`, `COMFY_CKPT`, `COMFY_WORKFLOW` when you use them). Each
+is empty by default, and every command that wants one says what is missing in a
+single sentence.

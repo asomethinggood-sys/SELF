@@ -9,7 +9,7 @@ account other than the logged-in user.
 `.` in the usage column stands for the active prefix (default `.`).
 
 
-Total: **147 commands**.
+Total: **149 commands**.
 
 
 ## Account
@@ -138,6 +138,7 @@ Total: **147 commands**.
 | `.time` | Show the current time in cities or timezones _(owner only)._ | `.time [city...]` | `.clock-time`, `.زمان` |
 | `.transform` | Preview a text transformation _(owner only)._ | `.transform <upper|lower|title|reverse|sort|dedupe|wrap|quote|trim>` | `.تبدیل` |
 | `.translate` | Translate text with the configured provider _(owner only)._ | `.translate [lang] [text]` | `.tr`, `.ترجمه` |
+| `.web` | Search the open web through a SearXNG instance you run — separate from .search, which searches your own chats _(owner only)._ | `.web ‹query› [--limit n] | info` | `.google`, `.internet` |
 
 ## Management
 
@@ -162,6 +163,7 @@ Total: **147 commands**.
 | Command | Description | Usage | Aliases |
 | --- | --- | --- | --- |
 | `.download` | Fetch the video behind a YouTube, TikTok or Instagram link: thumbnail, title, quality picked by number _(owner only; changes state)._ | `.download ‹link› | ‹number› | info` | `.dl`, `.grab`, `.vid` |
+| `.draw` | Draw a picture on the ComfyUI/Stable Diffusion server you run and send it back _(owner only; changes state)._ | `.draw ‹prompt› [--seed n] | info` | `.paint`, `.imagine` |
 | `.geo` | Send a location point _(owner only; changes state)._ | `.geo ‹lat›, ‹lon›` | — |
 | `.pic` | Send a picture or file (path or URL); several files become an album _(owner only; changes state)._ | `.pic ‹path|url› [...] [--caption text] [--to chat] [--silent]` | `.image`, `.file`, `.sendfile`, `.عکس`, `.تصویر` |
 | `.poll` | Post a real poll in this chat _(owner only; changes state)._ | `.poll ‹question› | ‹option› | ‹option›` | — |

@@ -294,9 +294,27 @@ async def cmd_tasks(ctx: CommandContext) -> None:
         items = await scheduler.pending(limit=30)
         tz = tz_for(ctx)
         header = ui.title("▦", ctx.t("tasks.header", count=len(items)))
-        if not items:
+        # Long work first: a bulk send is the only thing here that is *happening
+        # right now*, and "how much is left" is the question someone asks the
+        # moment they start one.
+        runner = getattr(ctx.runtime, "jobs", None)
+        running = runner.snapshot() if runner is not None else []
+        running_rows = []
+        for row in running:
+            eta = row.get("eta")
+            tail = f" · {int(eta) // 60}m{int(eta) % 60:02d}s" if eta else ""
+            running_rows.append(
+                f"{ui.code('#' + str(row['id']))} {ui.bold(escape(str(row['kind'])))} "
+                f"{ui.meter(int(row.get('percent', 0)), 100)} {row.get('percent', 0)}%"
+                + f"\n  {escape(ctx.t('tasks.running_line', done=row.get('done', 0), total=row.get('total', 0), rate=row.get('rate', 0)))}{escape(tail)}"
+            )
+        if not items and not running_rows:
             await ctx.reply("\n\n".join([header, ui.note(ctx.t("tasks.empty"))]))
             return
+        if running_rows:
+            header = "\n\n".join(
+                [header, ui.panel(running_rows), ui.note(ctx.t("tasks.running_hint", prefix=ctx.runtime.prefix))]
+            )
         rows_out: list[str] = []
         for item in items:
             when = parse_iso(item["when"])
@@ -312,14 +330,21 @@ async def cmd_tasks(ctx: CommandContext) -> None:
 
     if action in {"cancel", "rm", "delete"}:
         target = _int(ctx.arg(0))
+        # A running job stops at its next message; anything else is a row to
+        # mark cancelled. Both are "cancel <id>", because remembering which
+        # table an id lives in is not the owner's job.
+        runner = getattr(ctx.runtime, "jobs", None)
+        if runner is not None and runner.cancel(target):
+            await ctx.reply_ok(ctx.t("tasks.cancelling", id=target))
+            return
         kind = ctx.arg(1).lower() or "reminder"
         if kind.startswith("sched"):
             ok = await ctx.store.cancel_schedule(target)
         elif kind.startswith("job"):
-            changed = await ctx.store.db.execute(
-                "UPDATE jobs SET status = 'cancelled' WHERE id = ? AND status = 'pending'", (target,)
-            )
-            ok = changed > 0
+            # The runner owns that table: a pending row cancelled here and a
+            # running task cancelled above are the same decision, and doing the
+            # SQL here would let the two drift apart.
+            ok = await runner.cancel_stored(target) if runner is not None else False
         else:
             ok = await ctx.store.cancel_reminder(target)
         if not ok:

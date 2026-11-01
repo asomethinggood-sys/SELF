@@ -127,6 +127,10 @@ VALUE_FLAGS: frozenset[str] = frozenset(
         "at", "delete_after", "ttl", "until", "from", "count", "each", "gap",
         # ``.poll q | a | b --quiz --correct 2`` names an answer by number.
         "correct",
+        # ``.draw a cat --seed 1234``: a seed is a number. As a boolean flag the
+        # number fell back into the prompt ("a cat 1234") and the seed became the
+        # string "true", so every "same picture again" drew a different one.
+        "seed",
         # A rule's lifespan: ``.policy ignore sara --for 2h``. Without this the
         # word "for" became a boolean and the lifespan landed in the name.
         "for",

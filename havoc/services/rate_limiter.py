@@ -23,6 +23,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from .cache import CooldownTracker, RateCounter
+from .pacer import Lane, Pacer, lane_now
 
 
 class RateLimited(Exception):
@@ -44,10 +45,22 @@ class RateLimiter:
     _flood_until: float = 0.0
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     counters: dict[str, int] = field(default_factory=dict)
+    #: Ordering, not ceiling: two lanes so a bulk job cannot make a reply wait.
+    pacer: Pacer | None = None
 
     def __post_init__(self) -> None:
         if self._outbound is None:
             self._outbound = RateCounter(self.outbound_limit, self.outbound_window, self.clock)
+        if self.pacer is None:
+            self.pacer = Pacer(
+                per_minute=self.outbound_limit,
+                clock=self.clock,
+                counter=self._outbound,
+            )
+        else:
+            # One budget, two doors: whatever built the pacer, the limiter's
+            # window and the pacer's window are the same counter.
+            self.pacer.counter = self._outbound
 
     # ------------------------------------------------------------------
     # Cooldowns
@@ -68,8 +81,28 @@ class RateLimiter:
     # Outbound window
     # ------------------------------------------------------------------
 
-    async def acquire_outbound(self, timeout: float = 30.0) -> None:
-        """Wait for a slot in the outbound window (bounded wait)."""
+    async def acquire_outbound(self, timeout: float = 30.0, *, lane: Lane | str | None = None) -> None:
+        """Wait for a slot in the outbound window (bounded wait).
+
+        With a pacer installed the wait is *ordered*: an interactive send jumps
+        ahead of a bulk one, so the person in the chat never waits behind a
+        thousand-message job. The ceiling is unchanged — the same window still
+        says no at the same number.
+        """
+        if self.pacer is not None:
+            try:
+                await self.pacer.acquire(lane if lane is not None else lane_now(), timeout=timeout)
+                return
+            except TimeoutError as exc:
+                # Waiting is over, but the caller still needs to know *how long*
+                # to come back after. The old path reported the window's real
+                # remaining time here; reporting 0 made every caller that waited
+                # a full timeout give up permanently (`retry_after` falsy reads as
+                # "not retryable" in the sender), which turned a busy minute into
+                # a lost message. Ask the counter, keep a floor of one second so a
+                # pure ordering timeout still comes back.
+                hint = self._outbound.retry_after() if self._outbound is not None else 0.0
+                raise RateLimited(max(hint, 1.0), scope="outbound") from exc
         assert self._outbound is not None
         # The wait bounds itself with the *real* clock: the window arithmetic
         # uses ``self.clock`` (which tests may freeze), so measuring the timeout
@@ -100,6 +133,7 @@ class RateLimiter:
             "floodwait_remaining": round(self.flood_remaining(), 1),
             "outbound_remaining": self._outbound.remaining() if self._outbound else 0,
             "outbound_limit": self.outbound_limit,
+            "pacer": self.pacer.snapshot() if self.pacer is not None else {},
         }
 
 

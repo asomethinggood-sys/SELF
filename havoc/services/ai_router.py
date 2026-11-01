@@ -191,6 +191,10 @@ class AIRouter:
         self.last_error = ""
         self.last_attempts: list[Attempt] = []
         self._loaded = False
+        #: The spare tyre: a model on this machine, used only when every key has
+        #: said no. It has no quota and no rate limit, so a spent daily allowance
+        #: stops meaning "she goes quiet until midnight".
+        self.local: Any = None
 
     # ------------------------------------------------------------------
     # Construction
@@ -339,7 +343,9 @@ class AIRouter:
 
     @property
     def available(self) -> bool:
-        """True when at least one credential could answer right now."""
+        """True when at least one credential — or the model on this machine — could answer."""
+        if self.local is not None and getattr(self.local, "configured", False):
+            return True
         if not self.credentials:
             return False
         now = utc_now()
@@ -423,6 +429,16 @@ class AIRouter:
     ) -> str:
         """Try credentials in order until one answers. Raises the last AIError."""
         if not self.credentials:
+            # A machine with a local model and no keys is not "not configured" —
+            # it is a machine whose provider is on the same disk. Asking it here,
+            # before the disabled error, is the difference between a bot that
+            # answers and a bot that tells its owner to go and buy a key.
+            local = await self._ask_local(messages, max_tokens=max_tokens, temperature=temperature)
+            if local is not None:
+                self.requests += 1
+                self.last_attempts = [Attempt("local", self.active_model, True)]
+                self.last_error = ""
+                return local
             raise AIError("AI provider is not configured", kind="disabled")
         self.requests += 1
         attempts: list[Attempt] = []
@@ -462,10 +478,46 @@ class AIRouter:
             if len(attempts) > 1:
                 self.logger.info("ai: answered by %s after %d attempt(s)", credential.label, len(attempts))
             return reply
+        local = await self._ask_local(messages, max_tokens=max_tokens, temperature=temperature)
+        if local is not None:
+            attempts.append(Attempt("local", self.active_model, True))
+            self.last_attempts = attempts
+            self.last_error = ""
+            return local
         self.failures += 1
         self.last_attempts = attempts
         self.last_error = f"{last.kind}: {last}" if last else "no usable credential"
         raise last or AIError("every credential is spent or disabled", kind="rate_limited")
+
+    async def _ask_local(
+        self, messages: Any, *, max_tokens: int, temperature: float
+    ) -> str | None:
+        """The local model, when the keys have nothing left to give.
+
+        Deliberately second: a 1-3B model on a CPU runner writes a slower, blunter
+        sentence than Gemma, and the owner should get the good one whenever it is
+        available. It is not a replacement — it is what makes "rate limited" stop
+        meaning "silent until midnight".
+        """
+        local = self.local
+        if local is None or not getattr(local, "available", False):
+            return None
+        # A picture needs vision, which this path does not have.
+        if any(getattr(message, "has_image", False) for message in messages):
+            return None
+        try:
+            reply = await local.converse(
+                messages, max_tokens=max_tokens, temperature=temperature
+            )
+        except Exception as exc:  # noqa: BLE001 - a broken spare is still a spare
+            self.logger.info("ai: the local model did not answer: %s", exc)
+            return None
+        if not reply:
+            return None
+        self.active_model = getattr(local, "active_model", "local")
+        self.active_label = "local"
+        self.logger.info("ai: answered by the local model")
+        return reply
 
     async def converse_tools(
         self,
@@ -600,6 +652,7 @@ class AIRouter:
                 for credential in self.credentials
                 if not self.health_of(credential).disabled and not self.health_of(credential).cooling(now)
             ),
+            "local": self.local.describe() if self.local is not None else None,
         }
 
     def status(self) -> list[dict[str, Any]]:

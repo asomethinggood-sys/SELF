@@ -66,10 +66,20 @@ class Scheduler:
     _running: bool = False
     _job_handlers: dict[str, Handler] = field(default_factory=dict)
     _inflight: set[asyncio.Task[Any]] = field(default_factory=set)
+    #: Kinds that take minutes instead of milliseconds (a thousand-message send).
+    #: They are handed to :class:`havoc.services.jobs.JobRunner` instead of being
+    #: awaited here, because a tick that waits a minute is a tick that fires
+    #: reminders late — the profile clock stopping is exactly that symptom.
+    job_runner: Any = None
+    deferred_kinds: set[str] = field(default_factory=set)
 
     # ------------------------------------------------------------------
     # Registration
     # ------------------------------------------------------------------
+    def defer(self, kind: str) -> None:
+        """Run ``kind`` in the background when a runner is available."""
+        self.deferred_kinds.add(kind)
+
     def register_job(self, kind: str, handler: Handler) -> None:
         """Register a handler for ``kind``.
 
@@ -241,7 +251,7 @@ class Scheduler:
         """
         self.stats.ticks += 1
         now = utc_now()
-        fired = {"reminders": 0, "schedules": 0, "jobs": 0, "errors": 0, "skipped": 0}
+        fired = {"reminders": 0, "schedules": 0, "jobs": 0, "errors": 0, "skipped": 0, "deferred": 0}
 
         if await self.store.emergency_stop():
             self.stats.skipped += 1
@@ -262,7 +272,23 @@ class Scheduler:
             if self.stats.failures > before:
                 fired["errors"] += 1
 
+        # Jobs that take minutes are *started* here and run elsewhere. The tick
+        # used to await them one by one, which is how a mass send put the clock
+        # to sleep for minutes at a time.
+        deferred: list[Any] = []
         for row in await self._due_jobs(now):
+            kind = str(row["kind"])
+            if self.job_runner is not None and kind in self.deferred_kinds:
+                defer_fn = getattr(self.job_runner, "start", None)
+                if defer_fn is not None and await defer_fn(row):
+                    fired["jobs"] += 1
+                    fired["deferred"] = fired.get("deferred", 0) + 1
+                    continue
+                if self.job_runner.busy():
+                    # No room yet: leave it pending for the next tick instead of
+                    # queueing it behind something that is already running.
+                    deferred.append(row["id"])
+                    continue
             before = self.stats.failures
             if await self._fire_job(row):
                 fired["jobs"] += 1

@@ -835,6 +835,15 @@ def register(runtime: Any) -> None:
     runtime.scheduler.register_job("reach_unsend", runtime.reach.unsend)
     runtime.scheduler.register_job("plan_step", _plan_step)
 
+    # A big repeat is not a tick: it is a background job with a cursor. The
+    # scheduler starts it and moves on, so reminders, the clock and replies keep
+    # being served while a thousand messages go out.
+    runner = getattr(runtime, "jobs", None)
+    if runner is not None:
+        runner.register("reach_bulk", runtime.reach.send_bulk)
+        runtime.scheduler.defer("reach_bulk")
+
+
     runtime.registry.register(
         Command(
             "send",

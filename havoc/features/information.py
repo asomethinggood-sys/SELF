@@ -16,6 +16,7 @@ from typing import Any
 
 from .. import ui
 from ..command_registry import Command, CommandContext, CommandError
+from ..services.websearch import SearchError
 from ..utils.formatting import bold, code, escape, key_value_block, pre
 from ..utils.parsing import paginate
 from ..utils.security import ensure_within, safe_filename
@@ -574,6 +575,98 @@ async def cmd_labels(ctx: CommandContext) -> None:
     raise CommandError("errors.invalid_choice", field="action", choices="list, add, remove")
 
 
+async def cmd_web(ctx: CommandContext) -> None:
+    """``.web <query>`` — the open web, through the engine he runs himself.
+
+    Separate from ``.search`` on purpose: that one searches *his* Telegram
+    history and needs no network at all. This one is the internet, and it says
+    plainly when there is no engine configured instead of answering with an
+    empty card that looks like "no results exist".
+
+    One message per trigger: the lookup is expected to be fast and the answer is
+    the card. A "looking it up" placeholder that has to be edited is two API
+    calls for a search that usually takes a second.
+    """
+    service = getattr(ctx.runtime, "web_search", None)
+    action = (ctx.sub or "").lower()
+    # `args` already excludes the subcommand and the `--flags`.
+    query = " ".join(ctx.args).strip()
+    if action in {"info", "status", "help"}:
+        await ctx.reply(_web_info(ctx, service))
+        return
+    if not query:
+        raise CommandError("errors.missing_argument", usage=ctx.usage_text())
+    if service is None or not getattr(service, "available", False):
+        await ctx.reply(_web_info(ctx, service))
+        return
+    try:
+        limit = max(1, min(int(ctx.flag("limit") or 5), 10))
+    except ValueError:
+        limit = 5
+    try:
+        results = await service.search(query, limit=limit)
+    except SearchError as exc:
+        await ctx.reply(_web_error(ctx, exc))
+        return
+    await ctx.reply(_web_card(ctx, query, results))
+
+
+def _web_info(ctx: CommandContext, service: Any) -> str:
+    if service is None or not getattr(service, "available", False):
+        return "\n\n".join(
+            [
+                ui.title("◎", ctx.t("web.title")),
+                ui.note(ctx.t("web.not_configured")),
+                ui.footer(ctx.t("web.setup_hint", prefix=ctx.runtime.prefix)),
+            ]
+        )
+    rows = [
+        ctx.t("web.row_engine", url=escape(str(service.url))),
+        ctx.t("web.row_requests", count=getattr(service, "requests", 0)),
+    ]
+    engines = getattr(service, "engines", ())
+    if engines:
+        rows.append(ctx.t("web.row_engines", names=escape(", ".join(engines))))
+    return "\n\n".join(
+        [ui.title("◎", ctx.t("web.title")), ui.panel(rows), ui.footer(ctx.t("web.usage_hint", prefix=ctx.runtime.prefix))]
+    )
+
+
+def _web_card(ctx: CommandContext, query: str, results: list[Any]) -> str:
+    if not results:
+        return "\n\n".join(
+            [
+                ui.title("◎", ctx.t("web.title_for", query=escape(truncate(query, 60)))),
+                ui.note(ctx.t("web.no_results")),
+            ]
+        )
+    lines = []
+    for index, row in enumerate(results, start=1):
+        title = escape(truncate(row.title, 90))
+        link = escape(row.url)
+        line = f"{ui.code(str(index))} {ui.bold(title)}\n  {link}"
+        if row.snippet:
+            line += f"\n  {ui.note(escape(truncate(row.snippet, 160)))}"
+        lines.append(line)
+    return "\n\n".join(
+        [
+            ui.title("◎", ctx.t("web.title_for", query=escape(truncate(query, 60)))),
+            ui.panel(lines),
+            ui.footer(ctx.t("web.footer", count=len(results))),
+        ]
+    )
+
+
+def _web_error(ctx: CommandContext, exc: SearchError) -> str:
+    return "\n\n".join(
+        [
+            ui.title("◎", ctx.t("web.title")),
+            ui.note(escape(str(exc))),
+            ui.footer(ctx.t("web.usage_hint", prefix=ctx.runtime.prefix)),
+        ]
+    )
+
+
 def _int_arg(ctx: CommandContext, index: int) -> int:
     try:
         return int(ctx.arg(index))
@@ -585,6 +678,17 @@ def register(runtime: Any) -> None:
     runtime.registry.register_many(
         [
             Command("search", cmd_search, category="information", usage="<query> [--chat id] [--limit n]"),
+            # The internet, kept apart from `.search` (which searches his own
+            # history and never leaves the machine). An alias would blur two very
+            # different answers to "search".
+            Command(
+                "web",
+                cmd_web,
+                category="information",
+                aliases=("google", "internet"),
+                usage="<query> [--limit n] | info",
+                subcommands=("info", "status", "help"),
+            ),
             Command("chats", cmd_chats, category="information", usage="[query]"),
             # Owner-only: a card with ids, links and a phone number is not
             # something a member of a group gets to ask of another member

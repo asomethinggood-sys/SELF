@@ -31,6 +31,7 @@ from typing import Any
 
 from ..utils.security import redact_text
 from ..utils.time import TimeParseError, iso, parse_when, utc_now
+from .jobs import JobError
 
 #: How a target was understood. ``saved`` is Saved Messages, i.e. his own chat.
 KINDS = ("saved", "user", "group", "channel", "unknown")
@@ -43,6 +44,9 @@ MAX_REPEAT = 500
 
 #: The gap between repeated lines when he did not name one.
 MIN_GAP = 1.2
+#: Above this many repeats a send becomes a background job with a cursor instead
+#: of N scheduler rows. Ten is a nudge; a hundred is work.
+BULK_THRESHOLD = 12
 
 
 class ReachError(Exception):
@@ -89,6 +93,8 @@ class SendReport:
     duplicate: bool = False
     #: The rest of a repeat: on the clock, not on the wire yet.
     queued: int = 0
+    #: The background job id when the repeat was big enough to become one.
+    bulk_job: int = 0
 
     @property
     def summary(self) -> str:
@@ -378,11 +384,36 @@ class Reach:
             report.scheduled_for = iso(when)
             return report
 
-        # A repeat is a first send and the rest on the clock, so a restart does
-        # not lose the tail and no loop sleeps inside a reply. With no interval
-        # asked for, a small gap keeps ten of them from arriving as one flood.
+        # A repeat is a first send now and the rest somewhere else. Two shapes,
+        # because ten is a nudge and a thousand is a job:
+        #
+        # * small repeats go on the clock (one row each), so the same code path
+        #   that fires reminders fires these, and a restart loses nothing;
+        # * a bulk repeat becomes ONE job row with a cursor. A thousand scheduler
+        #   rows meant a thousand claims, a thousand writes and a tick that
+        #   waited for all of them — the mass send that starved everything else.
         gaps = max(float(every or 0.0), MIN_GAP if repeat > 1 else 0.0)
-        if repeat > 1:
+        if repeat > BULK_THRESHOLD:
+            queued = await self.runtime.scheduler.enqueue(
+                "reach_bulk",
+                utc_now(),
+                {
+                    "chat_id": target.id,
+                    "text": body,
+                    "silent": bool(silent),
+                    "reply_to": reply_to,
+                    "delete_after": delete_after,
+                    "plan_id": plan_id,
+                    "every": gaps,
+                    "total": repeat - 1,
+                    "sent": 0,
+                    "cursor": 0,
+                },
+                max_attempts=5,
+            )
+            report.bulk_job = int(queued)
+            report.queued = repeat - 1
+        elif repeat > 1:
             for index in range(1, repeat):
                 when = utc_now() + timedelta(seconds=gaps * index)
                 await self.runtime.scheduler.enqueue(
@@ -499,6 +530,81 @@ class Reach:
         )
         if not report.ok:
             self.runtime.logger.warning("scheduled send failed: %s", report.error)
+
+    async def send_bulk(self, context: Any) -> None:
+        """The bulk half of a repeat: one job, one cursor, honest progress.
+
+        Runs inside the background runner, so the pacer puts a person's reply in
+        front of it and the scheduler keeps ticking. Progress is written back
+        every few sends; a process that dies mid-job resumes from the cursor
+        instead of starting a thousand messages over.
+        """
+        payload = context.payload
+        progress = context.progress
+        total = int(payload.get("total") or 0)
+        if total <= 0:
+            return
+        progress.total = total
+        chat_id = int(payload.get("chat_id") or 0)
+        target = await self.resolve(str(chat_id)) or Target(id=chat_id, kind="user")
+        body = str(payload.get("text") or "")
+        every = float(payload.get("every") or 0.0)
+        interval = max(every, MIN_GAP)
+        while progress.done < total:
+            if context.stopped():
+                progress.note = "cancelled"
+                await context.checkpoint(force=True)
+                return
+            started = time.monotonic()
+            result = await self._send_once(
+                target,
+                body,
+                silent=bool(payload.get("silent")),
+                reply_to=payload.get("reply_to"),
+                dry_run=None,
+            )
+            if result.get("ok"):
+                context.advance()
+            else:
+                context.fail()
+                # A refused send is not retried forever: three in a row means
+                # the chat is gone, and the job says so instead of grinding.
+                if progress.failed >= 3 and progress.done == progress.failed:
+                    raise JobError(str(result.get("error") or "the sends are failing"))
+            await context.checkpoint()
+            if payload.get("delete_after") and result.get("message_id"):
+                when = utc_now() + timedelta(seconds=float(payload["delete_after"]))
+                await self.runtime.scheduler.enqueue(
+                    "reach_unsend",
+                    when,
+                    {
+                        "chat_id": target.id,
+                        "message_id": result["message_id"],
+                        "outbox_id": result.get("outbox_id"),
+                    },
+                )
+            # Pace by budget: sleep only what is left of the gap the send did not
+            # already take. A send that took 800ms of a 1.2s gap waits 400ms.
+            spent = time.monotonic() - started
+            await asyncio.sleep(max(0.0, interval - spent))
+        progress.note = "done"
+        await context.checkpoint(force=True)
+        await self._announce_bulk(chat_id, progress)
+
+    async def _announce_bulk(self, chat_id: int, progress: Any) -> None:
+        """One line at the end, in the chat the job was started from."""
+        try:
+            language = await self.runtime.resolve_language("", chat_id=chat_id, sender_id=self.self_id)
+            text = self.runtime.t(
+                "reach.bulk_done",
+                language,
+                sent=progress.done - progress.failed,
+                failed=f" · {progress.failed} failed" if progress.failed else "",
+                minutes=max(1, int(progress.elapsed // 60)),
+            )
+            await self.sender.send(chat_id, text)
+        except Exception as exc:  # noqa: BLE001 - a missing summary is not a lost job
+            self.runtime.logger.debug("bulk summary not sent: %s", exc)
 
     async def unsend(self, row: Any) -> None:
         """The scheduler's job: delete a message that was told to self-destruct."""

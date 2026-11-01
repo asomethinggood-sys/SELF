@@ -12,6 +12,7 @@ plugins → Telegram client → handlers.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from dataclasses import dataclass, field
@@ -32,13 +33,18 @@ from .scheduler import Scheduler
 from .services.ai_provider import AIProvider
 from .services.ai_router import AIRouter
 from .services.fight_loop import FightLoop
+from .services.imagegen import ImageGenerator
+from .services.jobs import JobRunner
+from .services.lag import LoopLagMonitor
 from .services.lessons import LessonBook
+from .services.local_model import LocalModel
 from .services.memory import MemoryStore
 from .services.people import PersonBook
 from .services.rate_limiter import RateLimiter
 from .services.sender import Sender
 from .services.storage import Store
 from .services.translation_provider import build_translation_provider
+from .services.websearch import WebSearch
 from .services.yura_chat import YuraChat
 from .utils.security import redact_text
 from .utils.time import utc_now
@@ -73,6 +79,16 @@ class Runtime:
     sender: Sender
     telegram: Any = None
     client: Any = None
+    #: Long work that outlives the reply that started it (bulk sends).
+    jobs: Any = None
+    #: How late the event loop wakes up — the honest answer to "why is it slow".
+    lag: Any = None
+    #: A model served on this machine (llama.cpp behind /v1), or ``None``.
+    local_model: Any = None
+    #: SearXNG, when one is configured (``.web``).
+    web_search: Any = None
+    #: ComfyUI, when one is configured (``.draw``).
+    image_gen: Any = None
     memory: MemoryStore = None  # type: ignore[assignment] - set in create()
     people: PersonBook = None  # type: ignore[assignment] - set in create()
     sent_ledger: Any = None
@@ -117,6 +133,14 @@ class Runtime:
         # asked `runtime.ai` for a sentence keeps working without knowing about
         # the second key.
         ai: Any = await AIRouter.load(config, store, logger)
+        # The spare tyre: a model on this machine, if one is configured. It is
+        # only *asked* when every key has said no — see `AIRouter._ask_local` —
+        # so a spent daily allowance stops meaning "silent until midnight". With
+        # no keys at all it is not a spare, it is the engine; the router stays in
+        # place either way, because `.ai`, `.key` and `.models` all speak router.
+        local_model = LocalModel.from_env(logger=logger)
+        if local_model is not None and isinstance(ai, AIRouter):
+            ai.local = local_model
         if not ai.available:
             # A plain single-provider setup still works, and so does a lone key
             # pasted into the chat (`.yura key …`), which lives in the database.
@@ -130,6 +154,9 @@ class Runtime:
                     timeout=config.ai_timeout,
                     enabled=True,
                 )
+            if not ai.available and local_model is not None and local_model.configured:
+                # No rotation to sit behind: the local model *is* the provider.
+                ai = local_model
         # Translation speaks through the same engine she does (Gemma 31B by
         # default), so `.translate` works on a clone with keys but no
         # translation provider configured.
@@ -169,6 +196,14 @@ class Runtime:
             on_error=_scheduler_error,
             missed_policy=config.missed_job_policy,
         )
+        # Long work (a bulk send) runs here instead of inside a tick, so the
+        # scheduler keeps firing reminders and the pacer keeps a reply ahead of
+        # the queue. Two at a time: any more and they halve each other's pace.
+        jobs = JobRunner(store=store, logger=logger, scheduler=scheduler)
+        scheduler.job_runner = jobs
+        # How late the event loop wakes up. The number that says whether "slow"
+        # is the loop, the budget or the network.
+        lag = LoopLagMonitor()
 
         runtime = cls(
             config=config,
@@ -183,6 +218,8 @@ class Runtime:
             dispatcher=None,  # type: ignore[arg-type] - installed right below
             event_engine=event_engine,
             scheduler=scheduler,
+            jobs=jobs,
+            lag=lag,
             health=health,
             metrics=health.metrics,
             ai=ai,
@@ -191,6 +228,12 @@ class Runtime:
             stats={"commands_ok": 0, "commands_failed": 0, "events": 0},
         )
         runtime.dispatcher = Dispatcher(runtime)
+        runtime.local_model = local_model
+        # Services that are optional by nature: a search engine he runs, and a
+        # picture generator he runs. Both say "not configured" in one sentence
+        # rather than failing a command.
+        runtime.web_search = WebSearch.from_env()
+        runtime.image_gen = ImageGenerator.from_env(logger=logger)
         runtime.memory = MemoryStore(db)
         # What this account sent as the bot, so a reply to her answer can be told
         # apart from a reply to the owner's own message.
@@ -394,12 +437,26 @@ class Runtime:
         # calling it at boot is what made `havoc run` die with an AttributeError
         # one second after login.
         await self.scheduler.start()
+        self.lag.start(self.logger)
+        # The local model is started in the background: loading a GGUF takes ten
+        # seconds and nothing should wait for it. Until it answers, `available`
+        # is false and the keys carry every turn.
+        if self.local_model is not None:
+            asyncio.create_task(self._start_local_model(), name="havoc-local-model")
         if self.plugin_loader is not None:
             records = await self.plugin_loader.load_all()
             failed = [record for record in records if not record.loaded]
             if failed:
                 self.logger.warning("%s plugin(s) failed to load", len(failed))
         await self.event_engine.emit(now_event(EventType.STARTUP, extra={"version": VERSION}))
+
+    async def _start_local_model(self) -> None:
+        try:
+            ready = await self.local_model.start()
+            if not ready:
+                self.logger.info("local model unavailable: %s", self.local_model.last_error)
+        except Exception as exc:  # noqa: BLE001 - a spare tyre must not stop the car
+            self.logger.info("local model could not start: %s", exc)
 
     async def shutdown(self) -> None:
         self.logger.info("shutting down")
@@ -412,6 +469,19 @@ class Runtime:
                 await self.fight_loop.stop_all()
             except Exception as exc:  # noqa: BLE001
                 self.logger.debug("error stopping fight loops: %s", exc)
+        try:
+            if self.local_model is not None:
+                await self.local_model.stop()
+        except Exception as exc:  # noqa: BLE001
+            self.logger.debug("local model stop failed: %s", exc)
+        try:
+            await self.lag.stop()
+        except Exception as exc:  # noqa: BLE001 - teardown must not raise
+            self.logger.debug("lag monitor stop failed: %s", exc)
+        try:
+            await self.jobs.shutdown()
+        except Exception as exc:  # noqa: BLE001
+            self.logger.debug("job runner shutdown failed: %s", exc)
         await self.scheduler.stop()
         if self.telegram is not None:
             try:

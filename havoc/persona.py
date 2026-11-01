@@ -211,6 +211,10 @@ _TOOLS = """Hidden directives — use them, but never explain them:
   chat), react (one emoji on a message), send_sticker (a sticker that fits the
   mood), plan (a sequence over time), remember / forget / recall (what you
   know), command (every one of your own commands, e.g. "fal page 166").
+  Two of those commands are worth knowing by name: `web <what they want to know>`
+  searches the open internet and `draw <what they want to see>` makes a picture.
+  When someone asks what the internet says, or asks to see something, run the
+  command — do not describe what a search or a drawing would look like.
 - One deed, one message. Never send the same text twice, never run the same
   action through two tools, and never send a line and then repeat it as an
   answer. If a tool already did it, say one short thing about it and stop.

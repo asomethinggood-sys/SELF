@@ -1,0 +1,260 @@
+name: Local model
+
+# A model that lives on the runner, not behind an API key.
+#
+# Why it exists: every other way Yura thinks needs a key, a quota and a network.
+# When the allowance is spent she goes quiet until midnight, and a clone with no
+# keys at all never answers. A GGUF on disk removes all three — the router asks
+# it *after* every key has refused (see `AIRouter._ask_local`), and with no keys
+# at all it is the engine rather than the spare.
+#
+# Why its own workflow: downloading a model, starting a server and asking it
+# three questions takes minutes and would delay every deploy if it lived inside
+# `auth-and-run.yml`. It also has nothing to do with logging in.
+#
+# How it stays on a six-hour rhythm: schedules only fire for workflows on the
+# *default* branch, and this branch is not it. So the running bot's workflow —
+# which is awake anyway — asks `scripts/local_model_schedule.py` once per run
+# whether the last check in `.local-model.json` is more than `--every-hours` old,
+# and dispatches this one if it is. The report this workflow commits is the
+# clock, so a cancelled run simply means the next one is due.
+#
+# What it proves, in order:
+#   1. a llama.cpp server starts from a real binary and a real .gguf;
+#   2. `LocalModel.start()` notices it inside its own timeout;
+#   3. it answers three questions through the same `converse()` the chat uses;
+#   4. `AIRouter` with **zero credentials** still gets an answer, labelled local.
+#
+# The weights and the binary are cached between runs (a 400 MB download sixty
+# times a day would be rude and slow), and the server is killed at the end even
+# when a step failed — a runner that keeps a model resident is a runner that
+# times out.
+
+on:
+  # The real clock for anyone whose default branch is this one.
+  schedule:
+    - cron: "0 */6 * * *"
+  push:
+    paths:
+      - ".github/workflows/local-model.yml"
+      - "scripts/local_model_check.py"
+      - "scripts/local_model_schedule.py"
+      - "havoc/services/local_model.py"
+      - "havoc/services/ai_router.py"
+  workflow_dispatch:
+    inputs:
+      model_url:
+        description: "GGUF to fetch (default: Qwen2.5-0.5B-Instruct Q4_K_M)"
+        required: false
+        type: string
+      llama_tag:
+        description: "llama.cpp release tag (default: b12032, a known-good build)"
+        required: false
+        default: "b12032"
+      skip_download:
+        description: "Only check a local endpoint (LOCAL_MODEL_URL), fetch nothing"
+        required: false
+        default: "false"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: havoc-local-model
+  cancel-in-progress: false
+
+env:
+  # Where the binary and the weights live between runs. Everything else about
+  # the model arrives as a dispatch input and is resolved inside each step, so a
+  # missing input can never expand to an empty string somewhere quiet.
+  KIT_DIR: ${{ github.workspace }}/.runtime/local-model
+
+jobs:
+  model:
+    name: serve and ask
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: python -m pip install -e ".[dev]"
+
+      - name: Restore the binary and the weights
+        id: kit
+        uses: actions/cache@v4
+        with:
+          path: .runtime/local-model
+          # Keyed by both knobs: changing the model must not silently reuse the
+          # old weights, and changing the build must not reuse the old server.
+          key: local-model-${{ inputs.llama_tag || 'b12032' }}-${{ hashFiles('.github/workflows/local-model.yml') }}-${{ inputs.model_url || 'default' }}
+          restore-keys: |
+            local-model-${{ inputs.llama_tag || 'b12032' }}-
+
+      - name: Report what was restored
+        shell: bash
+        env:
+          IN_TAG: ${{ inputs.llama_tag }}
+          IN_MODEL: ${{ inputs.model_url }}
+        run: |
+          set -uo pipefail
+          LLAMA_TAG="${IN_TAG:-b12032}"
+          MODEL_URL="${IN_MODEL:-https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf}"
+          echo "cache hit: ${{ steps.kit.outputs.cache-hit }}"
+          find .runtime/local-model -maxdepth 3 -name "llama-server" -o -maxdepth 3 -name "*.gguf" 2>/dev/null | sed 's/^/  /' || true
+          {
+            echo "### Local model kit"
+            echo ""
+            echo "cache: \\`${{ steps.kit.outputs.cache-hit || 'miss' }}\\`"
+            echo "llama.cpp: \\`${LLAMA_TAG}\\`"
+            echo "weights: \\`${MODEL_URL##*/}\\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fetch llama.cpp
+        # A failed download is not a failed job: the next step reports exactly
+        # what is missing, in words, and the report is what the owner reads.
+        continue-on-error: true
+        if: inputs.skip_download != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IN_TAG: ${{ inputs.llama_tag }}
+        run: |
+          set -uo pipefail
+          LLAMA_TAG="${IN_TAG:-b12032}"
+          mkdir -p "$KIT_DIR"
+          if [ -x "$KIT_DIR/llama-server" ]; then
+            echo "already have llama-server"; exit 0
+          fi
+          url="https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_TAG}/llama-${LLAMA_TAG}-bin-ubuntu-x64.tar.gz"
+          echo "::notice::fetching $url"
+          if ! curl -fsSL --retry 3 --max-time 900 -o "$KIT_DIR/llama.tar.gz" "$url"; then
+            echo "::warning::could not fetch the llama.cpp build $LLAMA_TAG"
+            exit 0
+          fi
+          tar xzf "$KIT_DIR/llama.tar.gz" -C "$KIT_DIR"
+          rm -f "$KIT_DIR/llama.tar.gz"
+          # The archive unpacks into a build directory; flatten it so the path
+          # does not change with every tag.
+          find "$KIT_DIR" -name llama-server -type f -exec cp {} "$KIT_DIR/llama-server" \; || true
+          chmod +x "$KIT_DIR/llama-server" 2>/dev/null || true
+          # The shared libraries ship beside the binaries, and the server looks
+          # for them next to itself.
+          find "$KIT_DIR" -name "libllama*.so*" -o -name "libggml*.so*" -exec cp {} "$KIT_DIR/" \; 2>/dev/null || true
+          LD_LIBRARY_PATH="$KIT_DIR" "$KIT_DIR/llama-server" --version || echo "::warning::the binary does not run"
+
+      - name: Fetch the weights
+        continue-on-error: true
+        if: inputs.skip_download != 'true'
+        shell: bash
+        env:
+          IN_MODEL: ${{ inputs.model_url }}
+        run: |
+          set -uo pipefail
+          MODEL_URL="${IN_MODEL:-https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf}"
+          mkdir -p "$KIT_DIR"
+          gguf="$KIT_DIR/$(basename "${MODEL_URL%%\?*}")"
+          if [ -s "$gguf" ]; then
+            echo "already have $(basename "$gguf")"; exit 0
+          fi
+          echo "::notice::fetching ${MODEL_URL##*/}"
+          if ! curl -fL --retry 3 --max-time 1800 -o "$gguf.part" "$MODEL_URL"; then
+            echo "::warning::could not fetch the weights"
+            rm -f "$gguf.part"
+            exit 0
+          fi
+          mv "$gguf.part" "$gguf"
+          ls -lh "$gguf"
+
+      - name: Serve it and ask it things
+        id: ask
+        shell: bash
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/.runtime/local-model
+          IN_MODEL: ${{ inputs.model_url }}
+        run: |
+          set -uo pipefail
+          MODEL_URL="${IN_MODEL:-https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf}"
+          bin="$KIT_DIR/llama-server"
+          gguf=$(ls "$KIT_DIR"/*.gguf 2>/dev/null | head -1 || true)
+          json_out="$KIT_DIR/local-model.json"
+          args=(--json "$json_out" --name "${MODEL_URL##*/}" --timeout 180)
+          if [ "${{ inputs.skip_download }}" = "true" ] || [ ! -x "$bin" ] || [ -z "$gguf" ]; then
+            # Nothing to launch: check the endpoint the owner configured instead,
+            # and say so rather than pretending the runner made a model.
+            echo "::notice::no binary or no weights on this runner; checking \$LOCAL_MODEL_URL only"
+            args+=(--url "${LOCAL_MODEL_URL:-http://127.0.0.1:8080/v1}" --binary /nonexistent --model "")
+          else
+            args+=(--binary "$bin" --model "$gguf" --url http://127.0.0.1:8080/v1)
+          fi
+          set +e
+          LD_LIBRARY_PATH="$KIT_DIR" python scripts/local_model_check.py "${args[@]}"
+          code=$?
+          set -e
+          echo "exit=$code" >> "$GITHUB_OUTPUT"
+          # The report is published even when the check failed: a failure with
+          # the reason in it is worth more than a red cross.
+          python - <<'PY'
+          import datetime, json, pathlib
+          src = pathlib.Path(".runtime/local-model/local-model.json")
+          data = {"at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+          try:
+              data.update(json.loads(src.read_text()))
+          except (OSError, ValueError):
+              data["checks"] = [{"name": "no report was written", "ok": False, "detail": "see the run log"}]
+          pathlib.Path(".local-model.json").write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+          ok = sum(1 for c in data.get("checks", []) if c.get("ok"))
+          print(f"::notice::local model: {ok}/{len(data.get('checks', []))} checks passed")
+          PY
+          {
+            echo "### Local model"
+            echo ""
+            echo '```'
+            python -c "import json;d=json.load(open('.local-model.json'));[print(('ok  ' if c['ok'] else 'FAIL')+' '+c['name']+(' — '+c['detail'] if not c['ok'] else '')) for c in d.get('checks',[])]" || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+
+      - name: Stop the server
+        # Without this the runner keeps the model resident and the job sits until
+        # its timeout: a killed job leaves the workflow looking broken.
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          pkill -f llama-server 2>/dev/null && echo "stopped llama-server" || echo "no server was running"
+          sleep 1
+          pgrep -af llama-server || echo "nothing left behind"
+
+      - name: Publish the report
+        # Committed so the answer to "is the local model working" is readable
+        # without the run log, which is not always reachable.
+        continue-on-error: true
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          [ -f .local-model.json ] || { echo "no report to publish"; exit 0; }
+          git config user.name "HAVOC local model"
+          git config user.email "local-model@users.noreply.github.com"
+          git add .local-model.json
+          if git diff --cached --quiet; then
+            echo "the report did not change"; exit 0
+          fi
+          git commit -qm "local model $(date -u +%Y-%m-%dT%H:%MZ) [skip ci]"
+          for _ in 1 2 3; do
+            git fetch -q origin "${GITHUB_REF_NAME}" || true
+            git rebase -q --autostash FETCH_HEAD 2>/dev/null || { git rebase --abort 2>/dev/null || true; sleep 2; continue; }
+            if git push -q origin "HEAD:refs/heads/${GITHUB_REF_NAME}"; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::warning::could not publish .local-model.json"

@@ -127,6 +127,40 @@ async def cmd_diagnose(ctx: CommandContext) -> None:
     )
     checks.append(ctx.t("doctor.queue", queues=escape(await _queue_health(ctx))))
 
+    # The three numbers that explain "it feels slow" without guessing: is the
+    # loop breathing, who is waiting at the outbound gate, and what long job is
+    # eating the budget.
+    lag = getattr(runtime, "lag", None)
+    if lag is not None and getattr(lag, "ticks", 0):
+        checks.append(ctx.t("doctor.lag", state=escape(lag.sentence(ctx.language))))
+    pacer = getattr(runtime.limiter, "pacer", None)
+    if pacer is not None:
+        depth = pacer.depth()
+        peek = pacer.snapshot()
+        checks.append(
+            ctx.t(
+                "doctor.lanes",
+                interactive=depth.get("interactive", 0),
+                bulk=depth.get("bulk", 0),
+                used=peek.get("used_in_window", 0),
+                limit=peek.get("per_minute", 0),
+            )
+        )
+    jobs = getattr(runtime, "jobs", None)
+    running = jobs.snapshot() if jobs is not None else []
+    if running:
+        row = running[0]
+        checks.append(
+            ctx.t(
+                "doctor.bulk",
+                id=row.get("id"),
+                percent=row.get("percent", 0),
+                done=row.get("done", 0),
+                total=row.get("total", 0),
+                rate=row.get("rate", 0),
+            )
+        )
+
     provider = getattr(runtime, "ai", None)
     checks.append(
         ctx.t(

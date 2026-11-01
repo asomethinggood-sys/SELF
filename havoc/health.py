@@ -181,6 +181,12 @@ class Health:
             data["event_engine"] = runtime.event_engine.snapshot()
             data["scheduler"] = runtime.scheduler.snapshot()
             data["rate_limiter"] = runtime.limiter.snapshot()
+            # What "slow" actually means, measured: how late the loop wakes up,
+            # who is waiting at the outbound gate, and what long job is running.
+            lag = getattr(runtime, "lag", None)
+            data["loop_lag"] = lag.snapshot() if lag is not None else {}
+            jobs = getattr(runtime, "jobs", None)
+            data["jobs_running"] = jobs.snapshot() if jobs is not None else []
             data["features"] = await runtime.feature_manager.refresh()
             data["ai"] = runtime.ai.describe()
             data["translation"] = runtime.translator.describe()

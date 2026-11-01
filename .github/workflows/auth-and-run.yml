@@ -114,6 +114,42 @@ jobs:
       - name: Install
         run: python -m pip install -e ".[media,voice,download]"
 
+      - name: Install the media tools
+        # `yt-dlp` arrives with the download extra above; ffmpeg is a system
+        # binary it shells out to for merging a video stream with its sound. The
+        # image has it already — this makes that a guarantee instead of a
+        # surprise, and refreshes yt-dlp, which gains site extractors weekly.
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          if command -v ffmpeg >/dev/null 2>&1; then
+            echo "ffmpeg already present: $(ffmpeg -version | head -1)"
+          else
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq ffmpeg || echo "::warning::ffmpeg could not be installed; downloads that need merging will say so"
+          fi
+          python -m pip install -q --upgrade yt-dlp || echo "::warning::could not refresh yt-dlp"
+          python -c "import yt_dlp; print('yt-dlp', yt_dlp.version.__version__)" || true
+          {
+            echo "### Media tools"
+            echo ""
+            echo "- ffmpeg: \`$(command -v ffmpeg || echo missing)\`"
+            echo "- yt-dlp: \`$(python -c 'import yt_dlp;print(yt_dlp.version.__version__)' 2>/dev/null || echo missing)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the local model warm
+        # The local model lives in its own workflow (it downloads weights and
+        # starts a server; that has no business in front of a login). Its six
+        # hours are counted from the report it commits, and this run — which is
+        # awake anyway — is the clock. A branch has no schedule of its own, so
+        # without this the spare tyre would be fitted exactly once, by hand.
+        continue-on-error: true
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/local_model_schedule.py --every-hours 5.5
+
       - name: Announce the deploy
         shell: bash
         run: |
@@ -447,6 +483,19 @@ jobs:
           # run being cancelled before its own save step.
           HAVOC_SNAPSHOT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HAVOC_SNAPSHOT_MINUTES: '5'
+          # Optional services he runs himself. All four are empty by default and
+          # the bots that use them say so in one sentence — nothing here is
+          # required for her to work.
+          #   SEARXNG_URL   `.web` — a search engine of his own
+          #   COMFY_URL     `.draw` — a picture on his own graphics card
+          #   LOCAL_MODEL_* the spare brain on this machine (`local-model.yml`)
+          SEARXNG_URL: ${{ vars.SEARXNG_URL }}
+          SEARXNG_ENGINES: ${{ vars.SEARXNG_ENGINES }}
+          COMFY_URL: ${{ vars.COMFY_URL }}
+          COMFY_WORKFLOW: ${{ vars.COMFY_WORKFLOW }}
+          COMFY_CKPT: ${{ vars.COMFY_CKPT }}
+          LOCAL_MODEL_URL: ${{ vars.LOCAL_MODEL_URL }}
+          LOCAL_MODEL_NAME: ${{ vars.LOCAL_MODEL_NAME }}
         run: |
           set -uo pipefail
           export SESSION_STRING="$(cat .auth/session.txt)"
