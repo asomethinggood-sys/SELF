@@ -177,6 +177,16 @@ class YuraChat:
         # straight to the offline bank instead of burning a request and a
         # timeout to learn the same thing again.
         self.quota_until: datetime | None = None
+        #: A short hold for a per-minute limit, when the whole rotation is
+        #: cooling down. Separate from a spent daily allowance: one clears in a
+        #: minute, the other at midnight.
+        self.hold_until: datetime | None = None
+        #: What to call it when she has to say it out loud: "limit" or "spent".
+        self.hold_reason: str = ""
+        #: The last chat that was told, and the deadline it was told about. One
+        #: explanation per cooldown is information; the same line every message is
+        #: a machine reading its error log at him.
+        self._told_hold: dict[int, datetime] = {}
         #: The rules the last answer walked over, for a caller that wants to say so.
         self.broken: tuple[str, ...] = ()
         #: Tools this turn actually used, for the receipt line under the answer.
@@ -489,8 +499,9 @@ class YuraChat:
         reply: str | None = None
         source = "model"
         did: list[str] = []
-        if self.enabled and self._quota_spent():
-            self.logger.debug("yura: daily model allowance spent, answering offline")
+        hold_until = self.model_until() if self.enabled else None
+        if self.enabled and hold_until is not None:
+            self.logger.debug("yura: model unavailable (%s), answering offline", self.hold_reason)
         elif self.enabled:
             budget = FILE_TOKENS if _wants_file(prompt) else CHAT_TOKENS
             try:
@@ -518,12 +529,24 @@ class YuraChat:
             except AIError as exc:
                 self.last_error = f"{exc.kind}: {exc}"
                 self.logger.warning("yura: provider failed (%s)", exc.kind)
-                if exc.kind == "rate_limited" and not hasattr(self.provider, "plan"):
-                    # A single-provider setup has one allowance; when it is gone,
-                    # stop asking until midnight. The rotating router spends its
-                    # own per-key counters instead and knows which keys are left,
-                    # so muting the day would be wrong there.
-                    self._spend_quota()
+                if exc.kind == "rate_limited":
+                    # Two different walls, and the message says which one. A daily
+                    # allowance is gone until midnight; a per-minute limit is a
+                    # 90-second breath. Both used to end in the same silence: she
+                    # answered a random offline line and nothing said why, which is
+                    # exactly what "yura is not working" looked like.
+                    text = str(exc).lower()
+                    if "spent" in text or "daily" in text or "per-day" in text or "quota" in text:
+                        self._spend_quota()
+                    else:
+                        held = getattr(self.provider, "retry_after", None)
+                        seconds = 90.0
+                        if callable(held):
+                            try:
+                                seconds = float(held() or seconds)
+                            except Exception:  # noqa: BLE001 - a hint, not a contract
+                                seconds = 90.0
+                        self._hold(seconds)
                 reply = None
         elif not self.enabled:
             self.last_error = "AI provider is not configured"
@@ -554,6 +577,14 @@ class YuraChat:
             source = "offline"
             self.fallbacks += 1
             reply = fallback
+            # An offline line that pretends nothing happened is why a rate limit
+            # looked like a broken bot. Say it once per cooldown, in her voice,
+            # with the time it ends — then stop saying it.
+            offline_until = self.model_until()
+            if offline_until is not None and self.enabled:
+                notice = self._limit_notice(chat_id, language, offline_until)
+                if notice:
+                    reply = f"{notice}\n\n{reply}"
 
         # There is no filter in front of her mouth: she may swear, insult and be
         # nasty, and he corrects her when it is wrong — that correction is stored
@@ -1068,7 +1099,7 @@ class YuraChat:
             return False
         return True
 
-    def _spend_quota(self) -> None:
+    def _spend_quota(self, reason: str = "spent") -> None:
         """Remember a spent allowance until the next UTC midnight.
 
         OpenRouter's free plan allows 50 model requests per day and resets at
@@ -1079,10 +1110,50 @@ class YuraChat:
         self.quota_until = (now + timedelta(days=1)).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
+        self.hold_reason = reason
         self.logger.warning(
             "yura: daily model allowance spent; offline lines until %s",
             self.quota_until.strftime("%Y-%m-%d %H:%M UTC"),
         )
+
+    def _hold(self, seconds: float) -> None:
+        """Cool off for a moment instead of asking again immediately.
+
+        A per-minute limit is not a dead key: the rotation needs a breath, and
+        asking again on the next message spends the breath and learns nothing.
+        """
+        self.hold_until = utc_now() + timedelta(seconds=max(5.0, float(seconds)))
+        self.hold_reason = "limit"
+        self.logger.warning(
+            "yura: every model is rate limited; answering offline for %ds",
+            int(max(5.0, float(seconds))),
+        )
+
+    def model_until(self) -> datetime | None:
+        """When the model is worth asking again, or ``None`` if it is available."""
+        if self._quota_spent():
+            return self.quota_until
+        if self.hold_until is not None and utc_now() < self.hold_until:
+            return self.hold_until
+        if self.hold_until is not None:
+            self.hold_until = None
+            self.hold_reason = ""
+        return None
+
+    def _limit_notice(self, chat_id: int, language: str, until: datetime) -> str:
+        """One sentence, once per cooldown, about why she is answering offline."""
+        told = self._told_hold.get(chat_id)
+        if told is not None and told == until:
+            return ""
+        self._told_hold[chat_id] = until
+        try:
+            stamp = until.strftime("%H:%M")
+            if self.quota_until is not None and until == self.quota_until:
+                return str(self.runtime.t("ai.spent_line", language, when=stamp))
+            minutes = max(1, round((until - utc_now()).total_seconds() / 60))
+            return str(self.runtime.t("ai.limit_line", language, minutes=minutes))
+        except Exception:  # pragma: no cover - a stripped runtime has no locales
+            return f"⟡ out of allowance until {until.strftime('%H:%M')}"
 
     # ------------------------------------------------------------------
     # Variety and the loop guard

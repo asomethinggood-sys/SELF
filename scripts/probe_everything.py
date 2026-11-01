@@ -1213,6 +1213,93 @@ async def probe_delivery(runtime: Any) -> list[dict[str, Any]]:
         runtime.logger.removeHandler(sink)
     return results
 
+
+async def probe_limits() -> list[dict[str, Any]]:
+    """What he sees, and what the process does, when the model says no.
+
+    "It just hit rate limit" and "the bot is dead" are the same silence from
+    inside a chat, and this is the section that keeps them apart: the answer must
+    say why, the model must not be asked again during the cooldown, and the
+    things that never needed a model must still work.
+    """
+    from conftest import FakeEvent, FakeMessage
+
+    from havoc.services.ai_provider import AIError
+
+    class Limit:
+        model = "probe-limit"
+        available = True
+        active_model = "probe-limit"
+
+        def __init__(self, message: str) -> None:
+            self.message = message
+            self.calls = 0
+
+        async def converse(self, *args: Any, **kwargs: Any) -> str:
+            self.calls += 1
+            raise AIError(self.message, kind="rate_limited")
+
+        async def complete(self, *args: Any, **kwargs: Any) -> str:
+            self.calls += 1
+            raise AIError(self.message, kind="rate_limited")
+
+    def _owner_line(text: str, index: int) -> Any:
+        message = FakeMessage(
+            id=9600 + index,
+            chat_id=Harness.OWNER,
+            sender_id=Harness.OWNER,
+            text=text,
+            out=True,
+            is_private=True,
+            is_group=False,
+        )
+        return FakeEvent(message, out=True)
+
+    results: list[dict[str, Any]] = []
+
+    for label, error, must in (
+        ("a per-minute limit", "429: too many requests", "throttled"),
+        ("a spent daily allowance", "every credential is spent or disabled", "allowance"),
+    ):
+        runtime = await build_runtime()
+        provider = Limit(error)
+        runtime.ai = provider
+        await runtime.feature_manager.set_enabled("persona", True)
+        try:
+            before = len(runtime.client.sent)
+            await runtime.handlers.on_outgoing(_owner_line("are you there", 0))
+            said = [message.text for message in runtime.client.sent[before:]]
+        finally:
+            await runtime.db.close()
+        findings: list[str] = []
+        if not said:
+            findings.append("silent")
+        elif must not in " ".join(said).lower():
+            findings.append("said nothing about the limit")
+        if provider.calls != 1:
+            findings.append(f"asked {provider.calls} times")
+        results.append({"case": label, "said": " ⏎ ".join(said)[:200], "findings": findings})
+
+    # A command does not need the model, so a spent allowance must not touch it.
+    runtime = await build_runtime()
+    provider = Limit("every credential is spent or disabled")
+    runtime.ai = provider
+    await runtime.feature_manager.set_enabled("persona", True)
+    try:
+        before = len(runtime.client.sent)
+        await runtime.handlers.on_outgoing(_owner_line("who am i", 1))
+        ran = list(getattr(runtime.yura_chat, "_intent_done", ()))
+        said = [message.text for message in runtime.client.sent[before:]]
+    finally:
+        await runtime.db.close()
+    findings = []
+    if not ran:
+        findings.append("the command did not run")
+    if not said:
+        findings.append("silent")
+    results.append({"case": "a command while the model is spent", "did": ran, "findings": findings})
+    return results
+
 async def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--json", default=".probe.json")
@@ -1242,6 +1329,7 @@ async def main() -> int:
         groups = await probe_groups(await build_runtime())
         ownership = await probe_ownership()
         delivery = await probe_delivery(await build_runtime())
+        limits = await probe_limits()
     finally:
         await runtime.db.close()
 
@@ -1257,6 +1345,7 @@ async def main() -> int:
         "groups": groups,
         "ownership": ownership,
         "delivery": delivery,
+        "limits": limits,
     }
     Path(args.json).write_text(json.dumps(report, ensure_ascii=False, indent=2))
 
@@ -1271,6 +1360,7 @@ async def main() -> int:
     bad_groups = [v for v in groups if v.get("findings") or v.get("crash")]
     bad_ownership = [v for v in ownership if v.get("findings") or v.get("crash")]
     bad_delivery = [v for v in delivery if v.get("findings") or v.get("crash")]
+    bad_limits = [v for v in limits if v.get("findings") or v.get("crash")]
 
     for title, rows, key in (
         ("COMMANDS", bad_commands, "command"),
@@ -1284,6 +1374,7 @@ async def main() -> int:
         ("GROUPS", bad_groups, "group"),
         ("OWNERSHIP", bad_ownership, "turn"),
         ("DELIVERY", bad_delivery, "case"),
+        ("LIMITS", bad_limits, "case"),
     ):
         print(f"\n=== {title}: {len(rows)} with findings")
         for row in rows:
@@ -1303,7 +1394,8 @@ async def main() -> int:
         f"{len(bad_sentences)}/{len(sentences)} sentences, "
         f"{len(bad_surfaces)}/{len(surfaces)} surfaces, {len(bad_groups)}/{len(groups)} group cases, "
         f"{len(bad_ownership)}/{len(ownership)} ownership turns, "
-        f"{len(bad_delivery)}/{len(delivery)} delivery cases"
+        f"{len(bad_delivery)}/{len(delivery)} delivery cases, "
+        f"{len(bad_limits)}/{len(limits)} limit cases"
     )
     return (
         1
@@ -1319,6 +1411,7 @@ async def main() -> int:
             or bad_groups
             or bad_ownership
             or bad_delivery
+            or bad_limits
         )
         else 0
     )

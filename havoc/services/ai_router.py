@@ -308,6 +308,35 @@ class AIRouter:
     # ------------------------------------------------------------------
     # Selection
     # ------------------------------------------------------------------
+    def retry_after(self) -> float:
+        """Seconds until some key could answer again (0 when one is free now).
+
+        The rotation knows exactly which keys are cooling and until when, so it
+        can answer the only question the caller needs: how long is the quiet
+        going to last. Without it every caller invented "a minute" or "until
+        midnight" and got it wrong half the time.
+        """
+        now = utc_now()
+        chosen = self.selected_spec()
+        specs = [chosen] if chosen is not None else list(auto_plan())
+        soonest: float | None = None
+        for spec in specs:
+            for credential in self.credentials:
+                if credential.provider != spec.provider:
+                    continue
+                health = self.health_of(credential)
+                if health.disabled or self.remaining(credential, spec) <= 0:
+                    continue
+                if not health.cooling(now):
+                    return 0.0
+                try:
+                    left = (datetime.fromisoformat(health.cooldown_until) - now).total_seconds()
+                except ValueError:
+                    left = 0.0
+                if left > 0:
+                    soonest = left if soonest is None else min(soonest, left)
+        return float(soonest or 0.0)
+
     @property
     def available(self) -> bool:
         """True when at least one credential could answer right now."""

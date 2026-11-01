@@ -115,15 +115,34 @@ async def _model_card(ctx: CommandContext, router: AIRouter) -> str:
         now = ctx.t("ai.current_model", model=escape(current.label), key=escape(router.active_label or "—"))
     else:
         now = ctx.t("ai.current_auto", key=escape(router.active_label or "—"))
-    return "\n\n".join(
-        [
-            ui.title("◈", ctx.t("ai.models_title")),
-            ui.note(ctx.t("ai.models_subtitle")),
-            ui.panel(rows),
-            ui.note(now),
-            ui.footer(ctx.t("ai.models_footer", prefix=runtime.prefix)),
-        ]
-    )
+    blocks = [
+        ui.title("◈", ctx.t("ai.models_title")),
+        ui.note(ctx.t("ai.models_subtitle")),
+        ui.panel(rows),
+        ui.note(now),
+    ]
+    # "The AI has spent today's allowance" and "the bot is broken" look identical
+    # from inside a chat, so the card says it out loud when it is the first one.
+    offline_until = _offline_until(runtime)
+    if offline_until is not None:
+        blocks.append(ui.note(ctx.t("ai.offline_until", when=escape(offline_until))))
+    blocks.append(ui.footer(ctx.t("ai.models_footer", prefix=runtime.prefix)))
+    return "\n\n".join(blocks)
+
+
+def _offline_until(runtime: Any) -> str:
+    """When the model comes back, or ``""`` when it never went away."""
+    chat = getattr(runtime, "yura_chat", None)
+    reader = getattr(chat, "model_until", None)
+    if not callable(reader):
+        return ""
+    try:
+        until = reader()
+    except Exception:  # noqa: BLE001 - a card must never fail over a timestamp
+        return ""
+    if until is None:
+        return ""
+    return until.strftime("%H:%M")
 
 
 async def _key_card(ctx: CommandContext, router: AIRouter) -> str:
@@ -237,15 +256,17 @@ async def cmd_ai(ctx: CommandContext) -> None:
     if router is None:
         # A single-provider setup still deserves an answer, not an error.
         provider = ctx.runtime.ai
-        await ctx.reply(
-            "\n\n".join(
-                [
-                    ui.title("◈", ctx.t("ai.models_title")),
-                    ui.note(ctx.t("ai.single_provider", model=escape(str(getattr(provider, "model", "—"))))),
-                    ui.footer(ctx.t("ai.models_footer", prefix=ctx.runtime.prefix)),
-                ]
-            )
-        )
+        blocks = [
+            ui.title("◈", ctx.t("ai.models_title")),
+            ui.note(ctx.t("ai.single_provider", model=escape(str(getattr(provider, "model", "—"))))),
+        ]
+        # A single provider is the setup where a spent allowance is *most* likely,
+        # so this card says it too instead of leaving him to guess.
+        offline_until = _offline_until(ctx.runtime)
+        if offline_until:
+            blocks.append(ui.note(ctx.t("ai.offline_until", when=escape(offline_until))))
+        blocks.append(ui.footer(ctx.t("ai.models_footer", prefix=ctx.runtime.prefix)))
+        await ctx.reply("\n\n".join(blocks))
         return
 
     # The parser hands back the first word after the command as `ctx.sub` and the

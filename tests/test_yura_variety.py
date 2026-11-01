@@ -190,14 +190,19 @@ async def test_a_spent_daily_allowance_keeps_her_offline_instead_of_retrying(run
     chat = runtime.yura_chat
     runtime.ai = RateLimited()
     first = await chat.answer("hi", chat_id=3, language="en", is_owner=True)
-    assert persona.is_own_line(first.text or "")
     assert chat.fallbacks == 1
     assert chat.quota_until is not None
     assert "rate_limited" in chat.last_error
+    # She says it out loud once, with the time it ends — an offline line that
+    # pretends nothing happened is what made a spent allowance look like a
+    # broken bot — and then goes back to being herself.
+    notice, _, line = (first.text or "").partition("\n\n")
+    assert "allowance" in notice.lower()
+    assert persona.is_own_line(line)
 
     for _ in range(5):
         answer = await chat.answer("again", chat_id=3, language="en", is_owner=True)
-        assert persona.is_own_line(answer.text or "")
+        assert persona.is_own_line(answer.text or ""), answer.text
     assert calls == ["request"], "kept calling a spent allowance"
     assert chat.fallbacks == 6  # every one of those turns was served offline
 
@@ -235,3 +240,64 @@ async def test_a_long_conversation_never_repeats_a_line(runtime) -> None:
         text = " ".join((answer.text or "").split())
         assert text not in seen, f"repeat at turn {turn}: {text}"
         seen.add(text)
+
+
+# ---------------------------------------------------------------------------
+# A rate limit is a fact to report, not a silence to hide
+# ---------------------------------------------------------------------------
+async def test_a_minute_rate_limit_is_announced_once_and_then_held(runtime) -> None:
+    """``429`` from every key is not a broken bot — it is a short wait.
+
+    The rotation cools each key for 90 seconds. Asking again on the next message
+    spends the wait and learns nothing, so the answer is offline *and* says so,
+    once per cooldown instead of once per message.
+    """
+    from havoc.services.ai_provider import AIError
+
+    calls: list[str] = []
+
+    class Throttled:
+        model = "throttled"
+        available = True
+        active_model = "throttled"
+
+        async def converse(self, messages, **kwargs):
+            calls.append("request")
+            raise AIError("429: too many requests", kind="rate_limited")
+
+    chat = runtime.yura_chat
+    runtime.ai = Throttled()
+    first = await chat.answer("hi", chat_id=4, language="en", is_owner=True)
+    assert chat.hold_until is not None
+    assert chat.quota_until is None, "a minute is not a day"
+    assert "throttled" in (first.text or "").lower()
+    assert len(calls) == 1
+
+    for _ in range(3):
+        answer = await chat.answer("again", chat_id=4, language="en", is_owner=True)
+        assert answer.text
+    assert len(calls) == 1, "a held model must not be asked again"
+
+
+async def test_the_hold_clears_when_it_expires(runtime) -> None:
+    from datetime import timedelta
+
+    from havoc.utils.time import utc_now
+
+    chat = runtime.yura_chat
+    chat.hold_until = utc_now() + timedelta(seconds=30)
+    assert chat.model_until() is not None
+    chat.hold_until = utc_now() - timedelta(seconds=1)
+    assert chat.model_until() is None
+    assert chat.hold_until is None
+
+
+async def test_the_card_says_when_the_model_comes_back(runtime) -> None:
+    from conftest import invoke
+
+    from havoc.utils.time import utc_now
+
+    runtime.yura_chat.hold_until = utc_now().replace(hour=23, minute=59, second=0, microsecond=0)
+    sent = await invoke(runtime, ".ai")
+    text = "\n".join(message.text for message in sent)
+    assert "23:59" in text or "offline" in text.lower()
