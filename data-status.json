@@ -6,21 +6,21 @@
   "populated": {
     "bookmarks": 1,
     "chat_settings": 1,
-    "features": 17,
-    "jobs": 4256,
+    "features": 18,
+    "jobs": 4507,
     "language_prefs": 1,
     "outbox": 767,
-    "profile_history": 3469,
+    "profile_history": 3720,
     "profile_snapshots": 3,
     "reminders": 9,
     "reply_rules": 5,
     "schema_migrations": 12,
-    "settings": 54,
+    "settings": 55,
     "sqlite_sequence": 9,
     "usage_stats": 43,
     "yura_actions": 78,
     "yura_history": 174,
-    "yura_memory": 75,
+    "yura_memory": 77,
     "yura_people": 1
   },
   "tables": {
@@ -32,17 +32,17 @@
     "counters": 0,
     "dedupe": 0,
     "diagnostics": 0,
-    "features": 17,
+    "features": 18,
     "ignored": 0,
     "interactive_sessions": 0,
-    "jobs": 4256,
+    "jobs": 4507,
     "language_prefs": 1,
     "notes": 0,
     "outbox": 767,
     "plan_steps": 0,
     "plans": 0,
     "plugins": 0,
-    "profile_history": 3469,
+    "profile_history": 3720,
     "profile_presets": 0,
     "profile_snapshots": 3,
     "reaction_rules": 0,
@@ -50,7 +50,7 @@
     "reply_rules": 5,
     "schedules": 0,
     "schema_migrations": 12,
-    "settings": 54,
+    "settings": 55,
     "sqlite_sequence": 9,
     "templates": 0,
     "triggers": 0,
@@ -59,18 +59,18 @@
     "yura_actions": 78,
     "yura_history": 174,
     "yura_lessons": 0,
-    "yura_memory": 75,
+    "yura_memory": 77,
     "yura_people": 1
   },
   "restored_from": {
     "cache_hit": "false",
-    "run_id": "41308433513"
+    "run_id": "41329472347"
   },
   "boot_log_lines": 50,
   "boot_log_tail": [
-    "2026-11-01T11:59:57+00:00 run=41304297604 boots=97 db=1994752B",
-    "2026-11-01T12:08:46+00:00 run=41304946588 boots=98 db=1994752B",
-    "2026-11-01T12:52:31+00:00 run=41308433513 boots=99 db=1994752B"
+    "2026-11-01T12:52:31+00:00 run=41308433513 boots=99 db=1994752B",
+    "2026-11-01T16:57:53+00:00 run=41328897226 boots=100 db=2084864B",
+    "2026-11-01T17:04:57+00:00 run=41329472347 boots=101 db=2084864B"
   ],
-  "boots": 99
+  "boots": 101
 }
