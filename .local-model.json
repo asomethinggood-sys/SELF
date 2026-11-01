@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-01T17:06:03Z",
+  "at": "2026-11-01T17:07:03Z",
   "checks": [
     {
       "name": "local · something is configured",
@@ -14,27 +14,47 @@
     {
       "name": "local · answered: In one sentence: what are you?",
       "ok": true,
-      "detail": "1.0s · I am an artificial intelligence created by Alibaba Cloud, designed to assist use"
+      "detail": "0.6s · I am a large language model created by Alibaba Cloud."
     },
     {
       "name": "local · answered: Write a single line of poetry abou",
       "ok": true,
-      "detail": "0.7s · Rain falls upon the earth,\nA gentle whisper in the still night,\nIt paints the la"
+      "detail": "1.0s · Rain falls like a silver thread, a gentle breeze,\nWhispers through the leaves, a"
     },
     {
       "name": "local · answered: Answer with one word: two plus two",
       "ok": true,
       "detail": "0.2s · four"
+    },
+    {
+      "name": "local · the router answers with zero keys",
+      "ok": true,
+      "detail": "Hello! How can I assist you today?"
+    },
+    {
+      "name": "local · the router labels it local",
+      "ok": true,
+      "detail": "local"
+    },
+    {
+      "name": "local · diagnostics describe it",
+      "ok": true,
+      "detail": "{\"provider\": \"local\", \"model\": \"qwen2.5-0.5b-instruct-q4_k_m.gguf\", \"ready\": true, \"url\": \"http://127.0.0.1:8080/v1\", \"weights\": \"qwen2.5-0.5b-instruct-q4_k_m.gguf\", \"requests\": 4, \"failures\": 0, \"las"
+    },
+    {
+      "name": "local · the server stops cleanly",
+      "ok": true,
+      "detail": "stopped"
     }
   ],
   "answers": [
     {
       "question": "In one sentence: what are you?",
-      "reply": "I am an artificial intelligence created by Alibaba Cloud, designed to assist users with various tasks and provide information and services."
+      "reply": "I am a large language model created by Alibaba Cloud."
     },
     {
       "question": "Write a single line of poetry about rain.",
-      "reply": "Rain falls upon the earth,\nA gentle whisper in the still night,\nIt paints the landscape with hues,\nA symphony of colors that dance."
+      "reply": "Rain falls like a silver thread, a gentle breeze,\nWhispers through the leaves, a gentle whisper.\nNature's melody, a joyful harmony,\nLies in the gentle rain, a sweet reminder."
     },
     {
       "question": "Answer with one word: two plus two?",
@@ -45,6 +65,6 @@
     "server · already unpacked and runs (/home/runner/work/SELF/SELF/.runtime/local-model/llama-b12032/llama-server)",
     "weights · cached (/home/runner/work/SELF/SELF/.runtime/local-model/qwen2.5-0.5b-instruct-q4_k_m.gguf)"
   ],
-  "exit": 1,
-  "log_tail": "Traceback (most recent call last):\n  File \"/home/runner/work/SELF/SELF/scripts/local_model_check.py\", line 173, in <module>\n    raise SystemExit(main())\n                     ^^^^^^\n  File \"/home/runner/work/SELF/SELF/scripts/local_model_check.py\", line 166, in main\n    return asyncio.run(run(args))\n           ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.11.17/x64/lib/python3.11/asyncio/runners.py\", line 190, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.11.17/x64/lib/python3.11/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.11.17/x64/lib/python3.11/asyncio/base_events.py\", line 654, in run_until_complete\n    return future.result()\n           ^^^^^^^^^^^^^^^\n  File \"/home/runner/work/SELF/SELF/scripts/local_model_check.py\", line 126, in run\n    router = AIRouter()\n             ^^^^^^^^^^\nTypeError: AIRouter.__init__() missing 1 required positional argument: 'credentials'\n"
+  "exit": 0,
+  "log_tail": "  ok   local · something is configured\n  ok   local · start() reaches the endpoint\n  ok   local · answered: In one sentence: what are you?\n  ok   local · answered: Write a single line of poetry abou\n  ok   local · answered: Answer with one word: two plus two\n  ok   local · the router answers with zero keys\n  ok   local · the router labels it local\n  ok   local · diagnostics describe it\n  ok   local · the server stops cleanly\n\nsummary: 9/9 checks passed\n"
 }
