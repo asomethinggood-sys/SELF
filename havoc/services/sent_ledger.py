@@ -58,24 +58,39 @@ class SentLedger:
 
     async def note(self, chat_id: Any, message_id: Any) -> None:
         """Record one message this process sent."""
-        if message_id is None:
+        await self.note_many(chat_id, [message_id])
+
+    async def note_many(self, chat_id: Any, message_ids: Any) -> None:
+        """Record several messages with **one** write.
+
+        The whole ledger for a chat is a single settings row holding a JSON list,
+        so noting ten messages one at a time re-encoded and rewrote that row ten
+        times. Sending is the path under load — a chunked answer, an album, a
+        bulk job — and one write per send is the point of batching here.
+        """
+        wanted: list[int] = []
+        for candidate in message_ids or ():
+            if candidate is None:
+                continue
+            try:
+                value = int(candidate)
+            except (TypeError, ValueError):
+                continue
+            if value not in wanted:
+                wanted.append(value)
+        if not wanted:
             return
         try:
             bucket = await self._bucket(chat_id)
         except Exception:  # noqa: BLE001 - bookkeeping is never worth an exception
             return
-        try:
-            value = int(message_id)
-        except (TypeError, ValueError):
+        fresh = [value for value in wanted if value not in bucket]
+        if not fresh:
             return
-        if value in bucket:
-            return
-        bucket.append(value)
+        bucket.extend(fresh)
         if self.store is not None:
             try:
-                await self.store.set_setting(
-                    f"{LEDGER_SETTING}.{int(chat_id)}", list(bucket)
-                )
+                await self.store.set_setting(f"{LEDGER_SETTING}.{int(chat_id)}", list(bucket))
             except Exception:  # noqa: BLE001 - see above
                 pass
 

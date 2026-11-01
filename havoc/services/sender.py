@@ -158,8 +158,7 @@ class Sender:
             # Recorded here rather than by each caller: every path that sends —
             # the ambient answer, a command, a file, a voice note — is remembered,
             # and none of them can forget.
-            for message in results:
-                await self.ledger.note(chat_id, getattr(message, "id", None))
+            await self.ledger.note_many(chat_id, [getattr(message, "id", None) for message in results])
         return SendResult(ok=True, message=results[0] if results else None, messages=results, text="\n".join(chunks))
 
     async def _with_flood_retry(self, operation) -> Any:
