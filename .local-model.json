@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-01T17:03:46Z",
+  "at": "2026-11-01T17:05:02Z",
   "checks": [
     {
       "name": "local · something is configured",
@@ -14,7 +14,7 @@
   ],
   "answers": [],
   "fetch": [
-    "server · cached",
+    "server · cached (binary and libraries)",
     "weights · cached (/home/runner/work/SELF/SELF/.runtime/local-model/qwen2.5-0.5b-instruct-q4_k_m.gguf)"
   ],
   "exit": 1,
