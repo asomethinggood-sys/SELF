@@ -686,8 +686,12 @@ class Host:
             checks.append(("the answer is JSON with results", '"results"' in text, text[:200]))
         if self.service == "ollama":
             checks.append(("the model is listed", self.model_name.split(":")[0] in text, text[:200]))
+            reply = self._generate(base, token)
+            answer = (reply or "").strip()
+            checks.append(("a real reply through the gate", bool(answer), answer[:200] or "no answer"))
         if self.service == "comfy":
-            checks.append(("the server reports system stats", '"system"' in text or '"devices"' in text, text[:200]))
+            # `_probe` returned PNG bytes, not JSON, for this service.
+            checks.append(("a real PNG came back through the gate", body.startswith(b"\x89PNG"), f"{len(body)} bytes"))
 
         failures = 0
         lines: list[str] = []
@@ -715,10 +719,15 @@ class Host:
         """One real request through the gate, per service."""
         label, path = probe
         if self.service == "comfy" and path == "/prompt":
-            # A picture is the only honest ComfyUI probe, but it costs a minute on
-            # a CPU; system_stats proves the server and the gate, and the picture
-            # path is proven by `probe_services.py` over a socket.
-            return _http(f"{base}/system_stats", timeout=30.0, token=token)
+            # Not system_stats: a *picture*. It costs 30-50 s at 8 steps, and it
+            # is the only thing that proves the checkpoint loads and a PNG comes
+            # out the other end. The client doing it is the bot's own
+            # ImageGenerator, pointed at the gate through a directory override, so
+            # the self-test exercises the same code `.draw` does.
+            picture = self._picture(base, token)
+            if picture is None:
+                return 0, b"the picture path did not produce a file"
+            return 200, picture
         if self.service == "ollama" and path == "/api/generate":
             body = json.dumps({"model": self.model_name, "prompt": "Say OK.", "stream": False}).encode()
             request = urllib.request.Request(f"{base}/api/generate", data=body, method="POST")
@@ -732,6 +741,61 @@ class Host:
             except (urllib.error.URLError, OSError, TimeoutError) as exc:
                 return 0, str(exc).encode()[:200]
         return _http(f"{base}{path}", timeout=60.0, token=token)
+
+    def _generate(self, base: str, token: str) -> str:
+        """One short completion through the gate. The point is a reply, not a tag list."""
+        body = json.dumps(
+            {"model": self.model_name, "prompt": "In one short sentence: what is a transformer?", "stream": False}
+        ).encode()
+        request = urllib.request.Request(f"{base}/api/generate", data=body, method="POST")
+        request.add_header("Authorization", f"Bearer {token}")
+        request.add_header("Content-Type", "application/json")
+        try:
+            with urllib.request.urlopen(request, timeout=300) as response:  # noqa: S310 - loopback
+                payload = json.loads(response.read())
+        except (urllib.error.HTTPError, urllib.error.URLError, OSError, ValueError) as exc:
+            log(f"the completion failed: {type(exc).__name__}: {exc}")
+            return ""
+        return str(payload.get("response") or "")
+
+    def _picture(self, base: str, token: str) -> bytes | None:
+        """Ask for one 8-step picture through the gate and return the PNG bytes."""
+        import asyncio
+        import tempfile
+
+        from havoc.services.imagegen import ImageGenerator
+        from havoc.services.service_directory import ServiceDirectory
+
+        now = datetime.now(UTC)
+        directory = ServiceDirectory(
+            override={
+                "comfy": {
+                    "service": "comfy",
+                    "url": base,
+                    "run_id": self.run_id,
+                    "started_at": self.started_at,
+                    "published_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "expires_at": (now + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "model": self.model_name,
+                    "gated": True,
+                }
+            },
+            secret=(os.environ.get("SERVICE_SECRET") or ""),
+            branch="",
+        )
+        generator = ImageGenerator.from_env(directory=directory) or ImageGenerator(
+            url="",
+            directory=directory,
+        )
+        folder = Path(tempfile.mkdtemp())
+        try:
+            path = asyncio.run(generator.generate("a lighthouse in fog, pen and ink", outdir=folder))
+        except Exception as exc:  # noqa: BLE001 - the reason is the finding
+            log(f"the picture failed: {type(exc).__name__}: {exc}")
+            return None
+        if not path.exists():
+            return None
+        return path.read_bytes()
 
     # -- teardown -----------------------------------------------------
     def stop_upstream_only(self) -> None:
