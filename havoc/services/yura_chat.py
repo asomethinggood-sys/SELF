@@ -239,9 +239,23 @@ class YuraChat:
     # Prompt assembly
     # ------------------------------------------------------------------
     async def _context(
-        self, chat_id: int, language: str, *, greeting: bool = False
+        self,
+        chat_id: int,
+        language: str,
+        *,
+        greeting: bool = False,
+        is_owner: bool = True,
+        speaker: str = "",
     ) -> tuple[str, list[AIMessage]]:
-        facts = tuple(memory.line() for memory in await self.memory.recall(chat_id))
+        facts: tuple[str, ...] = ()
+        if is_owner:
+            self_chat = int(getattr(self.runtime.permissions, "self_id", 0) or 0)
+            rows = (
+                await self.memory.recall_owner(chat_id, self_chat)
+                if self_chat and self_chat != chat_id
+                else await self.memory.recall(chat_id)
+            )
+            facts = tuple(memory.line() for memory in rows)
         owner_name = await self._owner_name()
         local_time = None
         try:
@@ -261,17 +275,22 @@ class YuraChat:
             local_time=local_time,
             greeting=greeting,
             hour=hour,
+            is_owner=is_owner,
+            speaker=speaker,
         )
         # Whose account this is, spelled out: her own name for him and the ids the
         # permission layer actually checks, so recognition and authority agree.
-        owner_block = persona.owner_prompt(
-            language=language,
-            names=(owner_name,) if owner_name else (),
-            ids=tuple(sorted(getattr(self.runtime.permissions, "owner_ids", set())))[:4],
-            handle=(getattr(self.runtime.config, "owner_usernames", ()) or ("",))[0],
-        )
-        if owner_block:
-            system = f"{system}\n\n{owner_block}"
+        # Only on his turn. On a guest's turn the block that names him *is* the
+        # leak — she was reading his handle and ids back to whoever asked.
+        if is_owner:
+            owner_block = persona.owner_prompt(
+                language=language,
+                names=(owner_name,) if owner_name else (),
+                ids=tuple(sorted(getattr(self.runtime.permissions, "owner_ids", set())))[:4],
+                handle=(getattr(self.runtime.config, "owner_usernames", ()) or ("",))[0],
+            )
+            if owner_block:
+                system = f"{system}\n\n{owner_block}"
         messages = [AIMessage("system", system)]
         for role, content in await self.memory.history(chat_id):
             messages.append(AIMessage(role, content))
@@ -303,6 +322,7 @@ class YuraChat:
         audience: Any = None,
         person: Any = None,
         is_owner: bool | None = None,
+        sender_id: int | None = None,
         chat_title: str = "",
         lessons: tuple[str, ...] = (),
         reminder: str = "",
@@ -323,9 +343,25 @@ class YuraChat:
         applied as a filter on the way out.
         """
         who = person if person is not None else getattr(audience, "person", None)
-        owner = bool(is_owner) if is_owner is not None else bool(
-            getattr(audience, "is_owner", True) if audience is not None else True
-        )
+        # Whose turn this is: never inferred from "nobody told me otherwise".
+        #
+        # This used to default to the owner when there was no audience, and the
+        # audience is exactly what goes missing when the room cannot be read (a
+        # private chat has no room, ``.yura`` from a stranger has no event, a
+        # failed ``get_messages`` returns None). A stranger calling her name in a
+        # group was therefore answered as *him* — pet names, his hands, his
+        # commands. Ownership is a fact about a user id, so it is asked of the
+        # permission layer, and anything unknown is a guest.
+        if is_owner is None:
+            owner = bool(self.runtime.permissions.is_owner(sender_id)) if sender_id else bool(
+                getattr(audience, "is_owner", False)
+            )
+        else:
+            # A caller that knows better still cannot promote a stranger: the
+            # permission layer has the last word over a boolean.
+            owner = bool(is_owner) and (
+                sender_id is None or bool(self.runtime.permissions.is_owner(sender_id))
+            )
         tone = str(getattr(who, "tone", "") or getattr(audience, "tone", "") or "rude")
         spoken = text.strip()
         prompt = spoken or ("" if picture is not None else persona.call_prompt(language))
@@ -360,7 +396,17 @@ class YuraChat:
         avoid |= set(self._sent.get(chat_id, ()))
         # Context first, then the current turn: appending before reading would
         # put the same message in the prompt twice.
-        _, messages = await self._context(chat_id, language, greeting=greeting)
+        _, messages = await self._context(
+            chat_id,
+            language,
+            greeting=greeting,
+            is_owner=owner,
+            speaker=str(
+                getattr(who, "name", "")
+                or getattr(audience, "speaker", "")
+                or ("" if owner else "")
+            ),
+        )
         block = _audience_block(audience, language)
         relationship = persona.relationship_prompt(
             language=language,
@@ -502,6 +548,7 @@ class YuraChat:
                 language=language,
                 reply_to=reply_to,
                 already=tuple(did),
+                sender_id=sender_id,
             )
         if reply is None:
             source = "offline"
@@ -531,6 +578,7 @@ class YuraChat:
             # fix its punctuation.
             worn=worn if source == "model" else set(),
             worn_faces=worn_faces if source == "model" else set(),
+            is_owner=owner,
         )
         if answer.text and (self._cards or self._receipts):
             # A card, not a status report: what she did, drawn under her words.
@@ -595,6 +643,7 @@ class YuraChat:
         language: str,
         reply_to: int | None = None,
         already: tuple[str, ...] = (),
+        sender_id: int | None = None,
     ) -> None:
         """Read the sentence as an instruction and *do* it.
 
@@ -604,6 +653,11 @@ class YuraChat:
         are the real ones — not a second implementation that can drift.
         """
         if not text.strip():
+            return
+        # The last gate before a console line runs as the owner. ``answer`` has
+        # already decided, but a sentence from somebody who is not him must never
+        # reach a command even if a caller passes the wrong boolean.
+        if sender_id is not None and not self.runtime.permissions.is_owner(sender_id):
             return
         # The sentence arrives with her name in front of it — that is how a
         # person calls her. Reading "yura, turn off the clock" as chatter meant
@@ -856,6 +910,7 @@ class YuraChat:
         incoming: str = "",
         worn: set[str] | None = None,
         worn_faces: set[str] | None = None,
+        is_owner: bool = True,
     ) -> Answer:
         """Pull directives out of a raw reply and perform them.
 
@@ -866,24 +921,30 @@ class YuraChat:
         remembered: list[str] = []
         forgotten = 0
 
-        for fact in _REMEMBER_RE.findall(reply):
-            if await self.memory.remember(chat_id, fact, kind=_kind_of(fact)):
-                remembered.append(" ".join(fact.split()))
-        for phrase in _FORGET_RE.findall(reply):
-            forgotten += await self.memory.forget_matching(chat_id, phrase)
+        # Remembering, forgetting and writing files are things she does *for him*.
+        # On a guest's turn the directives are still stripped (they are machinery,
+        # never shown), but nothing is written: a stranger must not be able to
+        # plant a memory in his account by asking nicely.
+        if is_owner:
+            for fact in _REMEMBER_RE.findall(reply):
+                if await self.memory.remember(chat_id, fact, kind=_kind_of(fact)):
+                    remembered.append(" ".join(fact.split()))
+            for phrase in _FORGET_RE.findall(reply):
+                forgotten += await self.memory.forget_matching(chat_id, phrase)
 
         files: list[Path] = []
-        for name, body in _FILE_RE.findall(reply):
-            path = self._write_file(name, body)
-            if path is not None:
-                files.append(path)
+        if is_owner:
+            for name, body in _FILE_RE.findall(reply):
+                path = self._write_file(name, body)
+                if path is not None:
+                    files.append(path)
 
         cleaned = _FILE_RE.sub("", _REMEMBER_RE.sub("", _FORGET_RE.sub("", reply)))
         # A reply that hit the token ceiling stops mid-program, without the
         # closing marker. Salvage what arrived instead of dropping the file
         # entirely: a program missing its last line is still a program the owner
         # can run, and saying "here you go" over nothing is worse.
-        if not files:
+        if not files and is_owner:
             opened = _OPEN_FILE_RE.search(cleaned)
             if opened is not None:
                 salvaged = self._write_file(opened.group(1), opened.group(2))

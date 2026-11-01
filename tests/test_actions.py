@@ -369,7 +369,7 @@ async def test_an_ordinary_answer_is_untouched_by_hands(runtime) -> None:
 
     plain = "hello daddaaa ✦ i was just sitting here\n\nnothing happened"
     runtime.ai = StubProvider(plain)
-    answer = await runtime.yura_chat.answer(plain and "hey", chat_id=100)
+    answer = await runtime.yura_chat.answer(plain and "hey", chat_id=100, is_owner=True)
     assert "⌁" not in answer.text
     assert answer.source == "model"
 
@@ -388,7 +388,11 @@ async def test_a_tool_turn_carries_a_receipt(runtime) -> None:
             return self.reply if self.rounds == 1 else "she is the one with the boat ᵕ̈"
 
     runtime.ai = ToolProvider()
-    answer = await runtime.yura_chat.answer("what do you know about sara", chat_id=100)
+    # Ownership is a fact about a user id now, not a default: a turn with no
+    # speaker is a guest, and guests get no hands.
+    answer = await runtime.yura_chat.answer(
+        "what do you know about sara", chat_id=100, is_owner=True
+    )
     assert "she is the one with the boat" in answer.text
     # The card under her words: bold title, drawn rule, italic facts, a glyph.
     assert "Looked up" in answer.text, answer.text

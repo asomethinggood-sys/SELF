@@ -50,7 +50,9 @@ def _said(runtime, since: int) -> list[str]:
 async def test_a_picture_and_its_sentence_are_one_message(runtime) -> None:
     """The fortune travels in the answer, so delivery is a single send."""
     await _persona_on(runtime)
-    answer = await runtime.yura_chat.answer("فال بگیر", chat_id=OWNER, language="fa")
+    answer = await runtime.yura_chat.answer(
+        "فال بگیر", chat_id=OWNER, language="fa", is_owner=True
+    )
     assert answer.text or answer.media
     if answer.media:
         # Held as bytes with a name, because the command's temp file is deleted
@@ -65,7 +67,7 @@ async def test_a_deed_that_spoke_adds_nothing(runtime) -> None:
     """`send --here` is the message; a receipt under it is a second answer."""
     runtime.ai = _Talker()
     answer = await runtime.yura_chat.answer(
-        "say I am a good girl and repeat 2 times", chat_id=GROUP, language="en"
+        "say I am a good girl and repeat 2 times", chat_id=GROUP, language="en", is_owner=True
     )
     assert answer.text == "" or answer.media == []
     said = [message.text for message in runtime.client.sent if message.chat_id == GROUP]

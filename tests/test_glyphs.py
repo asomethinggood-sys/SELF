@@ -123,7 +123,7 @@ async def test_an_offline_line_is_never_restyled(runtime) -> None:
     chat = runtime.yura_chat
     await runtime.memory.append(100, "assistant", "✦ ✧ ❦ ⊹ ⁂ everything is used")
 
-    answer = await chat.answer("yura, say something", chat_id=100, language="en")
+    answer = await chat.answer("yura, say something", chat_id=100, language="en", is_owner=True)
 
     assert answer.source == "offline"
     # It is still one of her bank sentences, not a re-lettered version of one.

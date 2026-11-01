@@ -581,6 +581,25 @@ async def _chat(ctx: CommandContext, text: str, *, greeting: bool = False) -> No
         except Exception:  # noqa: BLE001 - context is a bonus
             quoted, audience = "", None
     reply_id = getattr(normalized, "reply_to_id", None) if normalized is not None else None
+    # ``.yura <anything>`` is not an owner-only command — a stranger may talk to
+    # her with it — so this path has to say who is talking. Without it there was
+    # no ``is_owner`` and no ``sender_id``, and the answer fell back to "no
+    # audience, therefore him": a stranger typing ``.yura hi`` in a private chat
+    # (where there is no room to read) was greeted like the owner.
+    speaker = getattr(normalized, "sender_id", None) if normalized is not None else None
+    if speaker is None:
+        speaker = getattr(getattr(ctx, "event", None), "sender_id", None)
+    is_owner = bool(getattr(normalized, "is_outgoing", False)) or bool(
+        speaker and ctx.runtime.permissions.is_owner(speaker)
+    )
+    person = None
+    if not is_owner and speaker:
+        try:
+            person = await ctx.runtime.persona_replies._person(
+                int(speaker), str(getattr(audience, "speaker", "") or "")
+            )
+        except Exception:  # noqa: BLE001 - the book is a bonus, never a blocker
+            person = None
     answer = await ctx.runtime.yura_chat.answer(
         text,
         chat_id=ctx.chat_id,
@@ -589,6 +608,9 @@ async def _chat(ctx: CommandContext, text: str, *, greeting: bool = False) -> No
         picture=picture,
         quoted=quoted,
         audience=audience,
+        person=person,
+        is_owner=is_owner,
+        sender_id=int(speaker) if speaker else None,
         reply_to=reply_id,
         message_id=getattr(normalized, "message_id", None) if normalized is not None else None,
     )
@@ -1545,6 +1567,7 @@ class PersonaReplies:
             audience=audience,
             person=person,
             is_owner=owner,
+            sender_id=speaker,
             chat_title=getattr(audience, "chat_title", "") if audience is not None else "",
             lessons=rules,
             reminder=reminder,

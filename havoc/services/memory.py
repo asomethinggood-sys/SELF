@@ -91,6 +91,31 @@ class MemoryStore:
         )
         return [_memory(row) for row in rows]
 
+    async def recall_owner(self, chat_id: int, owner_chat: int, *, limit: int = RECALL_LIMIT) -> list[Memory]:
+        """What she knows, wherever she and he happen to be standing.
+
+        A memory is stored against the chat it was made in — that is what keeps a
+        stranger's chat from carrying his facts. But *he* is one person: when he
+        talks to her in a group, the things he told her in his own chat are what
+        make her recognise him. Without this she "forgot" him the moment the
+        conversation moved, which is exactly how it felt to him.
+        """
+        rows = await self.db.fetch_all(
+            "SELECT * FROM yura_memory WHERE chat_id IN (?, ?) "
+            "ORDER BY weight DESC, id DESC LIMIT ?",
+            (chat_id, owner_chat, limit),
+        )
+        seen: set[str] = set()
+        out: list[Memory] = []
+        for row in rows:
+            item = _memory(row)
+            key = item.line().lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(item)
+        return out
+
     async def list(self, chat_id: int, *, limit: int = 50) -> list[Memory]:
         rows = await self.db.fetch_all(
             "SELECT * FROM yura_memory WHERE chat_id = ? ORDER BY id DESC LIMIT ?",

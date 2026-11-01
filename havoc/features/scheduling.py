@@ -63,8 +63,31 @@ async def deliver_reminder(runtime: Any, row: Any) -> None:
 
 
 async def deliver_schedule(runtime: Any, row: Any) -> None:
+    """One due schedule: a message to send, or — ``kind="command"`` — a line to run.
+
+    "Every day at 9 send sara good morning" is an instruction, not a note to
+    himself. A message schedule sends its text; a command schedule runs the line
+    through the same console the model uses, so the abilities that work when he
+    asks also work when the clock does.
+    """
     chat_id = int(row["chat_id"])
-    await runtime.sender.send(chat_id, row["text"])
+    kind = str(row["kind"] or "message") if "kind" in row.keys() else "message"
+    if kind != "command":
+        await runtime.sender.send(chat_id, row["text"])
+        return
+    from .self_console import run as run_command
+
+    self_id = int(getattr(runtime.permissions, "self_id", 0) or 0) or chat_id
+    reply = await run_command(
+        runtime, str(row["text"]), chat_id=chat_id, sender_id=self_id
+    )
+    if not reply.ok:
+        # A schedule that has been failing must say so where he will see it, not
+        # only in a log he never reads.
+        await runtime.store.db.execute(
+            "UPDATE schedules SET last_error = ? WHERE id = ?",
+            (redact_text(f"{reply.command or 'command'}: {reply.note or reply.kind}")[:200], row["id"]),
+        )
 
 
 async def report_scheduler_problem(runtime: Any, kind: str, info: dict[str, Any], exc: BaseException) -> None:

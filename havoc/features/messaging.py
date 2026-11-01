@@ -34,7 +34,15 @@ from ..utils.time import (
     utc_now,
 )
 from ..utils.validation import validate_message_body, validate_template_name
-from .helpers import fmt_time, reply_text, require_reply, resolve_target, split_when, tz_for
+from .helpers import (
+    _roll_if_past,
+    fmt_time,
+    reply_text,
+    require_reply,
+    resolve_target,
+    split_when,
+    tz_for,
+)
 
 MATCH_TYPES = ("contains", "exact", "startswith", "endswith", "regex", "any")
 AWAY_COOLDOWN = 900  # per person, 15 minutes
@@ -304,9 +312,27 @@ async def cmd_schedule(ctx: CommandContext) -> None:
     if not ctx.args:
         raise CommandError("errors.missing_argument", usage=ctx.usage_text())
     tz = tz_for(ctx)
-    # Same split as `.remind`: "in 2 hours", "tomorrow 9am" are one phrase, not
-    # one word, and the rest of the line is the message.
-    when, body, _raw = split_when(ctx, example="in 2h | 2026-11-01 09:00")
+    # ``--run "send sara good morning"`` is a *command* on a schedule, not a
+    # message: "every day at 9 send sara good morning" is an instruction, and
+    # delivering the words "send sara good morning" every morning is not doing
+    # what he asked. The line is taken whole from the flag so its own flags
+    # (``--here``) are not eaten by this command's parser.
+    run_line = ctx.flag("run") or ctx.flag("cmd") or ctx.flag("command")
+    if run_line:
+        at = ctx.flag("at") or ctx.flag("when")
+        if not at:
+            raise CommandError("errors.missing_argument", usage=ctx.usage_text())
+        try:
+            when = _roll_if_past(parse_when(at, tz), at, tz)
+        except TimeParseError as exc:
+            raise CommandError("errors.invalid_time", detail=escape(str(at)), example="09:00") from exc
+        body = " ".join(str(run_line).split())
+        kind = "command"
+    else:
+        kind = "message"
+        # Same split as `.remind`: "in 2 hours", "tomorrow 9am" are one phrase,
+        # not one word, and the rest of the line is the message.
+        when, body, _raw = split_when(ctx, example="in 2h | 2026-11-01 09:00")
     if when <= utc_now():
         raise CommandError("errors.time_in_past", when=escape(format_datetime(when, tz, ctx.language)))
     recurrence = parse_recurrence(ctx.flag("repeat") or None)
@@ -327,6 +353,7 @@ async def cmd_schedule(ctx: CommandContext) -> None:
         recurrence=recurrence,
         timezone_name=tz,
         created_by=getattr(ctx.event, "sender_id", None),
+        kind=kind,
         meta={"language": ctx.language},
     )
     # A card, like the reminder: "✉ Message scheduled (#2) for … in chat 42."
@@ -339,6 +366,8 @@ async def cmd_schedule(ctx: CommandContext) -> None:
         lines.append(ctx.t("schedule.card_chat", chat=chat_id))
     if recurrence:
         lines.append(ctx.t("schedule.recurring", spec=recurrence))
+    if kind == "command":
+        lines.append(ctx.t("schedule.runs_command", line=escape(body)))
     await ctx.reply(
         ui.card(ctx.t("schedule.card_title", id=schedule_id), lines, footer=escape(truncate(body, 120)))
     )

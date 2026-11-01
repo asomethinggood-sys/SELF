@@ -742,6 +742,7 @@
   "saved.reminders": "Pending reminders",
   "schedule.created": "✉ Message scheduled (#{id}) for {when} ({relative}) in chat {chat}.",
   "schedule.recurring": "Repeats: {spec}",
+  "schedule.runs_command": "Runs: {line}",
   "scheduled.cancelled": "Schedule #{id} cancelled.",
   "scheduled.empty": "No scheduled messages.",
   "scheduled.header": "✉ Scheduled messages ({count})",

@@ -59,7 +59,7 @@ async def test_sixty_fallback_replies_never_repeat(runtime) -> None:
     runtime.ai = _Offline()
     said = []
     for _ in range(60):
-        answer = await chat.answer("hey", chat_id=7, language="en")
+        answer = await chat.answer("hey", chat_id=7, language="en", is_owner=True)
         said.append(" ".join((answer.text or "").split()))
     assert len(set(said)) == len(said), f"{len(said) - len(set(said))} repeats in 60 turns"
     assert chat.fallbacks >= 60
@@ -71,7 +71,7 @@ async def test_memory_does_not_stop_the_bank_working(runtime) -> None:
     runtime.ai = _Offline()
     for index in range(30):
         await chat.memory.append(5, "assistant", f"old line {index}")
-    texts = [(await chat.answer("hi", chat_id=5, language="en")).text for _ in range(20)]
+    texts = [(await chat.answer("hi", chat_id=5, language="en", is_owner=True)).text for _ in range(20)]
     assert len(set(texts)) == len(texts)
 
 
@@ -98,7 +98,7 @@ async def test_every_composed_line_is_recognised_as_hers() -> None:
 async def test_the_loop_guard_remembers_what_this_process_sent(runtime) -> None:
     chat: YuraChat = runtime.yura_chat
     runtime.ai = _Offline()
-    answer = await chat.answer("hey", chat_id=9, language="en")
+    answer = await chat.answer("hey", chat_id=9, language="en", is_owner=True)
     assert chat.was_sent(9, answer.text or "") is True
     assert chat.was_sent(9, "   " + (answer.text or "") + "  ") is True  # spacing insensitive
     assert chat.was_sent(11, answer.text or "") is False  # other chat, other memory
@@ -162,7 +162,7 @@ async def test_the_same_sentence_does_not_come_back_within_the_recent_window(run
     runtime.ai = _Offline()
     seen: set[str] = set()
     for _ in range(200):
-        answer = await chat.answer("hello", chat_id=13, language="en")
+        answer = await chat.answer("hello", chat_id=13, language="en", is_owner=True)
         text = " ".join((answer.text or "").split())
         assert text not in seen, text
         seen.add(text)
@@ -189,14 +189,14 @@ async def test_a_spent_daily_allowance_keeps_her_offline_instead_of_retrying(run
 
     chat = runtime.yura_chat
     runtime.ai = RateLimited()
-    first = await chat.answer("hi", chat_id=3, language="en")
+    first = await chat.answer("hi", chat_id=3, language="en", is_owner=True)
     assert persona.is_own_line(first.text or "")
     assert chat.fallbacks == 1
     assert chat.quota_until is not None
     assert "rate_limited" in chat.last_error
 
     for _ in range(5):
-        answer = await chat.answer("again", chat_id=3, language="en")
+        answer = await chat.answer("again", chat_id=3, language="en", is_owner=True)
         assert persona.is_own_line(answer.text or "")
     assert calls == ["request"], "kept calling a spent allowance"
     assert chat.fallbacks == 6  # every one of those turns was served offline
@@ -231,7 +231,7 @@ async def test_a_long_conversation_never_repeats_a_line(runtime) -> None:
     runtime.ai = _Offline()
     seen: set[str] = set()
     for turn in range(1200):
-        answer = await chat.answer("hello", chat_id=31, language="en")
+        answer = await chat.answer("hello", chat_id=31, language="en", is_owner=True)
         text = " ".join((answer.text or "").split())
         assert text not in seen, f"repeat at turn {turn}: {text}"
         seen.add(text)

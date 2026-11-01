@@ -742,6 +742,7 @@
   "saved.reminders": "یادآورهای در انتظار",
   "schedule.created": "✉ پیام #{id} برای {when} ({relative}) در گفت‌وگوی {chat} زمان‌بندی شد.",
   "schedule.recurring": "تکرار: {spec}",
+  "schedule.runs_command": "اجرا می‌کند: {line}",
   "scheduled.cancelled": "زمان‌بندی #{id} لغو شد.",
   "scheduled.empty": "پیام زمان‌بندی‌شده‌ای نیست.",
   "scheduled.header": "✉ پیام‌های زمان‌بندی‌شده ({count})",

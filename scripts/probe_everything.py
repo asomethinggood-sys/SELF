@@ -924,7 +924,119 @@ async def probe_groups(runtime: Any) -> list[dict[str, Any]]:
     replies._group_window.clear()
     sent = await sent_by(lambda: say("did you see the match last night", sender=555))
     record("a conversation between two people", sent, want=False)
+
+    # 5. the actual bug he photographed: a stranger's sentence must not *do*
+    #    anything. Not the clock, not a command, not a memory.
+    replies._group_last.clear()
+    replies._group_window.clear()
+    clock_before = await runtime.store.get_bool("profile.clock", False)
+    memory_before = len(await runtime.memory.recall(group))
+    sent = await sent_by(lambda: say("yura turn the clock on", sender=666))
+    problems: list[str] = []
+    if await runtime.store.get_bool("profile.clock", False) != clock_before:
+        problems.append("a_guest_ran_a_command")
+    if len(await runtime.memory.recall(group)) != memory_before:
+        problems.append("a_guest_wrote_a_memory")
+    if list(getattr(runtime.yura_chat, "_intent_done", ())):
+        problems.append("intent_ran_for_a_guest")
+    record("a guest ordering her around", sent, want=True, extra=problems)
     return results
+
+
+async def probe_ownership() -> list[dict[str, Any]]:
+    """What the model is actually told about who is talking.
+
+    The prompt is the only thing standing between a stranger and her account, so
+    it is read here for the pieces that must never appear on a guest's turn — and
+    for the pieces that must appear on his.
+    """
+    from conftest import FakeMessage, incoming
+
+    class Recorder:
+        available = True
+        model = "probe"
+        name = "probe"
+
+        def __init__(self) -> None:
+            self.calls: list[Any] = []
+            self.reply = "ok"
+
+        async def converse(self, messages, max_tokens: int = 400, **kwargs: Any) -> str:
+            self.calls.append(list(messages))
+            return self.reply
+
+        async def complete(self, *args: Any, **kwargs: Any) -> str:
+            return "ok"
+
+    results: list[dict[str, Any]] = []
+    stranger = 6714832104
+    cases = (
+        ("a stranger in a group", stranger, None, "guest"),
+        ("the owner in a group", Harness.OWNER, None, "owner"),
+        # The fail-open itself, before any room exists to read.
+        ("nobody at all", None, "nobody", "guest"),
+        # A caller that passes the wrong boolean must not be able to promote.
+        ("a stranger a caller called the owner", stranger, "promote", "guest"),
+    )
+    for index, (label, sender, private, expected) in enumerate(cases):
+        runtime = await build_runtime()
+        provider = Recorder()
+        runtime.ai = provider
+        await runtime.feature_manager.set_enabled("persona", True)
+        await runtime.memory.remember(Harness.OWNER, "he takes his coffee black")
+        try:
+            if private is None:
+                message = FakeMessage(
+                    id=9100 + index,
+                    chat_id=group_chat(),
+                    sender_id=sender,
+                    text="yura hello",
+                    is_group=True,
+                )
+                message.sender = type("Sender", (), {"first_name": "Reza", "id": sender, "username": "peza"})()
+                await incoming(runtime, message)
+            elif private == "nobody":
+                await runtime.yura_chat.answer("hello", chat_id=group_chat())
+            else:
+                await runtime.yura_chat.answer(
+                    "hello", chat_id=group_chat(), is_owner=True, sender_id=sender
+                )
+        finally:
+            await runtime.db.close()
+        prompt = str(provider.calls[-1][0].content) if provider.calls else ""
+        findings: list[str] = []
+        if not prompt:
+            findings.append("no_prompt")
+        guest_block = "this turn is not his" in prompt or "این پیام مالِ او نیست" in prompt
+        if expected == "guest":
+            if not guest_block:
+                findings.append("guest_turn_read_as_the_owner")
+            if "The hands you have" in prompt:
+                findings.append("hands_promised_to_a_guest")
+            if "coffee black" in prompt:
+                findings.append("his_memory_leaked_to_a_guest")
+            if "@edited_by_nyx" in prompt:
+                findings.append("his_handle_leaked_to_a_guest")
+        else:
+            if guest_block:
+                findings.append("owner_turn_read_as_a_guest")
+            if "The hands you have" not in prompt:
+                findings.append("owner_has_no_hands")
+            if "coffee black" not in prompt:
+                findings.append("owner_forgot_himself")
+        results.append(
+            {
+                "who": label,
+                "expected": expected,
+                "findings": sorted(set(findings)),
+                "prompt": prompt[-160:],
+            }
+        )
+    return results
+
+
+def group_chat() -> int:
+    return -1001234567890
 
 
 def random_id() -> int:
@@ -964,6 +1076,7 @@ async def main() -> int:
         sentences = await probe_sentences(runtime)
         surfaces = await probe_surfaces(runtime)
         groups = await probe_groups(await build_runtime())
+        ownership = await probe_ownership()
     finally:
         await runtime.db.close()
 
@@ -977,6 +1090,7 @@ async def main() -> int:
         "sentences": sentences,
         "surfaces": surfaces,
         "groups": groups,
+        "ownership": ownership,
     }
     Path(args.json).write_text(json.dumps(report, ensure_ascii=False, indent=2))
 
@@ -989,6 +1103,7 @@ async def main() -> int:
     bad_sentences = [v for v in sentences if v.get("findings") or v.get("crash")]
     bad_surfaces = [v for v in surfaces if v.get("findings") or v.get("crash")]
     bad_groups = [v for v in groups if v.get("findings") or v.get("crash")]
+    bad_ownership = [v for v in ownership if v.get("findings") or v.get("crash")]
 
     for title, rows, key in (
         ("COMMANDS", bad_commands, "command"),
@@ -1000,6 +1115,7 @@ async def main() -> int:
         ("SENTENCES", bad_sentences, "sentence"),
         ("SURFACES", bad_surfaces, "surface"),
         ("GROUPS", bad_groups, "group"),
+        ("OWNERSHIP", bad_ownership, "turn"),
     ):
         print(f"\n=== {title}: {len(rows)} with findings")
         for row in rows:
@@ -1017,7 +1133,8 @@ async def main() -> int:
         f"{len(bad_voice)}/{len(voice)} voice samples, {len(bad_plain)}/{len(plain)} plain messages, "
         f"{len(bad_trips)}/{len(round_trips)} round trips, "
         f"{len(bad_sentences)}/{len(sentences)} sentences, "
-        f"{len(bad_surfaces)}/{len(surfaces)} surfaces, {len(bad_groups)}/{len(groups)} group cases"
+        f"{len(bad_surfaces)}/{len(surfaces)} surfaces, {len(bad_groups)}/{len(groups)} group cases, "
+        f"{len(bad_ownership)}/{len(ownership)} ownership turns"
     )
     return (
         1
@@ -1031,6 +1148,7 @@ async def main() -> int:
             or bad_sentences
             or bad_surfaces
             or bad_groups
+            or bad_ownership
         )
         else 0
     )

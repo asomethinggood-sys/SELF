@@ -2379,6 +2379,101 @@ def _reach(text: str, *, allow_plan: bool = True) -> Intent | None:
     return None
 
 
+#: "every day at 9 …", "every friday at 18:00 …", "هر روز ساعت ۹ …".
+_RECURRING = re.compile(
+    r"^(?:please\s+|لطفا\s+)?"
+    r"(?P<freq>every\s*day|everyday|daily|each\s+day|every\s+(?P<day>[a-z]+)|هر\s*روز|هر\s+(?P<fa_day>[\u0600-\u06FF]+))"
+    r"\s*(?:at\s+|ساعت\s*)?(?P<time>\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*(?:o'?clock)?\s*[,:]?\s+"
+    r"(?P<body>.+)$",
+    re.I,
+)
+_WEEKDAY_FULL = {
+    "mon": "monday", "tue": "tuesday", "wed": "wednesday", "thu": "thursday",
+    "fri": "friday", "sat": "saturday", "sun": "sunday",
+}
+#: A greeting is the one thing people schedule that is not an order with a verb.
+_GREETING = re.compile(
+    r"^(?:good\s+(?:morning|night|evening|afternoon|day)"
+    r"|happy\s+(?:birthday|new\s*year|anniversary)|congrats|سلام|صبح\s*بخیر|شب\s*بخیر"
+    r"|روز\s*بخیر|ظهر\s*بخیر|تولدت?\s*مبارک|عید\s*مبارک)\b"
+)
+_WEEKDAY_NAMES = {
+    "monday": "mon", "mon": "mon", "tuesday": "tue", "tue": "tue", "tues": "tue",
+    "wednesday": "wed", "wed": "wed", "thursday": "thu", "thu": "thu", "thur": "thu",
+    "thurs": "thu", "friday": "fri", "fri": "fri", "saturday": "sat", "sat": "sat",
+    "sunday": "sun", "sun": "sun",
+    "دوشنبه": "mon", "سه‌شنبه": "tue", "سه شنبه": "tue", "چهارشنبه": "wed",
+    "پنجشنبه": "thu", "پنج‌شنبه": "thu", "جمعه": "fri", "شنبه": "sat", "یکشنبه": "sun",
+}
+
+
+def _clock_time(raw: str) -> str | None:
+    """``9`` / ``9pm`` / ``18:30`` → ``09:00`` / ``21:00`` / ``18:30``."""
+    token = re.sub(r"\s+", "", raw or "").lower()
+    match = re.fullmatch(r"(\d{1,2})(?::(\d{2}))?(am|pm)?", token)
+    if not match:
+        return None
+    hour = int(match.group(1))
+    minute = int(match.group(2) or 0)
+    meridiem = match.group(3)
+    if meridiem == "pm" and hour < 12:
+        hour += 12
+    if meridiem == "am" and hour == 12:
+        hour = 0
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    return f"{hour:02d}:{minute:02d}"
+
+
+def _recurring(folded: str) -> Intent | None:
+    """``every day at 9 send sara good morning`` → a schedule that *runs* it.
+
+    The instruction underneath is read with the same rules as any other sentence,
+    so ``every day at 9 turn the clock on`` is a command and ``every day at 9 good
+    morning`` is a message. One line only: a timeline cannot repeat, and a plan
+    pretending to is worse than saying no.
+    """
+    match = _RECURRING.match(folded)
+    if not match:
+        return None
+    stamp = _clock_time(match.group("time"))
+    if stamp is None:
+        return None
+    day = (match.group("day") or match.group("fa_day") or "").strip()
+    if day:
+        code = _WEEKDAY_NAMES.get(day)
+        if code is None:
+            # "every time", "every week" are not "every <kind of day>".
+            return None
+        recurrence = f"weekly:{code}"
+    else:
+        recurrence = "daily"
+    body = match.group("body").strip(" .,!?؛،")
+    if not body or body == folded:
+        return None
+    if recurrence == "daily":
+        when_words = f"every day at {stamp}"
+    else:
+        when_words = f"every {_WEEKDAY_FULL.get(recurrence.split(':')[-1], 'week')} at {stamp}"
+    inner = detect(body, allow_plan=False)
+    if inner is not None and len(inner.lines) == 1 and not inner.lines[0].startswith("plan"):
+        line = inner.lines[0]
+        detail = f"{when_words} · {inner.detail or inner.label}"
+    elif re.match(r"^(?:send|say|tell|message|msg|post|write|text|notify)\b", body) or _GREETING.match(body):
+        # Words to send every morning: the message itself is the schedule.
+        line = f'send --here "{body}"'
+        detail = f"{when_words} · {body[:40]}"
+    else:
+        # "every day at 9 i am at work" is something he is telling her, not
+        # something he is asking her to do at nine.
+        return None
+    return Intent(
+        lines=(f'schedule --at {stamp} --repeat {recurrence} --run "{line}"',),
+        label="schedule",
+        detail=detail,
+    )
+
+
 def _timeline(text: str, *, allow_plan: bool = True) -> Intent | None:
     """Read a *sequence* — "…, then …" — as a plan, or ``None``.
 
@@ -2854,6 +2949,13 @@ def _detect(
     if not folded or len(folded) > 400:
         return None
     known = {name for name in set(commands) | set(features) if name and name.isascii()}
+
+    # "every day at 9 send sara good morning" is a recurrence with an instruction
+    # underneath it, and it must be read before every single-moment rule — a
+    # reminder, a send, a clock switch — or "every day" collapses into "today".
+    recurring = _recurring(folded)
+    if recurring is not None:
+        return recurring
 
     # A sentence with "then" in it is several instructions, and reading it as one
     # is how the tail of it disappears.
