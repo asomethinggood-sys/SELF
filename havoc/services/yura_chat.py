@@ -959,6 +959,10 @@ class YuraChat:
                     self.logger.warning("yura: salvaged a truncated file block (%s)", salvaged.name)
 
         visible = persona.strip_leaks(cleaned)
+        if not is_owner:
+            # His pet names are his. A guest never hears one, whatever the model
+            # decided — the prompt asks, this makes sure.
+            visible = persona.scrub_pet_names(visible, language)
         visible = persona.strip_echo(visible, incoming)
         # A repeat of an ornament she used a moment ago is swapped for a fresh one
         # of the same kind — that, together with the brief above, is why the same

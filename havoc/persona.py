@@ -690,6 +690,35 @@ def is_acceptable(line: str) -> bool:
     return not is_self_harm(line)
 
 
+#: The names that belong to him. A guest who gets called "daddy" has been handed
+#: something that was never theirs — the same confusion as reading his account
+#: back to them, in one word.
+_PET_NAMES = {
+    # ``master`` only in lower case: "Master of Puppets" is a song, "master?" is
+    # him being called for.
+    "en": re.compile(r"\b(?:(?i:d+add+y+|d+add+a+|daddy)|master)\b"),
+    "fa": re.compile(r"(?:دد+ا+ی?ی?|دددی|ددد+|ارباب|صاحبم|اربابم|مولا)"),
+}
+_PET_REPLACEMENT = {"en": "you", "fa": "هوم"}
+
+
+def scrub_pet_names(text: str, language: str = "en") -> str:
+    """Take the owner's private names out of a line meant for a guest.
+
+    The persona is told, at the top of the prompt, never to use them for anyone
+    else. This is the second lock on the same door: the model is a model, and a
+    "جونم ددایی" to a stranger is exactly the sentence he photographed. Only
+    applied to guest turns — his own answers keep every name they always had.
+    """
+    if not text:
+        return text
+    pattern = _PET_NAMES.get(language) or _PET_NAMES["en"]
+    word = _PET_REPLACEMENT.get(language) or _PET_REPLACEMENT["en"]
+    cleaned = pattern.sub(word, text)
+    cleaned = re.sub(r"\b(?:you\s+){2,}", "you ", cleaned)
+    return re.sub(r"(?:هوم\s*){2,}", "هوم ", cleaned)
+
+
 def stranger_line(
     language: str = "en",
     *,

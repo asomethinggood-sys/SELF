@@ -189,3 +189,20 @@ async def test_a_fact_he_says_in_a_group_still_comes_home(live) -> None:
     # ...and it is there when he talks to her in his own chat.
     await runtime.yura_chat.answer("hi", chat_id=SELF_ID, is_owner=True, sender_id=SELF_ID)
     assert "coriander" in system_of(provider)
+
+
+async def test_a_guest_never_hears_his_pet_names(live) -> None:
+    """The prompt asks; this makes sure. "جونم ددایی" to a stranger is the leak."""
+    runtime, provider = live
+    provider.reply = "جونم ددایی؟ من اینجام، بگو."
+    await say(runtime, "یورا", sender=STRANGER)
+    said = [m.text or "" for m in runtime.client.sent]
+    assert said, "she must still answer a guest"
+    assert not any("ددایی" in text for text in said), said
+
+
+async def test_his_own_answer_keeps_the_pet_names(live) -> None:
+    runtime, provider = live
+    provider.reply = "جونم ددایی؟"
+    await say(runtime, "یورا", sender=SELF_ID, name="Owner")
+    assert any("ددایی" in (m.text or "") for m in runtime.client.sent)
