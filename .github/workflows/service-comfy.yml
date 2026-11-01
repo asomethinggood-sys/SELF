@@ -125,7 +125,7 @@ jobs:
           # install time; without this every restart downloads them again.
           path: |
             .runtime/service-comfy/ComfyUI
-          key: comfy-${{ hashFiles('.services/assets.json') }}-${{ github.run_id }}
+          key: comfy-${{ vars.COMFY_TAG || 'v0.43.2' }}-${{ hashFiles('.services/assets.json') }}-${{ github.run_id }}
           restore-keys: |
             comfy-
 
@@ -162,6 +162,7 @@ jobs:
           SERVICE_MINUTES: "335"
           OLLAMA_MODEL: ${{ vars.OLLAMA_MODEL || 'qwen2.5:0.5b' }}
           COMFY_CKPT: ${{ vars.COMFY_CKPT || 'sd-turbo.safetensors' }}
+          COMFY_TAG: ${{ vars.COMFY_TAG || 'v0.43.2' }}
           CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
           CLOUDFLARE_HOSTNAME: ${{ vars.CLOUDFLARE_HOSTNAME }}
         run: |

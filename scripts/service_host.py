@@ -55,6 +55,12 @@ GATE_PORTS = {"search": 9001, "comfy": 9002, "ollama": 9003}
 
 #: Models. One small model per service, because a runner gives us four cores.
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL") or "qwen2.5:0.5b"
+#: Pinned on purpose: master is a moving target and a service that worked
+#: yesterday should still be the same program today.
+COMFY_TAG = os.environ.get("COMFY_TAG") or "v0.43.2"
+#: Modules ComfyUI imports without listing: `app/database/db.py` wants `filelock`
+#: and nothing in requirements.txt says so (measured on v0.43.2).
+EXTRA_MODULES = ("filelock",)
 COMFY_CHECKPOINT = os.environ.get("COMFY_CKPT") or "sd-turbo.safetensors"
 
 
@@ -66,6 +72,22 @@ def log(message: str) -> None:
 # ---------------------------------------------------------------------------
 # Small helpers
 # ---------------------------------------------------------------------------
+def _capture(command: list[str], *, timeout: float = 120.0) -> str | None:
+    """stdout of a short command, or ``None`` when it fails."""
+    try:
+        done = subprocess.run(  # noqa: S603 - our own command
+            command,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if done.returncode != 0:
+        return None
+    return (done.stdout or "").strip()
+
+
 def _run(command: list[str], *, env: dict[str, str] | None = None, cwd: Path | None = None) -> int:
     """Run a command to completion, echoing its output to the job log."""
     log("$ " + " ".join(command))
@@ -177,31 +199,63 @@ def start_search(port: int, workdir: Path) -> subprocess.Popen | None:
 
 
 def start_comfy(port: int, workdir: Path) -> subprocess.Popen | None:
-    """ComfyUI on CPU with a fast checkpoint, 4 steps by default.
+    """ComfyUI on CPU with a fast single-file checkpoint, 8 steps by default.
 
-    A CPU SD1.5 image at 20 steps is 1-3 minutes. ``sd-turbo`` at 4 steps is
-    20-40 seconds, which is the difference between a command someone uses and one
-    they stop using. ``--quality`` switches the workflow the bot sends to 20
-    steps, not this script — the checkpoint is the fast one either way, because a
-    slow checkpoint cannot be made fast.
+    A CPU SD1.5 image at 20 steps is 1-3 minutes. Eight steps of a turbo-style
+    checkpoint is 30-50 seconds, which is the difference between a command someone
+    uses and one they stop using. ``--quality`` switches the *graph the bot sends*
+    to 20 steps; the checkpoint stays the fast one, because a slow checkpoint cannot
+    be made fast.
+
+    Three things here are scars from real runs:
+
+    * The checkout is **pinned to a tag**. Master changes under you, and a service
+      that worked yesterday is a different program today.
+    * The requirements install runs **on every start**, cache hit or not. The
+      Actions cache restores the ComfyUI directory but not site-packages, so
+      skipping it on a hit is how the second run died with
+      ``ModuleNotFoundError: No module named 'filelock'``.
+    * ``filelock`` is installed by hand: ComfyUI imports it from
+      ``app/database/db.py`` and does not list it in ``requirements.txt``.
     """
     checkout = workdir / "ComfyUI"
+    wanted = os.environ.get("COMFY_TAG") or COMFY_TAG
     if not (checkout / "main.py").exists():
-        if _run(["git", "clone", "--depth", "1", "https://github.com/comfyanonymous/ComfyUI.git", str(checkout)]) != 0:
-            log("could not clone ComfyUI")
+        if _run([
+            "git", "clone", "--depth", "1", "--branch", wanted,
+            "https://github.com/comfyanonymous/ComfyUI.git", str(checkout),
+        ]) != 0:
+            log(f"could not clone ComfyUI {wanted}")
             return None
-        install = _run(
-            [sys.executable, "-m", "pip", "install", "-q", "-r", str(checkout / "requirements.txt")],
-        )
-        if install != 0:
-            log("ComfyUI requirements failed to install")
-            return None
-        # CPU wheels, explicitly: the default index pulls a CUDA build that is
-        # 2.5 GB and cannot run here.
+    installed = _run(
+        [sys.executable, "-m", "pip", "install", "-q", "-r", str(checkout / "requirements.txt")],
+    )
+    if installed != 0:
+        log("ComfyUI requirements failed to install")
+        return None
+    # CPU wheels, explicitly: the default index pulls a CUDA build that is 2.5 GB
+    # and cannot run here. Only reinstall when what is there is a CUDA build —
+    # `--force-reinstall` on every start would undo the pip cache for nothing.
+    version = _capture([sys.executable, "-c", "import torch; print(torch.__version__)"])
+    if not version or "+cu" in version or version.startswith("2.5.1+cu"):
         _run([
             sys.executable, "-m", "pip", "install", "-q", "--force-reinstall",
             "--index-url", "https://download.pytorch.org/whl/cpu", "torch", "torchvision",
         ])
+    missing = [
+        module for module in EXTRA_MODULES if _capture([sys.executable, "-c", f"import {module}"]) is None
+    ]
+    if missing:
+        log(f"ComfyUI imports these but does not require them: {', '.join(missing)}")
+        _run([sys.executable, "-m", "pip", "install", "-q", *missing])
+    check = _capture(
+        [
+            sys.executable,
+            "-c",
+            "import torch, filelock; print(torch.__version__, 'cpu' if not torch.cuda.is_available() else 'cuda')",
+        ]
+    )
+    log(f"torch: {check or '(could not import torch and filelock)'}")
 
     checkpoints = checkout / "models" / "checkpoints"
     checkpoints.mkdir(parents=True, exist_ok=True)
@@ -215,6 +269,7 @@ def start_comfy(port: int, workdir: Path) -> subprocess.Popen | None:
         if fetched != 0 or not target.exists():
             log("no checkpoint: see scripts/fetch_artifact.py output above")
             return None
+    log(f"checkpoint: {target.name} ({target.stat().st_size // (1024 * 1024)} MB)")
     return _spawn(
         [sys.executable, "main.py", "--cpu", "--listen", "127.0.0.1", "--port", str(port),
          "--disable-auto-launch", "--dont-print-server"],
