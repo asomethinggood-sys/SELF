@@ -97,6 +97,19 @@ self-test: 6/6 checks passed
 That is a green run with evidence, not a red run with nothing. It also proves the
 install path works on a runner — which is the part that breaks.
 
+Each run commits its transcript to `.services/last-<service>.txt` (`[skip ci]`),
+because GitHub's job logs cannot be read from everywhere and "it worked on the
+runner" is worth nothing without one. The first three runs of these workflows each
+failed for a different reason that only a real runner could show, and the file is
+how they were fixed:
+
+| what the transcript said | what it was |
+|---|---|
+| `the gate never came up` + `(no log)` | the Serve step declared `SERVICE_SECRET: ${{ secrets.… }}` at step level, shadowing the ephemeral self-test secret in `$GITHUB_ENV` — the gate got an empty string and correctly refused to start |
+| `Error: listen tcp 127.0.0.1:11434: bind: address already in use` | ollama's installer registers a systemd unit that starts serving first |
+| `ModuleNotFoundError: No module named 'filelock'` | the Actions cache restores ComfyUI but not site-packages, and the install only ran on a cache miss; `filelock` is imported by ComfyUI but missing from its `requirements.txt` |
+| `1116 bytes, png, starts 7b227379` | the picture probe was still asking `/system_stats`, and `{"sy` is not a PNG |
+
 ---
 
 ## What each service is
@@ -188,3 +201,8 @@ Nothing is gated in that case (`gated: false`): the gate is for what is public.
   cloud API when a hosted one is down: it names the state.
 * **The service files are committed** — one small JSON per service, one commit per
   start, `[skip ci]`. They are the only thing those workflows write.
+* **The publish path is unproven until the secret exists.** Everything up to and
+  including a real answer through the gate has run on a real runner; opening the
+  tunnel and committing `.services/<name>.json` has not, because a gate cannot be
+  exposed without `SERVICE_SHARED_SECRET` and that is a repository secret only the
+  owner can add.
