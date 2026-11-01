@@ -85,13 +85,17 @@ async def cmd_services(ctx: CommandContext) -> None:
     footer_key = "services.footer_live" if any(
         (probe[0] if isinstance(probe, tuple) else False) for probe in probes
     ) else "services.footer_down"
-    text = "\n\n".join(
-        [
-            ui.title("◇", ctx.t("services.title")),
-            ui.panel(rows),
-            ui.footer(ctx.t(footer_key, prefix=ctx.runtime.prefix)),
-        ]
-    )
+    blocks = [
+        ui.title("◇", ctx.t("services.title")),
+        ui.panel(rows),
+        ui.footer(ctx.t(footer_key, prefix=ctx.runtime.prefix)),
+    ]
+    if not getattr(directory, "secret", "") and any(not endpoint.ok for endpoint in endpoints):
+        # The one configuration that makes three healthy runners invisible: with
+        # no gate secret they run as self-tests on loopback and publish nothing.
+        # Saying it here is the difference between "broken" and "one secret".
+        blocks.insert(2, ui.note(ctx.t("services.no_secret")))
+    text = "\n\n".join(blocks)
     await ctx.reply(text)
 
 

@@ -1364,6 +1364,7 @@
   "services.footer_live": "{prefix}draw یک قلعه · {prefix}web یعنی چه ... · این‌ها روی رانر خودشان‌اند و هر شش ساعت جابه‌جا می‌شوند",
   "services.model": "مدل · {model}",
   "services.model_none": "مدلی با این نام نیست",
+  "services.no_secret": "در این مخزن کلید دروازه نیست، پس اجراها فقط روی loopback خودآزمایی می‌کنند و چیزی منتشر نمی‌کنند. یک مقدار هر سه را روشن می‌کند: `SERVICE_SHARED_SECRET` (هر رشتهٔ تصادفی بلند) در Settings → Secrets and variables → Actions.",
   "services.none": "در این نسخه فهرست سرویسی وجود ندارد.",
   "services.state_between": "بین دو اجرا",
   "services.state_broken": "در دسترس نیست",
