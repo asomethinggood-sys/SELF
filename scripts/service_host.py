@@ -875,7 +875,8 @@ class Host:
             # the self-test exercises the same code `.draw` does.
             picture = self._picture(base, token)
             if picture is None:
-                return 0, b"the picture path did not produce a file"
+                reason = getattr(self, "_picture_reason", "") or "no file"
+                return 0, f"the picture path did not produce a file: {reason}"[:300].encode()
             return 200, picture
         if self.service == "ollama" and path == "/api/generate":
             body = json.dumps({"model": self.model_name, "prompt": "Say OK.", "stream": False}).encode()
@@ -908,7 +909,14 @@ class Host:
         return str(payload.get("response") or "")
 
     def _picture(self, base: str, token: str) -> bytes | None:
-        """Ask for one 8-step picture through the gate and return the PNG bytes."""
+        """Ask for one 8-step picture through the gate and return the PNG bytes.
+
+        The secret comes from :func:`secret_for`, not straight from the
+        environment: with nothing configured the host signs with the committed
+        default, and reading `SERVICE_SECRET` here produced an empty token — the
+        gate refused the request and the self-test reported "the picture path did
+        not produce a file" while the gate was simply saying 401.
+        """
         import asyncio
         import tempfile
 
@@ -929,7 +937,7 @@ class Host:
                     "gated": True,
                 }
             },
-            secret=(os.environ.get("SERVICE_SECRET") or ""),
+            secret=secret_for(),
             branch="",
         )
         generator = ImageGenerator.from_env(directory=directory) or ImageGenerator(
@@ -940,9 +948,12 @@ class Host:
         try:
             path = asyncio.run(generator.generate("a lighthouse in fog, pen and ink", outdir=folder))
         except Exception as exc:  # noqa: BLE001 - the reason is the finding
-            log(f"the picture failed: {type(exc).__name__}: {exc}")
+            reason = f"{type(exc).__name__}: {exc}"
+            log(f"the picture failed: {reason}")
+            self._picture_reason = reason
             return None
         if not path.exists():
+            self._picture_reason = "the generator returned a path that does not exist"
             return None
         return path.read_bytes()
 

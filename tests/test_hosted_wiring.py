@@ -310,6 +310,19 @@ def test_the_gate_starts_with_no_secret_configured(tmp_path: Path, monkeypatch) 
         gate.wait(timeout=10)
 
 
+def test_the_host_never_signs_the_picture_with_an_empty_secret() -> None:
+    """`SERVICE_SECRET` unset is the normal case now, and it must not mean "".
+
+    The comfy self-test built its directory with ``secret=SERVICE_SECRET or ""``,
+    computed an empty token, and reported "the picture path did not produce a
+    file" — which was the gate answering 401. One `secret_for()` call is the fix.
+    """
+    root = Path(__file__).resolve().parents[1]
+    text = (root / "scripts" / "service_host.py").read_text()
+    assert 'secret=(os.environ.get("SERVICE_SECRET") or "")' not in text
+    assert "secret=secret_for()" in text
+
+
 def test_the_service_workflows_always_publish() -> None:
     """No `if [ -z "${{ secrets.… }}" ]` guard may stand between a run and its tunnel."""
     root = Path(__file__).resolve().parents[1]
