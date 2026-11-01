@@ -313,7 +313,9 @@ STARTERS = {"search": start_search, "comfy": start_comfy, "ollama": start_ollama
 #: system stats instead.
 PROBES: dict[str, tuple[str, str]] = {
     "search": ("/search", "/search?q=transformers&format=json"),
-    "comfy": ("/system_stats", "/system_stats"),
+    # The label is what the transcript says; the path is what `_probe` looks at,
+    # and "/prompt" is the marker for the picture cycle (see `_probe`).
+    "comfy": ("a picture", "/prompt"),
     "ollama": ("/api/tags", "/api/tags"),
 }
 
@@ -749,11 +751,20 @@ class Host:
             from havoc.services.imagegen import _suffix_of
 
             kind = _suffix_of(body)
+            magic = body[:4].hex()
+            # `_suffix_of` defaults to png so a file still has a name; the check
+            # has to be stricter than that, or a JSON body passes as an image.
+            looks_like_an_image = (
+                magic == "89504e47"          # PNG
+                or magic.startswith("ffd8ff")  # JPEG
+                or magic == "47494638"         # GIF
+                or magic == "52494646"         # RIFF (webp)
+            )
             checks.append(
                 (
                     "a real image came back through the gate",
-                    kind in {"png", "jpg", "webp", "gif"} and len(body) > 1024,
-                    f"{len(body)} bytes, {kind}, starts {body[:4].hex()}",
+                    looks_like_an_image and len(body) > 1024,
+                    f"{len(body)} bytes, {kind}, starts {magic}",
                 )
             )
 
