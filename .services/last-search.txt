@@ -1,0 +1,6 @@
+search · run 41335433728 · 2026-11-01T18:13:28Z
+-----------------------------------------------
+the gate never came up, so the upstream was stopped rather than exposed
+
+--- gate log ---
+(no log)
