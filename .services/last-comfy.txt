@@ -1,0 +1,6 @@
+comfy · run 41335566624 · 2026-11-01T18:20:23Z
+----------------------------------------------
+the gate never came up, so the upstream was stopped rather than exposed
+
+--- gate log ---
+(no log)
