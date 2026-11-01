@@ -131,8 +131,8 @@ jobs:
           LLAMA_TAG="${IN_TAG:-b12032}"
           mkdir -p "$KIT_DIR"
           note="$KIT_DIR/fetch.txt"
-          if [ -x "$KIT_DIR/llama-server" ]; then
-            echo "server · cached" >> "$note"; echo "already have llama-server"; exit 0
+          if [ -x "$KIT_DIR/llama-server" ] && ls "$KIT_DIR"/*.so* >/dev/null 2>&1; then
+            echo "server · cached (binary and libraries)" >> "$note"; echo "already have llama-server"; exit 0
           fi
           # The asset name changes with every build, so ask the API which
           # ubuntu-x64 tarball the requested tag (or the newest five) has. A
@@ -168,7 +168,12 @@ jobs:
           # does not change with every tag, and keep the shared libraries beside
           # the binary, which is where it looks for them.
           find "$KIT_DIR" -name llama-server -type f -exec cp {} "$KIT_DIR/llama-server" \; || true
-          find "$KIT_DIR" \( -name "libllama*.so*" -o -name "libggml*.so*" -o -name "libmtmd*.so*" \) -type f -exec cp {} "$KIT_DIR/" \; 2>/dev/null || true
+          # *Every* shared library, not a guessed list: the server needs
+          # libllama-server-impl.so, libmtmd.so and whatever the next build adds,
+          # and a missing one reads as "the model exited while loading" (measured
+          # on a runner: exactly that, with the file named in the log).
+          find "$KIT_DIR" -name "*.so*" -type f -exec cp -a {} "$KIT_DIR/" \; 2>/dev/null || true
+          find "$KIT_DIR" -name "*.so*" -type l -exec cp -a {} "$KIT_DIR/" \; 2>/dev/null || true
           chmod +x "$KIT_DIR/llama-server" 2>/dev/null || true
           if LD_LIBRARY_PATH="$KIT_DIR" "$KIT_DIR/llama-server" --version 2>&1 | head -3; then
             echo "llama.cpp · binary runs" >> "$note"
@@ -218,11 +223,13 @@ jobs:
         id: ask
         shell: bash
         env:
-          LD_LIBRARY_PATH: ${{ github.workspace }}/.runtime/local-model
           IN_MODEL: ${{ inputs.model_url }}
         run: |
           set -uo pipefail
           mkdir -p "$KIT_DIR"
+          # Every directory the archive unpacked into, plus the flattened copy.
+          LD_LIBRARY_PATH="$KIT_DIR$(printf ':%s' "$KIT_DIR"/llama-*/ 2>/dev/null)"
+          export LD_LIBRARY_PATH
           bin="$KIT_DIR/llama-server"
           gguf=$(ls "$KIT_DIR"/*.gguf 2>/dev/null | head -1 || true)
           json_out="$KIT_DIR/local-model.json"
