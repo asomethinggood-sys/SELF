@@ -8,3 +8,4 @@
 04:30:07Z run 41360205988 · published https://adaptation-counsel-timely-amd.trycloudflare.com
 14:46:03Z run 41464896059 · starting comfy on this runner
 14:48:41Z run 41464896059 · comfy is up behind the gate
+14:48:43Z run 41464896059 · proving it through the gate with a real request
