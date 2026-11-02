@@ -4,3 +4,4 @@
 03:12:53Z run 41360205965 · published https://toe-beats-mechanics-move.trycloudflare.com
 14:23:59Z run 41415692160 · starting search on this runner
 14:24:06Z run 41415692160 · search is up behind the gate
+14:24:08Z run 41415692160 · proving it through the gate with a real request
