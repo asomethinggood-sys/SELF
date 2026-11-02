@@ -23,20 +23,22 @@ name: Her Yura
 # the moment she signs in. `.auth/her/config.json` lists who else may command it
 # — him — so he can fix something for her without borrowing her phone.
 #
-# How the login works (this is the only part that needs her):
-#   1. this file's first run finds no session and sees `.auth/her/REQUEST`;
-#   2. it asks Telegram for a code — Telegram delivers it to *her* app;
-#   3. whoever has the code commits it to `.auth/her/code.txt` on this branch
-#      (the job polls the branch and picks it up within seconds);
+# How the login works (this is the only part that needs her), once:
+#   1. Actions → **Her Yura** → *Run workflow* with `login: true`;
+#   2. Telegram sends a login code to *her* app — nobody types it here;
+#   3. whoever has it commits it to `.auth/her/code.txt` on this branch (the job
+#      polls the branch and picks it up within seconds);
 #   4. the job finishes the login, records her user id in `.auth/her/owner.json`
-#      (so his bot also treats her as an owner), and deletes the request marker.
-# Steps 3 and 4 are the job's own work: nothing has to be pasted into the runner.
+#      (so his bot treats her as an owner too), and takes the code back off the
+#      branch in the same commit.
+# Steps 3 and 4 are the job's own work: nothing is pasted into the runner, and
+# only a deliberate dispatch ever asks for a code — a deploy never texts her.
 
 on:
   push:
     paths:
-      # A push is a deploy for both bots. Commits that only touch her login
-      # files start her workflow without restarting his.
+      # A push is a deploy for both bots. It never asks Telegram for a code —
+      # only a dispatch with `login: true` does.
       - "havoc/**"
       - "pyproject.toml"
       - ".auth/her/**"
@@ -85,15 +87,33 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Restore her session
+        id: session
+        uses: actions/cache@v4
+        with:
+          path: .auth/her/session.txt
+          key: havoc-her-session-${{ github.run_id }}
+          restore-keys: |
+            havoc-her-session-
+
       - name: Queue the successor
-        # First thing: a crash, a cancelled run or a failed login must not leave
-        # her bot down until somebody notices.
+        # Right after the session comes back, because this decides whether there
+        # is anything to keep alive. With a session, a crash, a cancelled run or a
+        # kill must never leave her bot down until somebody notices. Without one,
+        # nothing is queued: a successor that cannot sign in would only chain
+        # itself all night, asking Telegram for a code on every lap.
         continue-on-error: true
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HANDOVER_WORKFLOW: yura-her.yml
-        run: python scripts/handover.py
+          IN_LOGIN: ${{ inputs.login }}
+        run: |
+          if [ ! -s .auth/her/session.txt ] && [ "${IN_LOGIN:-}" != "true" ]; then
+            echo "::notice::No session yet and no login was asked for — nothing is queued, so this cannot loop."
+            exit 0
+          fi
+          python scripts/handover.py
 
       - uses: actions/setup-python@v5
         with:
@@ -144,15 +164,6 @@ jobs:
             echo "- brain: ${ai_provider:-none} · ${ai_model:-auto}"
             echo "- also an owner: ${owners:-nobody else}"
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Restore her session
-        id: session
-        uses: actions/cache@v4
-        with:
-          path: .auth/her/session.txt
-          key: havoc-her-session-${{ github.run_id }}
-          restore-keys: |
-            havoc-her-session-
 
       - name: Restore her database
         uses: actions/cache@v4
@@ -207,13 +218,16 @@ jobs:
             rm -f .auth/her/code.txt
           fi
 
-          if [ -z "$code" ] && [ ! -f .auth/her/REQUEST ] && [ "${IN_LOGIN:-}" != "true" ]; then
-            echo "::notice::No session and no request marker — her login is not being asked for on this run."
+          # Only a person asks for a code. A push-triggered run that saw a login
+          # marker and asked on its own would text her a new code on every deploy,
+          # so the ask is a deliberate dispatch instead.
+          if [ -z "$code" ] && [ "${IN_LOGIN:-}" != "true" ]; then
+            echo "::notice::No session for her yet. Run this workflow with login: true and Telegram sends her a code."
             {
               echo "### No session yet"
               echo ""
-              echo "Add \`.auth/her/REQUEST\` (or dispatch this workflow with \`login: true\`)"
-              echo "to ask Telegram for her login code."
+              echo "Actions → **Her Yura** → *Run workflow* → set \`login\` to \`true\`."
+              echo "Telegram then sends a login code to her own app."
             } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
@@ -260,8 +274,9 @@ jobs:
             {
               echo "### No code arrived"
               echo ""
-              echo "The job waited ${WAIT_MINUTES} minutes. Codes expire quickly, so the next"
-              echo "run asks for a fresh one — \`.auth/her/REQUEST\` is still in place."
+              echo "The job waited ${WAIT_MINUTES} minutes and gave up quietly. Nothing is"
+              echo "left behind: run it again with \`login: true\` when she is ready, and a"
+              echo "fresh code goes to her app."
             } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
@@ -350,10 +365,6 @@ jobs:
               git rm -q --cached .auth/her/code.txt && keep=1
             fi
             rm -f .auth/her/code.txt
-            if git ls-files --error-unmatch .auth/her/REQUEST >/dev/null 2>&1; then
-              git rm -q --cached .auth/her/REQUEST && keep=1
-            fi
-            rm -f .auth/her/REQUEST
             [ "$keep" -eq 1 ] || exit 0
             git -c user.name="Her Yura" -c user.email="her-yura@users.noreply.github.com" \
               commit -qm "her yura: session ready [skip ci]" || true

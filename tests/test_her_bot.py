@@ -163,12 +163,23 @@ def test_her_login_asks_for_a_code_and_finishes_without_a_human_at_the_runner() 
     assert "TELEGRAM_2FA_PASSWORD" in json.dumps(workflow(HER)), "no way to supply a 2FA password"
 
 
-def test_the_request_marker_stops_a_second_code_from_being_asked_for() -> None:
-    """Deploys must not spam her with codes; only a missing session + the marker ask."""
+def test_only_a_person_asks_for_her_code() -> None:
+    """A deploy must never text her: the code is asked for by a dispatch, once."""
     scripts = run_scripts(workflow(HER))
-    assert ".auth/her/REQUEST" in scripts
-    assert "git rm -q --cached .auth/her/REQUEST" in scripts
-    assert (ROOT / ".auth" / "her" / "REQUEST").exists(), "the one-time request marker is missing"
+    assert 'if [ -z "$code" ] && [ "${IN_LOGIN:-}" != "true" ]; then' in scripts
+    # No marker file decides this any more: a file on the branch could be stale,
+    # and a deploy that read it as "ask for a code" would text her every time.
+    assert not (ROOT / ".auth" / "her" / "REQUEST").exists(), "a stale request marker came back"
+
+
+def test_a_run_without_a_session_never_starts_a_repeating_chain() -> None:
+    """A successor that cannot sign in would chain itself all night asking for codes."""
+    scripts = run_scripts(workflow(HER))
+    assert 'if [ ! -s .auth/her/session.txt ] && [ "${IN_LOGIN:-}" != "true" ]; then' in scripts
+    assert "nothing is queued" in scripts
+    # The session has to be restored before that decision is taken.
+    order = [step.get("name") or step.get("uses") for step in workflow(HER)["jobs"]["run"]["steps"]]
+    assert order.index("Restore her session") < order.index("Queue the successor")
 
 
 def test_a_login_code_does_not_stay_in_the_repository() -> None:
