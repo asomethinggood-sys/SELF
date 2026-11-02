@@ -1,2 +1,0 @@
-One shot: while this file exists, Her Yura asks Telegram for a login code.
-The job deletes it the moment the ask succeeds, so it can never repeat.
