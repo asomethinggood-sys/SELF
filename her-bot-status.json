@@ -1,0 +1,80 @@
+{
+  "app": "havoc",
+  "kind": "bot-status",
+  "history": [
+    {
+      "app": "havoc",
+      "kind": "bot-run",
+      "run_id": "41501147949",
+      "run_attempt": "1",
+      "repository": "asomethinggood-sys/SELF",
+      "branch": "arena/b9a136e7-self",
+      "commit": "d02c2f84e61e5309c07831659a9bed8a3370de51",
+      "written_at": "2026-11-02T18:35:56+00:00",
+      "started_at": "2026-11-02T18:34:53Z",
+      "exit_code": 0,
+      "uptime_seconds": 63.0,
+      "healthy": false,
+      "reason": "stepped aside after 63s for the next deploy",
+      "log_tail": [
+        "INFO     havoc: logging initialised (level=INFO, dir=/home/runner/work/SELF/SELF/.runtime/her/logs)",
+        "INFO     havoc: Y.U.R.A 1.9 starting",
+        "INFO     havoc: registered 152 commands from 35 feature modules",
+        "INFO     havoc: session authorized as @Liavieoo (id=«redacted»)",
+        "INFO     havoc: yura: owner(s) resolved — @edited_by_nyx",
+        "INFO     havoc: telegram handlers registered",
+        "INFO     havoc: scheduler started (tick=10s, policy=run_once)",
+        "INFO     havoc.plugins: plugin directory plugins does not exist; skipping",
+        "INFO     havoc: database: /home/runner/work/SELF/SELF/.runtime/her/data/havoc.db (37 tables, 32 rows, schema 12)",
+        "INFO     havoc: snapshots every 5 minute(s) to .data/her-snapshot.json",
+        "INFO     havoc: stop requested; shutting down",
+        "INFO     havoc: snapshot committed to .data/her-snapshot.json (19 tables)",
+        "INFO     havoc: shutting down",
+        "INFO     havoc: scheduler stopped",
+        "INFO     havoc: shutdown complete"
+      ],
+      "extra": {
+        "account": "her",
+        "bot_minutes": "340"
+      }
+    }
+  ],
+  "current": {
+    "app": "havoc",
+    "kind": "bot-run",
+    "run_id": "41501147949",
+    "run_attempt": "1",
+    "repository": "asomethinggood-sys/SELF",
+    "branch": "arena/b9a136e7-self",
+    "commit": "d02c2f84e61e5309c07831659a9bed8a3370de51",
+    "written_at": "2026-11-02T18:35:56+00:00",
+    "started_at": "2026-11-02T18:34:53Z",
+    "exit_code": 0,
+    "uptime_seconds": 63.0,
+    "healthy": false,
+    "reason": "stepped aside after 63s for the next deploy",
+    "log_tail": [
+      "INFO     havoc: logging initialised (level=INFO, dir=/home/runner/work/SELF/SELF/.runtime/her/logs)",
+      "INFO     havoc: Y.U.R.A 1.9 starting",
+      "INFO     havoc: registered 152 commands from 35 feature modules",
+      "INFO     havoc: session authorized as @Liavieoo (id=«redacted»)",
+      "INFO     havoc: yura: owner(s) resolved — @edited_by_nyx",
+      "INFO     havoc: telegram handlers registered",
+      "INFO     havoc: scheduler started (tick=10s, policy=run_once)",
+      "INFO     havoc.plugins: plugin directory plugins does not exist; skipping",
+      "INFO     havoc: database: /home/runner/work/SELF/SELF/.runtime/her/data/havoc.db (37 tables, 32 rows, schema 12)",
+      "INFO     havoc: snapshots every 5 minute(s) to .data/her-snapshot.json",
+      "INFO     havoc: stop requested; shutting down",
+      "INFO     havoc: snapshot committed to .data/her-snapshot.json (19 tables)",
+      "INFO     havoc: shutting down",
+      "INFO     havoc: scheduler stopped",
+      "INFO     havoc: shutdown complete"
+    ],
+    "extra": {
+      "account": "her",
+      "bot_minutes": "340"
+    }
+  },
+  "runs_seen": 1,
+  "last_healthy_at": ""
+}
