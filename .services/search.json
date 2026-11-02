@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://cad-presently-websites-restore.trycloudflare.com",
-  "run_id": "41352887698",
-  "started_at": "2026-11-01T21:36:54Z",
-  "expires_at": "2026-11-02T03:36:54Z",
+  "url": "https://toe-beats-mechanics-move.trycloudflare.com",
+  "run_id": "41360205965",
+  "started_at": "2026-11-02T03:12:33Z",
+  "expires_at": "2026-11-02T09:12:33Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-01T21:37:08Z",
+  "published_at": "2026-11-02T03:12:52Z",
   "gated": true,
   "public": false
 }
