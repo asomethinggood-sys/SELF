@@ -43,6 +43,10 @@ import urllib.error
 import urllib.request
 from datetime import datetime
 
+#: Both bots queue their own successor, and each one watches `scripts/`: a fix
+#: here is a deploy for the two of them, which is why this file is in the push
+#: paths as well as in each run's stand-aside check.
+#:
 #: GitHub statuses that mean "a run exists and is not finished".
 LIVE_STATUSES = frozenset({"queued", "in_progress", "requested", "waiting", "pending", "accepted"})
 
