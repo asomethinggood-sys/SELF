@@ -47,6 +47,9 @@ on:
       - "havoc/**"
       - "pyproject.toml"
       - ".auth/config.json"
+      # Her login records who she is; a change there is a change to who may
+      # command this bot, so it has to deploy like any other.
+      - ".auth/her/owner.json"
       - ".github/workflows/auth-and-run.yml"
   workflow_dispatch:
     inputs:
@@ -636,7 +639,7 @@ jobs:
             [ -n "$remote" ] || continue
             [ "$remote" = "${GITHUB_SHA}" ] && continue
             changed=$(git diff --name-only "${GITHUB_SHA}" "$remote" 2>/dev/null \
-              | grep -E '^(havoc/|pyproject\.toml|\.auth/config\.json|\.github/workflows/auth-and-run\.yml)' \
+              | grep -E '^(havoc/|pyproject\.toml|\.auth/config\.json|\.auth/her/owner\.json|\.github/workflows/auth-and-run\.yml)' \
               || true)
             if [ -n "$changed" ]; then
               # Wait for the replacement to appear before stepping aside. If the

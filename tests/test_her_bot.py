@@ -150,6 +150,11 @@ def test_his_bot_learns_her_id_from_her_login() -> None:
     his = run_scripts(workflow(MAIN))
     assert ".auth/her/owner.json" in his
     assert "steps.owners.outputs.owner_ids" in run_env(workflow(MAIN))
+    # Recording her id is a change to who may command him: it deploys at once,
+    # and the running bot steps aside for it instead of waiting six hours.
+    assert ".auth/her/owner.json" in (workflow(MAIN).get("on", {}).get("push", {}).get("paths", [])
+                                      or workflow(MAIN)[True]["push"]["paths"])
+    assert ".auth/her/owner.json" in his
 
 
 # ---------------------------------------------------------------------------
