@@ -166,7 +166,9 @@ def test_her_login_asks_for_a_code_and_finishes_without_a_human_at_the_runner() 
 def test_only_a_person_asks_for_her_code() -> None:
     """A deploy must never text her: the code is asked for by a dispatch, once."""
     scripts = run_scripts(workflow(HER))
-    assert 'if [ -z "$code" ] && [ "${IN_LOGIN:-}" != "true" ]; then' in scripts
+    assert 'if [ -z "$code" ] && [ "${IN_LOGIN:-}" != "true" ] && [ ! -f .auth/her/ASK ]; then' in scripts
+    # …and the ask file is spent in the same step, so it cannot fire twice.
+    assert "git rm -q --cached .auth/her/ASK" in scripts
     # No marker file decides this any more: a file on the branch could be stale,
     # and a deploy that read it as "ask for a code" would text her every time.
     assert not (ROOT / ".auth" / "her" / "REQUEST").exists(), "a stale request marker came back"
@@ -175,7 +177,7 @@ def test_only_a_person_asks_for_her_code() -> None:
 def test_a_run_without_a_session_never_starts_a_repeating_chain() -> None:
     """A successor that cannot sign in would chain itself all night asking for codes."""
     scripts = run_scripts(workflow(HER))
-    assert 'if [ ! -s .auth/her/session.txt ] && [ "${IN_LOGIN:-}" != "true" ]; then' in scripts
+    assert 'if [ ! -s .auth/her/session.txt ] && [ "${IN_LOGIN:-}" != "true" ] && [ ! -f .auth/her/ASK ]; then' in scripts
     assert "nothing is queued" in scripts
     # The session has to be restored before that decision is taken.
     order = [step.get("name") or step.get("uses") for step in workflow(HER)["jobs"]["run"]["steps"]]

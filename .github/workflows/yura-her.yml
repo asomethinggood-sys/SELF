@@ -109,7 +109,7 @@ jobs:
           HANDOVER_WORKFLOW: yura-her.yml
           IN_LOGIN: ${{ inputs.login }}
         run: |
-          if [ ! -s .auth/her/session.txt ] && [ "${IN_LOGIN:-}" != "true" ]; then
+          if [ ! -s .auth/her/session.txt ] && [ "${IN_LOGIN:-}" != "true" ] && [ ! -f .auth/her/ASK ]; then
             echo "::notice::No session yet and no login was asked for — nothing is queued, so this cannot loop."
             exit 0
           fi
@@ -221,7 +221,7 @@ jobs:
           # Only a person asks for a code. A push-triggered run that saw a login
           # marker and asked on its own would text her a new code on every deploy,
           # so the ask is a deliberate dispatch instead.
-          if [ -z "$code" ] && [ "${IN_LOGIN:-}" != "true" ]; then
+          if [ -z "$code" ] && [ "${IN_LOGIN:-}" != "true" ] && [ ! -f .auth/her/ASK ]; then
             echo "::notice::No session for her yet. Run this workflow with login: true and Telegram sends her a code."
             {
               echo "### No session yet"
@@ -241,6 +241,19 @@ jobs:
             if ! python -m havoc login --request --state .auth/her/login-state.json; then
               echo "::error::Could not request a login code for her account — see above."
               exit 1
+            fi
+            # One shot: the ask file is consumed right here, so no later deploy
+            # finds anything that would make it text her again.
+            if git ls-files --error-unmatch .auth/her/ASK >/dev/null 2>&1; then
+              git rm -q --cached .auth/her/ASK
+              rm -f .auth/her/ASK
+              if git -c user.name="Her Yura" -c user.email="her-yura@users.noreply.github.com" \
+                commit -qm "her yura: asked for a login code [skip ci]" \
+                && git push -q origin "HEAD:refs/heads/${GITHUB_REF_NAME}"; then
+                echo "::notice::The ask is spent — the file is gone, so only a new ask can ask again."
+              else
+                echo "::warning::Could not record that the code was asked for; the next deploy may ask again."
+              fi
             fi
             echo "::notice::A login code is on its way to her Telegram. Commit it to .auth/her/code.txt (or dispatch with the code input) and this job will finish on its own."
             {
