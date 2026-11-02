@@ -26,6 +26,8 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
+import time
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -106,67 +108,145 @@ def build(
     return payload
 
 
-def merge_into(path: Path, payload: dict[str, Any]) -> dict[str, Any]:
-    """Keep a short history, so one good run does not erase the last bad one."""
-    document: dict[str, Any] = {"app": "havoc", "kind": "bot-status", "history": []}
+def _loads(text: str) -> dict[str, Any]:
     try:
-        existing = json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(existing, dict):
-            document.update({k: v for k, v in existing.items() if k not in {"current", "history"}})
-            history = existing.get("history")
-            if isinstance(history, list):
-                document["history"] = history[-9:]
-    except (OSError, ValueError):
-        pass
+        value = json.loads(text)
+    except ValueError:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def merge_documents(existing: dict[str, Any] | None, payload: dict[str, Any]) -> dict[str, Any]:
+    """Keep a short history, so one good run does not erase the last bad one.
+
+    ``existing`` is whatever the branch already holds, not just what this
+    checkout holds: a run that started from older code must not drop the entry a
+    newer run published in the meantime. The same run is never counted twice.
+    """
+    document: dict[str, Any] = {"app": "havoc", "kind": "bot-status", "history": []}
+    history: list[dict[str, Any]] = []
+    if isinstance(existing, dict):
+        document.update({k: v for k, v in existing.items() if k not in {"current", "history"}})
+        if isinstance(existing.get("history"), list):
+            history = [entry for entry in existing["history"] if isinstance(entry, dict)][-9:]
+    # The same entry, word for word, is a re-publish; anything else is a run of
+    # its own, even if it shares a run id and a timestamp with the one before.
+    fingerprint = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+    if not any(json.dumps(entry, sort_keys=True, ensure_ascii=False) == fingerprint for entry in history):
+        history = [*history, payload][-10:]
+    document["history"] = history
     document["current"] = payload
-    document["history"] = [*document["history"], payload][-10:]
-    document["runs_seen"] = len(document["history"])
+    document["runs_seen"] = len(history)
     document["last_healthy_at"] = next(
-        (entry.get("written_at") for entry in reversed(document["history"]) if entry.get("healthy")),
+        (entry.get("written_at") for entry in reversed(history) if entry.get("healthy")),
         "",
     )
     return document
 
 
-def publish(path: Path, document: dict[str, Any], *, commit: bool = True) -> str:
-    """Write the document, then commit and push it. Returns what happened."""
+def merge_into(path: Path, payload: dict[str, Any]) -> dict[str, Any]:
+    """Merge a payload into the document in ``path`` (what a local run can see)."""
+    try:
+        existing = _loads(path.read_text(encoding="utf-8"))
+    except OSError:
+        existing = {}
+    return merge_documents(existing, payload)
+
+
+def write_document(path: Path, document: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _git(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        env={**os.environ, **(env or {})},
+        check=False,
+    )
+
+
+def _repo_path(path: Path) -> str:
+    """The path as git knows it: relative to the repository root."""
+    try:
+        return Path(path).resolve().relative_to(Path(ROOT).resolve()).as_posix()
+    except ValueError:
+        return Path(path).as_posix()
+
+
+def _commit_on_top(base: str, path: Path) -> tuple[str, str]:
+    """A commit that changes only ``path``, built on top of ``base``.
+
+    Plumbing, not ``add``/``commit``/``rebase``: it needs no clean worktree, it
+    cannot be stopped by a rebase somebody else left in progress, and it cannot
+    conflict with a branch that moved while the bot was running — the branch is
+    read first, merged into the document, and then written over ``base``.
+    """
+    blob = _git("hash-object", "-w", "--", str(path))
+    if blob.returncode != 0:
+        return "", f"hash-object failed: {blob.stderr.strip()[:200]}"
+    with tempfile.TemporaryDirectory() as tmp:
+        env = {"GIT_INDEX_FILE": str(Path(tmp) / "index")}
+        for step, args in (
+            ("read-tree", ("read-tree", base)),
+            ("update-index", ("update-index", "--add", "--cacheinfo", f"100644,{blob.stdout.strip()},{_repo_path(path)}")),
+            ("write-tree", ("write-tree",)),
+        ):
+            done = _git(*args, env=env)
+            if done.returncode != 0:
+                return "", f"{step} failed: {done.stderr.strip()[:200]}"
+            if step == "write-tree":
+                tree = done.stdout.strip()
+    message = f"bot status {datetime.now(UTC):%Y-%m-%dT%H:%MZ} [skip ci]"
+    commit = _git("commit-tree", tree, "-p", base, "-m", message)
+    if commit.returncode != 0:
+        return "", f"commit-tree failed: {commit.stderr.strip()[:200]}"
+    return commit.stdout.strip(), ""
+
+
+def publish(path: Path, document: dict[str, Any], *, commit: bool = True) -> str:
+    """Write the document, then publish it. Returns what happened.
+
+    Returns ``"committed"`` only when the branch really moved, and a string
+    starting with ``"push failed"`` (or ``"write failed"``) otherwise, so the
+    caller can fail loudly instead of leaving a stale file that looks like the
+    truth.
+    """
+    write_document(path, document)
     if not commit:
         return "written"
     if not (ROOT / ".git").exists():
         return "written (no git)"
-    try:
-        subprocess.run(["git", "config", "user.name", "HAVOC status"], cwd=ROOT, check=False)
-        subprocess.run(
-            ["git", "config", "user.email", "status@users.noreply.github.com"], cwd=ROOT, check=False
-        )
-        # -f: the file is deliberately committed, and an ignore rule added for
-        # some other reason must not silently swallow the bot's own status.
-        subprocess.run(["git", "add", "-f", str(path)], cwd=ROOT, check=True)
-        staged = subprocess.run(
-            ["git", "diff", "--cached", "--quiet"], cwd=ROOT, check=False
-        ).returncode
-        if staged == 0:
-            return "unchanged"
-        subprocess.run(
-            ["git", "commit", "-qm", f"bot status {datetime.now(UTC):%Y-%m-%dT%H:%MZ} [skip ci]"],
-            cwd=ROOT,
-            check=True,
-        )
-    except (OSError, subprocess.CalledProcessError) as exc:
-        return f"write failed: {exc}"
-    branch = os.environ.get("GITHUB_REF_NAME", "")
-    for _ in range(3):
-        subprocess.run(["git", "fetch", "-q", "origin", branch or "HEAD"], cwd=ROOT, check=False)
-        subprocess.run(["git", "rebase", "-q", "--autostash", "FETCH_HEAD"], cwd=ROOT, check=False)
-        push = subprocess.run(
-            ["git", "push", "-q", "origin", f"HEAD:refs/heads/{branch}"], cwd=ROOT, check=False
-        )
-        if push.returncode == 0:
+    branch = os.environ.get("GITHUB_REF_NAME", "") or "HEAD"
+    last = "no attempt"
+    for attempt in range(3):
+        if attempt:
+            time.sleep(2)
+        fetched = _git("fetch", "-q", "origin", branch)
+        if fetched.returncode != 0:
+            last = f"push failed (fetch): {fetched.stderr.strip()[:200]}"
+            continue
+        rev = _git("rev-parse", "FETCH_HEAD")
+        base = rev.stdout.strip()
+        if rev.returncode != 0 or not base:
+            last = f"push failed (rev-parse): {rev.stderr.strip()[:200]}"
+            continue
+        # What the branch says right now, not what this checkout said at boot.
+        on_branch = _loads(_git("show", f"{base}:{_repo_path(path)}").stdout)
+        merged = merge_documents(on_branch, document["current"]) if document.get("current") else document
+        write_document(path, merged)
+        commit_sha, error = _commit_on_top(base, path)
+        if not commit_sha:
+            last = f"write failed: {error}"
+            continue
+        pushed = _git("push", "-q", "origin", f"{commit_sha}:refs/heads/{branch}")
+        if pushed.returncode == 0:
             return "committed"
-        subprocess.run(["git", "rebase", "--abort"], cwd=ROOT, check=False)
-    return "committed locally (push failed)"
+        last = f"push failed: {pushed.stderr.strip()[:200]}"
+    return last
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -201,7 +281,9 @@ def main(argv: list[str] | None = None) -> int:
     document = merge_into(path, payload)
     outcome = publish(path, document, commit=not args.no_commit)
     print(json.dumps({"healthy": payload["healthy"], "outcome": outcome}, ensure_ascii=False))
-    return 0
+    # Silence is how a stale status file starts to look like the truth: a
+    # publish that never reached the branch has to fail the command.
+    return 1 if outcome.startswith(("push failed", "write failed")) else 0
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -69,6 +69,90 @@ def test_the_status_file_is_not_ignored() -> None:
     assert "bot-status.json" not in ignore.splitlines()
 
 
-def test_publish_forces_the_file_into_the_index() -> None:
+def test_publish_does_not_depend_on_a_clean_worktree() -> None:
+    """A run's checkout can be dirty or mid-rebase; publishing builds its own commit.
+
+    The old path was `add -f` + `commit` + `rebase` + `push`, which fails silently
+    on a worktree another process touched — and a stale status file then looks
+    exactly like the truth.
+    """
     source = (Path(__file__).resolve().parent.parent / "scripts" / "publish_status.py").read_text()
-    assert 'git", "add", "-f"' in source
+    assert '"commit-tree"' in source
+    assert '"read-tree"' in source
+    assert '"update-index"' in source
+    assert '"rebase"' not in source
+
+
+# ---------------------------------------------------------------------------
+# Publishing for real: into a git repo, against a branch that moves
+# ---------------------------------------------------------------------------
+def _git(cwd: Path, *args: str) -> str:
+    import subprocess
+
+    done = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    return done.stdout
+
+
+def _repo(tmp_path: Path) -> tuple[Path, Path]:
+    """A bare origin and a checkout of it, with one status entry already there."""
+    import subprocess
+
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    work = tmp_path / "work"
+    subprocess.run(["git", "init", "-q", "-b", "main", str(work)], check=True)
+    _git(work, "config", "user.email", "run@example.com")
+    _git(work, "config", "user.name", "run")
+    (work / "bot-status.json").write_text(json.dumps({"app": "havoc", "kind": "bot-status", "history": []}))
+    _git(work, "add", "bot-status.json")
+    _git(work, "commit", "-qm", "init")
+    _git(work, "remote", "add", "origin", str(origin))
+    _git(work, "push", "-q", "-u", "origin", "main")
+    return origin, work
+
+
+def test_publishing_lands_on_a_branch_that_moved_while_the_bot_ran(tmp_path: Path, monkeypatch) -> None:
+    """Another run published first, the worktree is dirty, and it still lands."""
+    import subprocess
+
+    origin, work = _repo(tmp_path)
+    elsewhere = tmp_path / "elsewhere"
+    subprocess.run(["git", "clone", "-q", "-b", "main", str(origin), str(elsewhere)], check=True)
+    _git(elsewhere, "config", "user.email", "other@example.com")
+    _git(elsewhere, "config", "user.name", "other")
+    theirs = {
+        "app": "havoc",
+        "kind": "bot-status",
+        "history": [{"run_id": "other-run", "written_at": "then", "healthy": True}],
+        "current": {"run_id": "other-run", "written_at": "then", "healthy": True},
+    }
+    (elsewhere / "bot-status.json").write_text(json.dumps(theirs))
+    _git(elsewhere, "commit", "-qam", "bot status from another run [skip ci]")
+    _git(elsewhere, "push", "-q", "origin", "main")
+
+    (work / "stray.txt").write_text("the bot left this behind")  # dirty worktree
+    monkeypatch.setattr(publish_status, "ROOT", work)
+    monkeypatch.setenv("GITHUB_REF_NAME", "main")
+    payload = publish_status.build(exit_code=0, uptime_seconds=3000, reason="stepped aside")
+    outcome = publish_status.publish(work / "bot-status.json", publish_status.merge_documents({}, payload))
+    assert outcome == "committed"
+
+    check = tmp_path / "check"
+    subprocess.run(["git", "clone", "-q", "-b", "main", str(origin), str(check)], check=True)
+    on_branch = json.loads((check / "bot-status.json").read_text())
+    assert on_branch["current"]["reason"] == "stepped aside"
+    assert any(entry.get("run_id") == "other-run" for entry in on_branch["history"]), "the other run was erased"
+
+
+def test_a_publish_that_cannot_push_says_so(tmp_path: Path, monkeypatch, capsys) -> None:
+    """The old code printed `committed locally (push failed)` and exited 0."""
+    origin, work = _repo(tmp_path)
+    (origin / "config").write_text("[core]\n\tbare = true\n")  # still a real repo…
+    _git(work, "remote", "set-url", "origin", str(tmp_path / "nowhere.git"))  # …that is gone
+    monkeypatch.setattr(publish_status, "ROOT", work)
+    monkeypatch.setenv("GITHUB_REF_NAME", "main")
+    code = publish_status.main(["--exit-code", "0", "--uptime", "3000", "--reason", "stepped aside"])
+    printed = capsys.readouterr().out
+    assert code == 1, printed
+    assert "push failed" in printed
