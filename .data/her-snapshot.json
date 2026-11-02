@@ -1,6 +1,6 @@
 {
   "app": "havoc",
-  "created_at": "2026-11-02T18:37:46+00:00",
+  "created_at": "2026-11-02T18:43:46+00:00",
   "tables": {
     "aliases": [],
     "autoreplies": [],
@@ -111,18 +111,38 @@
     "settings": [
       {
         "key": "owner.resolved",
-        "updated_at": "2026-11-02T18:36:46+00:00",
+        "updated_at": "2026-11-02T18:38:45+00:00",
         "value": "{\"edited_by_nyx\":7542695649}"
       },
       {
         "key": "owner.ids",
-        "updated_at": "2026-11-02T18:36:46+00:00",
+        "updated_at": "2026-11-02T18:38:45+00:00",
         "value": "[7542695649]"
       },
       {
         "key": "yura.sent_ids.7542695649",
-        "updated_at": "2026-11-02T18:36:47+00:00",
-        "value": "[97167,97168]"
+        "updated_at": "2026-11-02T18:39:27+00:00",
+        "value": "[97167,97168,97169,97171]"
+      },
+      {
+        "key": "ai.usage",
+        "updated_at": "2026-11-02T18:39:26+00:00",
+        "value": "{\"2b9beacf67a2|google:gemini-3.5-flash-lite\":{\"day\":\"2026-11-02\",\"count\":1},\"e8bfd373256a|google:gemini-3.5-flash-lite\":{\"day\":\"2026-11-02\",\"count\":1}}"
+      },
+      {
+        "key": "ai.health",
+        "updated_at": "2026-11-02T18:39:26+00:00",
+        "value": "{\"2b9beacf67a2\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":1,\"failures\":0},\"e8bfd373256a\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":1,\"failures\":0}}"
+      },
+      {
+        "key": "yura.said.7542695649",
+        "updated_at": "2026-11-02T18:39:26+00:00",
+        "value": "[\"✪ yura 1.9 is awake and keeping watch over the quiet hours. settling into the corner of your screen where it is warm. the evening has slowed down, and everything in here is right where you left it. ⟡ tell me what you need, or just stay a while and let me purr at you. (˶ᵔ ᵕ ᵔ˶)\"]"
+      },
+      {
+        "key": "yura.own_ids.7542695649",
+        "updated_at": "2026-11-02T18:39:27+00:00",
+        "value": "[97171]"
       }
     ],
     "templates": [],
