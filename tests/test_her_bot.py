@@ -261,3 +261,15 @@ def test_the_login_code_is_never_echoed() -> None:
     assert 'echo "::add-mask::$code"' in scripts
     # The session string is written to a file and cached, never printed.
     assert "cat .auth/her/session.txt" not in scripts.split("### Logged in")[0]
+
+
+def test_a_script_change_reaches_both_bots() -> None:
+    """`scripts/` is part of the bot — handover, publish, supervision — so a fix
+    there has to deploy to him and to her, not wait for the next `havoc/` push."""
+    for path in (MAIN, HER):
+        document = workflow(path)
+        key = "on" if "on" in document else True
+        watched = document[key]["push"]["paths"]
+        assert "scripts/**" in watched, path
+    for path in (MAIN, HER):
+        assert "scripts/" in run_scripts(workflow(path)), path

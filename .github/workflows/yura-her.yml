@@ -40,6 +40,7 @@ on:
       # A push is a deploy for both bots. It never asks Telegram for a code —
       # only a dispatch with `login: true` does.
       - "havoc/**"
+      - "scripts/**"
       - "pyproject.toml"
       - ".auth/her/**"
       - ".github/workflows/yura-her.yml"
@@ -473,7 +474,7 @@ jobs:
             [ -n "$remote" ] || continue
             [ "$remote" = "${GITHUB_SHA}" ] && continue
             changed=$(git diff --name-only "${GITHUB_SHA}" "$remote" 2>/dev/null \
-              | grep -E '^(havoc/|pyproject\.toml|\.auth/her/|\.github/workflows/yura-her\.yml)' || true)
+              | grep -E '^(havoc/|scripts/|pyproject\.toml|\.auth/her/|\.github/workflows/yura-her\.yml)' || true)
             if [ -n "$changed" ]; then
               echo "::notice::Newer code (${remote:0:7}) touches her bot; stopping so the queued run applies it."
               kill -INT "$bot" 2>/dev/null || true

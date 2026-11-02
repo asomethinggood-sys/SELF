@@ -45,6 +45,8 @@ on:
       # A push is the deploy. Only things that change the bot's behaviour are
       # listed: docs and tests must not restart a running userbot.
       - "havoc/**"
+      # The scripts are part of the bot: they hand over, publish, supervise.
+      - "scripts/**"
       - "pyproject.toml"
       - ".auth/config.json"
       # Her login records who she is; a change there is a change to who may
@@ -639,7 +641,7 @@ jobs:
             [ -n "$remote" ] || continue
             [ "$remote" = "${GITHUB_SHA}" ] && continue
             changed=$(git diff --name-only "${GITHUB_SHA}" "$remote" 2>/dev/null \
-              | grep -E '^(havoc/|pyproject\.toml|\.auth/config\.json|\.auth/her/owner\.json|\.github/workflows/auth-and-run\.yml)' \
+              | grep -E '^(havoc/|scripts/|pyproject\.toml|\.auth/config\.json|\.auth/her/owner\.json|\.github/workflows/auth-and-run\.yml)' \
               || true)
             if [ -n "$changed" ]; then
               # Wait for the replacement to appear before stepping aside. If the
