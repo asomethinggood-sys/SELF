@@ -3,3 +3,4 @@
 22:53:07Z run 41359070533 · proving it through the gate with a real request
 22:55:44Z run 41359070533 · published https://cash-tampa-lows-created.trycloudflare.com
 04:26:10Z run 41360205988 · starting comfy on this runner
+04:28:28Z run 41360205988 · comfy is up behind the gate
