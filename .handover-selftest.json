@@ -1,17 +1,11 @@
 {
   "workflow": "ai-probe.yml",
   "ref": "arena/b9a136e7-self",
-  "action": "already-covered",
-  "live": [
-    {
-      "id": 41335304138,
-      "status": "in_progress",
-      "event": "push"
-    }
-  ],
-  "status": null,
-  "at": "2026-11-01T18:11:27Z",
+  "action": "dispatched",
+  "live": [],
+  "status": 204,
+  "at": "2026-11-02T19:03:39Z",
   "err": "",
-  "noop_runs": false,
-  "noop_count": 0
+  "noop_runs": true,
+  "noop_count": 1
 }
