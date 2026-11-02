@@ -665,6 +665,13 @@ async def probe_round_trips(runtime: Any) -> list[dict[str, Any]]:
                 "not available",
                 "is not a command",
                 "no such",
+                # A name the account cannot find is a refusal, not a silent
+                # failure: "I can't find probe-person in your chats" is the
+                # honest answer to a round trip that named nobody real.
+                "can't find",
+                "cannot find",
+                "don't know anyone",
+                "do not know anyone",
             )
         )
         if not refused and marker not in read_text:

@@ -52,8 +52,11 @@ BULK_THRESHOLD = 12
 class ReachError(Exception):
     """Something about the target or the text makes the send impossible."""
 
-    def __init__(self, message: str, kind: str = "reach_error") -> None:
+    def __init__(self, message: str, kind: str = "reach_error", target: str = "") -> None:
         self.kind = kind
+        #: what he typed, so the answer can name it back to him instead of
+        #: printing "unexpected error" about a name she simply does not know.
+        self.target = target
         super().__init__(message)
 
 
@@ -200,13 +203,22 @@ class Reach:
     # ------------------------------------------------------------------
     # Resolving a target
     # ------------------------------------------------------------------
-    async def resolve(self, value: Any, *, search_dialogs: bool = True) -> Target | None:
+    async def resolve(
+        self, value: Any, *, search_dialogs: bool = True, in_chat: int | None = None
+    ) -> Target | None:
         """Turn what he said into one chat, or ``None``.
 
         Order matters and is deliberate: an explicit id, then Saved Messages, then
         a stored alias, then a username, then a dialog whose name matches. A
         numeric string is an id and never a name, because a person called "999"
         is a coincidence and a chat id is not.
+
+        ``in_chat`` is the room he is standing in, and it is the difference
+        between "block sara" working and answering "there is no chat called
+        'sara'". A member of a group he is in has no dialog of their own until
+        they write to him privately, so the dialog list cannot see them — and
+        "block the person who keeps talking in this group" was therefore
+        impossible to obey, by command or by hand.
         """
         raw = str(value or "").strip().strip(",")
         if not raw:
@@ -231,19 +243,96 @@ class Reach:
             if re.fullmatch(r"-?\d+", raw):
                 return Target(id=int(raw), kind="unknown")
 
-        entity = await self._entity(lowered)
+        # A handle is resolved on the wire, and the "@" is part of how Telegram
+        # is asked: stripping it turned "@spammer" into a *bare name*, which is
+        # only ever looked up in the session's own cache — and a spammer is
+        # never in it.
+        entity = await self._entity(raw if raw.startswith("@") else lowered)
         if entity is not None:
             return self._target_from(entity)
         if search_dialogs:
             found = await self._search_dialogs(raw)
             if found is not None:
                 return found
-        return None
+        # His own address book of people she knows: introduced with `.yura people`,
+        # or met in a room. Names come from here before the room, because a name
+        # he taught her beats a fuzzy match on a display name.
+        known = await self._known_person(raw)
+        if known is not None:
+            return known
+        if in_chat is not None:
+            member = await self.member(in_chat, raw)
+            if member is not None:
+                await self._remember_person(member)
+                return member
+        # Nobody by that name in this room (or he is not in one). The rooms he has
+        # been talking in lately are the next honest place to look: he says "sara"
+        # and there is exactly one sara among the people he shares a group with.
+        # Only the person *he named* is looked for — this is never a sweep.
+        found = await self._search_rooms(raw, avoid=in_chat)
+        if found is not None:
+            await self._remember_person(found)
+        return found
 
-    async def resolve_or_raise(self, value: Any) -> Target:
-        found = await self.resolve(value)
+    #: How many rooms a name search will open. Each one is a participants call,
+    #: and five is enough for a person to be "somewhere he talks" without turning
+    #: one sentence into a flood of requests.
+    ROOM_SCAN_LIMIT = 5
+
+    async def _search_rooms(self, needle: str, *, avoid: int | None = None) -> Target | None:
+        """A participant of a recent room whose name matches, if exactly one does."""
+        wanted = str(needle or "").strip()
+        if not wanted or self.client is None:
+            return None
+        fetch = getattr(self.client, "get_dialogs", None)
+        if fetch is None:
+            return None
+        try:
+            rows = await fetch(limit=40)
+        except Exception:  # noqa: BLE001 - no dialogs is not an error
+            return None
+        hits: dict[int, Target] = {}
+        opened = 0
+        for row in rows or []:
+            if not getattr(row, "is_group", False):
+                continue
+            chat_id = int(getattr(row, "id", 0) or 0)
+            if not chat_id or chat_id == avoid:
+                continue
+            if opened >= self.ROOM_SCAN_LIMIT:
+                break
+            opened += 1
+            hit = await self.member(chat_id, wanted)
+            if hit is None:
+                continue
+            # Two different people with the same name are not one person: asking is
+            # the only honest answer, and the caller turns ``None`` into a question.
+            if hits and hit.id not in hits:
+                return None
+            hits[hit.id] = hit
+        return next(iter(hits.values()), None)
+
+    async def _remember_person(self, target: Target) -> None:
+        """Write down who he asked about, so the next sentence is instant.
+
+        Not a file on every member of every group — one row, for one person he
+        named himself. That is the difference between recognising somebody and
+        keeping a register.
+        """
+        people = getattr(self.runtime, "people", None)
+        if people is None or not target.id or target.kind not in {"user", "unknown"}:
+            return
+        try:
+            await people.touch(int(target.id), str(target.title or ""))
+        except Exception:  # noqa: BLE001 - a book that cannot be written is not a lockout
+            return
+
+    async def resolve_or_raise(self, value: Any, *, in_chat: int | None = None) -> Target:
+        found = await self.resolve(value, in_chat=in_chat)
         if found is None:
-            raise ReachError(f"there is no chat called {value!r}", kind="unknown_target")
+            raise ReachError(
+                f"there is no chat called {value!r}", kind="unknown_target", target=str(value)
+            )
         return found
 
     async def resolve_many(
@@ -300,6 +389,60 @@ class Reach:
         else:
             kind = "unknown"
         return Target(id=int(chat_id or 0), kind=kind, title=str(title), username=str(username))
+
+    async def _known_person(self, needle: str) -> Target | None:
+        """A person in her book of people, by name. One match, or nothing."""
+        people = getattr(self.runtime, "people", None)
+        if people is None:
+            return None
+        try:
+            rows = await people.search(needle, limit=3)
+        except Exception:  # noqa: BLE001 - a book that cannot be read is not a lockout
+            return None
+        exact = [row for row in rows if str(getattr(row, "name", "")).strip().lower() == needle.strip().lower()]
+        chosen = exact or (rows if len(rows) == 1 else [])
+        if not chosen:
+            return None
+        row = chosen[0]
+        name = str(getattr(row, "name", "") or "")
+        handle = str(getattr(row, "username", "") or "")
+        return Target(
+            id=int(getattr(row, "user_id", 0) or 0),
+            kind="user",
+            title=name or (f"@{handle}" if handle else str(getattr(row, "user_id", ""))),
+            username=handle,
+        )
+
+    async def member(self, chat_id: int, needle: str) -> Target | None:
+        """A participant of ``chat_id`` whose name or handle matches ``needle``.
+
+        The participants list is what the client already knows how to fetch. A
+        name that matches more than one person is not resolved: the caller gets
+        ``None`` and :meth:`candidates` is what asks the question, exactly as with
+        dialogs. Blocking the wrong person on a guess is worse than asking.
+        """
+        wanted = str(needle or "").strip().lstrip("@").lower()
+        if not wanted or self.client is None:
+            return None
+        fetch = getattr(self.client, "get_participants", None)
+        if fetch is None:
+            return None
+        try:
+            people = await fetch(chat_id, limit=200)
+        except Exception:  # noqa: BLE001 - not a group, no rights, or offline
+            return None
+        found: list[Target] = []
+        for user in people or []:
+            target = self._target_from(user)
+            if not target.id:
+                continue
+            first = str(getattr(user, "first_name", "") or "").lower()
+            last = str(getattr(user, "last_name", "") or "").lower()
+            handle = str(getattr(user, "username", "") or "").lower()
+            full = f"{first} {last}".strip()
+            if wanted in {first, last, full, handle} or (len(wanted) > 2 and wanted in full):
+                found.append(target)
+        return found[0] if len(found) == 1 else None
 
     async def _search_dialogs(self, needle: str) -> Target | None:
         """A name that matches exactly one of his chats.

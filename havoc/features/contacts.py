@@ -110,10 +110,26 @@ async def cmd_contact(ctx: CommandContext) -> None:
 
 
 async def _block_toggle(ctx: CommandContext, *, blocked: bool) -> None:
+    """Block or unblock one person, by name, handle, id — or by pointing at them.
+
+    ``block`` with nothing after it was a usage error. He says "block him" with
+    his finger on a message, or types ``.block`` as a reply, and the person being
+    pointed at is the answer; asking him to retype their handle is asking him to
+    do the work twice. The name is resolved inside the room he is standing in,
+    too: a group member has no dialog of their own, so the dialog list alone
+    answered "there is no chat called 'sara'" about somebody on the screen.
+    """
     who = " ".join(ctx.args).strip()
     if not who:
-        raise CommandError("contacts.usage_block", prefix=ctx.runtime.prefix)
-    target = await ctx.runtime.reach.resolve_or_raise(who)
+        replied = await ctx.reply_message()
+        person = getattr(replied, "sender_id", None) or getattr(replied, "from_id", None)
+        if person is None or int(person) in {
+            int(getattr(ctx.runtime.permissions, "self_id", 0) or 0),
+            int(getattr(ctx.event, "sender_id", 0) or 0),
+        }:
+            raise CommandError("contacts.usage_block", prefix=ctx.runtime.prefix)
+        who = str(int(person))
+    target = await ctx.runtime.reach.resolve_or_raise(who, in_chat=ctx.chat_id)
     chat_id = getattr(target, "id", None)
     label = escape(getattr(target, "label", "") or str(chat_id))
     try:

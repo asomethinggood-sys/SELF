@@ -1,0 +1,8 @@
+Ask Telegram for a login code for her account.
+
+This file is the switch. While it exists and there is no cached session,
+"Her Yura" requests one code per run (Telegram delivers it to her app) and then
+waits for `.auth/her/code.txt` on this branch. The job removes this file by
+itself once the login succeeds, so later deploys never ask again.
+
+Delete it to stop asking.

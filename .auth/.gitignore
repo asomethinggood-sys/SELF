@@ -1,3 +1,7 @@
 # Login codes are consumed by the waiting job and removed afterwards.
 # A file here is a leftover, not a credential.
 *.txt
+# …except hers: she may not have git or a console handy, and the only way her
+# code can reach the waiting job is a commit. The job deletes it again the
+# moment the login works (and the code expires in minutes either way).
+!her/code.txt

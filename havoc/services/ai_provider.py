@@ -127,6 +127,10 @@ class AIProvider:
         self.timeout = timeout
         self.enabled = enabled and bool(self.base_url) and bool(api_key)
         self.requests = 0
+        #: Set the first time a model refuses a payload carrying `tools`. Not a
+        #: failure: it means answers come back as prose and the text parser (and
+        #: her console) do the work instead of native calls.
+        self.tools_unsupported = False
         self.failures = 0
 
     @classmethod
@@ -271,12 +275,31 @@ class AIProvider:
                 messages, max_tokens=max_tokens, temperature=temperature
             )
             return _content_of_message(message).strip(), []
-        message = await self._completion(
-            messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            extra={"tools": list(tools), "tool_choice": "auto"},
-        )
+        try:
+            message = await self._completion(
+                messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                extra={"tools": list(tools), "tool_choice": "auto"},
+            )
+        except AIError as exc:
+            # A model that does not implement function calling answers 400 to a
+            # payload with `tools` in it — and the turn then failed completely,
+            # which is "add one thing to the prompt and she stops working". Ask
+            # again without the catalogue: the prose answer still goes through
+            # the same text parser, and her console is the floor under it.
+            if exc.kind not in {"http_error", "bad_request", "bad_response"}:
+                raise
+            # Only a complaint *about* tools is about tools. A 400 for a context
+            # that is too long would otherwise switch function calling off for the
+            # rest of the process and quietly degrade every later turn.
+            said = str(exc).lower()
+            if not any(word in said for word in ("tool", "function", "unsupported", "unknown field")):
+                raise
+            self.tools_unsupported = True
+            message = await self._completion(
+                messages, max_tokens=max_tokens, temperature=temperature
+            )
         return _content_of_message(message).strip(), list(message.get("tool_calls") or [])
 
     async def _completion(

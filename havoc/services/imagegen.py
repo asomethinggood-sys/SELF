@@ -45,7 +45,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .http import HttpError, get_bytes, post_json, request
+from .http import HttpError, get_bytes, get_json, post_json, request
 
 DEFAULT_URL = "http://127.0.0.1:8188"
 #: A 512×512, 20-step image on a mid-range GPU takes 3-10 seconds; a CPU-only
@@ -79,6 +79,8 @@ class ImageGenerator:
     directory: Any = None
     made: int = 0
     failures: int = 0
+    #: The checkpoint last used, when it differed from the configured one.
+    last_checkpoint: str = ""
     last_error: str = ""
     _workflow: dict[str, Any] | None = field(default=None, repr=False)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
@@ -141,6 +143,54 @@ class ImageGenerator:
         if self.directory is not None:
             return bool(getattr(self.directory.resolve("comfy"), "ok", False))
         return False
+
+    #: The checkpoint the *server* says it has, remembered per base URL. A free
+    #: runner is reinstalled on every run, so the file it has is whatever the
+    #: workflow pulled — and a hardcoded name is a 400 from ComfyUI's validator,
+    #: which is what he saw as "the image server refused the job".
+    _available: dict[str, list[str]] = field(default_factory=dict, repr=False)
+
+    async def checkpoints(self, base: str, headers: dict[str, str]) -> list[str]:
+        """Every checkpoint the server actually has. Empty when it cannot say."""
+        cached = self._available.get(base)
+        if cached is not None:
+            return cached
+        names: list[str] = []
+        try:
+            info = await get_json(
+                f"{base}/object_info/CheckpointLoaderSimple", timeout=15.0, headers=headers
+            )
+        except (HttpError, ValueError, OSError):
+            info = None
+        node = (info or {}).get("CheckpointLoaderSimple") if isinstance(info, dict) else None
+        required = ((node or {}).get("input") or {}).get("required") or {}
+        spec = required.get("ckpt_name")
+        if isinstance(spec, (list, tuple)) and spec:
+            first = spec[0]
+            if isinstance(first, list):
+                names = [str(item) for item in first if item]
+        self._available[base] = names
+        return names
+
+    async def pick_checkpoint(self, base: str, headers: dict[str, str]) -> str:
+        """The name to put in the graph: what he configured, if the server has it.
+
+        Otherwise the first one it does have. A run with ``sd-turbo`` installed and
+        ``v1-5-pruned-emaonly`` written in the code is not a configuration
+        mistake he can see — it is a refusal with a node id in it. The server is
+        the authority on its own files.
+        """
+        available = await self.checkpoints(base, headers)
+        if available and self.checkpoint not in available:
+            if self.logger is not None:
+                self.logger.info(
+                    "comfyui: %s is not on the server; using %s",
+                    self.checkpoint,
+                    available[0],
+                )
+            self.last_checkpoint = available[0]
+            return available[0]
+        return self.checkpoint
 
     #: Steps used when the owner did not ask for a path. A CPU render at 20 steps
     #: is 1-3 minutes; at 8 it is 30-50 seconds, which is the difference between
@@ -254,24 +304,49 @@ class ImageGenerator:
         base, headers, reason = self._target()
         if not base:
             raise ImageError(reason or "no image server is configured", kind="disabled")
+        # Ask what the server has before writing its name into the graph.
+        self.checkpoint = await self.pick_checkpoint(base, headers)
         graph, _positive, _save = self._graph(
             text, seed=seed, steps=self.QUALITY_STEPS if quality else self.FAST_STEPS
         )
         started = time.monotonic()
-        try:
-            payload = await post_json(f"{base}/prompt", {"prompt": graph}, timeout=30.0, headers=headers)
-        except HttpError as exc:
-            self.failures += 1
-            self.last_error = str(exc)[:200]
-            hint = ""
-            if exc.status == 401:
+        payload: Any = None
+        for attempt in range(3):
+            try:
+                payload = await post_json(
+                    f"{base}/prompt", {"prompt": graph}, timeout=30.0, headers=headers
+                )
+                break
+            except HttpError as exc:
+                # A hosted runner is asleep half the time and the tunnel under it
+                # is a free one: a refused connection is the *normal* first answer,
+                # and the machine is up seconds later. Two short retries are the
+                # difference between "draw doesn't work" and a picture.
+                if exc.kind in {"network", "timeout"} and attempt < 2:
+                    self.last_error = str(exc)[:200]
+                    await asyncio.sleep(2.0 + 3.0 * attempt)
+                    continue
+                self.failures += 1
+                self.last_error = str(exc)[:200]
+                if exc.kind in {"network", "timeout"}:
+                    raise ImageError(
+                        "the picture server did not answer — it is starting up, or its "
+                        f"tunnel moved; try again in a minute ({exc})",
+                        kind="unreachable",
+                    ) from exc
+                hint = ""
+                if exc.status == 401:
+                    raise ImageError(
+                        "the gate refused me — the shared secret does not match this run",
+                        kind="unauthorized",
+                    ) from exc
+                if exc.status == 400:
+                    available = await self.checkpoints(base, headers)
+                    hint = " (the checkpoint or a node is missing on the server"
+                    hint += f"; it has {', '.join(available)})" if available else ")"
                 raise ImageError(
-                    "the gate refused me — the shared secret does not match this run",
-                    kind="unauthorized",
+                    f"the image server refused the job: {exc}{hint}", kind="refused"
                 ) from exc
-            if exc.status == 400:
-                hint = " (the checkpoint or a node is missing on the server)"
-            raise ImageError(f"the image server refused the job: {exc}{hint}", kind="refused") from exc
         prompt_id = str((payload or {}).get("prompt_id") or "") if isinstance(payload, dict) else ""
         if not prompt_id:
             self.failures += 1

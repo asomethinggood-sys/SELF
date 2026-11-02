@@ -1,0 +1,9 @@
+{
+  "phone": "+989309823681",
+  "owner_ids": [
+    7542695649
+  ],
+  "note": "The second Yura: this account's own userbot. She is the owner of her bot because the logged-in account always is; this list is who *else* may command it, and it is him. The AI block is read from .auth/config.json so the two bots share one brain and one key.",
+  "language": "en",
+  "enabled": true
+}

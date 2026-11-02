@@ -16,6 +16,7 @@ Feature areas: 27 (offline content), 63 (Persian display), 100 (media output).
 from __future__ import annotations
 
 import random
+import re
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -115,7 +116,12 @@ async def cmd_poem(ctx: CommandContext) -> None:
 
 
 def _poem_card(poem: dict[str, Any], *, note: str = "") -> str:
-    text = str(poem.get("text", "")).strip()
+    # The corpus came out of HTML, so a verse can carry two spaces where the page
+    # had a line break. They are not typography: collapse them per line, keeping
+    # the newlines and any deliberate leading indent.
+    text = "\n".join(
+        re.sub(r"(?<=\S) {2,}", " ", line) for line in str(poem.get("text", "")).splitlines()
+    ).strip()
     lines = text.count("\n") + 1
     # Persian verse is set in italics: it separates the quoted couplets from
     # Yura's own voice, which is never italic.

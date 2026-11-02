@@ -27,6 +27,7 @@ from .database import DatabaseError
 from .localization import LocaleFormatError, LocaleManager, MissingTranslationError
 from .services.ai_provider import AIError
 from .services.rate_limiter import RateLimited
+from .services.reach import ReachError
 from .services.sender import SendError
 from .services.translation_provider import TranslationError
 from .utils.formatting import code, escape
@@ -703,6 +704,21 @@ class Dispatcher:
                 key = "errors.missing_argument"
                 variables = {"usage": escape(context.usage_text())}
             await runtime.sender.respond(context.event, runtime.t(key, language, **variables), reply=True)
+            runtime.stats["commands_failed"] += 1
+            return False
+        except ReachError as exc:
+            # "block sara" about somebody Telegram has never shown her must read as
+            # "I can't find sara in your chats", not as a stack trace in a card —
+            # the failure mode he described as "she does literally nothing".
+            await runtime.sender.respond(
+                context.event,
+                runtime.t(
+                    "reach.unknown_target",
+                    language,
+                    name=escape(getattr(exc, "target", "") or str(exc)),
+                ),
+                reply=True,
+            )
             runtime.stats["commands_failed"] += 1
             return False
         except ValidationError as exc:

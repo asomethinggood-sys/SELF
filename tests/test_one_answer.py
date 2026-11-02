@@ -65,8 +65,11 @@ async def test_an_instruction_in_his_own_chat_runs_once(runtime) -> None:
     assert len(sent) == 1, [m.text[:120] for m in sent]
     text = html.unescape(sent[0].text)
     # The receipt appears once. It used to appear twice, because the whole answer
-    # was produced twice.
-    assert text.count("◈") == 1
+    # was produced twice. Counted by its *body*, not by a glyph: the drawn rule
+    # rotates through twelve marks, so `text.count("◈")` was measuring which mark
+    # happened to be spent this time and went red whenever the pool reached ◈.
+    assert text.count("Nothing has left this account yet.") == 1
+    assert text.count("asked at") == 1
 
 
 def test_a_weekly_spec_reads_as_a_weekday() -> None:

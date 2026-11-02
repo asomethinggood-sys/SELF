@@ -135,7 +135,9 @@ async def _person(ctx: CommandContext) -> tuple[Any, str, int]:
                 pass
             return int(person), label, int(person)
         raise CommandError("admin.usage_person", prefix=ctx.runtime.prefix)
-    target = await ctx.runtime.reach.resolve_or_raise(who)
+    # ``in_chat``: the person he named is usually standing in the room he is
+    # typing in, and a member has no dialog of their own until they DM him.
+    target = await ctx.runtime.reach.resolve_or_raise(who, in_chat=ctx.chat_id)
     person = getattr(target, "id", None)
     label = escape(getattr(target, "label", "") or str(person))
     return person, label, int(person or 0)

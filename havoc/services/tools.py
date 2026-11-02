@@ -418,7 +418,9 @@ def build_tools(runtime: Any) -> list[Tool]:
                 "run one of her own commands for him (everything in .help): "
                 "'fal page 166', 'clock on -- timezone Asia/Tehran', 'remind 30m call mom', "
                 "'unsend last' (delete the message she just sent), 'delete' (the one he "
-                "replied to), 'policy ignore sara --for 2h', 'send --here hi'"
+                "replied to), 'policy ignore sara --for 2h', 'send --here hi', "
+                "'block sara', 'unblock sara', 'ban sara', 'kick sara', 'promote sara', "
+                "'whois sara', 'mute' / 'unmute' with no name for this whole group"
             ),
             properties={
                 "command": "the command name without the prefix, e.g. fal",
@@ -451,7 +453,10 @@ def build_tools(runtime: Any) -> list[Tool]:
 
             target = Target(id=int(turn.chat_id), kind="unknown", title="this chat")
         if target is None:
-            target = await runtime.reach.resolve(who)
+            # In the room she is speaking in: a member has no dialog of their own,
+            # and "send sara a message" about somebody on the screen used to answer
+            # "no chat called 'sara'".
+            target = await runtime.reach.resolve(who, in_chat=turn.chat_id)
         if target is None:
             near = await runtime.reach.candidates(who, limit=4)
             hint = ", ".join(f"{item.label} ({item.id})" for item in near) if near else ""
@@ -569,7 +574,7 @@ def build_tools(runtime: Any) -> list[Tool]:
         who = (args.get("who") or "").strip()
         if not who:
             return ActionResult(False, detail="a chat is needed", kind="bad_args")
-        target = await runtime.reach.resolve(who)
+        target = await runtime.reach.resolve(who, in_chat=turn.chat_id)
         if target is None:
             return ActionResult(False, detail=f"no chat called {who!r}", kind="unknown_target")
         try:

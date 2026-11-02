@@ -556,6 +556,49 @@ def system_prompt(
     return "\n\n".join(blocks)
 
 
+#: The words that name the owner in the assembled prompt, and what they become
+#: when the owner is not a "he". Applied to the finished system block, because
+#: every rule above is written for *him* — that is who installed her.
+_PRONOUN_SWAPS: dict[str, tuple[tuple[str, str], ...]] = {
+    "her": (
+        ("himself", "herself"),
+        ("him", "her"),
+        ("his", "her"),
+        ("he's", "she's"),
+        ("he is", "she is"),
+        ("he was", "she was"),
+        ("he has", "she has"),
+        ("he", "she"),
+    ),
+    "them": (
+        ("himself", "themselves"),
+        ("him", "them"),
+        ("his", "their"),
+        ("he's", "they're"),
+        ("he is", "they are"),
+        ("he was", "they were"),
+        ("he has", "they have"),
+        ("he", "they"),
+    ),
+}
+
+
+def with_owner_pronoun(text: str, pronoun: str = "him") -> str:
+    """``him`` → ``her`` when the owner is not a he.
+
+    One pass over the finished prompt, longest phrase first, whole words only:
+    "him" inside "himself" is handled before "him", and "this" is never touched.
+    Default ``him`` returns the text untouched, so his bot is byte-identical.
+    """
+    swaps = _PRONOUN_SWAPS.get(str(pronoun or "").strip().lower())
+    if not swaps or not text:
+        return text
+    out = text
+    for word, replacement in swaps:
+        out = re.sub(rf"(?<![A-Za-z']){re.escape(word)}(?![A-Za-z'])", replacement, out)
+    return out
+
+
 def call_prompt(language: str = "en") -> str:
     """The user-role text used when the owner only says her name."""
     return "yura" if language == "en" else "یورا"

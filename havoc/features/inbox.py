@@ -280,7 +280,7 @@ async def cmd_read(ctx: CommandContext) -> None:
     who = " ".join(ctx.args).strip()
     if not who:
         raise CommandError("inbox.usage_read", prefix=ctx.runtime.prefix)
-    target = await ctx.runtime.reach.resolve_or_raise(who)
+    target = await ctx.runtime.reach.resolve_or_raise(who, in_chat=ctx.chat_id)
     try:
         wanted = int(ctx.flag("limit") or _READ_DEFAULT)
     except ValueError:
@@ -324,7 +324,10 @@ async def cmd_whois(ctx: CommandContext) -> None:
     who = " ".join(ctx.args).strip()
     if not who:
         raise CommandError("inbox.usage_whois", prefix=ctx.runtime.prefix)
-    target = await ctx.runtime.reach.resolve_or_raise(who)
+    # In the room he said the name in: a member he has never spoken to has no
+    # dialog of their own, and "who is sara" answered "no such chat" about the
+    # person standing right there.
+    target = await ctx.runtime.reach.resolve_or_raise(who, in_chat=ctx.chat_id)
     person = await ctx.runtime.people.get(target.id)
     ignored = await ctx.store.is_ignored(target.id)
     entity = None

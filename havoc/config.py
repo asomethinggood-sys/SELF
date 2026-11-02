@@ -205,6 +205,11 @@ class Config:
     #: behind it is resolved once at login and stored in the database, so nothing
     #: has to be re-read from Telegram on every message.
     owner_usernames: tuple[str, ...] = ("edited_by_nyx",)
+    #: How her instructions should refer to the owner when it is not a "he".
+    #: One bot, two people: "him" is right for his account and wrong for hers, and
+    #: a companion that calls her owner "him" in her own chat is a bug she can see.
+    #: ``him`` (default), ``her`` or ``them``.
+    owner_pronoun: str = "him"
 
     translate_provider: str = "none"
     libretranslate_url: str = ""
@@ -493,6 +498,7 @@ def load_config(
         timezone=raw("TIMEZONE") or "Asia/Tehran",
         owner_ids=_split_ids(env.get("OWNER_IDS")) or (7542695649,),
         owner_usernames=_split_handles(env.get("OWNER_USERNAMES")) or ("edited_by_nyx",),
+        owner_pronoun=(raw("HAVOC_OWNER_PRONOUN") or "him").lower(),
         automation_allowlist=_split_ids(env.get("AUTOMATION_ALLOWLIST")),
         automation_denylist=_split_ids(env.get("AUTOMATION_DENYLIST")),
         dry_run=bool_of("DRY_RUN", False),

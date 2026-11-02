@@ -381,9 +381,39 @@ class ActionLayer:
                 "message through two different tools. if you "
                 "send no block, nothing changes — and "
                 "you answer *exactly as you always do*: same voice, same paragraphs, same "
-                "typography. hands do not change your voice."
+                "typography. hands do not change your voice.\n"
+                "names: write a person exactly as he said them (\"sara\", \"@sara\") — "
+                "people in this chat are found by name, you do not need their id."
             )
         return f"{header}\n" + "\n".join(rows) + "\n\n" + body
+
+    #: The sentences that were getting answered with words instead of done. This
+    #: is deliberately a *lookup table from his word to her hand*: a free model
+    #: with a catalogue of seventeen tools reads a list of seventeen tools, and
+    #: "block sara" then came back as "I am not able to block people" while
+    #: ``.block`` sat right there in her console. One line per verb costs a few
+    #: hundred characters and removes the guesswork.
+    QUICK_HANDS = (
+        ("block / unblock someone", 'command · {"command": "block", "args": "sara"}'),
+        ("ban / kick / remove from the group", 'command · {"command": "ban", "args": "sara"}'),
+        ("make someone an admin", 'command · {"command": "promote", "args": "sara"}'),
+        ("delete the message he replied to", 'command · {"command": "delete", "args": "--yes"}'),
+        ("delete your own last message", 'command · {"command": "unsend", "args": "last"}'),
+        ("who a person is", 'command · {"command": "whois", "args": "sara"}'),
+        ("read what someone said", 'read_chat · {"who": "sara"}'),
+        ("search this chat", 'search · {"query": "…"}'),
+    )
+
+    def quick_hands(self) -> str:
+        """The verb-to-hand table, in the prompt right under the catalogue."""
+        if not self._tools:
+            return ""
+        lines = [f"- {said} → {hand}" for said, hand in self.QUICK_HANDS]
+        return (
+            "## when he says this, use that\n"
+            + "\n".join(lines)
+            + "\n\nanything else in .help is the `command` tool with that command name."
+        )
 
     # ------------------------------------------------------------------
     # Policy

@@ -237,6 +237,13 @@ class Intent:
         return bool(self.lines)
 
 
+#: "yura, block sara" and "یورا سارا رو بلاک کن": the name is how a person calls
+#: her, not part of the order. ``_run_intent`` strips it before calling, but the
+#: reader is also used directly (a group handler, a plan step), and a name left in
+#: front used to become part of the target: ``ban یورا سارا``.
+_ADDRESS_LEAD = re.compile(r"^(?:yura|یورا|یورا جان)\s*[,،:!.]?\s*", re.I)
+
+
 def _clean(text: str) -> str:
     folded = (text or "").translate(_PERSIAN_DIGITS)
     folded = folded.replace("\u200c", " ").replace("‌", " ")
@@ -1952,6 +1959,15 @@ def _rule_react_order(text: str, *, window: str = "") -> Intent | None:
     everything they say from now on.
     """
     said = text.strip()
+    # "دیگه به سارا جواب نده" — "anymore" in front of the order is the way it is
+    # usually said, and an anchored rule that only accepts the bare form reads it
+    # as conversation. Same for "please" and "from now on".
+    said = re.sub(
+        r"^(?:دیگه|دیگر|لطفا|از\s*این\s*به\s*بعد|from\s+now\s+on|please)\s+",
+        "",
+        said,
+        flags=re.I,
+    )
 
     match = _RULE_IGNORE_FA.match(said)
     if match:
@@ -2068,9 +2084,21 @@ def _reach_options(body: str) -> tuple[str, list[str]]:
     return text, flags
 
 
+#: Words that trail a name in a spoken sentence and are never part of it.
+#: "don't reply to sara anymore" used to look up a person called "sara anymore"
+#: and answer "I don't know anyone called sara anymore" — a refusal for a name
+#: he never said, about a rule he did ask for.
+_NAME_TAIL = re.compile(
+    r"(?:\s+(?:anymore|any\s+more|again|please|pls|now|for\s+now|at\s+all|ever|"
+    r"ok|okay|thanks|thank\s+you|for\s+good|forever|from\s+now\s+on))+$",
+    re.I,
+)
+
+
 def _who(raw: str) -> str:
     who = " ".join((raw or "").split()).strip(" .,!")
     who = re.sub(r"^(?:to|for|my|our)\s+", "", who, flags=re.I)
+    who = _NAME_TAIL.sub("", who).strip(" .,!")
     if who.lower() in {"saved", "saved messages", "my saved messages", "our saved messages"}:
         return "saved"
     if who.lower() in {"me", "myself"}:
@@ -2557,6 +2585,18 @@ _HOUSEKEEPING = (
         ),
         "unsend last",
     ),
+    # "delete this message" / "remove the message i replied to" — *his* target,
+    # not her own last line. Both spellings of "the one you are looking at" end
+    # in ``.delete``, which needs the reply and says so when there is none.
+    (
+        re.compile(
+            r"^(?:please\s+)?(?:delete|remove|erase|bin)\s+"
+            r"(?:this|that|the)\s+(?:message|msg|line|one)\b"
+            r"(?:\s+(?:i\s+)?(?:replied\s+to|sent|just\s+sent|forwarded))?\s*[.!?]*$",
+            re.I,
+        ),
+        "delete --yes",
+    ),
     # "mute this chat for an hour" / "silence this group"
     (
         re.compile(
@@ -2908,6 +2948,180 @@ _PRONOUN_TARGETS = frozenset(
 )
 
 
+#: The orders about *people* on Telegram itself: block, unblock, ban, kick.
+#:
+#: "block sara" was read as nothing at all for two versions, and "unblock sara"
+#: was worse than nothing: it matched the *social* un-ignore rule and quietly
+#: turned a mute into "answer her again", which is the opposite of the sentence.
+#: Telegram has two different verbs about a person — reach them (block) and leave
+#: the room (kick/ban) — and this is the reader for both.
+_TELEGRAM_PERSON_ORDER = re.compile(
+    r"^(?:please\s+)?(?:(?:can|could|would|will)\s+you\s+"
+    r"|(?:i\s+(?:want|need|would\s+like|'?d\s+like)\s+you\s+to\s+)"
+    r"|(?:go\s+ahead\s+and\s+)|(?:just\s+))?(?P<verb>"
+    r"block|unblock|ban|unban|kick|boot|remove|throw\s+out|get\s+rid\s+of"
+    r")\s+(?P<who>@[\w.]+|[\w][\w\s.'@-]{0,48}?)"
+    r"(?:\s+(?:from|out\s+of|off)\s+(?:the\s+|this\s+)?(?:group|chat|room|channel))?"
+    r"\s*[.!?]*$",
+    re.I,
+)
+
+#: Persian is verb-final: "سارا رو بلاک کن". The object comes first, so the rule
+#: is the same sentence backwards.
+_TELEGRAM_PERSON_ORDER_FA = re.compile(
+    r"^(?:لطفا\s+)?(?P<who>[^\s].{0,40}?)\s*(?:رو|را)\s*(?P<verb>"
+    r"بلاک|آنبلاک|انبلاک|بن|اخراج|بیرون|حذف"
+    r")\s*کن(?:ش)?\s*[.!؟]*$"
+)
+
+#: The same order said as a consequence: "don't let sara message me", "make sure
+#: she can't text me anymore". It is a block, not a social rule — the sentence
+#: names a channel that has to be closed, not a mood.
+_DONT_LET = re.compile(
+    r"^(?:please\s+)?(?:don'?t|do\s+not|never)\s+(?:let|allow)\s+"
+    r"(?P<who>@[\w.]+|[\w][\w\s.'-]{2,40}?)\s+(?:to\s+)?"
+    r"(?:message|text|call|contact|dm|write\s+to)\s+me\b.*$",
+    re.I,
+)
+_CANT_REACH_ME = re.compile(
+    r"^(?:please\s+)?(?:make\s+sure\s+)?(?P<who>@[\w.]+|[\w][\w\s.'-]{2,40}?)\s+"
+    r"(?:can'?t|cannot|shouldn'?t|mustn'?t)\s+(?:message|text|call|contact|dm)\s+me\b.*$",
+    re.I,
+)
+
+#: What is left of the object after the verb and the name: "from messaging me",
+#: "so she can't text me". The name is the part before it.
+_WHO_TAIL = re.compile(
+    r"\s+(?:from|so|because|since)\b.*$"
+    r"|\s+(?:messaging|texting|calling|contacting|dm(?:ing|'?ing)?|writing)\s+me\b.*$",
+    re.I,
+)
+
+#: "him", "her", "the one who keeps texting me" — the target is whoever he replied
+#: to. The command resolves that from the reply; the sentence cannot know an id.
+_VAGUE_PEOPLE = (
+    "this person", "that person", "this guy", "that guy", "this user", "that user",
+    "the person", "the guy", "the user", "the account", "whoever",
+    "این شخص", "اون شخص", "همین شخص", "ایشان", "این یارو", "این", "اون", "این کاربر",
+)
+
+#: The verb in his sentence → the command that does it. ``--yes`` is his yes: he
+#: typed the order, and the alternative is a question in a chat where the answer
+#: would be the same one he just gave.
+_PEOPLE_VERBS = {
+    "block": "block",
+    "unblock": "unblock",
+    "ban": "ban",
+    "unban": "unban",
+    "kick": "kick",
+    "boot": "kick",
+    "remove": "kick",
+    "throw out": "kick",
+    "get rid of": "kick",
+    "بلاک": "block",
+    "آنبلاک": "unblock",
+    "انبلاک": "unblock",
+    "بن": "ban",
+    "اخراج": "kick",
+    "بیرون": "kick",
+    "حذف": "kick",
+}
+
+
+def _telegram_people(folded: str) -> Intent | None:
+    """One sentence about one person and what to do with them on Telegram.
+
+    Deliberately conservative: the object has to be a name, a handle, or one of
+    the vague phrases that the command can resolve from the reply. Anything that
+    reads like conversation — "the block was fun", "we were blocked by traffic" —
+    never matches, because the verb has to be in the imperative slot.
+
+    A *clause* is a different matter. "block sara, she keeps spamming" is the
+    same order with the reason attached, and it used to match nothing at all:
+    the pattern demanded the end of the sentence, so adding one honest word to
+    the command made the command disappear. That is the shape he described as
+    "it only works when the prompt is very plain". Each clause is tried on its
+    own, and the order is taken from whichever one is an order.
+    """
+    folded = _ADDRESS_LEAD.sub("", folded).strip()
+    found = _match_people(folded)
+    if found is not None:
+        return found
+    parts = [part.strip(" .!?:;،") for part in re.split(r"[,،;]", folded)]
+    if len(parts) < 2:
+        return None
+    for part in parts:
+        if not part or part == folded:
+            continue
+        found = _match_people(part)
+        if found is not None:
+            return found
+    return None
+
+
+def _match_people(folded: str) -> Intent | None:
+    """The whole-sentence match, on exactly one clause."""
+    for pattern in (
+        _TELEGRAM_PERSON_ORDER,
+        _TELEGRAM_PERSON_ORDER_FA,
+        _DONT_LET,
+        _CANT_REACH_ME,
+    ):
+        match = pattern.match(folded)
+        if not match:
+            continue
+        if pattern is _DONT_LET or pattern is _CANT_REACH_ME:
+            who = (match.group("who") or "").strip(" .,!?:;")
+            who = _WHO_TAIL.sub("", who).strip(" .,!?:;")
+            vague = (
+            not who
+            or who.lower() in _VAGUE_PEOPLE
+            or who.lower() in _PRONOUN_TARGETS
+            # Persian attaches the person to the verb: "بنش کن" is "ban them".
+            or (who.startswith("ش") and len(who) <= 3)
+            or who in {"او", "اون", "این", "ایشون"}
+        )
+            if vague:
+                return None
+            return Intent(lines=(f"block {who} --yes",), label="people", detail=f"block · {who}")
+        verb = " ".join(match.group("verb").lower().split())
+        command = _PEOPLE_VERBS.get(verb)
+        if not command:
+            continue
+        who = (match.group("who") or "").strip(" .,!?:;")
+        # "block sara from messaging me" → the name is "sara"; the rest of the
+        # sentence is the reason, not part of the name.
+        who = _WHO_TAIL.sub("", who).strip(" .,!?:;")
+        # ...and "block sara now, please" is still sara. Looking up "sara please"
+        # is a refusal about a name he never said.
+        who = _NAME_TAIL.sub("", who).strip(" .,!?:;")
+        # "remove the block" is about the feature, not about a person.
+        if who.lower() in {"the block", "block", "blocklist", "the list"}:
+            return None
+        # A clause can start mid-thought — "i told her, block by block, the story"
+        # — and a preposition is not somebody's name.
+        said = who.lower().split()
+        if said and said[0] in {"by", "to", "of", "in", "on", "for", "with", "at", "and", "or", "but"}:
+            return None
+        if who.lower().startswith(f"{verb} "):
+            return None
+        vague = not who or who.lower() in _VAGUE_PEOPLE or who.lower() in _PRONOUN_TARGETS
+        if who.lower().startswith(("the one ", "the guy who", "the person who")):
+            vague = True
+        if vague and command in {"ban", "kick"}:
+            # "ban this person" / "این شخص رو بن کن" already has a rule of its
+            # own, and it names the reply as the target. Leaving it there keeps
+            # one answer per sentence instead of two rules agreeing by accident.
+            return None
+        line = f"{command} --yes" if vague else f"{command} {who} --yes"
+        return Intent(
+            lines=(line,),
+            label="people",
+            detail=f"{command} · {who or 'the one he replied to'}",
+        )
+    return None
+
+
 def _handed(folded: str, original: str = "") -> Intent | None:
     """Orders about the account and the room: broadcast, purge, promote, ban.
 
@@ -3159,6 +3373,13 @@ def _detect(
     if knowledge is not None:
         return knowledge
 
+    # Telegram's own verbs about a person (block / unblock / ban / kick) come
+    # before the social rules: "unblock sara" used to match the *un-ignore* rule
+    # and turn a mute back into "answer her", the exact opposite sentence.
+    telegram_people = _telegram_people(folded)
+    if telegram_people is not None:
+        return telegram_people
+
     reached = _reach(text, allow_plan=allow_plan)
     if reached is not None:
         return reached
@@ -3251,3 +3472,60 @@ def _detect(
     # The vocative is not part of the sentence: "یورا فال بگیر" asks for a
     # fortune exactly like "فال بگیر" does.
     return _misc(_lead(folded))
+
+
+# ---------------------------------------------------------------------------
+# "is this a sentence asking for something to be done?"
+# ---------------------------------------------------------------------------
+#: Verbs that ask for an act, not for a thought. This is *not* a command reader:
+#: it does not decide what to run (``detect`` does that, narrowly and exactly).
+#: It answers one much smaller question — "if the model replied with a paragraph
+#: and no hand, was that a paragraph *instead of* doing something?" — so the loop
+#: can ask once more, pointing at the catalogue, instead of finishing the turn
+#: with an apology. "add some things to the prompt and she stops working" is this
+#: question answered wrongly for too long.
+_ORDER_VERBS = {
+    # telegram, about people and messages
+    "block", "unblock", "ban", "unban", "kick", "mute", "unmute", "promote",
+    "demote", "pin", "unpin", "delete", "unsend", "remove", "forward", "react",
+    "reply", "send", "tell", "message", "text", "ping", "spam", "invite",
+    "add", "approve", "reject", "purge", "clear", "leave", "archive",
+    # her own machinery
+    "remind", "remember", "forget", "schedule", "set", "turn", "switch", "enable",
+    "disable", "start", "stop", "pause", "resume", "cancel", "run", "make",
+    "draw", "generate", "search", "find", "look", "translate", "download",
+    "save", "export", "import", "backup", "restore", "count", "show", "list",
+    "check", "read", "whois", "rename", "change", "update", "upload", "post",
+    "broadcast", "call", "wake", "sleep", "snooze", "ignore", "answer",
+}
+#: Persian imperatives, as stems (the suffixes vary and are not the point).
+_ORDER_STEMS_FA = (
+    "بلاک", "بلوک", "آنبلاک", "بن", "اخراج", "سکوت", "پین", "حذف", "پاک", "بفرست",
+    "بگو", "یادم", "یادت", "یادآور", "فراموش", "روشن", "خاموش", "فعال", "غیرفعال",
+    "بساز", "بکش", "بگیر", "پیدا", "ترجمه", "دانلود", "ذخیره", "بشمار",
+    "نشون", "نشان", "لیست", "چک", "بخوان", "تغییر", "بفرست", "پست", "صدا",
+    "بیدار", "نادیده", "جواب",
+)
+
+
+def looks_like_an_order(text: str) -> bool:
+    """True when the sentence asks for something to be *done*.
+
+    Deliberately permissive: a false positive costs one extra request, and a
+    false negative costs the thing he complained about — she writes "I can't do
+    that" while the account could have done it. Short sentences only, so a
+    paragraph about blocking someone does not read as an order to block.
+    """
+    raw = str(text or "").strip()
+    if not raw:
+        return False
+    if len(raw.split()) > 24:
+        return False
+    folded = _clean(raw)
+    if any(stem in folded for stem in _ORDER_STEMS_FA):
+        return True
+    words = set(re.findall(r"[a-z']+", folded))
+    if words & _ORDER_VERBS:
+        return True
+    # "can you …", "could you …", "میشه …" — a request wearing a question mark.
+    return bool(re.search(r"\b(can|could|would|will) you\b", folded)) or "میشه" in folded

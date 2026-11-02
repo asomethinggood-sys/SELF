@@ -65,6 +65,46 @@ CHAT_TOKENS = 2500
 #: lines of pygame do not fit anywhere else. The file block is computed by the
 #: model, so the ceiling has to move with the request.
 FILE_TOKENS = 6000
+#: A message older than this was not typed this minute: it waited while the
+#: account was between runs, and she is told so (see ``late_seconds``).
+LATE_NOTICE_SECONDS = 120.0
+
+
+def _ago(seconds: float, language: str) -> str:
+    """``3 minutes`` / ``۲ ساعت`` — how long a message has been waiting."""
+    minutes = int(seconds // 60)
+    if minutes < 60:
+        value, unit = max(1, minutes), ("minute", "دقیقه")
+    elif minutes < 60 * 24:
+        value, unit = minutes // 60, ("hour", "ساعت")
+    else:
+        value, unit = minutes // (60 * 24), ("day", "روز")
+    if language == "fa":
+        return f"{value} {unit[1]}"
+    return f"{value} {unit[0]}" + ("" if value == 1 else "s")
+
+
+def _late_note(seconds: float, language: str) -> str:
+    """The line that tells her the message waited.
+
+    Not an excuse to write about clocks: it exists so she answers a message from
+    forty minutes ago like a person who has just picked up the phone.
+    """
+    ago = _ago(seconds, language)
+    if language == "fa":
+        return (
+            f"## این پیام {ago} پیش نوشته شده\n"
+            "حالا به دستت رسیده. همان‌طور جواب بده که یک آدم بعد از مدت‌ها گوشی را "
+            "برمی‌دارد: کوتاه، گرم، و اگر لازم بود فقط یک اشارهٔ کوچک به دیر رسیدن."
+        )
+    return (
+        f"## this message was written {ago} ago\n"
+        "it reached you only now. answer it the way a person answers a phone they "
+        "picked up late: warm, brief, and — only if it fits — one small nod to the "
+        "wait. do not lecture about clocks or about being offline."
+    )
+
+
 #: Words that mean "give me an actual file", in both languages the owner uses.
 _FILE_WORDS = (
     "file", "code", "script", "program", "snippet", "write me", "make me a game",
@@ -346,6 +386,7 @@ class YuraChat:
         reminder: str = "",
         reply_to: int | None = None,
         message_id: int | None = None,
+        late_seconds: float = 0.0,
     ) -> Answer:
         """Reply to ``text``. Never raises for provider problems.
 
@@ -397,6 +438,11 @@ class YuraChat:
         if picture is not None and not prompt:
             # A photo with no caption is still a question: "what is this?".
             prompt = persona.picture_prompt(language)
+        if late_seconds >= LATE_NOTICE_SECONDS:
+            # It was written a while ago and only just reached her. Said plainly,
+            # in the prompt and never in the reply, so she can be warm about it
+            # instead of pretending the last hour did not happen.
+            prompt = f"{_late_note(late_seconds, language)}\n{prompt}"
         if quoted.strip():
             prompt = persona.quoted_prompt(quoted, language, prompt)
         # A picture is evidence, not an order. When the words attached to it are
@@ -470,6 +516,9 @@ class YuraChat:
         # voice and the room's manners; they do not get a manual.
         if layer is not None and layer.tools and owner and await self.agent_enabled():
             hands = layer.catalogue(language)
+            quick = layer.quick_hands() if hasattr(layer, "quick_hands") else ""
+            if quick:
+                hands = f"{hands}\n\n{quick}"
             # ...and what those hands can pull: her own command line, so "yura fal
             # page 166" needs no special-case code, only knowing that fal exists.
             listing = command_catalogue(self.runtime, language)
@@ -482,6 +531,37 @@ class YuraChat:
         if block:
             system = messages[0].content if messages else ""
             messages[0] = AIMessage("system", f"{system}\n\n{block}")
+        # The order in the sentence runs *before* the model sees it, when it can
+        # be read as one. Two reasons, and both are his complaints verbatim: a
+        # model that answers "I can't do that" while the account was perfectly
+        # able to is worse than no answer at all, and a model that is handed the
+        # result writes about what happened instead of about what it would like
+        # to do. The sentence reader is narrow (whole-sentence, imperative), so
+        # ordinary conversation never reaches this branch.
+        did_early: list[str] = []
+        intent_note = ""
+        if owner and spoken:
+            did_early = await self._run_intent(
+                spoken,
+                chat_id=chat_id,
+                language=language,
+                reply_to=reply_to,
+                already=(),
+                sender_id=sender_id,
+                note=True,
+            )
+            if did_early:
+                intent_note = self._did_note(did_early, language)
+        if intent_note:
+            prompt = f"{prompt}\n\n{intent_note}"
+        # The rules are written for the account that installed her, which is not
+        # always a "he": her own Yura belongs to her, and a prompt that calls her
+        # "him" in her own chat is a mistake she can read.
+        if messages:
+            pronoun = str(getattr(self.runtime.config, "owner_pronoun", "him") or "him")
+            messages[0] = AIMessage(
+                "system", persona.with_owner_pronoun(str(messages[0].content), pronoun)
+            )
         if picture is not None:
             # A multimodal turn: the words and the picture in one message, which
             # is the only shape every provider accepts for a photo plus a
@@ -524,6 +604,7 @@ class YuraChat:
                     person=person,
                     reply_to=reply_to,
                     message_id=message_id,
+                    said=spoken,
                 )
                 if step is not None and step.waiting is not None:
                     # The only answer to a pending action is the question about it.
@@ -570,10 +651,11 @@ class YuraChat:
         # Whether anything actually happened. The model's block is the first route
         # and the sentence itself is the second: "turn off my live clock" must turn
         # the clock off even on a turn where the model only wrote a paragraph.
-        if owner:
-            # Always offer the sentence to the floor: a model that narrates instead
-            # of acting must not be the reason nothing happens. An intent whose work
-            # a tool already did is skipped inside.
+        if owner and not did_early:
+            # The second pass, and only when the first found nothing to do: a
+            # model that narrates instead of acting must not be the reason
+            # nothing happens. An intent whose work a tool already did is skipped
+            # inside, so this cannot double up on the hands.
             await self._run_intent(
                 spoken,
                 chat_id=chat_id,
@@ -582,6 +664,16 @@ class YuraChat:
                 already=tuple(did),
                 sender_id=sender_id,
             )
+        if reply is not None and (did_early or did) and Agent.sounds_like_a_refusal(reply):
+            # The work is done and the sentence denies it. That is the exact shape
+            # he kept photographing: "she said she can't block people" under a card
+            # that says she blocked someone. The second ask (see the agent's
+            # `_repair`) usually fixes it; when it does not, her own sentence is not
+            # allowed to win over the wire. One plain confirmation replaces it and
+            # the card underneath carries the detail.
+            proven = did_early or did
+            reply = self._done_line(proven[0], language)
+            self.logger.warning("yura: the reply denied an action that had happened")
         if reply is None:
             source = "offline"
             self.fallbacks += 1
@@ -684,21 +776,28 @@ class YuraChat:
         reply_to: int | None = None,
         already: tuple[str, ...] = (),
         sender_id: int | None = None,
-    ) -> None:
+        note: bool = False,
+    ) -> list[str]:
         """Read the sentence as an instruction and *do* it.
 
-        This is the floor under her hands: a model that answers but sends no block
+        Returns what actually happened, as short plain sentences, when ``note`` is
+        set — those lines go back into the prompt so her words and the card under
+        them cannot disagree. An empty list means "this was not an instruction",
+        which is the answer for most sentences and the reason the caller can run
+        this before the model without changing an ordinary turn.
+
+        It is the floor under her hands: a model that answers but sends no block
         no longer means "nothing happens". One console line, dispatched by the same
         code ``.clock off`` uses, so the state change, the reply and the audit trail
         are the real ones — not a second implementation that can drift.
         """
         if not text.strip():
-            return
+            return []
         # The last gate before a console line runs as the owner. ``answer`` has
         # already decided, but a sentence from somebody who is not him must never
         # reach a command even if a caller passes the wrong boolean.
         if sender_id is not None and not self.runtime.permissions.is_owner(sender_id):
-            return
+            return []
         # The sentence arrives with her name in front of it — that is how a
         # person calls her. Reading "yura, turn off the clock" as chatter meant
         # the one way he ever speaks to her was the way that did nothing.
@@ -711,14 +810,14 @@ class YuraChat:
             )
         except Exception as exc:  # noqa: BLE001 - a reader that throws is not a lockout
             self.logger.warning("yura: could not read the sentence as an instruction: %s", exc)
-            return
+            return []
         if found is None:
-            return
+            return []
         done_by_tool = self._SAME_AS.get(found.label or "", ())
         if any(name in already for name in done_by_tool):
             # The hands already did this one. Doing it again is the duplicate
             # message he photographed.
-            return
+            return []
         lines: list[str] = []
         for line in found.lines:
             if line in {"help", "commands"}:
@@ -768,12 +867,43 @@ class YuraChat:
             # A card with no lines is a frame around nothing: a command that
             # answered only with a file (a fortune, a picture) already said what
             # it had to say.
-            return
+            return [found.detail or found.label] if note else []
         title = self._intent_title(language, found.detail or found.label)
         # Under the tool's own card, never over it: the hand did the work, the
         # sentence is the footnote.
         self._cards = list(self._cards) + [(title, tuple(lines[:6]))]
         self._intent_done.append(found.detail or found.label)
+        return [f"{found.detail or found.label}: {line}" for line in lines[:4]] if note else []
+
+    def _did_note(self, did: list[str], language: str) -> str:
+        """What the account already did this turn, said plainly, for the model.
+
+        Not an instruction to talk about the machinery — the opposite: it is the
+        only way she can answer "done, she won't bother you again" instead of
+        "I cannot block people", which is what she said while the block was being
+        executed under her own sentence.
+        """
+        body = "\n".join(f"- {line}" for line in did)
+        if language == "fa":
+            return (
+                "## کاری که همین حالا انجام شد\n" + body + "\n\n"
+                "این را انجام دادی؛ حالا جواب بده — با همان لحن همیشگی. "
+                "دربارهٔ این سازوکار حرف نزن، و چیزی که نشد را نگو که شد."
+            )
+        return (
+            "## already done, this turn\n" + body + "\n\n"
+            "that is done — it really happened. now answer him in your own voice, "
+            "in the same tone as always. do not explain this machinery, and do not "
+            "claim anything that is not in that list."
+        )
+
+    @staticmethod
+    def _done_line(line: str, language: str) -> str:
+        """The shortest true sentence there is: it happened."""
+        body = str(line or "").strip() or ("done" if language != "fa" else "انجام شد")
+        if language == "fa":
+            return f"انجام شد — {body}."
+        return f"done — {body}."
 
     @staticmethod
     def _intent_lines(said: list[str]) -> list[str]:
@@ -879,6 +1009,7 @@ class YuraChat:
         person: Any = None,
         reply_to: int | None = None,
         message_id: int | None = None,
+        said: str = "",
     ) -> Any:
         """Run the tool loop, or return ``None`` when there is nothing to run.
 
@@ -906,7 +1037,14 @@ class YuraChat:
             message_id=int(message_id) if message_id else None,
         )
         self.last_turn = turn
-        return await agent.run(self.provider, messages, turn=turn, max_tokens=budget)
+        # Did the sentence ask for something to be *done*? The reader already ran
+        # and found nothing it could carry out, so this is the residue: the orders
+        # it does not know by heart. A model that answers one of those with a
+        # paragraph gets one pointed second ask instead of ending the turn there.
+        order = intent_module.looks_like_an_order(said) if said else False
+        return await agent.run(
+            self.provider, messages, turn=turn, max_tokens=budget, order=order
+        )
 
     def _ask_permission(self, step: Any, *, chat_id: int, language: str) -> Answer:
         """The question that replaces an answer when a hand needs a yes."""

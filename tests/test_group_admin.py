@@ -18,7 +18,10 @@ def _said(sent) -> str:
     return "\n".join(message.text for message in sent)
 
 
-async def _raise_target(value):
+async def _raise_target(value, **_context):
+    # The real resolver takes ``in_chat`` (the room he is standing in, for a
+    # member with no dialog of their own); a stub that rejects it is testing its
+    # own signature instead of the command.
     from havoc.services.reach import Target
 
     return Target(id=880, kind="user", title=str(value).lstrip("@"))

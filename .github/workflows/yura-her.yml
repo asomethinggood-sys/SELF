@@ -1,0 +1,497 @@
+name: Her Yura
+
+# The second Yura: her own account (+989309823681), her own session, her own
+# database, her own repeating run — the same shape as "Auth and run", kept apart
+# in every place the two bots could collide.
+#
+# What is shared on purpose, so nothing has to be typed twice:
+#   * `.auth/config.json` — the api_id/api_hash and the AI block (one brain, one
+#     key). Only when that block is missing does her Yura fall back to her
+#     offline lines, exactly like his.
+#   * the hosted services (search, pictures, the spare model), through the same
+#     repository variables.
+#
+# What is separate on purpose, so one bot can never overwrite the other:
+#   * the session        `.auth/her/session.txt`   cache `havoc-her-session-*`
+#   * the database       `.runtime/her/data`       cache `havoc-her-data-*`
+#   * the snapshot       `.data/her-snapshot.json` (his is `.data/snapshot.json`)
+#   * the status file    `her-bot-status.json`     (his is `bot-status.json`)
+#   * the concurrency    `havoc-her`               (his is `havoc-auth`)
+#   * the handover chain `yura-her.yml` dispatches itself, never his workflow
+#
+# Ownership: the logged-in account is always an owner, so **she owns her bot**
+# the moment she signs in. `.auth/her/config.json` lists who else may command it
+# — him — so he can fix something for her without borrowing her phone.
+#
+# How the login works (this is the only part that needs her):
+#   1. this file's first run finds no session and sees `.auth/her/REQUEST`;
+#   2. it asks Telegram for a code — Telegram delivers it to *her* app;
+#   3. whoever has the code commits it to `.auth/her/code.txt` on this branch
+#      (the job polls the branch and picks it up within seconds);
+#   4. the job finishes the login, records her user id in `.auth/her/owner.json`
+#      (so his bot also treats her as an owner), and deletes the request marker.
+# Steps 3 and 4 are the job's own work: nothing has to be pasted into the runner.
+
+on:
+  push:
+    paths:
+      # A push is a deploy for both bots. Commits that only touch her login
+      # files start her workflow without restarting his.
+      - "havoc/**"
+      - "pyproject.toml"
+      - ".auth/her/**"
+      - ".github/workflows/yura-her.yml"
+  workflow_dispatch:
+    inputs:
+      login:
+        description: "true = ask Telegram for a code now (ignored when a session exists)"
+        required: false
+        default: "false"
+        type: string
+      code:
+        description: "The login code for her account, if you already have it"
+        required: false
+        type: string
+      password:
+        description: "2FA password (or set the TELEGRAM_2FA_PASSWORD secret)"
+        required: false
+        type: string
+      wait_minutes:
+        description: "How long to wait for .auth/her/code.txt (default 25)"
+        required: false
+        default: "25"
+      bot_minutes:
+        description: "How many minutes to run her bot afterwards (default 340)"
+        required: false
+        default: "340"
+
+permissions:
+  contents: write
+  # Write, not read: the run queues its own successor and records who she is.
+  actions: write
+
+concurrency:
+  # Never cancels: a push waits its turn and the running bot steps aside itself.
+  group: havoc-her
+  cancel-in-progress: false
+
+jobs:
+  run:
+    name: her userbot
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Queue the successor
+        # First thing: a crash, a cancelled run or a failed login must not leave
+        # her bot down until somebody notices.
+        continue-on-error: true
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HANDOVER_WORKFLOW: yura-her.yml
+        run: python scripts/handover.py
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: python -m pip install -e ".[media]"
+
+      - name: Read her credentials
+        id: creds
+        shell: bash
+        run: |
+          set -euo pipefail
+          conf=.auth/her/config.json
+          if [ ! -f "$conf" ]; then
+            echo "::error::Missing $conf — it holds her phone number."
+            exit 1
+          fi
+          phone=$(python -c 'import json;print(json.load(open(".auth/her/config.json"))["phone"])')
+          # The Telegram app is the same one his bot uses; the AI block too. One
+          # place to change a key, not two that can drift apart.
+          api_id=$(python -c 'import json;print(json.load(open(".auth/config.json"))["api_id"])')
+          api_hash=$(python -c 'import json;print(json.load(open(".auth/config.json"))["api_hash"])')
+          echo "::add-mask::$phone"
+          echo "phone=$phone" >> "$GITHUB_OUTPUT"
+          echo "api_id=$api_id" >> "$GITHUB_OUTPUT"
+          echo "api_hash=$api_hash" >> "$GITHUB_OUTPUT"
+          ai_provider=$(python -c 'import json;print((json.load(open(".auth/config.json")).get("ai") or {}).get("provider",""))' 2>/dev/null || true)
+          ai_base_url=$(python -c 'import json;print((json.load(open(".auth/config.json")).get("ai") or {}).get("base_url",""))' 2>/dev/null || true)
+          ai_model=$(python -c 'import json;print((json.load(open(".auth/config.json")).get("ai") or {}).get("model",""))' 2>/dev/null || true)
+          ai_api_key=$(python -c 'import base64,json;b=(json.load(open(".auth/config.json")).get("ai") or {});k=(b.get("api_key") or "").strip();k=k or (base64.b64decode(b["api_key_b64"]).decode().strip() if b.get("api_key_b64") else "");print(k)' 2>/dev/null || true)
+          owners=$(python -c 'import json;print(",".join(str(x) for x in (json.load(open(".auth/her/config.json")).get("owner_ids") or [])))' 2>/dev/null || true)
+          language=$(python -c 'import json;print(json.load(open(".auth/her/config.json")).get("language") or "en")' 2>/dev/null || true)
+          if [ -n "$ai_api_key" ]; then echo "::add-mask::$ai_api_key"; fi
+          echo "ai_provider=$ai_provider" >> "$GITHUB_OUTPUT"
+          echo "ai_base_url=$ai_base_url" >> "$GITHUB_OUTPUT"
+          echo "ai_model=$ai_model" >> "$GITHUB_OUTPUT"
+          echo "ai_api_key=$ai_api_key" >> "$GITHUB_OUTPUT"
+          echo "owners=$owners" >> "$GITHUB_OUTPUT"
+          echo "language=$language" >> "$GITHUB_OUTPUT"
+          # Only the shape of the number is ever published.
+          echo "::notice::Her Yura uses ${phone:0:3}…${phone: -3} (api_id ${api_id})"
+          {
+            echo "### Her Yura"
+            echo ""
+            echo "- account: \`${phone:0:3}…${phone: -3}\`"
+            echo "- brain: ${ai_provider:-none} · ${ai_model:-auto}"
+            echo "- also an owner: ${owners:-nobody else}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Restore her session
+        id: session
+        uses: actions/cache@v4
+        with:
+          path: .auth/her/session.txt
+          key: havoc-her-session-${{ github.run_id }}
+          restore-keys: |
+            havoc-her-session-
+
+      - name: Restore her database
+        uses: actions/cache@v4
+        with:
+          path: .runtime/her
+          key: havoc-her-data-${{ github.run_id }}
+          restore-keys: |
+            havoc-her-data-
+
+      - name: Is there a session already?
+        id: existing
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -s .auth/her/session.txt ]; then
+            echo "have_session=yes" >> "$GITHUB_OUTPUT"
+            echo "::notice::A saved session was restored; no login needed."
+          else
+            echo "have_session=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Ask Telegram for her code, then finish the login
+        id: login
+        # Only when she has no session yet. The request marker keeps deploys from
+        # spamming her with fresh codes: it is removed the moment the login works.
+        if: steps.existing.outputs.have_session != 'yes'
+        shell: bash
+        env:
+          API_ID: ${{ steps.creds.outputs.api_id }}
+          API_HASH: ${{ steps.creds.outputs.api_hash }}
+          PHONE: ${{ steps.creds.outputs.phone }}
+          DATA_DIR: ${{ github.workspace }}/.runtime/her/data
+          LOG_DIR: ${{ github.workspace }}/.runtime/her/logs
+          SESSION_PATH: ${{ github.workspace }}/.auth/her/havoc
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IN_LOGIN: ${{ inputs.login }}
+          IN_CODE: ${{ inputs.code }}
+          IN_PASSWORD: ${{ inputs.password }}
+          PASSWORD_SECRET: ${{ secrets.TELEGRAM_2FA_PASSWORD }}
+          WAIT_MINUTES: ${{ inputs.wait_minutes || '25' }}
+        run: |
+          set -uo pipefail
+          mkdir -p .auth/her .runtime/her/logs
+          echo "logged_in=no" >> "$GITHUB_OUTPUT"
+
+          code="${IN_CODE:-}"
+          # A code is bound to the auth key of the run that asked for it, and it
+          # expires in minutes: a code left on the branch by an older attempt is
+          # dead. Say so and get a fresh one rather than waiting for it.
+          if [ -s .auth/her/code.txt ]; then
+            echo "::notice::Ignoring a login code left on the branch by an earlier attempt — codes expire, and this run needs its own."
+            rm -f .auth/her/code.txt
+          fi
+
+          if [ -z "$code" ] && [ ! -f .auth/her/REQUEST ] && [ "${IN_LOGIN:-}" != "true" ]; then
+            echo "::notice::No session and no request marker — her login is not being asked for on this run."
+            {
+              echo "### No session yet"
+              echo ""
+              echo "Add \`.auth/her/REQUEST\` (or dispatch this workflow with \`login: true\`)"
+              echo "to ask Telegram for her login code."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # Where the branch is right now: only a commit newer than this can carry
+          # the code this run is about to ask for.
+          git fetch -q origin "${GITHUB_REF_NAME}" || true
+          base=$(git rev-parse FETCH_HEAD 2>/dev/null || echo "")
+
+          if [ -z "$code" ]; then
+            if ! python -m havoc login --request --state .auth/her/login-state.json; then
+              echo "::error::Could not request a login code for her account — see above."
+              exit 1
+            fi
+            echo "::notice::A login code is on its way to her Telegram. Commit it to .auth/her/code.txt (or dispatch with the code input) and this job will finish on its own."
+            {
+              echo "### Code requested"
+              echo ""
+              echo "Telegram is delivering the code to her app now."
+              echo ""
+              echo "- commit it to \`.auth/her/code.txt\`, or"
+              echo "- dispatch this workflow again with the \`code\` input."
+              echo ""
+              echo "This job is waiting and will finish the login within seconds of the file appearing."
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            deadline=$(( $(date +%s) + WAIT_MINUTES * 60 ))
+            while [ "$(date +%s)" -lt "$deadline" ]; do
+              git fetch -q origin "${GITHUB_REF_NAME}" || true
+              remote=$(git rev-parse FETCH_HEAD 2>/dev/null || echo "")
+              if [ -n "$remote" ] && [ "$remote" != "${base:-}" ]; then
+                candidate=$(git show "${remote}:.auth/her/code.txt" 2>/dev/null | tr -cd '0-9' || true)
+                if [ -n "$candidate" ]; then
+                  code="$candidate"
+                  break
+                fi
+              fi
+              sleep 5
+            done
+          fi
+
+          if [ -z "$code" ]; then
+            echo "::warning::No code arrived within ${WAIT_MINUTES} minutes; nothing was changed."
+            {
+              echo "### No code arrived"
+              echo ""
+              echo "The job waited ${WAIT_MINUTES} minutes. Codes expire quickly, so the next"
+              echo "run asks for a fresh one — \`.auth/her/REQUEST\` is still in place."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "::add-mask::$code"
+
+          password="${IN_PASSWORD:-${PASSWORD_SECRET:-}}"
+          args=(--code "$code" --state .auth/her/login-state.json --export-session .auth/her/session.txt)
+          if [ -n "${password:-}" ]; then
+            echo "::add-mask::$password"
+            args+=(--password "$password")
+          fi
+          set +e
+          python -m havoc login "${args[@]}" 2>&1 | tee .auth/her/login.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ] || [ ! -s .auth/her/session.txt ]; then
+            if grep -qi "two-factor" .auth/her/login.log; then
+              echo "::error::Her account has 2FA. Re-run with the password input, or set the TELEGRAM_2FA_PASSWORD secret."
+            elif grep -qi "PHONE_CODE" .auth/her/login.log; then
+              echo "::error::The code was rejected or expired; the next run asks for a fresh one."
+            else
+              echo "::error::Her login failed — see .auth/her/login.log."
+            fi
+            exit 1
+          fi
+          chmod 600 .auth/her/session.txt
+          echo "logged_in=yes" >> "$GITHUB_OUTPUT"
+          echo "::notice::Logged in as her. She owns her own bot; his id stays an owner too."
+
+          # Record who she is, so his bot can treat her as an owner as well.
+          her_id=$(grep -oE 'user id : [0-9]+' .auth/her/login.log | head -1 | grep -oE '[0-9]+' || true)
+          her_handle=$(grep -oE '^  username: @[A-Za-z0-9_]+' .auth/her/login.log | head -1 | sed 's/.*@//' || true)
+          python - "$her_id" "$her_handle" <<'PY'
+          import json, sys
+          from datetime import datetime, timezone
+          user_id, handle = sys.argv[1].strip(), sys.argv[2].strip()
+          if user_id.isdigit():
+              json.dump(
+                  {
+                      "user_id": int(user_id),
+                      "username": handle,
+                      "recorded_at": datetime.now(timezone.utc).isoformat(),
+                      "note": "The account running 'Her Yura'. His bot reads this to make her an owner too.",
+                  },
+                  open(".auth/her/owner.json", "w"),
+                  ensure_ascii=False,
+                  indent=2,
+              )
+              print(f"recorded her user id {user_id}")
+          else:
+              print("::warning::could not read her user id from the login output")
+          PY
+
+          {
+            echo "### Logged in"
+            echo ""
+            grep -E "^  (user id|username)" .auth/her/login.log || true
+            echo ""
+            echo "She is the owner of this bot because the account is. Her id is in"
+            echo "\`.auth/her/owner.json\`, which makes her an owner of his bot too."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Consume the code and the request marker
+        # A login code is account access: it does not stay in the repository, and
+        # the marker goes with it so a later deploy never asks for a second one.
+        if: steps.login.outputs.logged_in == 'yes'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          target="${GITHUB_REF_NAME}"
+          # The code file was committed from her phone, so it is on the branch
+          # but not in this checkout: start from whatever the branch holds now,
+          # then take the code off it again. Nothing of hers is lost.
+          for _ in 1 2 3; do
+            git fetch -q origin "$target" || true
+            if git rev-parse -q --verify FETCH_HEAD >/dev/null 2>&1; then
+              git reset -q --mixed FETCH_HEAD
+            fi
+            keep=0
+            if [ -f .auth/her/owner.json ]; then
+              git add -f .auth/her/owner.json
+              keep=1
+            fi
+            if git ls-files --error-unmatch .auth/her/code.txt >/dev/null 2>&1; then
+              git rm -q --cached .auth/her/code.txt && keep=1
+            fi
+            rm -f .auth/her/code.txt
+            if git ls-files --error-unmatch .auth/her/REQUEST >/dev/null 2>&1; then
+              git rm -q --cached .auth/her/REQUEST && keep=1
+            fi
+            rm -f .auth/her/REQUEST
+            [ "$keep" -eq 1 ] || exit 0
+            git -c user.name="Her Yura" -c user.email="her-yura@users.noreply.github.com" \
+              commit -qm "her yura: session ready [skip ci]" || true
+            if git push -q origin "HEAD:refs/heads/$target"; then
+              echo "::notice::Recorded her session state and removed the login code from the branch."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::warning::Could not record her session state on the branch; the cached session still works."
+
+      - name: Save her session for later runs
+        if: always() && steps.login.outputs.logged_in == 'yes'
+        uses: actions/cache/save@v4
+        with:
+          path: .auth/her/session.txt
+          # Immutable, unique key; later runs restore it with the prefix above.
+          key: havoc-her-session-${{ github.run_id }}
+
+      - name: Run her userbot
+        # always(): a failed AI probe or a stale cache must never keep her down.
+        if: always() && (steps.login.outputs.logged_in == 'yes' || steps.existing.outputs.have_session == 'yes')
+        shell: bash
+        env:
+          API_ID: ${{ steps.creds.outputs.api_id }}
+          API_HASH: ${{ steps.creds.outputs.api_hash }}
+          # Separate everywhere it matters. One bot cannot overwrite the other.
+          DATA_DIR: ${{ github.workspace }}/.runtime/her/data
+          DATABASE_PATH: ${{ github.workspace }}/.runtime/her/data/havoc.db
+          LOG_DIR: ${{ github.workspace }}/.runtime/her/logs
+          BACKUP_DIR: ${{ github.workspace }}/.runtime/her/data/backups
+          TIMEZONE: ${{ vars.HAVOC_TIMEZONE || 'Asia/Tehran' }}
+          DEFAULT_LANGUAGE: ${{ steps.creds.outputs.language || 'en' }}
+          OWNER_IDS: ${{ steps.creds.outputs.owners }}
+          # She is the owner here, so her rules say "her", not "him". His bot is
+          # untouched: its prompt is byte-identical to before.
+          HAVOC_OWNER_PRONOUN: her
+          AI_PROVIDER: ${{ steps.creds.outputs.ai_provider }}
+          AI_BASE_URL: ${{ steps.creds.outputs.ai_base_url }}
+          AI_MODEL: ${{ steps.creds.outputs.ai_model }}
+          AI_API_KEY: ${{ steps.creds.outputs.ai_api_key }}
+          BOT_MINUTES: ${{ inputs.bot_minutes || '340' }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Her own snapshot file: his is committed by his bot every five minutes
+          # and must not be replaced by hers.
+          HAVOC_SNAPSHOT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HAVOC_SNAPSHOT_MINUTES: '5'
+          HAVOC_SNAPSHOT_PATH: .data/her-snapshot.json
+          # The same hosted services his bot uses — she gets .web, .draw and the
+          # spare model with nothing extra configured.
+          SEARXNG_URL: ${{ vars.SEARXNG_URL }}
+          SEARXNG_ENGINES: ${{ vars.SEARXNG_ENGINES }}
+          COMFY_URL: ${{ vars.COMFY_URL }}
+          COMFY_WORKFLOW: ${{ vars.COMFY_WORKFLOW }}
+          COMFY_CKPT: ${{ vars.COMFY_CKPT }}
+          LOCAL_MODEL_URL: ${{ vars.LOCAL_MODEL_URL }}
+          LOCAL_MODEL_NAME: ${{ vars.LOCAL_MODEL_NAME }}
+          SERVICE_SHARED_SECRET: ${{ secrets.SERVICE_SHARED_SECRET }}
+          SERVICE_PUBLIC: ${{ vars.SERVICE_PUBLIC }}
+          SERVICE_BRANCH: ${{ github.ref_name }}
+        run: |
+          set -uo pipefail
+          export SESSION_STRING="$(cat .auth/her/session.txt)"
+          if [ -z "${SESSION_STRING:-}" ]; then
+            echo "::error::No session for her account; nothing to run."
+            exit 1
+          fi
+          # Fail fast and loudly when the session is rejected instead of looping.
+          if ! python -m havoc check > .check-her.txt 2>&1; then
+            sed -n '1,40p' .check-her.txt
+            echo "::error::havoc check failed for her instance — configuration or session problem."
+            exit 1
+          fi
+          sed -n '1,12p' .check-her.txt
+
+          mkdir -p .runtime/her/logs
+          started=$(date +%s)
+          export BOT_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          timeout --signal=INT "${BOT_MINUTES}m" python -m havoc run \
+            >> .runtime/her/logs/bot.log 2>&1 &
+          bot=$!
+
+          # Same promise as his bot: when newer code lands, step aside so the
+          # queued run takes over. Never stand down without a replacement, or her
+          # bot is down until somebody notices.
+          while kill -0 "$bot" 2>/dev/null; do
+            sleep 60
+            kill -0 "$bot" 2>/dev/null || break
+            python scripts/handover.py --workflow yura-her.yml --json >/dev/null 2>&1 \
+              || echo "::warning::could not re-assert her successor run"
+            git fetch -q origin "${GITHUB_REF_NAME}" 2>/dev/null || continue
+            remote=$(git rev-parse FETCH_HEAD 2>/dev/null || echo "")
+            [ -n "$remote" ] || continue
+            [ "$remote" = "${GITHUB_SHA}" ] && continue
+            changed=$(git diff --name-only "${GITHUB_SHA}" "$remote" 2>/dev/null \
+              | grep -E '^(havoc/|pyproject\.toml|\.auth/her/|\.github/workflows/yura-her\.yml)' || true)
+            if [ -n "$changed" ]; then
+              echo "::notice::Newer code (${remote:0:7}) touches her bot; stopping so the queued run applies it."
+              kill -INT "$bot" 2>/dev/null || true
+              break
+            fi
+          done
+          wait "$bot" 2>/dev/null
+          status=$?
+          uptime=$(( $(date +%s) - started ))
+          reason="ran for ${uptime}s and stopped (exit ${status})"
+          case "$status" in
+            124) reason="reached the run's ${BOT_MINUTES}-minute ceiling" ;;
+            0|130) reason="stepped aside after ${uptime}s for the next deploy" ;;
+          esac
+          echo "::notice::Her bot ended: ${reason}"
+          python scripts/publish_status.py \
+            --path her-bot-status.json \
+            --exit-code "$status" --uptime "$uptime" --reason "$reason" \
+            --log .runtime/her/logs/bot.log \
+            --extra "account=her" --extra "bot_minutes=${BOT_MINUTES}" \
+            || echo "::warning::could not publish her-bot-status.json"
+          if [ "$status" -ne 0 ] && [ "$status" -ne 124 ] && [ "$uptime" -lt 300 ]; then
+            echo "::error::Her bot died after ${uptime}s (exit ${status}). Last lines:"
+            tail -n 40 .runtime/her/logs/bot.log 2>/dev/null | sed 's/^/  /' || true
+            exit 1
+          fi
+
+      - name: Save her database
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .runtime/her
+          key: havoc-her-data-${{ github.run_id }}
+
+      - name: Keep her logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: her-yura-${{ github.run_id }}
+          path: |
+            .auth/her/login.log
+            .runtime/her/logs
+            her-bot-status.json
+          if-no-files-found: ignore
+          retention-days: 3

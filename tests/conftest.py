@@ -40,6 +40,25 @@ class FakeChat:
         self.username = username
         self.chat_type = chat_type
 
+    # Telethon's ``Dialog`` answers these three, and code that walks the dialog
+    # list uses them to tell a room from a person. A fake without them makes that
+    # code look broken instead of making the fake look wrong.
+    @property
+    def is_group(self) -> bool:
+        return self.chat_type == "group"
+
+    @property
+    def is_user(self) -> bool:
+        return self.chat_type == "user"
+
+    @property
+    def is_channel(self) -> bool:
+        return self.chat_type == "channel"
+
+    @property
+    def entity(self) -> FakeChat:
+        return self
+
 
 class FakeDocument:
     def __init__(self, size: int = 1024, file_name: str = "file.bin", duration: int | None = None) -> None:
@@ -165,6 +184,9 @@ class FakeClient:
         self.left: list[Any] = []
         self.input_peers: list[Any] = []
         self.dialogs: list[Any] = []
+        #: The people in a group, for ``get_participants``: a member with no
+        #: dialog of their own is only findable through here.
+        self.members: list[Any] = []
         self.history: list[FakeMessage] = []
         #: Every reaction the bot asked for, so a test can assert it reached the
         #: wire — the whole bug was that it never did.
@@ -239,8 +261,42 @@ class FakeClient:
     async def get_dialogs(self, limit: int = 100) -> list[Any]:
         return self.dialogs
 
+    async def get_participants(self, chat: Any, limit: int = 200) -> list[Any]:
+        return self.members
+
     async def get_entity(self, value: Any) -> Any:
-        return FakeChat(chat_id=int(value) if str(value).lstrip("-").isdigit() else 999, title=str(value))
+        """Only what Telegram would actually resolve.
+
+        A fake that answers every string with a chat made "sara" resolvable in
+        every test and in no real room: the whole point of the member search is
+        that Telegram *fails* on a name it has never seen a dialog for.
+        """
+        raw = str(value)
+        if raw.lstrip("-").isdigit():
+            return FakeChat(chat_id=int(raw), title=raw)
+        if raw.strip().startswith("@"):
+            # A username is looked up on the wire, so Telegram resolves one it
+            # has never seen a dialog for. A *bare name* is only ever resolved
+            # from the session's cache — that is the difference this fake keeps.
+            return FakeChat(chat_id=999, title=raw)
+        wanted = raw.strip().lstrip("@").lower()
+        for row in self.dialogs:
+            names = {
+                str(getattr(row, "title", "") or "").lower(),
+                str(getattr(row, "username", "") or "").lower(),
+                str(getattr(row, "first_name", "") or "").lower(),
+                " ".join(
+                    part
+                    for part in (
+                        str(getattr(row, "first_name", "") or ""),
+                        str(getattr(row, "last_name", "") or ""),
+                    )
+                    if part
+                ).lower(),
+            }
+            if wanted in {name for name in names if name}:
+                return row
+        raise ValueError(f'no user has "{raw}" as username')
 
     async def get_me(self) -> FakeUser:
         return FakeUser()
@@ -305,6 +361,9 @@ class FakeTelegram:
 
     async def resolve_entity(self, value: Any) -> Any:
         return await self.client.get_entity(value)
+
+    async def get_participants(self, chat: Any, **kwargs: Any) -> Any:
+        return await self.client.get_participants(chat, **kwargs)
 
     async def get_messages(self, entity: Any, **kwargs: Any) -> Any:
         return await self.client.get_messages(entity, **kwargs)

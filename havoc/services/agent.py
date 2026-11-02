@@ -83,14 +83,29 @@ class Agent:
         turn: Turn,
         max_tokens: int,
         ask_again: str = "",
+        order: bool = False,
     ) -> AgentStep:
-        """Ask, act, ask again. Never raises: a broken hand is a sentence."""
+        """Ask, act, ask again. Never raises: a broken hand is a sentence.
+
+        ``order`` means the sentence read as asking for something to be done. It
+        changes one thing only: a first reply with **no hand in it** gets one
+        pointed second ask (see :meth:`_repair`) instead of being the answer.
+        """
         if not self.tools:
             return AgentStep(text="", used=False)
         text, calls = await self._ask(provider, messages, max_tokens=max_tokens)
         if not calls:
-            # No hand requested: hand back exactly what the model wrote, untouched.
-            return AgentStep(text=text, used=False)
+            text, calls = await self._repair(
+                provider,
+                messages,
+                text,
+                language=turn.language,
+                max_tokens=max_tokens,
+                order=order,
+            )
+            if not calls:
+                # No hand requested: hand back what the model wrote, untouched.
+                return AgentStep(text=text, used=False)
 
         outcomes: list[Outcome] = []
         rounds = 0
@@ -124,6 +139,93 @@ class Agent:
             outcomes=outcomes,
             cards=[o.card for o in outcomes if o.status == "done" and o.card[0]],
         )
+
+    #: How a reply that means "I can't" starts. Free models that have never been
+    #: taught they have hands open with one of these, and the whole turn then ends
+    #: in an apology for something the account could do in one request.
+    REFUSALS: tuple[str, ...] = (
+        "i can't",
+        "i cannot",
+        "i can not",
+        "i'm unable",
+        "i am unable",
+        "i'm not able",
+        "i am not able",
+        "i don't have access",
+        "i do not have access",
+        "i'm not allowed",
+        "i am not allowed",
+        "not something i can",
+        "there's no way for me",
+        "as an ai",
+        "نمی‌توانم",
+        "نمی‌تونم",
+        "نمیتونم",
+        "قادر نیستم",
+        "امکانش نیست",
+        "دسترسی ندارم",
+        "نمی‌شه",
+    )
+
+    @classmethod
+    def sounds_like_a_refusal(cls, text: str) -> bool:
+        lowered = " ".join(str(text or "").lower().replace("\u200c", " ").split())
+        return any(marker.replace("\u200c", " ") in lowered for marker in cls.REFUSALS)
+
+    def _nudge(self, language: str) -> str:
+        """The second ask: one block, or repeat yourself — nothing else."""
+        if language == "fa":
+            return (
+                "## پیش از جواب\n"
+                "این جمله از تو کاری خواسته، و جواب تو هیچ دستی صدا نکرد. اگر کار شدنی است، "
+                "همین حالا فقط یک بلوک بفرست:\n"
+                "```tool\n{\"tool\": \"نام از فهرست\", \"args\": {\"…\": \"…\"}}\n```\n"
+                "اسم آدم را همان‌طور که او نوشت بنویس. اگر واقعاً هیچ دستی لازم نیست، "
+                "همان جواب قبلی‌ات را بی‌کم‌وکاست تکرار کن."
+            )
+        return (
+            "## before you answer\n"
+            "that sentence asked you for something, and your reply called no hand. "
+            "if it can be done, send exactly one block now and nothing else:\n"
+            "```tool\n{\"tool\": \"a name from the catalogue\", \"args\": {\"…\": \"…\"}}\n```\n"
+            "write a person's name exactly as he wrote it. if no hand is really needed, "
+            "repeat your previous answer unchanged."
+        )
+
+    async def _repair(
+        self,
+        provider: AIProvider,
+        messages: list[AIMessage],
+        text: str,
+        *,
+        language: str,
+        max_tokens: int,
+        order: bool,
+    ) -> tuple[str, list[ToolCall]]:
+        """One pointed second ask when the first reply called nothing.
+
+        It runs only when the sentence looked like an order *or* the reply itself
+        opened with a refusal — the two shapes where "she wrote a paragraph" means
+        "she did not do the thing". Ordinary conversation is never re-asked, so the
+        extra request costs nothing on the turns that were already fine, and on the
+        turns that were not it is the difference between doing the work and
+        explaining why she cannot.
+        """
+        if not (order or self.sounds_like_a_refusal(text)):
+            return text, []
+        nudged = [
+            *messages,
+            AIMessage("assistant", text or "…"),
+            AIMessage("user", self._nudge(language)),
+        ]
+        second, calls = await self._ask(provider, nudged, max_tokens=max_tokens)
+        if calls:
+            if self.logger is not None:
+                self.logger.info("agent: repaired a hand-less reply (%s)", calls[0].name)
+            return second, calls
+        # No hand the second time either: his answer is what she already wrote,
+        # not the machinery's second draft of it.
+        return text, []
 
     async def _ask(
         self, provider: AIProvider, messages: list[AIMessage], *, max_tokens: int

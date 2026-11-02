@@ -479,6 +479,34 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Who else may command her
+        # She has her own Yura (`yura-her.yml`), and she is an owner here too: one
+        # person, two bots, the same trust. The id is written by her login, so this
+        # needs nothing typed and stays empty until she has actually signed in.
+        id: owners
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          echo "owner_ids=" >> "$GITHUB_OUTPUT"
+          if [ ! -f .auth/her/owner.json ]; then
+            echo "Nothing recorded for her account yet; only the owner and this account."
+            exit 0
+          fi
+          her=$(python -c 'import json;print(int(json.load(open(".auth/her/owner.json"))["user_id"]))' 2>/dev/null || true)
+          if [ -z "${her:-}" ]; then
+            echo "::warning::.auth/her/owner.json has no usable user id."
+            exit 0
+          fi
+          echo "owner_ids=$her" >> "$GITHUB_OUTPUT"
+          echo "::notice::Her account ($her) is an owner here too."
+          {
+            echo "### Owners"
+            echo ""
+            echo "- this account (always)"
+            echo "- her account — \`$her\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Run the userbot
         # always(): a failure in any earlier step must not keep the bot down.
         if: always() && (steps.verify.outputs.logged_in == 'yes' || steps.existing.outputs.have_session == 'yes')
@@ -501,6 +529,9 @@ jobs:
           # while it still has time to checkpoint the database, rather than be
           # killed at the ceiling with a live WAL.
           BOT_MINUTES: ${{ inputs.bot_minutes || '340' }}
+          # Her id when her own Yura has logged in (see "Who else may command
+          # her"). Empty means "nobody extra": this account is always an owner.
+          OWNER_IDS: ${{ steps.owners.outputs.owner_ids }}
           # Needed by the loop below: it asks GitHub which runs are queued, and
           # without the token in *this step's* environment the answer was always
           # "unknown", so the bot never stood down and held the deploy behind it.

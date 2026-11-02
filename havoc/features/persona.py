@@ -18,6 +18,7 @@ Feature areas: 12 (personality), 21 (messaging), 70 (AI), 96 (feature switches).
 
 from __future__ import annotations
 
+import asyncio
 import random
 import time
 from collections import Counter, deque
@@ -34,7 +35,7 @@ from ..services.context import build as build_context
 from ..services.vision import IMAGE_MEDIA_TYPES, Picture, looks_like_picture
 from ..services.vision import download as download_picture
 from ..utils.attachments import materialize
-from ..utils.formatting import escape, strip_html
+from ..utils.formatting import code, escape, strip_html
 from ..utils.markup import rich
 from ..utils.mood import mood_line
 from ..utils.security import redact_text
@@ -55,6 +56,27 @@ MAX_PER_HOUR = 300
 #: ago lands in a conversation that has moved on while answering a day of them
 #: is a flood at a room that forgot her. Ten minutes still reads as a reply.
 MAX_AGE_SECONDS = 600
+
+#: A private message is a letter, not a room.
+#:
+#: The same ten-minute rule that keeps her from answering a group an hour after
+#: the fact made her *silent in DMs*: the account runs in short jobs, so a message
+#: that arrives between two of them comes back on catch-up already older than the
+#: gate, is skipped as "stale", and the person hears nothing — while the owner,
+#: typing while she is up, always gets an answer. Twelve hours is the window a
+#: person would still read a letter in.
+DM_MAX_AGE_SECONDS = 12 * 3600
+
+#: Saved Messages is his notebook, not a letter: half an hour is still "what I
+#: just typed", an hour and a half is not. The long window is for a *person*
+#: writing to her, not for his own notes resurfacing.
+SAVED_MAX_AGE_SECONDS = 30 * 60
+
+#: How long a catch-up burst is gathered before it is answered. Messages that
+#: arrived while the account was between runs come back in one clump; answering
+#: five of them is a flood, and answering only the first leaves the newest line
+#: on the floor. Three seconds of grace, then the *last* one gets the reply.
+CATCHUP_GRACE_SECONDS = 3.0
 
 #: Commands that belong to the dispatcher — never answered by the persona path.
 _INTERNAL_WORDS = frozenset({"yura", "یورا", "stop", "بسه", "off"})
@@ -361,8 +383,27 @@ async def _note_command(ctx: CommandContext, words: list[str]) -> None:
 
 
 async def _dm_command(ctx: CommandContext, words: list[str]) -> None:
-    """``.yura dm on|off`` — may she answer this person's private messages?"""
+    """``.yura dm on|off`` — may she answer this person's private messages?
+
+    With no argument at all it *lists* who she is answering in private, because
+    "I turned it on and she still doesn't answer her" needs an answer that is not
+    a guess: either the flag is there and something else is wrong, or the flag was
+    set on somebody else.
+    """
     mode = (words[0].lower() if words else "")
+    if not mode:
+        rows = [person for person in await ctx.runtime.people.all(limit=100) if person.dm]
+        if not rows:
+            await ctx.reply(ctx.t("yura.dm_list_empty", prefix=ctx.runtime.prefix))
+            return
+        lines = [
+            f"• {escape(person.name or str(person.user_id))} — {code(str(person.user_id))}"
+            for person in rows
+        ]
+        await ctx.reply(
+            "\n".join([ctx.t("yura.dm_list_title", count=len(rows)), *lines])
+        )
+        return
     user_id, name = await _who(ctx, words[1:] if mode in {"on", "off", "yes", "no"} else words)
     if user_id is None or ctx.runtime.permissions.is_owner(user_id):
         raise CommandError("yura.tone_needs_target", prefix=ctx.runtime.prefix)
@@ -374,7 +415,9 @@ async def _dm_command(ctx: CommandContext, words: list[str]) -> None:
     person = await ctx.runtime.people.get(user_id)
     who = escape((person.name if person and person.name else name) or str(user_id))
     key = "yura.dm_on" if enabled else "yura.dm_off"
-    await ctx.reply_ok(ctx.t(key, name=who))
+    # The id is printed with the name on purpose: "I turned it on and she is still
+    # quiet" is answered by seeing *which* account got switched on.
+    await ctx.reply_ok(ctx.t(key, name=who, id=code(str(user_id))))
 
 
 async def _teach_command(ctx: CommandContext, words: list[str]) -> None:
@@ -1035,6 +1078,11 @@ class PersonaReplies:
         self._group_last: dict[int, float] = {}
         self._dm_window: dict[int, list[float]] = {}
         self._dm_last: dict[int, float] = {}
+        #: A late DM waiting to be answered, and the timer that will answer it —
+        #: one per chat, and the newest event wins (see `_queue_catchup`).
+        self._dm_late: dict[int, tuple[NormalizedEvent, bool]] = {}
+        self._dm_flush: dict[int, asyncio.Task] = {}
+        self._dm_notice: dict[int, float] = {}
         self.answered = 0
         self.group_answered = 0
         #: Answers in a one-to-one chat with somebody else — his side or theirs.
@@ -1167,22 +1215,28 @@ class PersonaReplies:
             return False
         return True
 
-    def _stale(self, event: NormalizedEvent) -> bool:
+    def _age(self, event: NormalizedEvent) -> float:
+        """How many seconds ago the message was sent (0 when unknown)."""
+        stamp = getattr(event, "timestamp", None)
+        if not stamp:
+            return 0.0
+        try:
+            return max(0.0, time.time() - float(stamp))
+        except (TypeError, ValueError):  # pragma: no cover - a fake without a date
+            return 0.0
+
+    def _stale(self, event: NormalizedEvent, *, limit: float = MAX_AGE_SECONDS) -> bool:
         """True when this message is too old for a reply to make sense.
 
         Only the persona path uses this: a command is still a command, and a
         reminder that fires late still fires. Comparison is against the moment
         the message was *sent*, so a clock that jumps cannot make a fresh line
-        look ancient.
+        look ancient. The limit is a parameter because a room and a letter do not
+        age the same way (see :data:`DM_MAX_AGE_SECONDS`).
         """
-        stamp = getattr(event, "timestamp", None)
-        if not stamp:
+        if not getattr(event, "timestamp", None):
             return False
-        try:
-            age = time.time() - float(stamp)
-        except (TypeError, ValueError):  # pragma: no cover - a fake without a date
-            return False
-        return age > MAX_AGE_SECONDS
+        return self._age(event) > limit
 
     def _skip(self, reason: str, event: NormalizedEvent | None = None) -> None:
         """Note that a message went unanswered, and why.
@@ -1377,29 +1431,63 @@ class PersonaReplies:
     async def on_self_message(self, event: NormalizedEvent) -> None:
         if not event.is_outgoing:
             return
+        self_id = self.self_id
+        if self_id is None or event.chat_id != self_id:
+            self._skip("not_own_chat")
+            return
+        await self._owner_turn(event, chat_id=event.chat_id, needs_reply=False)
+
+    async def on_owner_chat(self, event: NormalizedEvent) -> None:
+        """He wrote to the bot account itself, one-to-one.
+
+        Same voice, same gates, same budget as Saved Messages — the only
+        differences are that the chat id is his message's, not the account's, and
+        that *every* line in a one-to-one window is aimed at her, so there is no
+        "was she addressed?" question to ask. ``on_self_message`` is the same
+        method with the opposite answer to that question.
+
+        This path existed nowhere for two versions: DM updates carry the account
+        id as their chat id, so they were mistaken for Saved Messages, and Saved
+        Messages only accepts *outgoing* messages. Every DM fell through both.
+        """
+        await self._owner_turn(event, chat_id=event.chat_id, needs_reply=True)
+
+    async def _owner_turn(
+        self, event: NormalizedEvent, *, chat_id: int, needs_reply: bool
+    ) -> None:
+        """One turn with the owner, wherever it happens.
+
+        ``needs_reply`` is the whole difference between the two callers: in Saved
+        Messages the turn has to be a reply to her or carry her name (he keeps
+        notes there, and answering his own notes is not company); in a DM it does
+        not, because there is nobody else the sentence could be for.
+        """
         if self._claimed(event):
             self._skip("claimed", event)
             return
         picture = await self._picture(event)
         if picture is None and not event.text.strip():
             return
-        self_id = self.self_id
-        if self_id is None or event.chat_id != self_id:
-            self._skip("not_own_chat")
-            return
-        if await self._is_own(event.chat_id, event.message_id, event.text):
+        if await self._is_own(chat_id, event.message_id, event.text):
             self._skip("own_message")
             return
         if self._is_command(event.text):
             self._skip("command")
             return
-        if self._stale(event):
+        # A DM window is a letter; Saved Messages is a notebook.
+        window = DM_MAX_AGE_SECONDS if needs_reply else SAVED_MAX_AGE_SECONDS
+        if self._stale(event, limit=window):
             self._skip("stale", event)
             return
         quote = await self._quote(event)
         await self._learn_from_owner(event, quote)
         await self._learn_correction(event, quote)
-        decision = await self.runtime.permissions.can_act(event.chat_id, "persona", is_private=True)
+        if needs_reply and not (quote.hers or self._named(event.text)):
+            # A one-to-one chat is always addressed to her, but a reply thread is
+            # still the strongest signal there is: it keeps ``quote`` meaningful
+            # for "what did you mean by that".
+            pass
+        decision = await self.runtime.permissions.can_act(chat_id, "persona", is_private=True)
         if not decision.allowed:
             self._skip(f"permission:{decision.code}")
             return
@@ -1410,12 +1498,24 @@ class PersonaReplies:
         if not quote.hers and not self._budget_ok(now):
             self._skip("cooldown")
             return
+        if self._age(event) > MAX_AGE_SECONDS:
+            # Same as a late DM: it waited while the account was between runs.
+            # Gather the clump, then answer his newest line once, knowing it is
+            # not "now" any more.
+            self._queue_catchup(event, owner=True)
+            return
+        await self._answer_owner(event, chat_id=chat_id, picture=picture, quote=quote)
+
+    async def _answer_owner(
+        self, event: NormalizedEvent, *, chat_id: int, picture: Picture | None, quote: Quote, late: float = 0.0
+    ) -> None:
+        """The last stretch of a turn in his own chat: one answer, once."""
         await self._answer(
-            event, chat_id=event.chat_id, picture=picture, quoted=quote.text,
-            reply_to=quote.message_id, is_private=True
+            event, chat_id=chat_id, picture=picture, quoted=quote.text,
+            reply_to=quote.message_id, is_private=True, late_seconds=late,
         )
-        self._last_at = now
-        self._window.append(now)
+        self._last_at = time.monotonic()
+        self._window.append(self._last_at)
         self.answered += 1
 
     # -- a group ----------------------------------------------------------
@@ -1560,7 +1660,17 @@ class PersonaReplies:
         # without this line both answered: two cards, two sentences, interleaved.
         # One message, one answer.
         self_id = self.runtime.permissions.self_id
-        if self_id is not None and event.chat_id == self_id:
+        # A private chat with this account carries the account's *own* id as its
+        # chat id — exactly like Saved Messages. Telling the two apart by the id
+        # alone is what muted her in every DM: somebody wrote to the bot, the
+        # message arrived with chat_id == self_id, this handler decided it was
+        # Saved Messages and returned, and `on_self_message` refused it because it
+        # was not outgoing. Nobody answered. The difference is who sent it:
+        # Saved Messages is this account writing to itself, a DM is not.
+        is_saved = bool(event.is_outgoing) or (
+            event.sender_id is not None and int(event.sender_id) == int(self_id or 0)
+        )
+        if self_id is not None and event.chat_id == self_id and is_saved:
             # Not a skip: this handler simply is not the one for that chat, and
             # counting it as "she decided not to answer" would overwrite the real
             # reason (stale, cooldown, a permission) in `.yura status`.
@@ -1642,17 +1752,32 @@ class PersonaReplies:
         row in her book with ``dm`` switched on, which only the owner can set
         (``.yura dm on`` while replying to them).
         """
-        if event.is_outgoing or event.is_group or event.message_id is None:
+        if event.is_group or event.message_id is None:
             self._skip("not_dm", event)
             return
         if await self._is_own(event.chat_id, event.message_id, event.text):
             self._skip("own_message", event)
             return
-        if self._stale(event):
+        # A letter may be late and still deserve an answer; a room an hour old
+        # does not. This is the gate that kept her quiet in every DM that arrived
+        # while the account was between runs.
+        if self._stale(event, limit=DM_MAX_AGE_SECONDS):
             self._skip("stale", event)
             return
         speaker = event.sender_id
-        if speaker is None or self.runtime.permissions.is_owner(speaker):
+        if speaker is None:
+            self._skip("no_sender", event)
+            return
+        if self.runtime.permissions.is_owner(speaker) and not event.is_outgoing:
+            # He messaged the bot account itself. That is not Saved Messages (the
+            # chat id is the same, the sender is not) and it is not a stranger: it
+            # is him, in a one-to-one window, and a companion who goes quiet there
+            # is the exact complaint this handler was written for. Answered like
+            # his own chat: same voice, same budget rules, his name on the fact
+            # only when he typed it.
+            await self.on_owner_chat(event)
+            return
+        if event.is_outgoing or self.runtime.permissions.is_owner(speaker):
             self._skip("owner_chat", event)
             return
         # "Don't answer him" is an instruction, not a preference: a rule beats
@@ -1666,7 +1791,21 @@ class PersonaReplies:
         person = await self.runtime.people.get(speaker)
         if person is None or not getattr(person, "dm", False):
             self._skip("dm_not_allowed", event)
+            # A stranger's knock stays silent — but somebody he *introduced* and
+            # then did not switch on is a setting, not a stranger, and the chat he
+            # is looking at shows both as "she ignored her". Say which it is, once.
+            if person is not None:
+                await self._notice_dm_off(event, person)
             return
+        if self._age(event) > MAX_AGE_SECONDS:
+            # Catching up: this line has been waiting. Gather the clump and answer
+            # once (see `_queue_catchup`), instead of five replies in a row.
+            self._queue_catchup(event)
+            return
+        await self._answer_dm(event)
+
+    async def _answer_dm(self, event: NormalizedEvent, *, late: float = 0.0) -> None:
+        """The last stretch of an answered DM: gates, budget, one reply."""
         picture = await self._picture(event)
         if picture is None and not event.text.strip():
             self._skip("empty", event)
@@ -1691,10 +1830,103 @@ class PersonaReplies:
             quoted=quote.text,
             reply_to=quote.message_id,
             is_private=False,
+            late_seconds=late,
         )
         self._dm_last[event.chat_id] = now
         window.append(now)
         self.group_answered += 1
+
+    #: One "her DMs are off" note per person per hour. Enough to be read, not
+    #: enough to become a second stream of messages in his own chat.
+    DM_NOTICE_SECONDS = 3600.0
+
+    async def _notice_dm_off(self, event: NormalizedEvent, person: Any) -> None:
+        """Tell the owner, once, that a person he knows wrote and was not answered."""
+        uid = int(getattr(person, "user_id", 0) or 0)
+        if not uid or self.self_id is None:
+            return
+        now = time.monotonic()
+        last = self._dm_notice.get(uid)
+        if last is not None and now - last < self.DM_NOTICE_SECONDS:
+            return
+        self._dm_notice[uid] = now
+        name = escape(str(getattr(person, "name", "") or uid))
+        text = self.runtime.t(
+            "yura.dm_off_notice",
+            str(getattr(self.runtime.config, "default_language", "en") or "en"),
+            name=name,
+            prefix=escape(self.runtime.prefix),
+        )
+        try:
+            await self.runtime.sender.send(int(self.self_id), text)
+        except Exception as exc:  # noqa: BLE001 - a notice is never worth an error
+            self.logger.debug("yura: could not send the dm notice (%s)", exc)
+
+    def _queue_catchup(self, event: NormalizedEvent, *, owner: bool = False) -> None:
+        """Hold a late DM for a moment, then answer the newest line of the clump.
+
+        A catch-up after a restart hands back every message that arrived while
+        the account was between runs. Answering each one is a wall of replies;
+        answering only the first leaves the loudest line ("yura talk to me")
+        unanswered. So the chat keeps the *latest* event and one timer: three
+        seconds after the clump stops arriving, she answers once, and she is told
+        how long it has been waiting.
+        """
+        chat = int(event.chat_id)
+        if chat in self._dm_late:
+            # Counted, not answered: this line was overtaken by a newer one.
+            self._skip("overtaken", event)
+        self._dm_late[chat] = (event, owner)
+        task = self._dm_flush.get(chat)
+        if task is None or task.done():
+            self._dm_flush[chat] = asyncio.create_task(self._flush_catchup(chat))
+
+    async def on_shutdown(self, event: NormalizedEvent) -> None:
+        """Answer whatever is still waiting, before the process goes away.
+
+        The account lives in short jobs. A late DM that is still inside the
+        three-second grace when the job is told to step aside would otherwise be
+        dropped — and catch-up will not hand it over a second time, because
+        Telegram has already advanced past it. So the queue is emptied on the way
+        out, not left on the table.
+        """
+        for chat in list(self._dm_late):
+            task = self._dm_flush.pop(chat, None)
+            if task is not None and not task.done():
+                task.cancel()
+            await self._flush_catchup(chat, wait=False)
+
+    async def _flush_catchup(self, chat: int, *, wait: bool = True) -> None:
+        try:
+            if wait:
+                await asyncio.sleep(CATCHUP_GRACE_SECONDS)
+            held = self._dm_late.pop(chat, None)
+            if held is None:
+                return
+            event, owner = held
+            late = self._age(event)
+            self.logger.info(
+                "yura: answering a catch-up message in chat %s (%.0fs late)", chat, late
+            )
+            if owner:
+                picture = await self._picture(event)
+                if picture is None and not event.text.strip():
+                    return
+                await self._answer_owner(
+                    event,
+                    chat_id=int(event.chat_id),
+                    picture=picture,
+                    quote=await self._quote(event),
+                    late=late,
+                )
+            else:
+                await self._answer_dm(event, late=late)
+        except asyncio.CancelledError:  # pragma: no cover - shutdown
+            raise
+        except Exception as exc:  # noqa: BLE001 - a timer must never take the loop down
+            self.logger.warning("yura: a catch-up answer failed (%s)", exc)
+        finally:
+            self._dm_flush.pop(chat, None)
 
     # -- one turn ---------------------------------------------------------
     async def _answer(
@@ -1706,6 +1938,7 @@ class PersonaReplies:
         quoted: str,
         is_private: bool,
         reply_to: int | None = None,
+        late_seconds: float = 0.0,
     ) -> None:
         language = await self._language(event)
         audience = await self._audience(event) if not is_private else None
@@ -1731,6 +1964,10 @@ class PersonaReplies:
             reminder=reminder,
             reply_to=reply_to,
             message_id=getattr(event, "message_id", None),
+            # A letter that waited: she answers it as a letter, not as a line
+            # typed this second. Without this she says "i'm here" to a "hru?"
+            # from forty minutes ago and sounds like she was ignoring them.
+            late_seconds=late_seconds,
         )
         self.logger.info(
             "yura: answering '%s' in %s%s",
@@ -2079,6 +2316,15 @@ def register(runtime: Any) -> None:
     )
     # Groups: only what is addressed to her. Kept as a separate subscriber so a
     # group bug can never take the owner's own chat down with it.
+    # Empty the catch-up queue on the way out: a short-lived job must not leave a
+    # person's late message on the table.
+    runtime.event_engine.subscribe(
+        "persona.catchup_flush",
+        replies.on_shutdown,
+        {EventType.SHUTDOWN},
+        priority=5,
+        description="Yura answers the messages still waiting when the process stops",
+    )
     runtime.event_engine.subscribe(
         "persona.group_reply",
         replies.on_group_message,
