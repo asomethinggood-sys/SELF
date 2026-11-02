@@ -1,0 +1,133 @@
+{
+  "app": "havoc",
+  "created_at": "2026-11-02T18:35:54+00:00",
+  "tables": {
+    "aliases": [],
+    "autoreplies": [],
+    "bookmarks": [],
+    "chat_labels": [],
+    "chat_settings": [],
+    "counters": [],
+    "features": [
+      {
+        "enabled": 0,
+        "name": "autoreply",
+        "updated_at": "2026-11-02T18:34:53+00:00"
+      },
+      {
+        "enabled": 0,
+        "name": "away",
+        "updated_at": "2026-11-02T18:34:53+00:00"
+      },
+      {
+        "enabled": 0,
+        "name": "triggers",
+        "updated_at": "2026-11-02T18:34:53+00:00"
+      },
+      {
+        "enabled": 0,
+        "name": "watches",
+        "updated_at": "2026-11-02T18:34:53+00:00"
+      },
+      {
+        "enabled": 0,
+        "name": "reactions",
+        "updated_at": "2026-11-02T18:34:53+00:00"
+      },
+      {
+        "enabled": 0,
+        "name": "notifications",
+        "updated_at": "2026-11-02T18:34:53+00:00"
+      },
+      {
+        "enabled": 0,
+        "name": "clock",
+        "updated_at": "2026-11-02T18:34:53+00:00"
+      },
+      {
+        "enabled": 0,
+        "name": "bio_rotation",
+        "updated_at": "2026-11-02T18:34:53+00:00"
+      },
+      {
+        "enabled": 0,
+        "name": "profile_scheduler",
+        "updated_at": "2026-11-02T18:34:53+00:00"
+      },
+      {
+        "enabled": 0,
+        "name": "backups",
+        "updated_at": "2026-11-02T18:34:53+00:00"
+      },
+      {
+        "enabled": 0,
+        "name": "reminder_intent",
+        "updated_at": "2026-11-02T18:34:53+00:00"
+      },
+      {
+        "enabled": 0,
+        "name": "summaries",
+        "updated_at": "2026-11-02T18:34:53+00:00"
+      },
+      {
+        "enabled": 0,
+        "name": "auto_translate",
+        "updated_at": "2026-11-02T18:34:53+00:00"
+      },
+      {
+        "enabled": 1,
+        "name": "persona",
+        "updated_at": "2026-11-02T18:34:53+00:00"
+      },
+      {
+        "enabled": 0,
+        "name": "media",
+        "updated_at": "2026-11-02T18:34:53+00:00"
+      },
+      {
+        "enabled": 1,
+        "name": "poetry",
+        "updated_at": "2026-11-02T18:34:53+00:00"
+      },
+      {
+        "enabled": 0,
+        "name": "roasts",
+        "updated_at": "2026-11-02T18:34:53+00:00"
+      },
+      {
+        "enabled": 1,
+        "name": "downloader",
+        "updated_at": "2026-11-02T18:34:53+00:00"
+      }
+    ],
+    "language_prefs": [],
+    "notes": [],
+    "plugins": [],
+    "profile_presets": [],
+    "profile_snapshots": [],
+    "reaction_rules": [],
+    "reminders": [],
+    "schedules": [],
+    "settings": [
+      {
+        "key": "owner.resolved",
+        "updated_at": "2026-11-02T18:34:55+00:00",
+        "value": "{\"edited_by_nyx\":7542695649}"
+      },
+      {
+        "key": "owner.ids",
+        "updated_at": "2026-11-02T18:34:55+00:00",
+        "value": "[7542695649]"
+      },
+      {
+        "key": "yura.sent_ids.7542695649",
+        "updated_at": "2026-11-02T18:34:55+00:00",
+        "value": "[97167]"
+      }
+    ],
+    "templates": [],
+    "triggers": [],
+    "watches": []
+  },
+  "version": 1
+}
