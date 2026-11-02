@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://toe-beats-mechanics-move.trycloudflare.com",
-  "run_id": "41360205965",
-  "started_at": "2026-11-02T03:12:33Z",
-  "expires_at": "2026-11-02T09:12:33Z",
+  "url": "https://kong-wit-guys-erik.trycloudflare.com",
+  "run_id": "41415692160",
+  "started_at": "2026-11-02T14:23:59Z",
+  "expires_at": "2026-11-02T20:23:59Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-02T03:12:52Z",
+  "published_at": "2026-11-02T14:24:17Z",
   "gated": true,
   "public": false
 }
