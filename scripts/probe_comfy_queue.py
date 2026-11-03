@@ -27,7 +27,30 @@ def main() -> int:
             with urllib.request.urlopen(req, timeout=20) as response:  # noqa: S310
                 data = json.load(response)
             if path == "/queue":
-                print(f"::notice::Queue: running={len(data.get('queue_running', []))} pending={len(data.get('queue_pending', []))}")
+                pending = data.get("queue_pending", [])
+                print(f"::notice::Queue: running={len(data.get('queue_running', []))} pending={len(pending)}")
+                if os.environ.get("REMOVE_OUR_DRAW_PROBES") == "1":
+                    # Delete only queued synthetic prompts from this diagnostic, never
+                    # running work or other people's prompts. Do not log the graph.
+                    ids = []
+                    for job in pending:
+                        if not isinstance(job, list) or len(job) < 3 or not isinstance(job[2], dict):
+                            continue
+                        graph = job[2]
+                        if any(
+                            isinstance(node, dict)
+                            and node.get("class_type") == "CLIPTextEncode"
+                            and node.get("inputs", {}).get("text") == "a small red lighthouse by the sea"
+                            for node in graph.values()
+                        ):
+                            ids.append(job[1])
+                    if ids:
+                        body = json.dumps({"delete": ids}).encode()
+                        headers = {**endpoint.headers(), "Content-Type": "application/json"}
+                        delete = urllib.request.Request(endpoint.base_url + "/queue", data=body, headers=headers)
+                        with urllib.request.urlopen(delete, timeout=20) as response:  # noqa: S310
+                            response.read()
+                    print(f"::notice::Removed {len(ids)} queued synthetic test jobs; no other work was removed")
             elif path == "/healthz":
                 print(f"::notice::Gate: requests={data.get('requests')} authorised={data.get('authorised')} refused={data.get('refused')} errors={data.get('errors')}")
             else:

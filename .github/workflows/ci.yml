@@ -16,6 +16,9 @@ jobs:
     name: Picture service queue diagnostic
     runs-on: ubuntu-latest
     timeout-minutes: 3
+    permissions:
+      contents: read
+      actions: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,7 +27,19 @@ jobs:
         env:
           SERVICE_SHARED_SECRET: ${{ secrets.SERVICE_SHARED_SECRET }}
           SERVICE_PUBLIC: ${{ vars.SERVICE_PUBLIC }}
+          REMOVE_OUR_DRAW_PROBES: '1'
         run: python scripts/probe_comfy_queue.py
+      - name: Release the account held by the long diagnostic
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          run=41645419424
+          info=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/$run")
+          sha=$(printf '%s' "$info" | jq -r .head_sha)
+          if [ "$(printf '%s' "$info" | jq -r .status)" = in_progress ] && [ "$(printf '%s' "$info" | jq -r .path)" = '.github/workflows/yura-her.yml' ] && [ "${sha:0:7}" = '1ec80e1' ]; then
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/runs/$run/cancel" --silent
+          fi
 
   private-pinterest-probe:
     if: github.event_name == 'push' && contains(github.event.head_commit.message, '[private-pinterest-probe]')
