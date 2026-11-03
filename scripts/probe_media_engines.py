@@ -16,7 +16,7 @@ from pathlib import Path
 
 YOUTUBE = "https://www.youtube.com/watch?v=wDchsz8nmbo"
 PINTEREST = "https://www.pinterest.com/pin/385691155608427004/"
-PINTEREST_IMAGE = "https://www.pinterest.com/pin/1900024838646360/"
+PINTEREST_IMAGE = "https://www.pinterest.com/pin/543809723775636824/"
 INSTAGRAM = "https://www.instagram.com/reel/Chunk8-jurw/"
 SPOTIFY = "https://open.spotify.com/track/7h3OzIhoGymiEBYDcqEtwc"
 
@@ -40,10 +40,29 @@ def attempt(name: str, args: list[str], directory: Path, timeout: int = 120) -> 
     return False
 
 
+def inspect_gallery(name: str, url: str) -> None:
+    """Record only safe metadata shapes, not cookies or private URLs."""
+    try:
+        result = subprocess.run(
+            ["gallery-dl", "--config-ignore", "-j", url], capture_output=True, text=True, timeout=60
+        )
+        entries = json.loads(result.stdout) if result.returncode == 0 else []
+        shapes = []
+        for item in entries:
+            if isinstance(item, list) and len(item) >= 3 and isinstance(item[-1], dict):
+                data = item[-1]
+                shapes.append({k: data.get(k) for k in ("extension", "filename", "title", "id", "width", "height") if k in data})
+        print(f"::notice::{name} metadata: {json.dumps(shapes[:3], ensure_ascii=True)[:600]}", flush=True)
+    except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
+        print(f"::warning::{name} metadata unavailable: {type(exc).__name__}", flush=True)
+
+
 def main() -> int:
     if not all(shutil.which(tool) for tool in ("yt-dlp", "gallery-dl", "spotdl")):
         print("::error::Candidate tools are not installed")
         return 1
+    inspect_gallery("pinterest video", PINTEREST)
+    inspect_gallery("pinterest image", PINTEREST_IMAGE)
     with tempfile.TemporaryDirectory(prefix="yura-media-probe-") as temp:
         root = Path(temp)
         results = {
@@ -60,6 +79,9 @@ def main() -> int:
             ),
             "instagram_ytdlp": attempt(
                 "instagram_ytdlp", ["yt-dlp", "--no-playlist", "--no-progress", "--socket-timeout", "15", "--retries", "0", "-o", "sample.%(ext)s", INSTAGRAM], root / "instagram", 90,
+            ),
+            "instagram_gallery_dl": attempt(
+                "instagram_gallery_dl", ["gallery-dl", "--config-ignore", "--retries", "0", "-d", ".", INSTAGRAM], root / "instagram-gallery", 90,
             ),
             "spotify_spotdl": attempt(
                 "spotify_spotdl", ["spotdl", "download", SPOTIFY, "--output", "{title}.{output-ext}"], root / "spotify", 150,
