@@ -11,6 +11,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  comfy-queue-probe:
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[comfy-queue-probe]')
+    name: Picture service queue diagnostic
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check gate and queue without logging prompts
+        env:
+          SERVICE_SHARED_SECRET: ${{ secrets.SERVICE_SHARED_SECRET }}
+          SERVICE_PUBLIC: ${{ vars.SERVICE_PUBLIC }}
+        run: python scripts/probe_comfy_queue.py
+
   private-pinterest-probe:
     if: github.event_name == 'push' && contains(github.event.head_commit.message, '[private-pinterest-probe]')
     name: Private Pinterest link probe
