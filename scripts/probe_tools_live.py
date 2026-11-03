@@ -10,18 +10,26 @@ the model has to choose a tool from the catalogue, the action layer has to
 authorize and run it, and the reply has to describe what happened without
 leaking the scaffolding.
 
-Nothing else in the repository proves that path against a real model:
+What already proves that, and what this adds
+--------------------------------------------
+``scripts/format_probe.py`` already drives the real agent loop, and on a hosted
+runner ``.auth/config.json`` carries real credentials — so its ``hands`` section
+is live evidence, not plumbing. ``.format-probe.json`` from 2026-11-03T09:54:51Z
+records ``provider=router`` with 4 keys, ``remind`` chosen and ``done``, one row
+in ``reminders``, an audit row of ``allowed``/``done``, and no tool code in the
+reply. It runs on every push to ``havoc/**``, so that path is covered
+continuously — in English.
 
-* ``scripts/try_message.py`` runs the real runtime behind a ``QuietProvider``
-  that, in its own words, "never runs anything";
-* ``scripts/format_probe.py`` drives the real agent loop, but in CI the config
-  yields no provider, so it measures the plumbing and not the model;
-* ``scripts/probe_ai.py`` talks to the gateway directly and never builds a
-  ``Turn``, so it cannot select a tool at all.
+What it does not cover is the same sentence in Persian. Half the owner's life is
+in Farsi, the catalogue is translated per language, and a model that picks the
+right tool in English can still fail to in the other one. This probe asks in
+whichever language it is told, writes its own ``.tool-probe.json``, and fails
+loudly when the reply leaks the call even though the tool ran.
 
-This is the same agent loop ``format_probe.py`` uses, pointed at the configured
-gateway, and it records the one thing that matters: which tool the model chose,
-whether it actually ran, and what the owner would have read.
+Two scripts are *not* substitutes for either: ``scripts/try_message.py`` runs the
+real runtime behind a ``QuietProvider`` that, in its own words, "never runs
+anything", and ``scripts/probe_ai.py`` talks to the gateway directly and never
+builds a ``Turn``, so it cannot select a tool at all.
 
 Cost, and why it is gated
 -------------------------
