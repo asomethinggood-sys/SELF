@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://databases-lives-opportunity-parish.trycloudflare.com",
-  "run_id": "41515030352",
-  "started_at": "2026-11-03T01:35:29Z",
-  "expires_at": "2026-11-03T07:35:29Z",
+  "url": "https://valentine-zoloft-logan-margaret.trycloudflare.com",
+  "run_id": "41594634293",
+  "started_at": "2026-11-03T12:46:54Z",
+  "expires_at": "2026-11-03T18:46:54Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-03T01:35:50Z",
+  "published_at": "2026-11-03T12:47:11Z",
   "gated": true,
   "public": false
 }
