@@ -75,11 +75,27 @@ async def _enable(runtime) -> None:
 _NEXT = {"id": 900}
 
 
-async def _send(runtime, text: str, *, sender: int = OWN, chat_id: int = OWN) -> None:
+async def _send(
+    runtime,
+    text: str,
+    *,
+    sender: int = OWN,
+    chat_id: int = OWN,
+    is_private: bool = False,
+    out: bool = False,
+) -> None:
     # A fresh id per message: claims are keyed by (chat, message), so reusing one
     # would make the second message look like one already handled.
     _NEXT["id"] += 1
-    message = FakeMessage(id=_NEXT["id"], chat_id=chat_id, sender_id=sender, text=text, out=False)
+    message = FakeMessage(
+        id=_NEXT["id"],
+        chat_id=chat_id,
+        sender_id=sender,
+        text=text,
+        out=out,
+        is_private=is_private,
+        is_group=not is_private,
+    )
     from havoc.event_engine import normalize_message
 
     event = normalize_message(message, self_id=OWN, prefix=".")
@@ -207,6 +223,79 @@ async def test_a_link_from_a_stranger_downloads_nothing(runtime, fake_media) -> 
     await _send(runtime, YOUTUBE, sender=999, chat_id=999)
     assert fake_media["inspected"] == []
     assert not runtime.downloader.sessions
+
+
+async def test_a_stranger_cannot_answer_the_owners_menu(runtime, fake_media) -> None:
+    """A private chat has two people in it; only one of them ordered the video.
+
+    The link path was already gated, but the menu was answered by whoever spoke
+    next in that chat — so the other participant could pick a quality, spend the
+    owner's bandwidth and account, and have the file land in the conversation.
+    """
+    await _enable(runtime)
+    await _send(runtime, YOUTUBE, chat_id=999, is_private=True)
+    assert fake_media["inspected"] == [YOUTUBE]
+    assert 999 in runtime.downloader.sessions, "the owner was not offered a menu"
+
+    await _send(runtime, "1", sender=999, chat_id=999, is_private=True)
+    assert fake_media["fetched"] == [], "a stranger's number started a download"
+    assert runtime.downloader.refused == 1
+    assert 999 in runtime.downloader.sessions, "refusing must not consume the menu"
+
+    # His own answer to his own menu still downloads, and still says nothing.
+    await _send(runtime, "1", chat_id=999, is_private=True)
+    assert fake_media["fetched"] == [(YOUTUBE, "1080p", False)]
+
+
+async def test_a_stranger_cannot_cancel_the_owners_menu(runtime, fake_media) -> None:
+    """Cancelling is an action on somebody else's order, not a remark."""
+    await _enable(runtime)
+    await _send(runtime, YOUTUBE, chat_id=999, is_private=True)
+
+    await _send(runtime, "cancel", sender=999, chat_id=999, is_private=True)
+    assert 999 in runtime.downloader.sessions, "a stranger cancelled the owner's download"
+    assert fake_media["fetched"] == []
+
+    await _send(runtime, "لغو", sender=999, chat_id=999, is_private=True)
+    assert 999 in runtime.downloader.sessions, "the Persian cancel word got through"
+
+    await _send(runtime, "3", chat_id=999, is_private=True)
+    assert fake_media["fetched"] == [(YOUTUBE, "sound only", True)]
+
+
+async def test_a_sender_that_cannot_be_read_is_not_the_owner(runtime, fake_media) -> None:
+    """A missing ``sender_id`` means *this account wrote it* — only if it did.
+
+    The subscriber listens for outgoing events as well as incoming ones, so the
+    gate used to answer "unknown sender" with "yes, that is the owner". An
+    incoming message this shape cannot attribute is a stranger.
+    """
+    await _enable(runtime)
+    await _send(runtime, YOUTUBE, sender=None, chat_id=OWN)
+    assert fake_media["inspected"] == [], "an unattributed message ordered a download"
+
+    await _send(runtime, YOUTUBE, sender=None, chat_id=OWN, out=True)
+    assert fake_media["inspected"] == [YOUTUBE], "his own outgoing message was refused"
+
+
+def test_target_of_reads_the_outgoing_flag_from_every_shape() -> None:
+    """The command path hands over a wrapper, the subscriber a normalized event."""
+    from havoc.event_engine import normalize_message
+    from havoc.features.downloader import target_of
+
+    wrapped = normalize_message(
+        FakeMessage(id=1, chat_id=2, text="x", out=True), self_id=OWN, prefix="."
+    )
+    assert target_of(wrapped).is_outgoing is True
+    assert target_of(wrapped).is_outgoing is not None
+
+    bare = FakeMessage(id=1, chat_id=2, text="x", out=True)
+    assert target_of(bare).is_outgoing is True, "a raw message spells it `out`"
+
+    incoming = normalize_message(
+        FakeMessage(id=1, chat_id=2, text="x", out=False), self_id=OWN, prefix="."
+    )
+    assert target_of(incoming).is_outgoing is False
 
 
 async def test_the_feature_switch_is_a_real_switch(runtime, fake_media) -> None:

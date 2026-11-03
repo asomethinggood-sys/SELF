@@ -278,6 +278,15 @@ def main(argv: list[str] | None = None) -> int:
         ],
     )
     path = Path(args.path)
+    if not path.is_absolute():
+        # Everything else here resolves against ROOT: the git plumbing runs with
+        # ``cwd=ROOT`` and ``_repo_path`` is relative to it. A bare
+        # ``bot-status.json`` therefore means *the repository's* status file, not
+        # a file in whatever directory the caller happens to be standing in —
+        # which is how a test run from a checkout overwrote the real record with
+        # ``run_id: local``, and a stale status file is the one thing this script
+        # exists to prevent.
+        path = Path(ROOT) / path
     document = merge_into(path, payload)
     outcome = publish(path, document, commit=not args.no_commit)
     print(json.dumps({"healthy": payload["healthy"], "outcome": outcome}, ensure_ascii=False))
