@@ -57,6 +57,9 @@ jobs:
           curl -fL --retry 3 --connect-timeout 30 --max-time 900 -o "$dest" https://huggingface.co/Lykon/dreamshaper-xl-lightning/resolve/a33ea52a3da2dfaf6e9001940bdb04daae06e944/DreamShaperXL_Lightning.safetensors
           echo 'fdbe56354b8f876b736f24d3ad867ecd4140c019f57642ec8ddd878088d44f64  '"$dest" | sha256sum -c -
           echo "::notice::Checkpoint verified; free disk: $(df -h . | awk 'NR==2 {print $4}')"
+      - name: Check experimental tile dispatch with torch
+        if: matrix.worker == 0
+        run: python scripts/check_tiled_denoise.py
       - name: Render real SDXL image and measure RAM
         env:
           COMFY_DIR: ${{ github.workspace }}/.runtime/service-comfy/ComfyUI
