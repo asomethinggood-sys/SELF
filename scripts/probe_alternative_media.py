@@ -68,7 +68,7 @@ def probe_spotify() -> bool:
     with tempfile.TemporaryDirectory() as temp:
         try:
             direct = subprocess.run(
-                ["yt-dlp", "--no-playlist", "--no-progress", "--socket-timeout", "15", "--retries", "0", "-f", "bestaudio/best", "-o", "source.%(ext)s", "https://soundcloud.com/nocopyrightsounds/elektronomia-sky-high-ncs-release"],
+                ["yt-dlp", "--no-playlist", "--no-progress", "--socket-timeout", "15", "--retries", "0", "-f", "bestaudio/best", "-o", "source.%(ext)s", "https://soundcloud.com/elektronomia-sc/sky-high"],
                 cwd=temp, capture_output=True, text=True, timeout=90,
             )
             sources = list(Path(temp).glob("source.*"))
