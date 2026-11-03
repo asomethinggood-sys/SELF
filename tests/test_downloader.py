@@ -73,6 +73,24 @@ async def test_empty_spotify_match_is_reported(monkeypatch) -> None:
         await service.inspect("https://open.spotify.com/track/0Id4mflvticjdKDRkyEkWZ")
 
 
+async def test_media_verification_rejects_cover_for_reel_but_accepts_photo(tmp_path, monkeypatch) -> None:
+    import os
+
+    probe = tmp_path / "ffprobe"
+    probe.write_text('#!/usr/bin/env python3\nprint(\'{"streams":[{"codec_type":"video","codec_name":"mjpeg"}]}\')\n')
+    probe.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path) + os.pathsep + os.environ.get("PATH", ""))
+    path = tmp_path / "download.jpg"
+    path.write_bytes(b"sample")
+    photo = Item(url=PINTEREST, site="pinterest")
+    await service.validate_file(path, photo, Quality(index=1, label="original"))
+    reel = Item(url="https://www.instagram.com/reel/example/", site="instagram")
+    with pytest.raises(DownloadError, match="still image"):
+        await service.validate_file(path, reel, Quality(index=1, label="720p", height=720))
+    with pytest.raises(DownloadError, match="no playable audio"):
+        await service.validate_file(path, photo, Quality(index=1, label="audio", audio_only=True))
+
+
 async def test_pinterest_download_runs_gallery_process_and_cleans_up(tmp_path, monkeypatch) -> None:
     """Exercise the subprocess, parser, original selection and cleanup together."""
     import os
@@ -139,6 +157,9 @@ def fake_media(monkeypatch):
     monkeypatch.setattr(service, "installed", lambda: True)
     monkeypatch.setattr(service, "inspect", inspect)
     monkeypatch.setattr(service, "fetch", fetch)
+    async def validate(path, item, quality):
+        return None
+    monkeypatch.setattr(service, "validate_file", validate)
     monkeypatch.setattr(service, "thumbnail", thumb)
     monkeypatch.setattr(service, "discard", lambda path: state.setdefault("discarded", []).append(path))
     return state

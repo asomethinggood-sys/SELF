@@ -519,6 +519,64 @@ async def fetch(
     return path
 
 
+async def validate_file(path: Path, item: Item, quality: Quality, *, timeout: float = 30.0) -> None:
+    """Reject empty or corrupt files, and still images returned for video links.
+
+    ffprobe reads the actual downloaded bytes, not the extractor's metadata.
+    Pinterest images and photo posts remain valid; reels and video URLs must
+    contain real moving media. Silent videos are allowed.
+    """
+    if not path.is_file() or path.stat().st_size <= 0:
+        raise DownloadError("the downloaded file is empty", kind="failed")
+    if not shutil.which("ffprobe"):
+        raise DownloadError("ffprobe is required to verify downloaded media", kind="not_installed")
+    try:
+        process = await asyncio.create_subprocess_exec(
+            "ffprobe", "-v", "error", "-show_entries", "stream=codec_type,codec_name,duration:format=duration",
+            "-of", "json", str(path), stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+        )
+    except OSError as exc:
+        raise DownloadError("could not start the media verifier", kind="failed") from exc
+    try:
+        output, _ = await asyncio.wait_for(process.communicate(), timeout=timeout)
+    except (TimeoutError, asyncio.CancelledError) as exc:
+        if process.returncode is None:
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
+        await process.communicate()
+        if isinstance(exc, TimeoutError):
+            raise DownloadError("media verification timed out", kind="timeout") from exc
+        raise
+    try:
+        data = json.loads(output) if process.returncode == 0 else {}
+        streams = data.get("streams", [])
+        kinds = {s.get("codec_type") for s in streams if isinstance(s, dict)}
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise DownloadError("downloaded media could not be verified", kind="failed") from exc
+    if quality.audio_only:
+        if "audio" not in kinds:
+            raise DownloadError("the download contains no playable audio", kind="failed")
+        return
+    if not kinds.intersection({"audio", "video"}):
+        raise DownloadError("the downloaded media is corrupt or unsupported", kind="failed")
+    motion = item.site == "youtube" or (
+        item.site == "instagram" and re.search(r"/(?:reel|reels|tv)/", item.url, re.I)
+    ) or (item.site == "tiktok" and "/video/" in item.url.lower())
+    if motion:
+        video = next((s for s in streams if isinstance(s, dict) and s.get("codec_type") == "video"), None)
+        if not video:
+            raise DownloadError("the download contains no video", kind="failed")
+        duration = (data.get("format") or {}).get("duration") or video.get("duration")
+        try:
+            seconds = float(duration) if duration is not None else None
+        except (ValueError, TypeError):
+            seconds = None
+        if (seconds is not None and seconds < 0.5) or (seconds is None and video.get("codec_name") in {"mjpeg", "png", "webp", "gif"}):
+            raise DownloadError("the site returned a still image instead of a video", kind="failed")
+
+
 def _rmtree(path: Path) -> None:
     shutil.rmtree(path, ignore_errors=True)
 

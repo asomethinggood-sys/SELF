@@ -8,10 +8,10 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from havoc.services.downloader import discard, fetch, inspect  # noqa: E402
+from havoc.services.downloader import discard, fetch, inspect, validate_file  # noqa: E402
 
 SAMPLES = (
-    ("Pinterest image", "https://www.pinterest.com/pin/543809723775636824/", "video"),
+    ("Pinterest image", "https://www.pinterest.com/pin/543809723775636824/", "image"),
     ("Pinterest video", "https://www.pinterest.com/pin/385691155608427004/", "video"),
     ("YouTube", "https://www.youtube.com/watch?v=wDchsz8nmbo", "video"),
     ("Instagram", "https://www.instagram.com/reel/Chunk8-jurw/", "video"),
@@ -33,8 +33,9 @@ async def main() -> int:
             else:
                 quality = next((q for q in item.qualities if 0 < q.height <= 360), item.qualities[0])
             path = await fetch(item.url, quality, max_mb=50, timeout=120)
+            await validate_file(path, item, quality)
             proc = await asyncio.create_subprocess_exec(
-                "ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "json", str(path),
+                "ffprobe", "-v", "error", "-show_entries", "stream=codec_type,codec_name,duration:format=duration", "-of", "json", str(path),
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
             )
             try:
@@ -43,10 +44,19 @@ async def main() -> int:
                 proc.kill()
                 await proc.communicate()
                 raise
-            streams = json.loads(output).get("streams", []) if proc.returncode == 0 else []
-            if not any(s.get("codec_type") == expected for s in streams):
+            media = json.loads(output) if proc.returncode == 0 else {}
+            streams = media.get("streams", [])
+            stream_type = "video" if expected == "image" else expected
+            stream = next((s for s in streams if s.get("codec_type") == stream_type), None)
+            if not stream:
                 raise ValueError("media did not contain the expected stream")
-            print(f"::notice::{name}: validated {expected}, {path.stat().st_size} bytes, quality {quality.label}", flush=True)
+            if expected == "image" and stream.get("codec_name") not in {"mjpeg", "png", "webp", "gif"}:
+                raise ValueError("expected an image but received another media type")
+            if expected == "video":
+                duration = (media.get("format") or {}).get("duration") or stream.get("duration") or 0
+                if float(duration) < 0.5:
+                    raise ValueError("video duration is absent or under half a second")
+            print(f"::notice::{name}: validated {expected} ({stream.get('codec_name')}), {path.stat().st_size} bytes, quality {quality.label}", flush=True)
         except Exception as exc:
             failures += 1
             detail = " ".join(str(exc).split())[:250].replace("%", "%25")

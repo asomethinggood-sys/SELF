@@ -26,6 +26,7 @@ Feature areas: 45 (media), 96 (feature switches).
 
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -403,11 +404,17 @@ class Downloader:
         path = None
         try:
             path = await downloader.fetch(session.item.url, quality)
+            await downloader.validate_file(path, session.item, quality)
         except DownloadError as exc:
+            downloader.discard(path)
             self.failed += 1
             session.busy = False
             await self._replace(event, notice, self._error_card(exc, language))
             return
+        except asyncio.CancelledError:
+            downloader.discard(path)
+            session.busy = False
+            raise
         try:
             result = await self.runtime.sender.send_media(
                 event.chat_id,
