@@ -1,0 +1,50 @@
+{
+  "app": "havoc",
+  "kind": "bot-status",
+  "history": [
+    {
+      "app": "havoc",
+      "kind": "bot-run",
+      "run_id": "41723993992",
+      "run_attempt": "1",
+      "repository": "asomethinggood-sys/SELF",
+      "branch": "arena/b9a136e7-self",
+      "commit": "a481c820ec96ac128ebd75c763aef9b29d38dda2",
+      "written_at": "2026-11-03T21:43:03+00:00",
+      "started_at": "",
+      "exit_code": 0,
+      "uptime_seconds": null,
+      "healthy": true,
+      "reason": "Owner reply Telegram probe",
+      "log_tail": [
+        "::notice::Reply to a bot message delivered through Telegram; persona_enabled=True"
+      ],
+      "extra": {
+        "account": "her"
+      }
+    }
+  ],
+  "current": {
+    "app": "havoc",
+    "kind": "bot-run",
+    "run_id": "41723993992",
+    "run_attempt": "1",
+    "repository": "asomethinggood-sys/SELF",
+    "branch": "arena/b9a136e7-self",
+    "commit": "a481c820ec96ac128ebd75c763aef9b29d38dda2",
+    "written_at": "2026-11-03T21:43:03+00:00",
+    "started_at": "",
+    "exit_code": 0,
+    "uptime_seconds": null,
+    "healthy": true,
+    "reason": "Owner reply Telegram probe",
+    "log_tail": [
+      "::notice::Reply to a bot message delivered through Telegram; persona_enabled=True"
+    ],
+    "extra": {
+      "account": "her"
+    }
+  },
+  "runs_seen": 1,
+  "last_healthy_at": "2026-11-03T21:43:03+00:00"
+}
