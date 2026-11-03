@@ -24,6 +24,12 @@ on:
       - ".auth/config.json"
       - ".github/workflows/ai-probe.yml"
   workflow_dispatch:
+    inputs:
+      tools:
+        description: "true = also ask something that needs a tool (costs ~2 requests)"
+        required: false
+        default: "false"
+        type: string
   schedule:
     # Once a day, after the free tier's UTC reset: if yesterday's runs spent the
     # 50-request allowance, this is the run that proves the key still answers.
@@ -183,7 +189,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ai-probe
-          path: .ai-probe.json
+          path: |
+            .ai-probe.json
+            .tool-probe.json
           if-no-files-found: warn
 
       - name: Fail the job when the model did not answer
@@ -204,3 +212,68 @@ jobs:
           fi
           echo "::error::The AI probe did not get an answer; see .ai-probe.json."
           exit 1
+
+      # 2+2 is the *plain* case: no catalogue, no execution, no second request.
+      # This is the other one — a sentence that is not a command, where the model
+      # has to choose a tool, the action layer has to authorize and run it, and
+      # the answer has to describe what happened without leaking the call. It is
+      # dispatch-gated because a tool call costs two requests out of the free
+      # tier's 50 a day, so it must never ride along on a push or the schedule.
+      # It is skipped when the step above failed: a provider that cannot answer
+      # 2+2 cannot run a tool either, and spending two more requests to learn
+      # that again is not evidence, it is waste.
+      - name: Ask it something that needs her hands
+        if: inputs.tools == 'true'
+        shell: bash
+        env:
+          AI_PROVIDER: ${{ steps.ai.outputs.ai_provider }}
+          AI_BASE_URL: ${{ steps.ai.outputs.ai_base_url }}
+          AI_MODEL: ${{ steps.ai.outputs.ai_model }}
+          AI_API_KEY: ${{ steps.ai.outputs.ai_api_key }}
+          DATA_DIR: ${{ github.workspace }}/.runtime/data
+          LOG_DIR: ${{ github.workspace }}/.runtime/logs
+        run: |
+          set -uo pipefail
+          # The exit status is the verdict, so it must be captured rather than
+          # allowed to abort the step before the record is written.
+          set +e
+          python scripts/probe_tools_live.py --lang en --json-out .tool-probe.json
+          status=$?
+          set -e
+          cat .tool-probe.json 2>/dev/null || echo "no tool record was written"
+          if [ "$status" -ne 0 ]; then
+            echo "::error::She talked about the tool instead of using it; see .tool-probe.json."
+          fi
+          exit "$status"
+
+      - name: Publish the tool record
+        # Always: a failed tool probe is the record worth keeping.
+        if: always() && inputs.tools == 'true'
+        shell: bash
+        run: |
+          set -uo pipefail
+          if [ ! -f .tool-probe.json ]; then
+            echo "no tool record to publish"
+            exit 0
+          fi
+          git config user.name "HAVOC tool probe"
+          git config user.email "probe@users.noreply.github.com"
+          git add .tool-probe.json
+          if git diff --cached --quiet; then
+            echo "nothing new to publish"
+            exit 0
+          fi
+          git commit -qm "ci: tool probe result [skip ci]"
+          # The running bot commits snapshots every few minutes, so the branch
+          # usually moves while this job runs. Rebase and retry; a lost publish
+          # is a lost record of a real failure, which is the thing we need.
+          for attempt in 1 2 3; do
+            if git pull -q --rebase origin "${GITHUB_REF_NAME}" && \
+               git push -q origin "HEAD:refs/heads/${GITHUB_REF_NAME}"; then
+              echo "published on attempt ${attempt}"
+              exit 0
+            fi
+            git rebase --abort 2>/dev/null || true
+            sleep 5
+          done
+          echo "::warning::Could not publish the tool record; the artifact still has it."
