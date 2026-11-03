@@ -11,6 +11,57 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  private-pinterest-probe:
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[private-pinterest-probe]')
+    name: Private Pinterest link probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install -q -e '.[download]' cryptography
+          if ! command -v ffprobe >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq ffmpeg
+          fi
+      - name: Receive encrypted links and test
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/private_pinterest_probe.py
+
+  recover-comfy:
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[comfy-recover]')
+    name: Release stalled picture service
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Cancel only the identified stalled service run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          run=41563071823
+          info=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/$run")
+          status=$(printf '%s' "$info" | jq -r .status)
+          path=$(printf '%s' "$info" | jq -r .path)
+          branch=$(printf '%s' "$info" | jq -r .head_branch)
+          if [ "$status" = in_progress ] && [ "$path" = '.github/workflows/service-comfy.yml' ] && [ "$branch" = "$GITHUB_REF_NAME" ]; then
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/runs/$run/cancel" --silent
+            echo '::notice::Requested cancellation of the stalled picture-service run.'
+          else
+            echo '::notice::The identified picture-service run no longer needs cancellation.'
+          fi
+
   downloader-auth-preflight:
     if: github.event_name == 'push' && contains(github.event.head_commit.message, '[downloader-auth-preflight]')
     name: Check private downloader service prerequisites

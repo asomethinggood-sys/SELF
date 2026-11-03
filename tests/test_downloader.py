@@ -99,7 +99,7 @@ async def test_pinterest_download_runs_gallery_process_and_cleans_up(tmp_path, m
     executable.write_text(
         '#!/usr/bin/env python3\n'
         'import json, pathlib, sys\n'
-        'if "-j" in sys.argv:\n'
+        'if "-J" in sys.argv:\n'
         '    print(json.dumps([[3, "https://media.example/image.jpg", '
         '{"id": "543809723775636824", "extension": "jpg", "title": "sunset"}]]))\n'
         'else:\n'
@@ -113,6 +113,8 @@ async def test_pinterest_download_runs_gallery_process_and_cleans_up(tmp_path, m
     assert not service.site_of("https://pinterest.com.evil.test/pin/1")
     item = await service.inspect(PINTEREST)
     assert item.title == "sunset" and item.quality(1).label == "original"
+    short_item = await service.inspect("https://pin.it/312oBjytt")
+    assert short_item.title == "sunset" and short_item.url == "https://pin.it/312oBjytt"
     file = await service.fetch(item.url, item.quality(1), max_mb=1)
     assert file.read_bytes() == b"image bytes"
     directory = file.parent

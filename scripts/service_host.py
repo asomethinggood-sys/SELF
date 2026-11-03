@@ -39,6 +39,7 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -102,10 +103,13 @@ def _run(command: list[str], *, env: dict[str, str] | None = None, cwd: Path | N
     """Run a command to completion, echoing its output to the job log."""
     log("$ " + " ".join(command))
     try:
-        return subprocess.call(command, env=env, cwd=str(cwd) if cwd else None)
+        return subprocess.run(command, env=env, cwd=str(cwd) if cwd else None, timeout=900, check=False).returncode
     except FileNotFoundError:
         log(f"not installed: {command[0]}")
         return 127
+    except subprocess.TimeoutExpired:
+        log(f"command timed out: {command[0]}")
+        return 124
 
 
 def _port_taken(port: int) -> bool:
@@ -477,25 +481,56 @@ def commit(message: str, *paths: str, attempts: int = 3) -> bool:
         # before this guard existed.
         log("not in CI: writing the address locally, not committing it")
         return False
-    _run(["git", "config", "user.name", "Yura service host"])
-    _run(["git", "config", "user.email", "services@users.noreply.github.com"])
-    _run(["git", "add", *paths])
-    if subprocess.call(["git", "diff", "--cached", "--quiet"]) == 0:
-        log("nothing to publish (unchanged)")
-        return True
-    _run(["git", "commit", "-qm", message])
+    # Build a one-file commit on the latest branch with a private index, just as
+    # the bot status publisher does. Never rebase the running checkout: a pending
+    # conflict or stalled Git command otherwise freezes the entire service before
+    # it can even start. All subprocesses are bounded and never log credentials.
+    if len(paths) != 1:
+        log("service publisher requires exactly one path")
+        return False
+    path = Path(paths[0]).resolve()
+    try:
+        relative = path.relative_to(ROOT.resolve()).as_posix()
+    except ValueError:
+        log("service report is outside the repository")
+        return False
+    env = {
+        **os.environ,
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_AUTHOR_NAME": "Yura service host",
+        "GIT_AUTHOR_EMAIL": "services@users.noreply.github.com",
+        "GIT_COMMITTER_NAME": "Yura service host",
+        "GIT_COMMITTER_EMAIL": "services@users.noreply.github.com",
+    }
+
+    def git(*args: str, extra: dict[str, str] | None = None) -> str | None:
+        try:
+            result = subprocess.run(
+                ["git", *args], cwd=ROOT, env={**env, **(extra or {})},
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        return result.stdout.strip() if result.returncode == 0 else None
+
     for attempt in range(1, attempts + 1):
-        _run(["git", "fetch", "-q", "origin", branch])
-        rebase = subprocess.call(["git", "rebase", "-q", "--autostash", "FETCH_HEAD"])
-        if rebase != 0:
-            subprocess.call(["git", "rebase", "--abort"])
+        fetched = git("fetch", "-q", "origin", branch)
+        base = git("rev-parse", "FETCH_HEAD") if fetched is not None else None
+        blob = git("hash-object", "-w", "--", str(path)) if base else None
+        if base and blob:
+            with tempfile.TemporaryDirectory(prefix="service-index-") as tmp:
+                index = {"GIT_INDEX_FILE": str(Path(tmp) / "index")}
+                if git("read-tree", base, extra=index) is not None and git(
+                    "update-index", "--add", "--cacheinfo", f"100644,{blob},{relative}", extra=index
+                ) is not None:
+                    tree = git("write-tree", extra=index)
+                    commit_sha = git("commit-tree", tree, "-p", base, "-m", message) if tree else None
+                    if commit_sha and git("push", "-q", "origin", f"{commit_sha}:refs/heads/{branch}") is not None:
+                        log(f"published on attempt {attempt}")
+                        return True
+        if attempt < attempts:
             time.sleep(2 * attempt)
-            continue
-        if subprocess.call(["git", "push", "-q", "origin", f"HEAD:refs/heads/{branch}"]) == 0:
-            log(f"published on attempt {attempt}")
-            return True
-        time.sleep(2 * attempt)
-    log("could not publish: three attempts failed")
+    log("could not publish: bounded attempts failed")
     return False
 
 

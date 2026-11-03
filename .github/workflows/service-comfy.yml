@@ -164,8 +164,10 @@ jobs:
           echo "service=comfy minutes=$SERVICE_MINUTES mode=${{ steps.token.outputs.mode }}"
           # The host proves the service on loopback (a real picture, a real
           # completion) and only then opens the tunnel.
-          python -u scripts/service_host.py --service comfy
-          echo "host exited with $?"
+          status=0
+          python -u scripts/service_host.py --service comfy || status=$?
+          echo "host exited with $status"
+          exit "$status"
 
       - name: Stop everything
         if: always()

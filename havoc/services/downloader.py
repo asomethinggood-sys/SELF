@@ -338,7 +338,10 @@ async def _gallery_run(args: list[str], *, timeout: float) -> tuple[int, bytes, 
 
 async def _inspect_pinterest(url: str, *, timeout: float) -> Item:
     try:
-        status, stdout, stderr = await _gallery_run(["--range", "1", "-j", url], timeout=timeout)
+        # -j stops at intermediary URLs (including pin.it redirects) and emits
+        # a queue entry rather than media. -J follows those entries before
+        # printing metadata, just as gallery-dl's download mode does.
+        status, stdout, stderr = await _gallery_run(["--range", "1", "-J", url], timeout=timeout)
     except TimeoutError as exc:
         raise DownloadError("Pinterest did not answer in time", kind="timeout") from exc
     if status:
