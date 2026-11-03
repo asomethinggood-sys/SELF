@@ -535,6 +535,8 @@ jobs:
           # killed at the ceiling with a live WAL.
           BOT_MINUTES: ${{ inputs.bot_minutes || '340' }}
           LIVE_DOWNLOADER_PROBE: ${{ contains(github.event.head_commit.message, '[telegram-download-probe]') && '1' || '0' }}
+          LIVE_DRAW_PROBE: ${{ contains(github.event.head_commit.message, '[telegram-draw-probe]') && '1' || '0' }}
+          DRAW_PROBE_ACCOUNT: own
           # Her id when her own Yura has logged in (see "Who else may command
           # her"). Empty means "nobody extra": this account is always an owner.
           OWNER_IDS: ${{ steps.owners.outputs.owner_ids }}
@@ -580,6 +582,14 @@ jobs:
             python scripts/publish_status.py --path .reports/downloader-own.json --exit-code "$probe_status" --reason 'Pinterest Telegram integration probe' --log "$RUNNER_TEMP/downloader-probe.log" --extra account=own || echo '::warning::Could not publish downloader probe result.'
             if [ "$probe_status" -ne 0 ]; then
               echo '::warning::Live downloader probe did not pass; starting the userbot anyway.'
+            fi
+          fi
+          if [ "${LIVE_DRAW_PROBE:-0}" = 1 ]; then
+            probe_status=0
+            timeout --signal=INT 8m python scripts/probe_telegram_draw.py 2>&1 | tee "$RUNNER_TEMP/draw-probe.log" || probe_status=${PIPESTATUS[0]}
+            python scripts/publish_status.py --path .reports/draw-own.json --exit-code "$probe_status" --reason 'Live draw and Telegram integration probe' --log "$RUNNER_TEMP/draw-probe.log" --extra account=own || echo '::warning::Could not publish draw probe result.'
+            if [ "$probe_status" -ne 0 ]; then
+              echo '::warning::Live draw probe did not pass; starting the userbot anyway.'
             fi
           fi
           echo "::notice::Starting the userbot for ${BOT_MINUTES} minutes."
