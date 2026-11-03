@@ -1,0 +1,58 @@
+name: Experimental SDXL CPU benchmark
+
+# Isolated, one-shot measurement. It does not replace or restart the live service.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/sdxl-benchmark.yml
+      - scripts/benchmark_sdxl.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: experimental-sdxl-benchmark-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Restore ComfyUI checkout if available
+        uses: actions/cache/restore@v4
+        with:
+          path: .runtime/service-comfy/ComfyUI
+          key: sdxl-benchmark-restore-only-${{ github.run_id }}
+          restore-keys: |
+            comfy-
+      - name: Prepare isolated CPU environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::notice::Runner CPUs: $(nproc); RAM: $(awk '/MemTotal/ {printf "%.1f GiB", $2/1048576}' /proc/meminfo); free disk: $(df -h . | awk 'NR==2 {print $4}')"
+          export COMFY_DIR="$GITHUB_WORKSPACE/.runtime/service-comfy/ComfyUI"
+          if [ ! -f "$COMFY_DIR/main.py" ]; then
+            git clone --depth 1 --branch v0.43.2 https://github.com/comfyanonymous/ComfyUI.git "$COMFY_DIR"
+          fi
+          # The restored image checkpoint is only a cache copy on this isolated
+          # benchmark runner. Free the space; never touch the live runner.
+          rm -f "$COMFY_DIR/models/checkpoints/"*.safetensors
+          python -m pip install -q --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          python -m pip install -q --no-cache-dir -r "$COMFY_DIR/requirements.txt" filelock
+          mkdir -p "$COMFY_DIR/models/checkpoints"
+          dest="$COMFY_DIR/models/checkpoints/DreamShaperXL_Lightning.safetensors"
+          curl -fL --retry 3 --connect-timeout 30 --max-time 900 -o "$dest" https://huggingface.co/Lykon/dreamshaper-xl-lightning/resolve/a33ea52a3da2dfaf6e9001940bdb04daae06e944/DreamShaperXL_Lightning.safetensors
+          echo 'fdbe56354b8f876b736f24d3ad867ecd4140c019f57642ec8ddd878088d44f64  '"$dest" | sha256sum -c -
+          echo "::notice::Checkpoint verified; free disk: $(df -h . | awk 'NR==2 {print $4}')"
+      - name: Render real SDXL image and measure RAM
+        env:
+          COMFY_DIR: ${{ github.workspace }}/.runtime/service-comfy/ComfyUI
+          OMP_NUM_THREADS: '4'
+          MKL_NUM_THREADS: '4'
+        run: python -u scripts/benchmark_sdxl.py
