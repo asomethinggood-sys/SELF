@@ -93,6 +93,13 @@ jobs:
           LOG_DIR: ${{ github.workspace }}/.runtime/logs
         run: |
           set -uo pipefail
+          # A probe exists to record failure, so a failure must not abort the
+          # recording. Under the `-e` this shell runs with, a non-zero exit here
+          # skipped the summary, `.ai-probe.status` and the `::error::` that says
+          # *why* — the publish step then had to guess exit 1. `-e` stays off for
+          # the rest of the step: the verdict below is explicit, and the reason
+          # grep is allowed to match nothing.
+          set +e
           # Straight to the file: nothing between the command and the record.
           python -m havoc ai "what is 2+2? answer with the number and nothing else" > .ai-probe.txt 2>&1
           status=$?

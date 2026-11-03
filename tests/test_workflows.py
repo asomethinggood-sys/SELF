@@ -8,6 +8,9 @@ only through ``${{ secrets.* }}``, and no step echoes a credential.
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -371,6 +374,119 @@ def test_the_run_publishes_its_own_status() -> None:
     script = next(s for s in job["steps"] if s.get("name") == "Run the userbot")["run"]
     assert "scripts/publish_status.py" in script
     assert "--log .runtime/logs/bot.log" in script
+
+
+# ----------------------------------------------------------------------
+# The status must be published on *every* exit, not only on exit 0
+# ----------------------------------------------------------------------
+
+#: His run and hers: same promise, same hazard, two files.
+BOT_RUN_STEPS = (
+    ("auth-and-run.yml", "login", "Run the userbot"),
+    ("yura-her.yml", "run", "Run her userbot"),
+)
+
+#: Stands in for the publish call. Reaching it is the whole point.
+MARKER = "PUBLISH_REACHED"
+
+#: How the bot actually ends: the 340-minute ceiling (124), a handover (130),
+#: a clean stop (0) and a crash (1).
+BOT_EXIT_CODES = (0, 124, 130, 1)
+
+
+def _bot_step_script(workflow: str, job: str, step: str) -> str:
+    return next(s for s in _load(workflow)["jobs"][job]["steps"] if s.get("name") == step)["run"]
+
+
+def _publish_region(script: str) -> list[str]:
+    """The real shell text from the watch loop to the publish call.
+
+    Everything that happens after the bot stops — exit status, uptime, reason,
+    publication — is the part that must survive a non-zero exit.
+    """
+    lines = script.splitlines()
+    wait_index = next(i for i, line in enumerate(lines) if 'wait "$bot"' in line)
+    # Start after the watch loop's own ``done`` so that a ``set +e`` guard placed
+    # between the loop and the wait is inside the region under test.
+    start = next(i for i in range(wait_index, -1, -1) if lines[i].strip() == "done") + 1
+    stop = next(
+        i
+        for i, line in enumerate(lines)
+        if line.strip().startswith("python scripts/publish_status.py")
+    )
+    assert start < wait_index < stop, "the run step changed shape; retarget this test"
+    return lines[start:stop]
+
+
+def _run_region(region: list[str], exit_code: int) -> subprocess.CompletedProcess[str]:
+    """Run that text the way GitHub does: ``bash --noprofile --norc -eo pipefail``."""
+    bash = shutil.which("bash")
+    if not bash:  # pragma: no cover - CI is Linux
+        pytest.skip("bash is not available")
+    with tempfile.TemporaryDirectory() as work:
+        summary = Path(work) / "summary"
+        summary.write_text("", encoding="utf-8")
+        script = Path(work) / "step.sh"
+        script.write_text(
+            "\n".join(
+                [
+                    "set -uo pipefail",
+                    "BOT_MINUTES=340",
+                    "bot_started=$(date +%s)",
+                    "started=$bot_started",
+                    f"GITHUB_STEP_SUMMARY={summary}",
+                    f"( sleep 0.05; exit {exit_code} ) &",
+                    "bot=$!",
+                    *region,
+                    f"echo {MARKER}",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return subprocess.run(
+            [bash, "--noprofile", "--norc", "-eo", "pipefail", str(script)],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+
+
+@pytest.mark.parametrize(("workflow", "job", "step"), BOT_RUN_STEPS)
+@pytest.mark.parametrize("exit_code", BOT_EXIT_CODES)
+def test_the_status_is_published_whatever_the_bot_exits_with(
+    workflow: str, job: str, step: str, exit_code: int
+) -> None:
+    """A ceiling stop or a handover is not a failure, and must still be recorded.
+
+    Both bot runs reached the end of their 340 minutes, ``timeout`` returned 124,
+    and the bare ``wait`` that collects that number aborted the step under the
+    ``-e`` GitHub runs it with. ``publish_status.py`` never ran, so the run was
+    reported as failed and ``bot-status.json`` / ``her-bot-status.json`` kept the
+    last exit-0 stop they had ever seen. This executes the workflow's own shell
+    text instead of trusting a string match.
+    """
+    region = _publish_region(_bot_step_script(workflow, job, step))
+    result = _run_region(region, exit_code)
+    assert MARKER in result.stdout, (
+        f"{workflow}: the bot's exit {exit_code} aborted the step before the status "
+        f"was published (step exit {result.returncode})"
+    )
+    assert result.returncode == 0, f"{workflow}: exit {exit_code} must not fail the step"
+
+
+def test_the_guard_is_what_saves_the_record() -> None:
+    """Teeth for the test above: drop the guard and the record is lost again."""
+    workflow, job, step = BOT_RUN_STEPS[0]
+    region = _publish_region(_bot_step_script(workflow, job, step))
+    guarded = _run_region(region, 124)
+    assert MARKER in guarded.stdout, "the guard is missing from the workflow itself"
+
+    unguarded = [line for line in region if line.strip() != "set +e"]
+    result = _run_region(unguarded, 124)
+    assert MARKER not in result.stdout
+    assert result.returncode == 124, "a bare `wait` must hand the step the bot's exit code"
 
 
 def test_the_database_survives_a_deploy() -> None:

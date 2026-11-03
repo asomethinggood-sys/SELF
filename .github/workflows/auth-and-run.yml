@@ -676,6 +676,14 @@ jobs:
               break
             fi
           done
+          # The bot's exit status is data to record, not a verdict to abort on.
+          # This shell runs with `-e`, so a bare `wait` returning 124 (the
+          # BOT_MINUTES ceiling) or 130 (a handover) ended the step right here:
+          # publish_status.py below never ran, every ceiling stop was reported as
+          # a failed run, and bot-status.json went stale. The step's own verdict
+          # is decided explicitly at the end, so `-e` stays off from here.
+          # credential-probe.yml already guards its status capture the same way.
+          set +e
           wait "$bot" 2>/dev/null
           bot_status=$?
           bot_uptime=$(( $(date +%s) - bot_started ))
