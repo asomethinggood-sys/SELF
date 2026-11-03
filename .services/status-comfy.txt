@@ -15,3 +15,4 @@
 02:00:24Z run 41518462686 · proving it through the gate with a real request
 02:03:06Z run 41518462686 · published https://evaluating-budapest-testimony-minus.trycloudflare.com
 18:38:12Z run 41640687271 · starting comfy on this runner
+18:40:29Z run 41640687271 · comfy is up behind the gate
