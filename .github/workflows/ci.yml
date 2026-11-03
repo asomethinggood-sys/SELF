@@ -22,8 +22,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install downloader
-        run: python -m pip install -e ".[download]"
+      - name: Install downloader and media tools
+        run: |
+          python -m pip install -e ".[download]"
+          if ! command -v ffprobe >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq ffmpeg
+          fi
       - name: Download and inspect a public video (no Telegram)
         run: python scripts/probe_youtube_live.py
 

@@ -294,9 +294,13 @@ def main(argv: list[str] | None = None) -> int:
     document = merge_into(path, payload)
     outcome = publish(path, document, commit=not args.no_commit)
     print(json.dumps({"healthy": payload["healthy"], "outcome": outcome}, ensure_ascii=False))
-    # Silence is how a stale status file starts to look like the truth: a
-    # publish that never reached the branch has to fail the command.
-    return 1 if outcome.startswith(("push failed", "write failed")) else 0
+    # The job log may be unavailable while its annotations remain visible.
+    # Publish only the failure stage, not git stderr (which can contain URLs).
+    failed = outcome.startswith(("push failed", "write failed"))
+    if failed and os.environ.get("GITHUB_ACTIONS") == "true":
+        stage = outcome.partition(":")[0]
+        print(f"::warning::Status publication failed at {stage}")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":  # pragma: no cover
