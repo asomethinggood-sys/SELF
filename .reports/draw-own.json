@@ -1,0 +1,54 @@
+{
+  "app": "havoc",
+  "kind": "bot-status",
+  "history": [
+    {
+      "app": "havoc",
+      "kind": "bot-run",
+      "run_id": "41644114901",
+      "run_attempt": "1",
+      "repository": "asomethinggood-sys/SELF",
+      "branch": "arena/b9a136e7-self",
+      "commit": "25a0e19fc35cf89e46adc09a1b405890f53f3028",
+      "written_at": "2026-11-03T13:26:27+00:00",
+      "started_at": "",
+      "exit_code": 1,
+      "uptime_seconds": null,
+      "healthy": false,
+      "reason": "Live draw and Telegram integration probe",
+      "log_tail": [
+        "::notice::Directory state: ok; run 41640429750",
+        "::error::.draw: no Telegram upload; generator error:",
+        "::notice::Bot response: .draw a small red lighthouse by the sea"
+      ],
+      "extra": {
+        "account": "own"
+      }
+    }
+  ],
+  "current": {
+    "app": "havoc",
+    "kind": "bot-run",
+    "run_id": "41644114901",
+    "run_attempt": "1",
+    "repository": "asomethinggood-sys/SELF",
+    "branch": "arena/b9a136e7-self",
+    "commit": "25a0e19fc35cf89e46adc09a1b405890f53f3028",
+    "written_at": "2026-11-03T13:26:27+00:00",
+    "started_at": "",
+    "exit_code": 1,
+    "uptime_seconds": null,
+    "healthy": false,
+    "reason": "Live draw and Telegram integration probe",
+    "log_tail": [
+      "::notice::Directory state: ok; run 41640429750",
+      "::error::.draw: no Telegram upload; generator error:",
+      "::notice::Bot response: .draw a small red lighthouse by the sea"
+    ],
+    "extra": {
+      "account": "own"
+    }
+  },
+  "runs_seen": 1,
+  "last_healthy_at": ""
+}
