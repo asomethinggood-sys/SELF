@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://kong-wit-guys-erik.trycloudflare.com",
-  "run_id": "41415692160",
-  "started_at": "2026-11-02T14:23:59Z",
-  "expires_at": "2026-11-02T20:23:59Z",
+  "url": "https://databases-lives-opportunity-parish.trycloudflare.com",
+  "run_id": "41515030352",
+  "started_at": "2026-11-03T01:35:29Z",
+  "expires_at": "2026-11-03T07:35:29Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-02T14:24:17Z",
+  "published_at": "2026-11-03T01:35:50Z",
   "gated": true,
   "public": false
 }
