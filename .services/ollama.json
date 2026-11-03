@@ -1,14 +1,14 @@
 {
   "service": "ollama",
-  "url": "https://measuring-entrepreneurs-acne-producer.trycloudflare.com",
-  "run_id": "41415706419",
-  "started_at": "2026-11-02T14:24:41Z",
-  "expires_at": "2026-11-02T20:24:41Z",
+  "url": "https://attachments-proudly-monroe-seventh.trycloudflare.com",
+  "run_id": "41515132872",
+  "started_at": "2026-11-03T01:36:04Z",
+  "expires_at": "2026-11-03T07:36:04Z",
   "gate_port": 9003,
   "upstream_port": 11434,
   "model": "qwen2.5:0.5b",
   "version": "ollama/qwen2.5:0.5b",
-  "published_at": "2026-11-02T14:26:52Z",
+  "published_at": "2026-11-03T01:37:02Z",
   "gated": true,
   "public": false
 }
