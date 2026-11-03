@@ -10,3 +10,4 @@
 01:36:48Z run 41515132872 · ollama is up behind the gate
 01:36:51Z run 41515132872 · proving it through the gate with a real request
 01:37:03Z run 41515132872 · published https://attachments-proudly-monroe-seventh.trycloudflare.com
+12:47:10Z run 41594657941 · starting ollama on this runner
