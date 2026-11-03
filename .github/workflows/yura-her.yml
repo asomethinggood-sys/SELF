@@ -122,7 +122,29 @@ jobs:
           cache: pip
 
       - name: Install
-        run: python -m pip install -e ".[media]"
+        run: python -m pip install -e ".[media,voice,download]"
+
+      - name: Install the media tools
+        # Match the main bot: yt-dlp handles the sites and ffmpeg merges streams
+        # or extracts audio. Warn rather than silently claiming it is available.
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          if command -v ffmpeg >/dev/null 2>&1; then
+            echo "ffmpeg already present: $(ffmpeg -version | head -1)"
+          else
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq ffmpeg || echo "::warning::ffmpeg could not be installed; downloads that need merging will say so"
+          fi
+          python -m pip install -q --upgrade yt-dlp || echo "::warning::could not refresh yt-dlp"
+          python -c "import yt_dlp; print('yt-dlp', yt_dlp.version.__version__)" || true
+          {
+            echo "### Media tools"
+            echo ""
+            echo "- ffmpeg: \`$(command -v ffmpeg || echo missing)\`"
+            echo "- yt-dlp: \`$(python -c 'import yt_dlp;print(yt_dlp.version.__version__)' 2>/dev/null || echo missing)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Read her credentials
         id: creds

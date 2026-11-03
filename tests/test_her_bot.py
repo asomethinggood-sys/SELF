@@ -78,6 +78,14 @@ def test_her_workflow_is_a_valid_repeating_run() -> None:
     assert "timeout --signal=INT" in run_scripts(document)
 
 
+def test_both_workflows_install_media_voice_and_download_dependencies() -> None:
+    for name in (MAIN, HER):
+        document = workflow(name)
+        assert ".[media,voice,download]" in step_named(document, "Install")["run"]
+        tools = step_named(document, "Install the media tools")["run"]
+        assert "ffmpeg" in tools and "yt-dlp" in tools
+
+
 def test_nothing_in_her_workflow_can_collide_with_his() -> None:
     hers, his = workflow(HER), workflow(MAIN)
     her_scripts, his_scripts = run_scripts(hers), run_scripts(his)
