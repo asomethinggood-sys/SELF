@@ -14,7 +14,4 @@
 02:00:22Z run 41518462686 · comfy is up behind the gate
 02:00:24Z run 41518462686 · proving it through the gate with a real request
 02:03:06Z run 41518462686 · published https://evaluating-budapest-testimony-minus.trycloudflare.com
-13:02:03Z run 41640429750 · starting comfy on this runner
-13:04:28Z run 41640429750 · comfy is up behind the gate
-13:04:30Z run 41640429750 · proving it through the gate with a real request
-13:07:04Z run 41640429750 · published https://perceived-regard-careful-schedules.trycloudflare.com
+18:38:12Z run 41640687271 · starting comfy on this runner
