@@ -16,6 +16,8 @@ from pathlib import Path
 
 YOUTUBE = "https://www.youtube.com/watch?v=wDchsz8nmbo"
 PINTEREST = "https://www.pinterest.com/pin/385691155608427004/"
+PINTEREST_IMAGE = "https://www.pinterest.com/pin/1900024838646360/"
+INSTAGRAM = "https://www.instagram.com/reel/Chunk8-jurw/"
 SPOTIFY = "https://open.spotify.com/track/7h3OzIhoGymiEBYDcqEtwc"
 
 
@@ -50,8 +52,14 @@ def main() -> int:
                 ["yt-dlp", "--no-playlist", "--no-progress", "--no-warnings", "--socket-timeout", "15", "--retries", "0", "--js-runtimes", "node", "--extractor-args", "youtube:player_client=mweb,android_vr", "-f", "best[height<=360]/best", "-o", "sample.%(ext)s", YOUTUBE],
                 root / "youtube", 120,
             ),
-            "pinterest_gallery_dl": attempt(
-                "pinterest_gallery_dl", ["gallery-dl", "--no-config", "-d", ".", PINTEREST], root / "pinterest", 90,
+            "pinterest_video_gallery_dl": attempt(
+                "pinterest_video_gallery_dl", ["gallery-dl", "--config-ignore", "-d", ".", PINTEREST], root / "pinterest-video", 90,
+            ),
+            "pinterest_image_gallery_dl": attempt(
+                "pinterest_image_gallery_dl", ["gallery-dl", "--config-ignore", "-d", ".", PINTEREST_IMAGE], root / "pinterest-image", 90,
+            ),
+            "instagram_ytdlp": attempt(
+                "instagram_ytdlp", ["yt-dlp", "--no-playlist", "--no-progress", "--socket-timeout", "15", "--retries", "0", "-o", "sample.%(ext)s", INSTAGRAM], root / "instagram", 90,
             ),
             "spotify_spotdl": attempt(
                 "spotify_spotdl", ["spotdl", "download", SPOTIFY, "--output", "{title}.{output-ext}"], root / "spotify", 150,
