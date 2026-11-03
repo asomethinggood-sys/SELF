@@ -68,6 +68,10 @@ class Target:
     message_id: int | None = None
     sender_id: int | None = None
     is_private: bool = False
+    #: Whether this account wrote the message. It is the only honest way to read
+    #: a missing ``sender_id``: outgoing messages are the owner's by definition,
+    #: while an incoming one whose sender cannot be read is a stranger.
+    is_outgoing: bool = False
 
 
 def target_of(event: Any) -> Target:
@@ -83,7 +87,21 @@ def target_of(event: Any) -> Target:
         if getattr(event, "is_private", None) is not None
         else getattr(message, "is_private", False)
     )
-    return Target(int(chat_id or 0), message_id, sender_id, is_private)
+    # ``NormalizedEvent`` spells it ``is_outgoing``; a Telethon message spells it
+    # ``out``, and the command path may hand over either the message itself or a
+    # wrapper around it. Read all three, in that order.
+    is_outgoing = getattr(event, "is_outgoing", None)
+    if is_outgoing is None:
+        is_outgoing = getattr(event, "out", None)
+    if is_outgoing is None:
+        is_outgoing = getattr(message, "out", False)
+    return Target(
+        int(chat_id or 0),
+        message_id,
+        sender_id,
+        is_private,
+        is_outgoing=bool(is_outgoing),
+    )
 
 
 @dataclass
@@ -157,8 +175,11 @@ class Downloader:
         sender = event.sender_id
         if sender is None:
             # An outgoing message from this account has no sender id; the account
-            # *is* the owner, and nothing else can write with it.
-            return True
+            # *is* the owner, and nothing else can write with it. An *incoming*
+            # message whose sender cannot be read is a stranger, not the owner —
+            # answering "unknown" with "yes" hands the download gate to whoever
+            # can produce a message this shape cannot attribute.
+            return bool(event.is_outgoing)
         return bool(self.runtime.permissions.is_owner(sender))
 
     async def _language(self, chat_id: int) -> str:
@@ -198,6 +219,14 @@ class Downloader:
             self.sessions.pop(target.chat_id, None)
             session = None
         if session is not None and self._looks_like_choice(text):
+            # The menu belongs to whoever ordered it. Without this gate a second
+            # participant in a private chat could answer the owner's menu — pick
+            # a quality, spend the owner's bandwidth and account, and have the
+            # file land in that chat — or cancel a download the owner asked for.
+            # A bare number is not a claim on somebody else's order.
+            if not self._owner(target):
+                self.refused += 1
+                return
             await self._choose(target, session, text)
             return
         if not downloader.is_link(text):
