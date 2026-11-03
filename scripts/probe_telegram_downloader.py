@@ -13,6 +13,7 @@ import sqlite3
 import sys
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -79,13 +80,13 @@ async def main() -> int:
             for label, url in SAMPLES:
                 before = len(results)
                 initial = await client.send_message(info.user_id, url)
-                await asyncio.wait_for(runtime.handlers.on_outgoing(initial), timeout=90)
+                await asyncio.wait_for(runtime.handlers.on_outgoing(SimpleNamespace(message=initial)), timeout=90)
                 session = runtime.downloader.sessions.get(info.user_id)
                 if not session:
                     print(f"::error::{label}: link did not produce a quality menu", flush=True)
                     continue
                 pick = await client.send_message(info.user_id, "1")
-                await asyncio.wait_for(runtime.handlers.on_outgoing(pick), timeout=180)
+                await asyncio.wait_for(runtime.handlers.on_outgoing(SimpleNamespace(message=pick)), timeout=180)
                 if runtime.downloader.delivered <= passed or len(results) <= before:
                     print(f"::error::{label}: media was not delivered", flush=True)
                     continue
