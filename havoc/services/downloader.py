@@ -22,6 +22,7 @@ boots, and says "the downloader is not installed" instead of crashing on a link.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import re
 import shutil
@@ -70,6 +71,7 @@ SITE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ),
     ("tiktok", re.compile(r"^(?:https?://)?(?:www\.|m\.|vm\.|vt\.)?tiktok\.com/", re.I)),
     ("instagram", re.compile(r"^(?:https?://)?(?:www\.)?instagram\.com/(?:reel|reels|p|tv)/", re.I)),
+    ("pinterest", re.compile(r"^https?://(?:(?:[a-z]{2,3}|www)\.)?pinterest\.com/pin/|^https?://pin\.it/", re.I)),
     ("twitter", re.compile(r"^(?:https?://)?(?:www\.|mobile\.)?(?:twitter|x)\.com/\w+/status/", re.I)),
     ("vimeo", re.compile(r"^(?:https?://)?(?:www\.)?vimeo\.com/\d+", re.I)),
     ("reddit", re.compile(r"^(?:https?://)?(?:www\.|old\.)?reddit\.com/r/[^/]+/comments/", re.I)),
@@ -298,8 +300,58 @@ def _inspect_sync(url: str) -> dict[str, Any]:
         return ydl.extract_info(url, download=False)
 
 
+async def _gallery_run(args: list[str], *, timeout: float) -> tuple[int, bytes, bytes]:
+    """Run gallery-dl without a shell; terminate it on timeout or cancellation."""
+    if not shutil.which("gallery-dl"):
+        raise DownloadError("gallery-dl is not installed", kind="not_installed")
+    process = await asyncio.create_subprocess_exec(
+        "gallery-dl", "--config-ignore", "--retries", "1", "--http-timeout", "20", *args,
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+    except (TimeoutError, asyncio.CancelledError):
+        if process.returncode is None:
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
+        await process.communicate()
+        raise
+    return process.returncode or 0, stdout, stderr
+
+
+async def _inspect_pinterest(url: str, *, timeout: float) -> Item:
+    try:
+        status, stdout, stderr = await _gallery_run(["--range", "1", "-j", url], timeout=timeout)
+    except TimeoutError as exc:
+        raise DownloadError("Pinterest did not answer in time", kind="timeout") from exc
+    if status:
+        detail = " ".join(stderr.decode("utf-8", "replace").split())[:200]
+        raise DownloadError(detail or "Pinterest refused the link", kind="unavailable")
+    try:
+        entries = json.loads(stdout)
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise DownloadError("Pinterest returned unreadable metadata", kind="unavailable") from exc
+    entries = entries if isinstance(entries, list) else []
+    media = next(
+        (entry[-1] for entry in entries if isinstance(entry, list) and len(entry) >= 3
+         and entry[0] == 3 and isinstance(entry[-1], dict)),
+        None,
+    )
+    if not media:
+        raise DownloadError("Pinterest returned no downloadable media", kind="unavailable")
+    title = _clean_title(media.get("title") or media.get("description") or f"Pinterest pin {media.get('id', '')}")
+    return Item(
+        url=url, site="pinterest", title=title,
+        qualities=[Quality(index=1, label="original")],
+    )
+
+
 async def inspect(url: str, *, timeout: float = INSPECT_TIMEOUT) -> Item:
     """Ask the site what this link is. Never downloads a byte of media."""
+    if site_of(url) == "pinterest":
+        return await _inspect_pinterest(url, timeout=timeout)
     if not installed():
         raise DownloadError(
             "yt-dlp is not installed, so there is nothing here to download with",
@@ -355,6 +407,32 @@ def _download_sync(url: str, quality: Quality, outdir: Path, *, max_mb: int) -> 
     return path
 
 
+async def _fetch_pinterest(url: str, *, max_mb: int, timeout: float) -> Path:
+    outdir = Path(tempfile.mkdtemp(prefix="havoc-dl-"))
+    try:
+        status, _, stderr = await _gallery_run(
+            ["--range", "1", "--filesize-max", f"{max(1, max_mb)}M", "-D", str(outdir), url],
+            timeout=timeout,
+        )
+        if status:
+            detail = " ".join(stderr.decode("utf-8", "replace").split())[:200]
+            raise DownloadError(detail or "Pinterest refused the download", kind="failed")
+        files = [path for path in outdir.rglob("*") if path.is_file() and not path.name.endswith(".part")]
+        if len(files) != 1:
+            raise DownloadError("Pinterest returned no file within the size limit", kind="failed")
+        path = files[0]
+        size = path.stat().st_size
+        if size == 0 or size > max(1, max_mb) * 1024 * 1024:
+            raise DownloadError("the file is empty or exceeds the size limit", kind="too_big")
+        return path
+    except TimeoutError as exc:
+        _rmtree(outdir)
+        raise DownloadError("the Pinterest download took too long", kind="timeout") from exc
+    except BaseException:
+        _rmtree(outdir)
+        raise
+
+
 async def fetch(
     url: str,
     quality: Quality,
@@ -367,6 +445,8 @@ async def fetch(
     The directory belongs to the caller (it is removed when the send is done),
     so a cancelled download cannot leave a half-file behind in ``data/``.
     """
+    if site_of(url) == "pinterest":
+        return await _fetch_pinterest(url, max_mb=max_mb, timeout=timeout)
     if not installed():
         raise DownloadError("yt-dlp is not installed", kind="not_installed")
     outdir = Path(tempfile.mkdtemp(prefix="havoc-dl-"))
@@ -392,10 +472,11 @@ async def fetch(
             raise DownloadError("nothing arrived", kind="failed")
         path = candidates[0]
     limit = max(1, max_mb) * 1024 * 1024
-    if path.stat().st_size > limit:
+    size = path.stat().st_size
+    if size > limit:
         _rmtree(outdir)
         raise DownloadError(
-            f"the file is {path.stat().st_size // (1024 * 1024)} MB, over the {max_mb} MB ceiling",
+            f"the file is {size // (1024 * 1024)} MB, over the {max_mb} MB ceiling",
             kind="too_big",
         )
     return path

@@ -22,7 +22,38 @@ from havoc.services import downloader as service
 from havoc.services.downloader import DownloadError, Item, Quality
 
 YOUTUBE = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+PINTEREST = "https://www.pinterest.com/pin/543809723775636824/"
 OWN = 42
+
+
+async def test_pinterest_download_runs_gallery_process_and_cleans_up(tmp_path, monkeypatch) -> None:
+    """Exercise the subprocess, parser, original selection and cleanup together."""
+    import os
+
+    executable = tmp_path / "gallery-dl"
+    executable.write_text(
+        '#!/usr/bin/env python3\n'
+        'import json, pathlib, sys\n'
+        'if "-j" in sys.argv:\n'
+        '    print(json.dumps([[3, "https://media.example/image.jpg", '
+        '{"id": "543809723775636824", "extension": "jpg", "title": "sunset"}]]))\n'
+        'else:\n'
+        '    target = pathlib.Path(sys.argv[sys.argv.index("-D") + 1])\n'
+        '    (target / "sunset.jpg").write_bytes(b"image bytes")\n'
+    )
+    executable.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path) + os.pathsep + os.environ.get("PATH", ""))
+    assert service.site_of(PINTEREST) == "pinterest"
+    assert service.site_of("https://pin.it/example") == "pinterest"
+    assert not service.site_of("https://pinterest.com.evil.test/pin/1")
+    item = await service.inspect(PINTEREST)
+    assert item.title == "sunset" and item.quality(1).label == "original"
+    file = await service.fetch(item.url, item.quality(1), max_mb=1)
+    assert file.read_bytes() == b"image bytes"
+    directory = file.parent
+    service.discard(file)
+    assert not directory.exists()
+
 
 
 def _item(url: str = YOUTUBE) -> Item:

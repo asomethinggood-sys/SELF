@@ -6,6 +6,7 @@ Failures are recorded per candidate rather than presented as working features.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import shutil
 import subprocess
@@ -40,6 +41,28 @@ def attempt(name: str, args: list[str], directory: Path, timeout: int = 120) -> 
     return False
 
 
+async def attempt_yura_pinterest(name: str, url: str, suffix: str) -> bool:
+    from havoc.services.downloader import discard, fetch, inspect
+
+    path = None
+    start = time.monotonic()
+    try:
+        item = await inspect(url)
+        quality = item.quality(1)
+        if item.site != "pinterest" or quality is None:
+            raise ValueError("Pinterest item or quality missing")
+        path = await fetch(item.url, quality, max_mb=30, timeout=90)
+        if path.suffix.lower() != suffix or path.stat().st_size == 0:
+            raise ValueError(f"unexpected media: {path.suffix}")
+        print(f"::notice::{name}: Yura fetched {path.stat().st_size} bytes ({suffix}) in {time.monotonic() - start:.1f}s", flush=True)
+        return True
+    except Exception as exc:  # noqa: BLE001 - a probe reports real failures
+        print(f"::warning::{name}: {type(exc).__name__}: {' '.join(str(exc).split())[:300]}", flush=True)
+        return False
+    finally:
+        discard(path)
+
+
 def inspect_gallery(name: str, url: str) -> None:
     """Record only safe metadata shapes, not cookies or private URLs."""
     try:
@@ -66,6 +89,8 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="yura-media-probe-") as temp:
         root = Path(temp)
         results = {
+            "yura_pinterest_video": asyncio.run(attempt_yura_pinterest("yura_pinterest_video", PINTEREST, ".mp4")),
+            "yura_pinterest_image": asyncio.run(attempt_yura_pinterest("yura_pinterest_image", PINTEREST_IMAGE, ".jpg")),
             "youtube_node_ejs_pot": attempt(
                 "youtube_node_ejs_pot",
                 ["yt-dlp", "--no-playlist", "--no-progress", "--no-warnings", "--socket-timeout", "15", "--retries", "0", "--js-runtimes", "node", "--extractor-args", "youtube:player_client=mweb,android_vr", "-f", "best[height<=360]/best", "-o", "sample.%(ext)s", YOUTUBE],
