@@ -16,3 +16,4 @@
 12:49:29Z run 41594657941 · published https://flat-relate-cartridge-doctors.trycloudflare.com
 23:58:48Z run 41693243240 · starting ollama on this runner
 23:59:32Z run 41693243240 · ollama is up behind the gate
+23:59:34Z run 41693243240 · proving it through the gate with a real request
