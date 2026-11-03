@@ -18,6 +18,16 @@ async def test_owner_reply_works_with_persona_automation_off(runtime):
     assert not await runtime.store.feature_enabled("persona")
 
 
+async def test_reply_remains_recognized_when_telegram_cannot_fetch_target(runtime):
+    runtime.permissions.set_self_id(42)
+    await runtime.store.set_feature("persona", False)
+    await runtime.persona_replies._note_own(42, 80)
+    reply = FakeMessage(id=81, chat_id=42, sender_id=42, text="why?", out=True, is_private=True, is_group=False)
+    reply.reply_to_msg_id = 80
+    await runtime.event_engine.emit(normalize_message(reply, self_id=42, prefix="."))
+    assert runtime.client.sent
+
+
 async def test_verified_incoming_owner_can_repeat_her_words(runtime):
     runtime.permissions.set_self_id(42)
     runtime.permissions.add_id(77)

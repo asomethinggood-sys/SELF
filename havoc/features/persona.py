@@ -2242,10 +2242,10 @@ class PersonaReplies:
         if replied is None:
             return Quote(hers=known_hers, message_id=known_id)
         lines: list[str] = []
-        hers = False
-        from_account = False
+        hers = known_hers
+        from_account = known_hers
         author: int | None = getattr(replied, "sender_id", None)
-        pointed_at = getattr(replied, "id", None)
+        pointed_at = getattr(replied, "id", None) or known_id
         current = replied
         for _ in range(max(1, depth)):
             if current is None:
