@@ -7,6 +7,7 @@ import asyncio
 import os
 import sys
 import time
+import urllib.request
 from pathlib import Path
 
 root = Path(sys.argv[1]).resolve()
@@ -32,6 +33,13 @@ async def main():
             else:
                 photos = await asyncio.wait_for(bot.ytdlp_photos(url), timeout=70)
                 print(f"::warning::{label}: SDP yt-dlp failed ({reason}); photo URLs={len(photos)}", flush=True)
+                if label == "Pinterest image" and photos:
+                    photo_url = photos[0] if isinstance(photos[0], str) else photos[0].get("url", "")
+                    def read_photo(url=photo_url):
+                        with urllib.request.urlopen(url, timeout=30) as response:
+                            return response.read(50 * 1024 * 1024 + 1)
+                    picture = await asyncio.to_thread(read_photo)
+                    print(f"::notice::SDP Pinterest photo: {len(picture)} bytes, JPEG={picture.startswith(bytes.fromhex('ffd8ff'))}", flush=True)
         except Exception as exc:
             print(f"::warning::{label}: {type(exc).__name__}", flush=True)
         finally:
