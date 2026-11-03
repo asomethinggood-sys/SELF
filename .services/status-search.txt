@@ -15,3 +15,4 @@
 12:47:01Z run 41594634293 · proving it through the gate with a real request
 12:47:14Z run 41594634293 · published https://valentine-zoloft-logan-margaret.trycloudflare.com
 18:22:51Z run 41640429804 · starting search on this runner
+18:23:46Z run 41640429804 · search is up behind the gate
