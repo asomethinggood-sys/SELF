@@ -315,7 +315,7 @@ class Sender:
             self.logger.warning("react failed: %s", _describe(exc))
             return False
 
-    async def notify_owner(self, text: str, owner_id: int | str | None = None, **kwargs: Any) -> SendResult:
+    async def notify_owner(self, text: str, owner_id: int | None = None, **kwargs: Any) -> SendResult:
         """Deliver to Saved Messages (``me``) unless an explicit target is set.
 
         ``OWNER_IDS`` wins when configured so notifications land in a place the

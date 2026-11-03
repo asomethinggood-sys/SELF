@@ -200,7 +200,7 @@ async def command_run(args: argparse.Namespace) -> int:
     )
     # Each account's own Saved Messages, never another configured owner's DM.
     # Owners control commands; they are not the destination for boot notices.
-    await runtime.notify_owner(banner, owner_id="me")
+    await runtime.notify_owner(banner, owner_id=info.user_id)
 
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()

@@ -160,7 +160,7 @@ async def boot(telegram_factory: type | None = None) -> dict[str, Any]:
         evidence["ran"] = bool(getattr(telegram, "ran", False))
         evidence["disconnected"] = bool(getattr(telegram, "disconnected", False))
         evidence["said"] = (sent[0][1][:400] if sent else "")
-        evidence["owner_told"] = bool(sent) and sent[0][0] == "me"
+        evidence["owner_told"] = bool(sent) and sent[0][0] == OWNER_ID
         evidence["banner_chat"] = sent[0][0] if sent else None
     else:
         evidence["handlers"] = 0
