@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://passage-donors-kay-longest.trycloudflare.com",
-  "run_id": "41464896059",
-  "started_at": "2026-11-02T14:46:03Z",
-  "expires_at": "2026-11-02T20:46:03Z",
+  "url": "https://evaluating-budapest-testimony-minus.trycloudflare.com",
+  "run_id": "41518462686",
+  "started_at": "2026-11-03T01:57:57Z",
+  "expires_at": "2026-11-03T07:57:57Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-02T14:51:19Z",
+  "published_at": "2026-11-03T02:03:04Z",
   "gated": true,
   "public": false
 }
