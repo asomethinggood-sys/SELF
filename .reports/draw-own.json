@@ -24,17 +24,45 @@
       "extra": {
         "account": "own"
       }
+    },
+    {
+      "app": "havoc",
+      "kind": "bot-run",
+      "run_id": "41644470201",
+      "run_attempt": "1",
+      "repository": "asomethinggood-sys/SELF",
+      "branch": "arena/b9a136e7-self",
+      "commit": "116aa0236bd0b52a91f9d5a547ed646751dd77fc",
+      "written_at": "2026-11-03T13:31:46+00:00",
+      "started_at": "",
+      "exit_code": 1,
+      "uptime_seconds": null,
+      "healthy": false,
+      "reason": "Live draw and Telegram integration probe",
+      "log_tail": [
+        "::notice::Directory state: ok; run 41640429750",
+        "::error::.draw: no Telegram upload; generator error:",
+        "::notice::Bot response: .draw a small red lighthouse by the sea",
+        "::notice::Bot response: **✎** · **drawn**",
+        "",
+        "__Drawing “a small red lighthouse by the sea” — 8 steps, about half a minute.__"
+      ],
+      "extra": {
+        "account": "own"
+      }
     }
   ],
+  "runs_seen": 2,
+  "last_healthy_at": "",
   "current": {
     "app": "havoc",
     "kind": "bot-run",
-    "run_id": "41644114901",
+    "run_id": "41644470201",
     "run_attempt": "1",
     "repository": "asomethinggood-sys/SELF",
     "branch": "arena/b9a136e7-self",
-    "commit": "25a0e19fc35cf89e46adc09a1b405890f53f3028",
-    "written_at": "2026-11-03T13:26:27+00:00",
+    "commit": "116aa0236bd0b52a91f9d5a547ed646751dd77fc",
+    "written_at": "2026-11-03T13:31:46+00:00",
     "started_at": "",
     "exit_code": 1,
     "uptime_seconds": null,
@@ -43,12 +71,13 @@
     "log_tail": [
       "::notice::Directory state: ok; run 41640429750",
       "::error::.draw: no Telegram upload; generator error:",
-      "::notice::Bot response: .draw a small red lighthouse by the sea"
+      "::notice::Bot response: .draw a small red lighthouse by the sea",
+      "::notice::Bot response: **✎** · **drawn**",
+      "",
+      "__Drawing “a small red lighthouse by the sea” — 8 steps, about half a minute.__"
     ],
     "extra": {
       "account": "own"
     }
-  },
-  "runs_seen": 1,
-  "last_healthy_at": ""
+  }
 }
