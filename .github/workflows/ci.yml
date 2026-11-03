@@ -11,6 +11,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  comfy-live-probe:
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[comfy-live]')
+    name: Live picture generation through tunnel
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -q -e .
+      - name: Generate a real picture
+        env:
+          SERVICE_SHARED_SECRET: ${{ secrets.SERVICE_SHARED_SECRET }}
+          SERVICE_PUBLIC: ${{ vars.SERVICE_PUBLIC }}
+        run: python scripts/probe_comfy_live.py
+
   comfy-queue-probe:
     if: github.event_name == 'push' && contains(github.event.head_commit.message, '[comfy-queue-probe]')
     name: Picture service queue diagnostic

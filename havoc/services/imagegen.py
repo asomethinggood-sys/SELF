@@ -353,7 +353,18 @@ class ImageGenerator:
         if not prompt_id:
             self.failures += 1
             raise ImageError("the image server did not return a job id", kind="bad_response")
-        image = await self._wait(prompt_id, base=base, headers=headers, timeout=self.timeout)
+        try:
+            image = await self._wait(prompt_id, base=base, headers=headers, timeout=self.timeout)
+        except (ImageError, asyncio.CancelledError):
+            # A timed-out client used to leave its pending job in ComfyUI's
+            # queue, so retries piled up behind pictures nobody was waiting for.
+            # Delete only this prompt if it is still pending; never interrupt the
+            # currently running job, which may belong to somebody else.
+            try:
+                await post_json(f"{base}/queue", {"delete": [prompt_id]}, timeout=10.0, headers=headers)
+            except Exception:  # noqa: BLE001 - cleanup must not hide the original error
+                pass
+            raise
         data = await self._download(image, base=base, headers=headers)
         folder = Path(outdir) if outdir is not None else Path(os.environ.get("TMPDIR", "/tmp"))
         folder.mkdir(parents=True, exist_ok=True)
