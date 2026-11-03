@@ -50,7 +50,9 @@ from .http import HttpError, get_bytes, get_json, post_json, request
 DEFAULT_URL = "http://127.0.0.1:8188"
 #: A 512×512, 20-step image on a mid-range GPU takes 3-10 seconds; a CPU-only
 #: runner takes minutes. The ceiling is the owner's patience for a command.
-DEFAULT_TIMEOUT = 180.0
+# Hosted CPU renders can take several minutes, especially when a job is queued.
+# Keep waiting long enough for the runner to finish instead of abandoning a live job.
+DEFAULT_TIMEOUT = 600.0
 POLL_INTERVAL = 1.5
 
 

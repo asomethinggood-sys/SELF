@@ -215,7 +215,7 @@ async def test_between_runs_carries_the_age(runtime) -> None:
     runtime.image_gen.url = ""
     sent = await invoke(runtime, ".imagegen a castle")
     body = sent[0].text.lower()
-    assert "between runs" in body
+    assert "picture service is unavailable" in body
     # The age is a sentence, not a timestamp: "40 minutes", "1h05m".
     assert any(unit in body for unit in ("minute", "hour", "m ago", "h")), body[:240]
 

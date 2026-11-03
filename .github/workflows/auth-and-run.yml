@@ -586,7 +586,7 @@ jobs:
           fi
           if [ "${LIVE_DRAW_PROBE:-0}" = 1 ]; then
             probe_status=0
-            timeout --signal=INT 8m python scripts/probe_telegram_draw.py 2>&1 | tee "$RUNNER_TEMP/draw-probe.log" || probe_status=${PIPESTATUS[0]}
+            timeout --signal=INT 16m python scripts/probe_telegram_draw.py 2>&1 | tee "$RUNNER_TEMP/draw-probe.log" || probe_status=${PIPESTATUS[0]}
             python scripts/publish_status.py --path .reports/draw-own.json --exit-code "$probe_status" --reason 'Live draw and Telegram integration probe' --log "$RUNNER_TEMP/draw-probe.log" --extra account=own || echo '::warning::Could not publish draw probe result.'
             if [ "$probe_status" -ne 0 ]; then
               echo '::warning::Live draw probe did not pass; starting the userbot anyway.'

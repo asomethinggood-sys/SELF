@@ -24,7 +24,7 @@ from havoc.runtime import Runtime  # noqa: E402
 async def main() -> int:
     # Both bots use one CPU server; avoid queueing both test renders at once.
     if os.environ.get("DRAW_PROBE_ACCOUNT") == "her":
-        await asyncio.sleep(180)
+        await asyncio.sleep(250)
     config, _ = load_config()
     logger = logging.getLogger("live-draw-probe")
     logger.addHandler(logging.NullHandler())
@@ -76,14 +76,15 @@ async def main() -> int:
                 sender_id=info.user_id, out=True, is_private=True,
             )
             started = time.monotonic()
-            await asyncio.wait_for(runtime.handlers.on_outgoing(event), timeout=250)
+            await asyncio.wait_for(runtime.handlers.on_outgoing(event), timeout=700)
             if not uploads:
                 print(f"::error::{alias}: no Telegram upload; generator error: {getattr(runtime.image_gen, 'last_error', '')}", flush=True)
                 for error in runtime.health.errors:
                     print(f"::notice::Handler error: {error['source']} {error['message']}", flush=True)
-                for reply in replies:
-                    if getattr(reply, "text", ""):
-                        print(f"::notice::Bot response: {reply.text[:350]}", flush=True)
+                for reply in replies[1:]:
+                    current = await client.get_messages(info.user_id, ids=reply.id)
+                    if current and getattr(current, "text", ""):
+                        print(f"::notice::Bot response: {current.text[:350]}", flush=True)
                 return 1
             remote = await client.get_messages(info.user_id, ids=uploads[-1].id)
             if not remote or not getattr(remote, "media", None):
