@@ -191,11 +191,14 @@ class Permissions:
             return PermissionDecision(True, code="private_default")
         return PermissionDecision(True, code="default")
 
-    async def can_act(self, chat_id: int, feature: str, *, is_private: bool | None = None) -> PermissionDecision:
-        """Full check used before any automatic outbound action."""
+    async def can_act(
+        self, chat_id: int, feature: str, *, is_private: bool | None = None,
+        require_feature: bool = True,
+    ) -> PermissionDecision:
+        """Check safety and scope; direct owner interactions may bypass the automation switch."""
         if await self.store.emergency_stop():
             return PermissionDecision(False, "emergency stop is active", "emergency_stop")
-        if not await self.store.feature_enabled(feature):
+        if require_feature and not await self.store.feature_enabled(feature):
             return PermissionDecision(False, f"feature '{feature}' is disabled", "feature_disabled")
         if await self.in_quiet_hours(chat_id):
             return PermissionDecision(False, "quiet hours are active", "quiet_hours")

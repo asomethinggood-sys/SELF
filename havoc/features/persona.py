@@ -1468,7 +1468,13 @@ class PersonaReplies:
         picture = await self._picture(event)
         if picture is None and not event.text.strip():
             return
-        if await self._is_own(chat_id, event.message_id, event.text):
+        # A verified incoming owner is not the bot, even if they repeat one of
+        # her words. Text-based loop detection is only meaningful for outgoing
+        # updates from this account.
+        incoming_owner = not event.is_outgoing and self.runtime.permissions.is_owner(event.sender_id)
+        direct_reply = event.is_reply and await self._is_own_id(chat_id, event.reply_to_id)
+        if (await self._is_own_id(chat_id, event.message_id) if incoming_owner or direct_reply else
+                await self._is_own(chat_id, event.message_id, event.text)):
             self._skip("own_message")
             return
         if self._is_command(event.text):
@@ -1487,7 +1493,12 @@ class PersonaReplies:
             # still the strongest signal there is: it keeps ``quote`` meaningful
             # for "what did you mean by that".
             pass
-        decision = await self.runtime.permissions.can_act(chat_id, "persona", is_private=True)
+        explicit_owner_reply = quote.hers and (
+            event.is_outgoing or self.runtime.permissions.is_owner(event.sender_id)
+        )
+        decision = await self.runtime.permissions.can_act(
+            chat_id, "persona", is_private=True, require_feature=not explicit_owner_reply
+        )
         if not decision.allowed:
             self._skip(f"permission:{decision.code}")
             return
@@ -1592,7 +1603,12 @@ class PersonaReplies:
         if picture is None and not event.text.strip():
             self._skip("empty", event)
             return
-        decision = await self.runtime.permissions.can_act(event.chat_id, "persona", is_private=False)
+        explicit_owner_reply = quote.hers and (
+            event.is_outgoing or self.runtime.permissions.is_owner(event.sender_id)
+        )
+        decision = await self.runtime.permissions.can_act(
+            event.chat_id, "persona", is_private=False, require_feature=not explicit_owner_reply
+        )
         if not decision.allowed:
             self._skip(f"permission:{decision.code}", event)
             return
@@ -1712,7 +1728,9 @@ class PersonaReplies:
         if picture is None and not event.text.strip():
             self._skip("empty", event)
             return
-        decision = await self.runtime.permissions.can_act(event.chat_id, "persona", is_private=True)
+        decision = await self.runtime.permissions.can_act(
+            event.chat_id, "persona", is_private=True, require_feature=not quote.hers
+        )
         if not decision.allowed:
             self._skip(f"permission:{decision.code}", event)
             return
@@ -1755,7 +1773,9 @@ class PersonaReplies:
         if event.is_group or event.message_id is None:
             self._skip("not_dm", event)
             return
-        if await self._is_own(event.chat_id, event.message_id, event.text):
+        incoming_owner = not event.is_outgoing and self.runtime.permissions.is_owner(event.sender_id)
+        if (await self._is_own_id(event.chat_id, event.message_id) if incoming_owner else
+                await self._is_own(event.chat_id, event.message_id, event.text)):
             self._skip("own_message", event)
             return
         # A letter may be late and still deserve an answer; a room an hour old
@@ -2208,13 +2228,19 @@ class PersonaReplies:
         if not event.is_reply:
             return Quote()
         message = event.raw
+        # The persisted sent-id ledger can identify the target even if Telegram
+        # temporarily cannot fetch its text (or the replied message was deleted).
+        known_id = getattr(event, "reply_to_id", None)
+        known_hers = await self._is_own_id(event.chat_id, known_id)
         getter = getattr(message, "get_reply_message", None)
         if getter is None:
-            return Quote()
+            return Quote(hers=known_hers, message_id=known_id)
         try:
             replied = await getter()
-        except Exception:  # noqa: BLE001 - a deleted target is not an error
-            return Quote()
+        except Exception:  # noqa: BLE001 - fetching context must not silence a reply
+            return Quote(hers=known_hers, message_id=known_id)
+        if replied is None:
+            return Quote(hers=known_hers, message_id=known_id)
         lines: list[str] = []
         hers = False
         from_account = False
