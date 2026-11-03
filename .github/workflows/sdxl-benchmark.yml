@@ -17,6 +17,13 @@ concurrency:
 
 jobs:
   benchmark:
+    # Load/concurrency experiment only: these are four independent renders,
+    # not a claim that the denoising for one image has been distributed.
+    strategy:
+      fail-fast: false
+      matrix:
+        worker: [0, 1, 2, 3]
+    name: SDXL independent runner ${{ matrix.worker }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:

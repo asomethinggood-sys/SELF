@@ -57,7 +57,8 @@ def main() -> int:
                 generator = ImageGenerator(checkpoint="DreamShaperXL_Lightning.safetensors", width=512, height=512)
                 graph, _, _ = generator._builtin("a lighthouse on a rocky coast at sunrise", 1234, steps=4)
                 graph["3"]["inputs"]["cfg"] = 1.0
-                # DreamShaper XL Lightning recommends Euler / SGM uniform, CFG 1.
+                # A fast Euler / SGM-uniform CPU baseline; the model card also
+                # recommends a DPM solver and CFG 2, which needs its own comparison.
                 graph["3"]["inputs"]["scheduler"] = "sgm_uniform"
                 result = request("/prompt", {"prompt": graph})
                 prompt_id = result.get("prompt_id")
