@@ -8,3 +8,4 @@
 14:24:18Z run 41415692160 · published https://kong-wit-guys-erik.trycloudflare.com
 01:35:29Z run 41515030352 · starting search on this runner
 01:35:35Z run 41515030352 · search is up behind the gate
+01:35:37Z run 41515030352 · proving it through the gate with a real request
