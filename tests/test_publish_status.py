@@ -145,6 +145,27 @@ def test_publishing_lands_on_a_branch_that_moved_while_the_bot_ran(tmp_path: Pat
     assert any(entry.get("run_id") == "other-run" for entry in on_branch["history"]), "the other run was erased"
 
 
+def test_publish_succeeds_without_git_user_configuration(tmp_path: Path, monkeypatch) -> None:
+    """A fresh runner has no git identity; publishing must still reach origin."""
+    origin, work = _repo(tmp_path)
+    _git(work, "config", "--unset", "user.name")
+    _git(work, "config", "--unset", "user.email")
+    _git(work, "config", "user.useConfigOnly", "true")
+    monkeypatch.setattr(publish_status, "ROOT", work)
+    monkeypatch.setenv("GITHUB_REF_NAME", "main")
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for name in ("GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"):
+        monkeypatch.delenv(name, raising=False)
+    payload = publish_status.build(exit_code=0, uptime_seconds=3000, reason="handover")
+    assert publish_status.publish(work / "her-bot-status.json", publish_status.merge_documents({}, payload)) == "committed"
+    _git(work, "fetch", "origin", "main")
+    published = json.loads(_git(work, "show", "FETCH_HEAD:her-bot-status.json"))
+    assert published["current"]["reason"] == "handover"
+    assert _git(work, "show", "-s", "--format=%an <%ae>", "FETCH_HEAD").strip() == "Yura status <status@users.noreply.github.com>"
+    assert origin.is_dir()
+
+
 def test_a_publish_that_cannot_push_says_so(tmp_path: Path, monkeypatch, capsys) -> None:
     """The old code printed `committed locally (push failed)` and exited 0."""
     origin, work = _repo(tmp_path)

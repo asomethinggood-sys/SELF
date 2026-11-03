@@ -46,6 +46,7 @@ def test_the_owner_is_told_that_she_is_awake(booted: dict[str, Any]) -> None:
     """The startup banner is a sentence, never a raw locale key."""
     banner = booted["said"]
     assert booted["owner_told"]
+    assert booted["banner_chat"] == "me"
     from havoc.identity import DISPLAY_NAME
 
     assert "Y.U.R.A 1.9" in banner

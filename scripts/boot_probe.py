@@ -124,7 +124,8 @@ def prepare_environment(data: Path) -> None:
         TIMEZONE="UTC",
         DEFAULT_LANGUAGE="en",
         HAVOC_SNAPSHOT_PUSH="0",
-        OWNER_IDS=str(OWNER_ID),
+        # A second owner must never receive this account's startup message.
+        OWNER_IDS=f"8384455313,{OWNER_ID}",
     )
 
 
@@ -159,7 +160,8 @@ async def boot(telegram_factory: type | None = None) -> dict[str, Any]:
         evidence["ran"] = bool(getattr(telegram, "ran", False))
         evidence["disconnected"] = bool(getattr(telegram, "disconnected", False))
         evidence["said"] = (sent[0][1][:400] if sent else "")
-        evidence["owner_told"] = bool(sent) and sent[0][0] == OWNER_ID
+        evidence["owner_told"] = bool(sent) and sent[0][0] == "me"
+        evidence["banner_chat"] = sent[0][0] if sent else None
     else:
         evidence["handlers"] = 0
         evidence["ran"] = False

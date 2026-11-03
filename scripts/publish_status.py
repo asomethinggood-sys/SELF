@@ -201,7 +201,17 @@ def _commit_on_top(base: str, path: Path) -> tuple[str, str]:
             if step == "write-tree":
                 tree = done.stdout.strip()
     message = f"bot status {datetime.now(UTC):%Y-%m-%dT%H:%MZ} [skip ci]"
-    commit = _git("commit-tree", tree, "-p", base, "-m", message)
+    # Runners do not necessarily have a global git identity. In particular,
+    # her workflow can publish without ever configuring user.name/user.email.
+    # Give this machine-generated commit its own explicit identity rather than
+    # depending on whichever earlier workflow step happened to set one.
+    identity = {
+        "GIT_AUTHOR_NAME": "Yura status",
+        "GIT_AUTHOR_EMAIL": "status@users.noreply.github.com",
+        "GIT_COMMITTER_NAME": "Yura status",
+        "GIT_COMMITTER_EMAIL": "status@users.noreply.github.com",
+    }
+    commit = _git("commit-tree", tree, "-p", base, "-m", message, env=identity)
     if commit.returncode != 0:
         return "", f"commit-tree failed: {commit.stderr.strip()[:200]}"
     return commit.stdout.strip(), ""
@@ -279,13 +289,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     path = Path(args.path)
     if not path.is_absolute():
-        # Everything else here resolves against ROOT: the git plumbing runs with
-        # ``cwd=ROOT`` and ``_repo_path`` is relative to it. A bare
-        # ``bot-status.json`` therefore means *the repository's* status file, not
-        # a file in whatever directory the caller happens to be standing in —
-        # which is how a test run from a checkout overwrote the real record with
-        # ``run_id: local``, and a stale status file is the one thing this script
-        # exists to prevent.
+        # Resolve status paths against the repository, not the caller's cwd.
         path = Path(ROOT) / path
     document = merge_into(path, payload)
     outcome = publish(path, document, commit=not args.no_commit)
