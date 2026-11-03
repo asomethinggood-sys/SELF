@@ -412,7 +412,7 @@ def _publish_region(script: str) -> list[str]:
     stop = next(
         i
         for i, line in enumerate(lines)
-        if line.strip().startswith("python scripts/publish_status.py")
+        if i > wait_index and line.strip().startswith("python scripts/publish_status.py")
     )
     assert start < wait_index < stop, "the run step changed shape; retarget this test"
     return lines[start:stop]

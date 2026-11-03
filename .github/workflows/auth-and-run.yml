@@ -575,7 +575,12 @@ jobs:
             exit 1
           fi
           if [ "${LIVE_DOWNLOADER_PROBE:-0}" = 1 ]; then
-            timeout --signal=INT 6m python scripts/probe_telegram_downloader.py || echo '::warning::Live downloader probe did not pass; starting the userbot anyway.'
+            timeout --signal=INT 6m python scripts/probe_telegram_downloader.py 2>&1 | tee "$RUNNER_TEMP/downloader-probe.log"
+            probe_status=${PIPESTATUS[0]}
+            python scripts/publish_status.py --path .reports/downloader-own.json --exit-code "$probe_status" --reason 'Pinterest Telegram integration probe' --log "$RUNNER_TEMP/downloader-probe.log" --extra account=own || echo '::warning::Could not publish downloader probe result.'
+            if [ "$probe_status" -ne 0 ]; then
+              echo '::warning::Live downloader probe did not pass; starting the userbot anyway.'
+            fi
           fi
           echo "::notice::Starting the userbot for ${BOT_MINUTES} minutes."
           # Fail fast and loudly if the session is rejected.
