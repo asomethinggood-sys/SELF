@@ -15,3 +15,4 @@
 12:49:17Z run 41594657941 · proving it through the gate with a real request
 12:49:29Z run 41594657941 · published https://flat-relate-cartridge-doctors.trycloudflare.com
 18:23:03Z run 41640430175 · starting ollama on this runner
+18:23:57Z run 41640430175 · ollama is up behind the gate
