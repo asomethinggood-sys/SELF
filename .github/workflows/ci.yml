@@ -11,6 +11,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  downloader-auth-preflight:
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[downloader-auth-preflight]')
+    name: Check private downloader service prerequisites
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check shared service secret is configured
+        env:
+          SHARED: ${{ secrets.SERVICE_SHARED_SECRET }}
+        run: |
+          if [ -n "$SHARED" ]; then
+            echo '::notice::A private shared service secret is configured.'
+          else
+            echo '::notice::No private shared service secret is configured; the committed default is not secure.'
+          fi
+
   yura-download-live:
     if: github.event_name == 'push' && contains(github.event.head_commit.message, '[yura-media-probe]')
     name: Real Yura downloader samples
