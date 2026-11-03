@@ -71,10 +71,16 @@ async def main() -> int:
             client.send_message, client.send_file = send, send_file
             alias = ".imagegen" if os.environ.get("DRAW_PROBE_ACCOUNT") == "her" else ".draw"
             message = await client.send_message(info.user_id, f"{alias} a small red lighthouse by the sea")
+            event = SimpleNamespace(
+                message=message, chat_id=info.user_id, id=message.id,
+                sender_id=info.user_id, out=True, is_private=True,
+            )
             started = time.monotonic()
-            await asyncio.wait_for(runtime.handlers.on_outgoing(SimpleNamespace(message=message)), timeout=250)
+            await asyncio.wait_for(runtime.handlers.on_outgoing(event), timeout=250)
             if not uploads:
                 print(f"::error::{alias}: no Telegram upload; generator error: {getattr(runtime.image_gen, 'last_error', '')}", flush=True)
+                for error in runtime.health.errors:
+                    print(f"::notice::Handler error: {error['source']} {error['message']}", flush=True)
                 for reply in replies:
                     if getattr(reply, "text", ""):
                         print(f"::notice::Bot response: {reply.text[:350]}", flush=True)
