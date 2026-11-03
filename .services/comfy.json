@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://evaluating-budapest-testimony-minus.trycloudflare.com",
-  "run_id": "41518462686",
-  "started_at": "2026-11-03T01:57:57Z",
-  "expires_at": "2026-11-03T07:57:57Z",
+  "url": "https://perceived-regard-careful-schedules.trycloudflare.com",
+  "run_id": "41640429750",
+  "started_at": "2026-11-03T13:02:03Z",
+  "expires_at": "2026-11-03T19:02:03Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-03T02:03:04Z",
+  "published_at": "2026-11-03T13:07:03Z",
   "gated": true,
   "public": false
 }
