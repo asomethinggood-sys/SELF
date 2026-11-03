@@ -11,3 +11,4 @@
 14:48:43Z run 41464896059 · proving it through the gate with a real request
 14:51:21Z run 41464896059 · published https://passage-donors-kay-longest.trycloudflare.com
 01:57:57Z run 41518462686 · starting comfy on this runner
+02:00:22Z run 41518462686 · comfy is up behind the gate
