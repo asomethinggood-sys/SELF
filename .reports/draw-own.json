@@ -50,19 +50,46 @@
       "extra": {
         "account": "own"
       }
+    },
+    {
+      "app": "havoc",
+      "kind": "bot-run",
+      "run_id": "41645419430",
+      "run_attempt": "1",
+      "repository": "asomethinggood-sys/SELF",
+      "branch": "arena/b9a136e7-self",
+      "commit": "1ec80e199eef8ea0ef24ca7f81179912702fad38",
+      "written_at": "2026-11-03T13:44:53+00:00",
+      "started_at": "",
+      "exit_code": 1,
+      "uptime_seconds": null,
+      "healthy": false,
+      "reason": "Live draw and Telegram integration probe",
+      "log_tail": [
+        "::notice::Directory state: ok; run 41640429750",
+        "::error::.draw: no Telegram upload; generator error:",
+        "::notice::Bot response: **✎** · **drawn**",
+        "",
+        "__the image took longer than 600s — a bigger GPU, or fewer steps__",
+        "",
+        "__check the server is up · docs/____INSTALL.md__"
+      ],
+      "extra": {
+        "account": "own"
+      }
     }
   ],
-  "runs_seen": 2,
+  "runs_seen": 3,
   "last_healthy_at": "",
   "current": {
     "app": "havoc",
     "kind": "bot-run",
-    "run_id": "41644470201",
+    "run_id": "41645419430",
     "run_attempt": "1",
     "repository": "asomethinggood-sys/SELF",
     "branch": "arena/b9a136e7-self",
-    "commit": "116aa0236bd0b52a91f9d5a547ed646751dd77fc",
-    "written_at": "2026-11-03T13:31:46+00:00",
+    "commit": "1ec80e199eef8ea0ef24ca7f81179912702fad38",
+    "written_at": "2026-11-03T13:44:53+00:00",
     "started_at": "",
     "exit_code": 1,
     "uptime_seconds": null,
@@ -71,10 +98,11 @@
     "log_tail": [
       "::notice::Directory state: ok; run 41640429750",
       "::error::.draw: no Telegram upload; generator error:",
-      "::notice::Bot response: .draw a small red lighthouse by the sea",
       "::notice::Bot response: **✎** · **drawn**",
       "",
-      "__Drawing “a small red lighthouse by the sea” — 8 steps, about half a minute.__"
+      "__the image took longer than 600s — a bigger GPU, or fewer steps__",
+      "",
+      "__check the server is up · docs/____INSTALL.md__"
     ],
     "extra": {
       "account": "own"
