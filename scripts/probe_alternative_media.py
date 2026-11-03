@@ -54,6 +54,10 @@ def probe_cobalt() -> bool:
                 return False
             notice(f"Cobalt downloaded a video: {size} bytes in {time.monotonic() - start:.1f}s")
             return True
+    except urllib.error.HTTPError as exc:
+        detail = exc.read(4096).decode("utf-8", "replace")
+        notice(f"Cobalt HTTP {exc.code}: {detail[:300]}", failure=True)
+        return False
     except (OSError, ValueError, subprocess.TimeoutExpired, urllib.error.URLError) as exc:
         notice(f"Cobalt probe failed: {type(exc).__name__}: {str(exc)[:250]}", failure=True)
         return False
@@ -63,6 +67,17 @@ def probe_spotify() -> bool:
     start = time.monotonic()
     with tempfile.TemporaryDirectory() as temp:
         try:
+            direct = subprocess.run(
+                ["yt-dlp", "--no-playlist", "--no-progress", "--socket-timeout", "15", "--retries", "0", "-f", "bestaudio/best", "-o", "source.%(ext)s", "https://soundcloud.com/alanwalker/faded-1"],
+                cwd=temp, capture_output=True, text=True, timeout=90,
+            )
+            sources = list(Path(temp).glob("source.*"))
+            if direct.returncode == 0 and sources:
+                notice(f"Direct SoundCloud fetch succeeded: {sources[0].stat().st_size} bytes")
+            else:
+                notice(f"Direct SoundCloud fetch failed: {' '.join((direct.stderr or direct.stdout).split())[-250:]}", failure=True)
+            for source in sources:
+                source.unlink()
             result = subprocess.run(
                 ["spotdl", "download", SPOTIFY, "--audio", "soundcloud", "bandcamp", "--output", "{title}.{output-ext}"],
                 cwd=temp, capture_output=True, text=True, timeout=150,
@@ -72,7 +87,7 @@ def probe_spotify() -> bool:
             return False
         files = [p for p in Path(temp).rglob("*") if p.is_file() and p.suffix.lower() in (".mp3", ".m4a", ".opus", ".ogg")]
         if not files:
-            detail = " ".join((result.stderr or result.stdout).split())[-300:]
+            detail = " ".join((result.stdout + " " + result.stderr).split())[-300:]
             notice(f"Spotify matching returned no audio (exit {result.returncode}): {detail}", failure=True)
             return False
         path = files[0]
