@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://valentine-zoloft-logan-margaret.trycloudflare.com",
-  "run_id": "41594634293",
-  "started_at": "2026-11-03T12:46:54Z",
-  "expires_at": "2026-11-03T18:46:54Z",
+  "url": "https://sitting-queensland-allergy-tue.trycloudflare.com",
+  "run_id": "41640429804",
+  "started_at": "2026-11-03T18:22:51Z",
+  "expires_at": "2026-11-04T00:22:51Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-03T12:47:11Z",
+  "published_at": "2026-11-03T18:24:21Z",
   "gated": true,
   "public": false
 }
