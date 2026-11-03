@@ -1,0 +1,52 @@
+{
+  "app": "havoc",
+  "kind": "bot-status",
+  "history": [
+    {
+      "app": "havoc",
+      "kind": "bot-run",
+      "run_id": "41634851172",
+      "run_attempt": "1",
+      "repository": "asomethinggood-sys/SELF",
+      "branch": "arena/b9a136e7-self",
+      "commit": "f21fa2b137c23682ae6a2a71fcf10ba0f5060e22",
+      "written_at": "2026-11-03T12:21:41+00:00",
+      "started_at": "",
+      "exit_code": 0,
+      "uptime_seconds": null,
+      "healthy": true,
+      "reason": "Pinterest Telegram integration probe",
+      "log_tail": [
+        "::notice::Pinterest image: router, quality selection and Telegram upload verified",
+        "::notice::Pinterest video: router, quality selection and Telegram upload verified"
+      ],
+      "extra": {
+        "account": "own"
+      }
+    }
+  ],
+  "current": {
+    "app": "havoc",
+    "kind": "bot-run",
+    "run_id": "41634851172",
+    "run_attempt": "1",
+    "repository": "asomethinggood-sys/SELF",
+    "branch": "arena/b9a136e7-self",
+    "commit": "f21fa2b137c23682ae6a2a71fcf10ba0f5060e22",
+    "written_at": "2026-11-03T12:21:41+00:00",
+    "started_at": "",
+    "exit_code": 0,
+    "uptime_seconds": null,
+    "healthy": true,
+    "reason": "Pinterest Telegram integration probe",
+    "log_tail": [
+      "::notice::Pinterest image: router, quality selection and Telegram upload verified",
+      "::notice::Pinterest video: router, quality selection and Telegram upload verified"
+    ],
+    "extra": {
+      "account": "own"
+    }
+  },
+  "runs_seen": 1,
+  "last_healthy_at": "2026-11-03T12:21:41+00:00"
+}
