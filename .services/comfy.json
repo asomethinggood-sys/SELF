@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://perceived-regard-careful-schedules.trycloudflare.com",
-  "run_id": "41640429750",
-  "started_at": "2026-11-03T13:02:03Z",
-  "expires_at": "2026-11-03T19:02:03Z",
+  "url": "https://where-putting-islands-ceramic.trycloudflare.com",
+  "run_id": "41640687271",
+  "started_at": "2026-11-03T18:38:12Z",
+  "expires_at": "2026-11-04T00:38:12Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-03T13:07:03Z",
+  "published_at": "2026-11-03T18:44:12Z",
   "gated": true,
   "public": false
 }
