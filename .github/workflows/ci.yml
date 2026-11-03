@@ -11,6 +11,44 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  media-engine-probe:
+    # Deliberately opt-in: this downloads public media and contacts third parties.
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[media-engines]')
+    name: Live media engine comparison
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install candidate engines
+        run: |
+          python -m pip install --upgrade yt-dlp yt-dlp-ejs bgutil-ytdlp-pot-provider gallery-dl spotdl
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq ffmpeg
+          fi
+          git clone -q --depth 1 --branch 2.0.2 https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git "$RUNNER_TEMP/pot-provider"
+          cd "$RUNNER_TEMP/pot-provider/server"
+          npm ci --silent
+          npx tsc
+      - name: Try real public links without Telegram
+        run: |
+          node "$RUNNER_TEMP/pot-provider/server/build/main.js" > "$RUNNER_TEMP/pot.log" 2>&1 &
+          provider=$!
+          trap 'kill "$provider" 2>/dev/null || true' EXIT
+          sleep 5
+          if ! kill -0 "$provider" 2>/dev/null; then
+            echo '::error::The token provider failed to start'
+            tail -n 30 "$RUNNER_TEMP/pot.log"
+            exit 1
+          fi
+          python scripts/probe_media_engines.py
+
   youtube-live-probe:
     # Opt in with the push commit message; never fetch media on routine CI runs.
     if: github.event_name == 'push' && contains(github.event.head_commit.message, '[youtube-probe]')
