@@ -1,14 +1,14 @@
 {
   "service": "ollama",
-  "url": "https://flat-relate-cartridge-doctors.trycloudflare.com",
-  "run_id": "41594657941",
-  "started_at": "2026-11-03T12:47:10Z",
-  "expires_at": "2026-11-03T18:47:10Z",
+  "url": "https://serves-hereby-pool-directly.trycloudflare.com",
+  "run_id": "41640430175",
+  "started_at": "2026-11-03T18:23:03Z",
+  "expires_at": "2026-11-04T00:23:03Z",
   "gate_port": 9003,
   "upstream_port": 11434,
   "model": "qwen2.5:0.5b",
   "version": "ollama/qwen2.5:0.5b",
-  "published_at": "2026-11-03T12:49:27Z",
+  "published_at": "2026-11-03T18:25:13Z",
   "gated": true,
   "public": false
 }
