@@ -1,0 +1,46 @@
+{
+  "app": "havoc",
+  "kind": "bot-status",
+  "history": [
+    {
+      "app": "havoc",
+      "kind": "bot-run",
+      "run_id": "41640429899",
+      "run_attempt": "1",
+      "repository": "asomethinggood-sys/SELF",
+      "branch": "arena/b9a136e7-self",
+      "commit": "d618289b00bce7ccc44576c8f348a30e2a0be17b",
+      "written_at": "2026-11-03T13:00:42+00:00",
+      "started_at": "",
+      "exit_code": 0,
+      "uptime_seconds": null,
+      "healthy": true,
+      "reason": "ephemeral Pinterest probe key",
+      "log_tail": [],
+      "extra": {
+        "public_key": "l7Rrt51/ID0WfzIDDdPOcXzmGjuM0cuLiMqeETJ3Axo="
+      }
+    }
+  ],
+  "current": {
+    "app": "havoc",
+    "kind": "bot-run",
+    "run_id": "41640429899",
+    "run_attempt": "1",
+    "repository": "asomethinggood-sys/SELF",
+    "branch": "arena/b9a136e7-self",
+    "commit": "d618289b00bce7ccc44576c8f348a30e2a0be17b",
+    "written_at": "2026-11-03T13:00:42+00:00",
+    "started_at": "",
+    "exit_code": 0,
+    "uptime_seconds": null,
+    "healthy": true,
+    "reason": "ephemeral Pinterest probe key",
+    "log_tail": [],
+    "extra": {
+      "public_key": "l7Rrt51/ID0WfzIDDdPOcXzmGjuM0cuLiMqeETJ3Axo="
+    }
+  },
+  "runs_seen": 1,
+  "last_healthy_at": "2026-11-03T13:00:42+00:00"
+}
