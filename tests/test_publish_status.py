@@ -156,3 +156,31 @@ def test_a_publish_that_cannot_push_says_so(tmp_path: Path, monkeypatch, capsys)
     printed = capsys.readouterr().out
     assert code == 1, printed
     assert "push failed" in printed
+
+
+def test_a_bare_path_is_the_repositorys_file_not_the_callers_directory(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A relative ``--path`` belongs to the repository, not to the current directory.
+
+    ``main()`` used to hand the bare default straight to ``Path``, so running the
+    suite from a checkout rewrote the committed ``bot-status.json`` — ten real run
+    records replaced by one ``run_id: local`` entry. The file is the only witness
+    of whether the bots lived, so no test may be able to reach it.
+    """
+    checkout = Path(__file__).resolve().parent.parent
+    real = checkout / "bot-status.json"
+    before = real.read_bytes()
+
+    _origin, work = _repo(tmp_path)
+    monkeypatch.setattr(publish_status, "ROOT", work)
+    monkeypatch.setenv("GITHUB_REF_NAME", "main")
+
+    code = publish_status.main(
+        ["--path", "bot-status.json", "--exit-code", "0", "--uptime", "3000",
+         "--reason", "stepped aside", "--no-commit"]
+    )
+    assert code == 0
+    written = json.loads((work / "bot-status.json").read_text())
+    assert written["current"]["reason"] == "stepped aside"
+    assert real.read_bytes() == before, "the repository's own status file was rewritten"
