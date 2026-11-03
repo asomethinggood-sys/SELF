@@ -13,7 +13,7 @@ import urllib.request
 from pathlib import Path
 
 YOUTUBE = "https://www.youtube.com/watch?v=wDchsz8nmbo"
-SPOTIFY = "https://open.spotify.com/track/2F2bGLhWQKalzkIaQM5hZu"
+SPOTIFY = "https://open.spotify.com/track/0Id4mflvticjdKDRkyEkWZ"
 
 
 def notice(message: str, *, failure: bool = False) -> None:
@@ -68,7 +68,7 @@ def probe_spotify() -> bool:
     with tempfile.TemporaryDirectory() as temp:
         try:
             direct = subprocess.run(
-                ["yt-dlp", "--no-playlist", "--no-progress", "--socket-timeout", "15", "--retries", "0", "-f", "bestaudio/best", "-o", "source.%(ext)s", "https://soundcloud.com/alanwalker/faded-1"],
+                ["yt-dlp", "--no-playlist", "--no-progress", "--socket-timeout", "15", "--retries", "0", "-f", "bestaudio/best", "-o", "source.%(ext)s", "https://soundcloud.com/nocopyrightsounds/elektronomia-sky-high-ncs-release"],
                 cwd=temp, capture_output=True, text=True, timeout=90,
             )
             sources = list(Path(temp).glob("source.*"))

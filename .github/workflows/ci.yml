@@ -28,9 +28,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker run -d --rm --name yura-cobalt -p 127.0.0.1:9000:9000 \
-            -e API_URL=http://127.0.0.1:9000/ ghcr.io/imputnet/cobalt:latest
-          trap 'docker logs yura-cobalt --tail 30 || true; docker stop yura-cobalt || true' EXIT
+          docker network create yura-media >/dev/null
+          trap 'docker stop yura-cobalt yura-youtube-session 2>/dev/null || true; docker network rm yura-media 2>/dev/null || true' EXIT
+          docker run -d --rm --name yura-youtube-session --network yura-media \
+            -p 127.0.0.1:8080:8080 ghcr.io/imputnet/yt-session-generator:webserver
+          for n in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/token >/dev/null; then break; fi
+            sleep 2
+          done
+          if ! curl -fsS http://127.0.0.1:8080/token >/dev/null; then
+            echo '::error::YouTube session generator did not become ready'
+            exit 1
+          fi
+          docker run -d --rm --name yura-cobalt --network yura-media -p 127.0.0.1:9000:9000 \
+            -e API_URL=http://127.0.0.1:9000/ \
+            -e YOUTUBE_SESSION_SERVER=http://yura-youtube-session:8080/ ghcr.io/imputnet/cobalt:latest
           for n in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:9000/ >/dev/null; then break; fi
             sleep 2
