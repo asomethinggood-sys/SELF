@@ -317,6 +317,18 @@ async def test_match_source_is_visible_in_menu_and_caption(runtime, fake_media, 
     assert "not Spotify audio" in runtime.downloader._caption(item, item.qualities[-1], "sound only")
 
 
+async def test_inspection_error_does_not_ask_for_a_menu_number(runtime, fake_media, monkeypatch) -> None:
+    async def fail(url, *, timeout=None):
+        raise DownloadError("Pinterest returned no downloadable media", kind="unavailable")
+
+    monkeypatch.setattr(service, "inspect", fail)
+    await _enable(runtime)
+    await _send(runtime, PINTEREST)
+    assert "Pinterest returned no downloadable media" in _plain(runtime)
+    assert "pick another number" not in _plain(runtime)
+    assert not runtime.downloader.sessions
+
+
 async def test_sound_only_is_its_own_choice(runtime, fake_media) -> None:
     await _enable(runtime)
     await _send(runtime, YOUTUBE)

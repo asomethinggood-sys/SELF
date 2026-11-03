@@ -119,7 +119,7 @@
   "alias.loop": "That would create a loop.",
   "alias.removed": "Alias {alias} removed.",
   "alias.reserved": "“{name}” is a reserved command name.",
-  "art.between_runs": "The picture server is between runs — its last address went quiet {age}. Nothing is broken; the next runner publishes a new one, and a picture takes {fast} seconds then, or {slow} for a careful one.",
+  "art.between_runs": "The picture service is unavailable. Its last address was published {age}; the runner may be starting or may have failed. Check .services for its status.",
   "art.never_published": "The picture runner has never published an address — it has not come up yet. `.services` shows it the moment it does, and `.draw` works from then on with nothing to configure.",
   "autoreply.added": "Auto-reply #{id} saved for “{pattern}”.",
   "autoreply.cleared": "Deleted {count} auto-reply rule(s).",

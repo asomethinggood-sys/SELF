@@ -1374,7 +1374,10 @@ async def probe_downloader() -> list[dict[str, Any]]:
             ],
         )
 
-    original = {name: getattr(service, name) for name in ("installed", "inspect", "fetch", "thumbnail", "discard")}
+    original = {
+        name: getattr(service, name)
+        for name in ("installed", "inspect", "fetch", "thumbnail", "discard", "validate_file")
+    }
     state: dict[str, Any] = {"fetched": [], "asked": 0, "calls": 0}
 
     class Model:
@@ -1400,6 +1403,11 @@ async def probe_downloader() -> list[dict[str, Any]]:
     async def _thumb(url: str, **_kwargs: Any) -> bytes:
         return b"\x89PNG probe"
 
+    async def _validate(*_args: Any, **_kwargs: Any) -> None:
+        # This probe stubs media fetching; real media validation is tested separately.
+        return None
+
+    service.validate_file = _validate  # type: ignore[assignment]
     service.installed = lambda: True  # type: ignore[assignment]
     service.inspect = _inspect  # type: ignore[assignment]
     service.fetch = _fetch  # type: ignore[assignment]
@@ -1465,6 +1473,7 @@ async def probe_downloader() -> list[dict[str, Any]]:
 
             # 3 — a stranger's link is not an order
             state["fetched"].clear()
+            sessions_before = set(runtime.downloader.sessions)
             stranger = FakeMessage(
                 id=9799,
                 chat_id=8899,
@@ -1477,7 +1486,7 @@ async def probe_downloader() -> list[dict[str, Any]]:
             findings = []
             if state["fetched"]:
                 findings.append("downloaded for a stranger")
-            if runtime.downloader.sessions:
+            if set(runtime.downloader.sessions) != sessions_before:
                 findings.append("a stranger opened a menu")
             results.append({"case": "a link from a stranger", "findings": findings})
 

@@ -409,7 +409,7 @@ class Downloader:
             downloader.discard(path)
             self.failed += 1
             session.busy = False
-            await self._replace(event, notice, self._error_card(exc, language))
+            await self._replace(event, notice, self._error_card(exc, language, can_pick=True))
             return
         except asyncio.CancelledError:
             downloader.discard(path)
@@ -496,7 +496,7 @@ class Downloader:
         except SendError as exc:
             self.logger.debug("downloader: working message left behind: %s", exc)
 
-    def _error_card(self, exc: DownloadError, language: str) -> str:
+    def _error_card(self, exc: DownloadError, language: str, *, can_pick: bool = False) -> str:
         detail = " ".join(str(exc).split())[:200]
         lines = [f"◈ {bold(escape(self._t('download.failed_title', language, default='')))}"]
         lines.append(drawn_rule(width=9))
@@ -505,7 +505,7 @@ class Downloader:
         hint = self._hint_for(exc, language)
         if hint:
             lines.append(italic(escape(hint)))
-        if exc.kind in {"timeout", "unavailable", "failed"}:
+        if can_pick and exc.kind in {"timeout", "unavailable", "failed"}:
             lines.append(
                 italic(escape(self._t("download.retry_hint", language, default="")))
             )

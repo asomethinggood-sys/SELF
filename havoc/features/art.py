@@ -199,7 +199,7 @@ def _draw_info(ctx: CommandContext, generator: Any) -> str:
                         )
                     ),
                     ui.footer(
-                        ctx.t("draw.hosted_hint" if never_published else "draw.setup_hint")
+                        ctx.t("draw.hosted_hint")
                     ),
                 ]
             )
