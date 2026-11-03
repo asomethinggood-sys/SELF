@@ -11,6 +11,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  yura-download-live:
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[yura-media-probe]')
+    name: Real Yura downloader samples
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Yura downloader
+        run: |
+          python -m pip install -e '.[download]'
+          if ! command -v ffprobe >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq ffmpeg
+          fi
+      - name: Download and validate public samples
+        run: python scripts/probe_yura_sites.py
+
   sdp-live-probe:
     if: github.event_name == 'push' && contains(github.event.head_commit.message, '[sdp-probe]')
     name: Live upstream SDP engine probe

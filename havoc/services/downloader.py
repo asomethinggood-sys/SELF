@@ -69,12 +69,25 @@ SITE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
             re.I,
         ),
     ),
-    ("tiktok", re.compile(r"^(?:https?://)?(?:www\.|m\.|vm\.|vt\.)?tiktok\.com/", re.I)),
-    ("instagram", re.compile(r"^(?:https?://)?(?:www\.)?instagram\.com/(?:reel|reels|p|tv)/", re.I)),
+    ("tiktok", re.compile(r"^(?:https?://)?(?:www\.|m\.|vm\.|vt\.)?(?:tiktok|douyin)\.com/", re.I)),
+    ("instagram", re.compile(r"^(?:https?://)?(?:www\.|m\.)?(?:instagram\.com|instagr\.am)/(?:reel|reels|p|tv)/", re.I)),
     ("pinterest", re.compile(r"^https?://(?:(?:[a-z]{2,3}|www)\.)?pinterest\.com/pin/|^https?://pin\.it/", re.I)),
     ("twitter", re.compile(r"^(?:https?://)?(?:www\.|mobile\.)?(?:twitter|x)\.com/\w+/status/", re.I)),
-    ("vimeo", re.compile(r"^(?:https?://)?(?:www\.)?vimeo\.com/\d+", re.I)),
-    ("reddit", re.compile(r"^(?:https?://)?(?:www\.|old\.)?reddit\.com/r/[^/]+/comments/", re.I)),
+    ("vimeo", re.compile(r"^(?:https?://)?(?:www\.|player\.)?vimeo\.com/(?:video/)?\d+", re.I)),
+    ("reddit", re.compile(r"^(?:https?://)?(?:(?:www\.|old\.)?reddit\.com/r/[^/]+/comments/|redd\.it/)", re.I)),
+    # The named services in SDP's registry. Keep these host-specific: a generic
+    # webpage extractor would turn an ordinary URL into an unexpected download.
+    ("facebook", re.compile(r"^https?://(?:www\.|m\.|web\.)?(?:facebook\.com|fb\.watch)/", re.I)),
+    ("tumblr", re.compile(r"^https?://(?:www\.|[a-z0-9-]+\.)?tumblr\.com/", re.I)),
+    ("snapchat", re.compile(r"^https?://(?:www\.)?snapchat\.com/", re.I)),
+    ("bluesky", re.compile(r"^https?://(?:www\.)?bsky\.app/", re.I)),
+    ("dailymotion", re.compile(r"^https?://(?:www\.)?(?:dailymotion\.com|dai\.ly)/", re.I)),
+    ("bilibili", re.compile(r"^https?://(?:www\.|m\.)?(?:bilibili\.(?:com|tv)|b23\.tv)/", re.I)),
+    ("twitch", re.compile(r"^https?://(?:www\.|m\.|clips\.)?twitch\.tv/", re.I)),
+    ("soundcloud", re.compile(r"^https?://(?:www\.|m\.)?(?:soundcloud\.com|snd\.sc)/", re.I)),
+    ("bandcamp", re.compile(r"^https?://(?:www\.|[a-z0-9-]+\.)?bandcamp\.com/", re.I)),
+    ("spotify", re.compile(r"^https?://open\.spotify\.com/(?:intl-[a-z]+/)?track/[a-z0-9]+(?:[/?#]|$)", re.I)),
+    ("deezer", re.compile(r"^https?://(?:www\.)?deezer\.com/(?:[a-z]{2}/)?track/\d+(?:[/?#]|$)", re.I)),
 )
 URL_RE = re.compile(r"https?://[^\s<>\"']+", re.I)
 
@@ -173,6 +186,8 @@ class Item:
     uploader: str = ""
     duration: float = 0.0
     thumbnail: str = ""
+    #: Search matches from another provider are not the source's own audio.
+    source_note: str = ""
     qualities: list[Quality] = field(default_factory=list)
     raw: dict[str, Any] = field(default_factory=dict)
     #: Some sites hand back a whole playlist; only the first entry is offered.
@@ -348,17 +363,39 @@ async def _inspect_pinterest(url: str, *, timeout: float) -> Item:
     )
 
 
+async def _music_query(url: str, site: str, *, timeout: float) -> str:
+    """Read public oEmbed metadata, as SDP does; never access protected audio."""
+    from .http import get_json
+
+    endpoint = "https://open.spotify.com/oembed" if site == "spotify" else "https://api.deezer.com/oembed"
+    try:
+        data = await get_json(endpoint, params={"url": url}, timeout=min(timeout, 20.0))
+    except Exception as exc:  # noqa: BLE001 - remote metadata providers fail independently
+        raise DownloadError(f"{site.title()} track metadata is unavailable", kind="unavailable") from exc
+    if not isinstance(data, dict) or not isinstance(data.get("title"), str) or not data["title"].strip():
+        raise DownloadError(f"{site.title()} returned no track title", kind="unavailable")
+    author = data.get("author_name") if isinstance(data.get("author_name"), str) else ""
+    return " ".join((data["title"] + " " + author).split())[:300]
+
+
 async def inspect(url: str, *, timeout: float = INSPECT_TIMEOUT) -> Item:
-    """Ask the site what this link is. Never downloads a byte of media."""
-    if site_of(url) == "pinterest":
+    """Ask the site what a link is; Spotify/Deezer search for a YouTube match."""
+    site = site_of(url)
+    if site == "pinterest":
         return await _inspect_pinterest(url, timeout=timeout)
     if not installed():
         raise DownloadError(
             "yt-dlp is not installed, so there is nothing here to download with",
             kind="not_installed",
         )
+    source_note = ""
+    lookup_url = url
+    if site in {"spotify", "deezer"}:
+        query = await _music_query(url, site, timeout=timeout)
+        lookup_url = f"ytsearch1:{query}"
+        source_note = f"YouTube match for {site.title()} — may differ; not {site.title()} audio"
     try:
-        info = await asyncio.wait_for(asyncio.to_thread(_inspect_sync, url), timeout=timeout)
+        info = await asyncio.wait_for(asyncio.to_thread(_inspect_sync, lookup_url), timeout=timeout)
     except TimeoutError as exc:
         raise DownloadError("the site did not answer in time", kind="timeout") from exc
     except Exception as exc:  # noqa: BLE001 - yt-dlp raises a zoo of its own errors
@@ -367,24 +404,24 @@ async def inspect(url: str, *, timeout: float = INSPECT_TIMEOUT) -> Item:
     if not isinstance(info, dict):
         raise DownloadError("the site returned nothing for that link", kind="unavailable")
     entries = info.get("entries")
-    if entries:
+    if entries is not None:
         first = next((entry for entry in entries if entry), None)
         if not isinstance(first, dict):
-            raise DownloadError("that link is a playlist with nothing playable", kind="unavailable")
+            raise DownloadError("no playable match was found" if source_note else "that link is a playlist with nothing playable", kind="unavailable")
         info = first
-        count = 1
-    else:
-        count = 1
+    resolved = str(info.get("webpage_url") or "")
+    if source_note and site_of(resolved) != "youtube":
+        raise DownloadError("no playable YouTube match was found", kind="unavailable")
     return Item(
-        url=str(info.get("webpage_url") or url),
-        site=site_of(url) or site_of(str(info.get("webpage_url") or "")),
+        url=resolved or url,
+        site=site or site_of(resolved),
         title=_clean_title(info.get("title")),
         uploader=" ".join(str(info.get("uploader") or info.get("channel") or "").split())[:80],
         duration=float(info.get("duration") or 0),
         thumbnail=str(info.get("thumbnail") or ""),
-        qualities=build_qualities(info),
+        source_note=source_note,
+        qualities=[Quality(index=1, label="sound only", audio_only=True, filesize=_estimated_audio(info))] if source_note else build_qualities(info),
         raw={k: info.get(k) for k in ("id", "ext", "webpage_url", "channel") if info.get(k)},
-        entries=count,
     )
 
 

@@ -349,6 +349,8 @@ class Downloader:
         ]
         if facts:
             body.append(italic(" · ".join(facts)))
+        if item.source_note:
+            body.append(italic(escape(item.source_note)))
         body.append(panel(rows))
         body.append(
             italic(escape(self._t("download.menu_hint", language, default="")))
@@ -407,12 +409,14 @@ class Downloader:
             await self._replace(event, notice, self._error_card(exc, language))
             return
         try:
-            await self.runtime.sender.send_media(
+            result = await self.runtime.sender.send_media(
                 event.chat_id,
                 str(path),
                 caption=self._caption(session.item, quality, label),
                 reply_to=event.message_id,
             )
+            if result.dry_run or not result.ok:
+                raise SendError("the file was not uploaded (dry run or unsuccessful send)", kind="upload")
             self.delivered += 1
             session.busy = False
             self.sessions.pop(event.chat_id, None)
@@ -443,6 +447,8 @@ class Downloader:
         )
         if line:
             parts.append(italic(line))
+        if item.source_note:
+            parts.append(italic(escape(item.source_note)))
         return "\n".join(parts)
 
     # ------------------------------------------------------------------

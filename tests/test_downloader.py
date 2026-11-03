@@ -26,6 +26,53 @@ PINTEREST = "https://www.pinterest.com/pin/543809723775636824/"
 OWN = 42
 
 
+@pytest.mark.parametrize(("url", "site"), [
+    ("https://www.facebook.com/watch/?v=1", "facebook"),
+    ("https://example.tumblr.com/post/123", "tumblr"),
+    ("https://www.snapchat.com/spotlight/123", "snapchat"),
+    ("https://bsky.app/profile/example/post/1", "bluesky"),
+    ("https://dai.ly/abcdef", "dailymotion"),
+    ("https://b23.tv/abcdef", "bilibili"),
+    ("https://clips.twitch.tv/ClipName", "twitch"),
+    ("https://soundcloud.com/artist/title", "soundcloud"),
+    ("https://artist.bandcamp.com/track/title", "bandcamp"),
+    ("https://open.spotify.com/intl-en/track/0Id4mflvticjdKDRkyEkWZ?si=abc", "spotify"),
+    ("https://www.deezer.com/en/track/12345", "deezer"),
+])
+def test_sdp_named_service_links(url, site) -> None:
+    assert service.site_of(url) == site
+    assert service.is_link(url)
+    assert not service.site_of(url.replace(".com/", ".com.evil.test/")) if ".com/" in url else True
+
+
+async def test_spotify_uses_labeled_youtube_match_not_spotify_audio(monkeypatch) -> None:
+    async def metadata(url, site, *, timeout):
+        return "artist track"
+
+    def inspect(url):
+        assert url == "ytsearch1:artist track"
+        return {"entries": [{"webpage_url": YOUTUBE, "title": "possible match", "formats": []}]}
+
+    monkeypatch.setattr(service, "installed", lambda: True)
+    monkeypatch.setattr(service, "_music_query", metadata)
+    monkeypatch.setattr(service, "_inspect_sync", inspect)
+    item = await service.inspect("https://open.spotify.com/track/0Id4mflvticjdKDRkyEkWZ")
+    assert item.site == "spotify" and item.url == YOUTUBE
+    assert item.quality(1).audio_only
+    assert "YouTube match" in item.source_note and "not Spotify audio" in item.source_note
+
+
+async def test_empty_spotify_match_is_reported(monkeypatch) -> None:
+    async def metadata(url, site, *, timeout):
+        return "artist track"
+
+    monkeypatch.setattr(service, "installed", lambda: True)
+    monkeypatch.setattr(service, "_music_query", metadata)
+    monkeypatch.setattr(service, "_inspect_sync", lambda _: {"entries": []})
+    with pytest.raises(DownloadError, match="no playable match"):
+        await service.inspect("https://open.spotify.com/track/0Id4mflvticjdKDRkyEkWZ")
+
+
 async def test_pinterest_download_runs_gallery_process_and_cleans_up(tmp_path, monkeypatch) -> None:
     """Exercise the subprocess, parser, original selection and cleanup together."""
     import os
@@ -215,6 +262,36 @@ async def test_a_number_downloads_and_sends_the_file_then_forgets_the_menu(runti
     assert not state.sessions
     # ...and the temporary directory is not left behind.
     assert fake_media["discarded"]
+
+
+async def test_dry_run_upload_is_not_counted_as_delivered(runtime, fake_media, monkeypatch) -> None:
+    from havoc.services.sender import SendResult
+
+    await _enable(runtime)
+    await _send(runtime, YOUTUBE)
+
+    async def simulated(*args, **kwargs):
+        return SendResult(ok=True, dry_run=True)
+
+    monkeypatch.setattr(runtime.sender, "send_media", simulated)
+    await _send(runtime, "2")
+    assert runtime.downloader.delivered == 0
+    assert runtime.downloader.failed == 1
+    assert fake_media["discarded"]
+
+
+async def test_match_source_is_visible_in_menu_and_caption(runtime, fake_media, monkeypatch) -> None:
+    item = _item()
+    item.source_note = "YouTube match for Spotify — may differ; not Spotify audio"
+
+    async def inspect(url, *, timeout=None):
+        return item
+
+    monkeypatch.setattr(service, "inspect", inspect)
+    await _enable(runtime)
+    await _send(runtime, YOUTUBE)
+    assert "not Spotify audio" in _plain(runtime)
+    assert "not Spotify audio" in runtime.downloader._caption(item, item.qualities[-1], "sound only")
 
 
 async def test_sound_only_is_its_own_choice(runtime, fake_media) -> None:
