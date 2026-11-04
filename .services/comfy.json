@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://feeling-gis-norfolk-seas.trycloudflare.com",
-  "run_id": "41871758476",
-  "started_at": "2026-11-04T17:02:45Z",
-  "expires_at": "2026-11-04T23:02:45Z",
+  "url": "https://minimize-fails-omaha-james.trycloudflare.com",
+  "run_id": "41873499421",
+  "started_at": "2026-11-04T22:38:47Z",
+  "expires_at": "2026-11-05T04:38:47Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-04T17:07:41Z",
+  "published_at": "2026-11-04T22:43:39Z",
   "gated": true,
   "public": false
 }
