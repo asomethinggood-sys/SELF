@@ -366,7 +366,10 @@ jobs:
           fi
           grep -E '^(FAILED|ERROR) |^E ' pytest.log | head -10 | while IFS= read -r line; do
             echo "::error::${line//$'\n'/ }"
-          done
+          done || true
+          grep -E '^Fatal Python error:|^Current thread |^  File "' pytest.log | head -20 | while IFS= read -r line; do
+            echo "::error::${line//$'\n'/ }"
+          done || true
 
       # Every registered command, dispatched for real with a battery of arguments,
       # plus locale coverage, feature switches, tool schemas and dead code. Static
