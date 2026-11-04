@@ -7,6 +7,7 @@ short-lived OIDC token scoped to the configured repo, branch and workflow.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import sys
@@ -59,8 +60,51 @@ def allowed(method: str, path: str) -> bool:
             return not parts.query
         if clean == "/view":
             query = urllib.parse.parse_qs(parts.query, strict_parsing=True)
-            return set(query) <= {"filename", "subfolder", "type"} and bool(query.get("filename"))
+            if set(query) - {"filename", "subfolder", "type"} or any(len(v) != 1 for v in query.values()):
+                return False
+            filename = query.get("filename", [""])[0]
+            return bool(re.fullmatch(r"[a-zA-Z0-9_.-]{1,200}\.png", filename)) and query.get("type", ["output"]) == ["output"] and not query.get("subfolder", [""])[0]
     return method == "POST" and not parts.query and clean in {"/prompt", "/queue"}
+
+
+def permitted_body(path: str, body: bytes) -> bool:
+    """Permit only our fixed SDXL graph or deletion of specific pending IDs.
+
+    Possession of a bot job token must not confer arbitrary ComfyUI graph or
+    extension execution. A caller cannot alter node types, model, or links.
+    """
+    try:
+        value = json.loads(body)
+        if path == "/queue":
+            return (isinstance(value, dict) and set(value) == {"delete"} and
+                    isinstance(value["delete"], list) and 1 <= len(value["delete"]) <= 4 and
+                    all(isinstance(x, str) and re.fullmatch(r"[a-zA-Z0-9-]{1,80}", x) for x in value["delete"]))
+        if path != "/prompt" or not isinstance(value, dict) or set(value) != {"prompt"}:
+            return False
+        graph = value["prompt"]
+        if not isinstance(graph, dict) or set(graph) != {str(n) for n in range(3, 11)}:
+            return False
+        sampler = graph["3"]["inputs"]
+        latent = graph["5"]["inputs"]
+        positive, negative = graph["6"]["inputs"]["text"], graph["7"]["inputs"]["text"]
+        overlap = graph["10"]["inputs"]["overlap"]
+        seed = sampler["seed"]
+        if (type(seed) is not int or not 0 <= seed < 2**64 or
+                not isinstance(positive, str) or not 1 <= len(positive) <= 4000 or
+                not isinstance(negative, str) or len(negative) > 4000 or
+                type(overlap) is not int or overlap not in {8, 16} or
+                type(latent["width"]) is not int or type(latent["height"]) is not int or
+                latent["width"] != latent["height"] or latent["width"] not in {512, 768}):
+            return False
+        from havoc.services.imagegen import ImageGenerator
+        generator = ImageGenerator(checkpoint="DreamShaperXL_Lightning.safetensors", width=latent["width"],
+                                   height=latent["height"], negative=negative)
+        expected, _, _ = generator._builtin(positive, seed, steps=4)
+        expected["3"]["inputs"].update({"cfg": 1.0, "scheduler": "sgm_uniform", "model": ["10", 0]})
+        expected["10"] = {"class_type": "FourWorkerSDXL", "inputs": {"model": ["4", 0], "overlap": overlap}}
+        return graph == expected
+    except (ValueError, TypeError, KeyError, AttributeError):
+        return False
 
 
 class Gate(BaseHTTPRequestHandler):
@@ -103,7 +147,7 @@ class Gate(BaseHTTPRequestHandler):
                 self.send_error(413)
                 return
             body = self.rfile.read(size)
-            if len(body) != size:
+            if len(body) != size or not permitted_body(self.path, body):
                 self.send_error(400)
                 return
         req = urllib.request.Request("http://127.0.0.1:8188" + self.path, method=method, data=body,

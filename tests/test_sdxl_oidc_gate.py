@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives import hashes  # noqa: E402
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 from scripts.sdxl_oidc import AUDIENCE, ISSUER, verify
-from scripts.sdxl_oidc_gate import allowed
+from scripts.sdxl_oidc_gate import allowed, permitted_body
 
 
 def _b64(raw: bytes) -> str:
@@ -54,3 +54,20 @@ def test_gateway_only_forwards_expected_image_routes():
     assert not allowed("GET", "/queue")
     assert not allowed("POST", "/prompt?x=y")
     assert not allowed("GET", "/history/../../prompt")
+    assert not allowed("GET", "/view?filename=../../secret.png")
+    assert not allowed("GET", "/view?filename=example.png&subfolder=secrets")
+
+
+def test_gateway_restricts_prompt_to_fixed_distributed_graph():
+    from havoc.services.imagegen import ImageGenerator
+
+    generator = ImageGenerator(checkpoint="DreamShaperXL_Lightning.safetensors", width=768, height=768)
+    graph, _, _ = generator._builtin("a lighthouse", 42, steps=4)
+    graph["3"]["inputs"].update({"cfg": 1.0, "scheduler": "sgm_uniform", "model": ["10", 0]})
+    graph["10"] = {"class_type": "FourWorkerSDXL", "inputs": {"model": ["4", 0], "overlap": 8}}
+    encode = lambda: json.dumps({"prompt": graph}).encode()  # noqa: E731
+    assert permitted_body("/prompt", encode())
+    graph["10"]["class_type"] = "ArbitraryCustomNode"
+    assert not permitted_body("/prompt", encode())
+    assert permitted_body("/queue", b'{"delete":["123-abcd"]}')
+    assert not permitted_body("/queue", b'{"clear":true}')
