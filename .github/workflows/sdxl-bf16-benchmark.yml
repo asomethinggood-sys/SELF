@@ -1,0 +1,47 @@
+name: Experimental SDXL CPU precision benchmark
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/sdxl-bf16-benchmark.yml
+      - scripts/benchmark_sdxl_bf16.py
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prepare isolated CPU model
+        run: |
+          set -euo pipefail
+          export COMFY_DIR="$GITHUB_WORKSPACE/.runtime/sdxl-bf16/ComfyUI"
+          git clone --depth 1 --branch v0.43.2 https://github.com/comfyanonymous/ComfyUI.git "$COMFY_DIR"
+          python -m pip install -q --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          python -m pip install -q --no-cache-dir -r "$COMFY_DIR/requirements.txt" filelock cryptography Pillow
+          mkdir -p "$COMFY_DIR/models/checkpoints"
+          dest="$COMFY_DIR/models/checkpoints/DreamShaperXL_Lightning.safetensors"
+          curl -fsSL --retry 3 --connect-timeout 30 --max-time 900 -o "$dest" https://huggingface.co/Lykon/dreamshaper-xl-lightning/resolve/a33ea52a3da2dfaf6e9001940bdb04daae06e944/DreamShaperXL_Lightning.safetensors
+          echo 'fdbe56354b8f876b736f24d3ad867ecd4140c019f57642ec8ddd878088d44f64  '"$dest" | sha256sum -c -
+      - name: Compare warmed FP32 and BF16 renders on the same runner
+        env:
+          COMFY_DIR: ${{ github.workspace }}/.runtime/sdxl-bf16/ComfyUI
+          PYTHONPATH: ${{ github.workspace }}
+          OMP_NUM_THREADS: '4'
+          MKL_NUM_THREADS: '4'
+        run: python -u scripts/benchmark_sdxl_bf16.py
+      - name: Preserve synthetic images
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdxl-bf16-${{ github.run_id }}
+          path: .reports/sdxl-bf16/*.png
+          if-no-files-found: ignore
+          retention-days: 7
