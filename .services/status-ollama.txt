@@ -14,7 +14,8 @@
 12:49:15Z run 41594657941 · ollama is up behind the gate
 12:49:17Z run 41594657941 · proving it through the gate with a real request
 12:49:29Z run 41594657941 · published https://flat-relate-cartridge-doctors.trycloudflare.com
-23:58:48Z run 41693243240 · starting ollama on this runner
-23:59:32Z run 41693243240 · ollama is up behind the gate
-23:59:34Z run 41693243240 · proving it through the gate with a real request
-23:59:45Z run 41693243240 · published https://burton-shield-heat-instantly.trycloudflare.com
+18:23:03Z run 41640430175 · starting ollama on this runner
+18:23:57Z run 41640430175 · ollama is up behind the gate
+18:24:23Z run 41640430175 · proving it through the gate with a real request
+18:25:37Z run 41640430175 · published https://serves-hereby-pool-directly.trycloudflare.com
+05:34:21Z run 41743298384 · starting ollama on this runner
