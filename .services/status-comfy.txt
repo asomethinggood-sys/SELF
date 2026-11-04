@@ -20,3 +20,4 @@
 13:07:04Z run 41640429750 · published https://perceived-regard-careful-schedules.trycloudflare.com
 00:14:22Z run 41695638286 · starting comfy on this runner
 00:19:06Z run 41695638286 · comfy is up behind the gate
+00:19:08Z run 41695638286 · proving it through the gate with a real request
