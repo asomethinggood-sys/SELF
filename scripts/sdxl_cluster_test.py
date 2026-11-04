@@ -256,7 +256,10 @@ def leader(temp: Path) -> int:
         workers = [open_envelope(private, wait_for(f"worker-{i}.json")) for i in (1, 2, 3)]
         env = {**os.environ, "SDXL_COORDINATOR_WORKERS": json.dumps(workers)}
         child, output = server(env, temp / "comfy.log")
-        generator = ImageGenerator(checkpoint="DreamShaperXL_Lightning.safetensors", width=512, height=512)
+        resolution = int(os.environ.get("SDXL_TEST_RESOLUTION", "512"))
+        if resolution not in {512, 768, 1024}:
+            raise ValueError("unsupported test resolution")
+        generator = ImageGenerator(checkpoint="DreamShaperXL_Lightning.safetensors", width=resolution, height=resolution)
         graph, _, _ = generator._builtin("a lighthouse on a rocky coast at sunrise", 1234, steps=4)
         graph["3"]["inputs"].update({"cfg": 1.0, "scheduler": "sgm_uniform", "model": ["10", 0]})
         graph["10"] = {"class_type": "FourWorkerSDXL", "inputs": {"model": ["4", 0], "overlap": 8}}
@@ -279,7 +282,11 @@ def leader(temp: Path) -> int:
                     blob = http("/view?" + urllib.parse.urlencode(images[0]), timeout=60)
                     if len(blob) < 1024 or not blob.startswith(b"\x89PNG\r\n\x1a\n"):
                         raise RuntimeError("invalid image")
-                    print(f"::notice::Four-worker SDXL: PNG {len(blob)} bytes; render {time.monotonic()-started:.1f}s; sha256 {hashlib.sha256(blob).hexdigest()[:16]}", flush=True)
+                    print(f"::notice::Four-worker SDXL: {resolution}x{resolution}; PNG {len(blob)} bytes; render {time.monotonic()-started:.1f}s; sha256 {hashlib.sha256(blob).hexdigest()[:16]}", flush=True)
+                    output.flush()
+                    for line in (temp / "comfy.log").read_text(errors="replace").splitlines():
+                        if line.startswith("SDXL_TILE_STATS "):
+                            print(f"::notice::{line}", flush=True)
                     success = True
                     return 0
             time.sleep(3)

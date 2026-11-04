@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from typing import Any
 
 from scripts.experimental_tiled_denoise import predict_four
@@ -63,15 +64,25 @@ class FourWorkerSDXL:
             x, sigma, conditions = args["input"], args["timestep"], args["c"]
             portable = _portable_conditions(conditions)
 
-            def run_tile(tile: Any, data: Any) -> Any:
-                if tile.index == 0:
-                    import torch
-                    with torch.inference_mode():
-                        return apply_model(data, sigma, **conditions)
-                worker = workers[tile.index - 1]
-                return predict(worker["url"], worker["token"], data, sigma, portable)
+            elapsed: dict[int, float] = {}
 
-            return predict_four(x, run_tile, overlap=overlap)
+            def run_tile(tile: Any, data: Any) -> Any:
+                start = time.monotonic()
+                try:
+                    if tile.index == 0:
+                        import torch
+                        with torch.inference_mode():
+                            return apply_model(data, sigma, **conditions)
+                    worker = workers[tile.index - 1]
+                    return predict(worker["url"], worker["token"], data, sigma, portable)
+                finally:
+                    elapsed[tile.index] = time.monotonic() - start
+
+            start = time.monotonic()
+            result = predict_four(x, run_tile, overlap=overlap)
+            print("SDXL_TILE_STATS step_seconds=" + f"{time.monotonic() - start:.2f}" +
+                  " tile_seconds=" + ",".join(f"{elapsed[i]:.2f}" for i in range(4)), flush=True)
+            return result
 
         patched.set_model_unet_function_wrapper(wrapper)
         return (patched,)

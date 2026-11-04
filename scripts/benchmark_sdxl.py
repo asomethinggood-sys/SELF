@@ -54,7 +54,10 @@ def main() -> int:
                         time.sleep(2)
                 else:
                     raise TimeoutError("ComfyUI did not start")
-                generator = ImageGenerator(checkpoint="DreamShaperXL_Lightning.safetensors", width=512, height=512)
+                resolution = int(os.environ.get("SDXL_TEST_RESOLUTION", "512"))
+                if resolution not in {512, 768, 1024}:
+                    raise ValueError("unsupported benchmark resolution")
+                generator = ImageGenerator(checkpoint="DreamShaperXL_Lightning.safetensors", width=resolution, height=resolution)
                 graph, _, _ = generator._builtin("a lighthouse on a rocky coast at sunrise", 1234, steps=4)
                 graph["3"]["inputs"]["cfg"] = 1.0
                 # A fast Euler / SGM-uniform CPU baseline; the model card also
