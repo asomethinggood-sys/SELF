@@ -286,12 +286,14 @@ def leader(temp: Path) -> int:
         generator = ImageGenerator(checkpoint="DreamShaperXL_Lightning.safetensors", width=resolution, height=resolution)
         def render(*, distributed: bool, seed: int, overlap: int = 8, sampler_id: str = "3", label: str,
                    global_weight: float = 0.0, global_first_only: bool = False, global_full_res: bool = False,
-                   prompt: str = "a lighthouse on a rocky coast at sunrise") -> tuple[float, bytes]:
+                   spatial_crops: bool = False, prompt: str = "a lighthouse on a rocky coast at sunrise") -> tuple[float, bytes]:
             graph, _, _ = generator._builtin(prompt, seed, steps=4)
             graph["3"]["inputs"].update({"cfg": 1.0, "scheduler": "sgm_uniform"})
             if distributed:
                 graph["3"]["inputs"]["model"] = ["10", 0]
                 graph["10"] = {"class_type": "FourWorkerSDXL", "inputs": {"model": ["4", 0], "overlap": overlap}}
+                if spatial_crops:
+                    graph["10"]["inputs"]["spatial_crops"] = True
                 if global_weight:
                     graph["10"]["inputs"]["global_weight"] = global_weight
                     if global_first_only:
@@ -332,6 +334,40 @@ def leader(temp: Path) -> int:
                         return elapsed, blob
                 time.sleep(3)
             raise TimeoutError("render timed out")
+
+        if os.environ.get("SDXL_TEST_SCENARIO") == "crop-conditioning":
+            from io import BytesIO
+
+            from PIL import Image, ImageChops, ImageStat
+
+            render(distributed=False, seed=1234, label="warmup")
+            crop_time, cropped = render(distributed=True, seed=1234, overlap=16, sampler_id="11", label="crop-only", spatial_crops=True)
+            anchor_time, anchored = render(distributed=True, seed=1234, overlap=16, sampler_id="12", label="crop-anchor", spatial_crops=True, global_weight=1.0, global_first_only=True, global_full_res=True)
+            baseline_time, baseline = render(distributed=False, seed=1234, sampler_id="13", label="single-baseline")
+            portrait = "a portrait of a woman with brown hair in a forest, cinematic photography"
+            portrait_time, portrait_anchored = render(distributed=True, seed=4321, overlap=16, sampler_id="14", label="portrait-crop-anchor", spatial_crops=True, global_weight=1.0, global_first_only=True, global_full_res=True, prompt=portrait)
+            portrait_baseline_time, portrait_baseline = render(distributed=False, seed=4321, sampler_id="15", label="portrait-baseline", prompt=portrait)
+            def difference(first: bytes, second: bytes) -> float:
+                a = Image.open(BytesIO(first)).convert("RGB")
+                b = Image.open(BytesIO(second)).convert("RGB")
+                if a.size != b.size:
+                    raise ValueError("quality comparison size mismatch")
+                return sum(ImageStat.Stat(ImageChops.difference(a, b)).mean) / 3
+            print("::notice::Same-seed crop experiment: "
+                  f"lighthouse baseline {baseline_time:.1f}s, crop-only {crop_time:.1f}s (RGB MAE {difference(cropped, baseline):.2f}), "
+                  f"crop plus full anchor {anchor_time:.1f}s (RGB MAE {difference(anchored, baseline):.2f}); "
+                  f"portrait baseline {portrait_baseline_time:.1f}s, crop plus full anchor {portrait_time:.1f}s (RGB MAE {difference(portrait_anchored, portrait_baseline):.2f}). "
+                  "RGB difference is not a perceptual quality score.", flush=True)
+            status = Path(f"/proc/{child.pid}/status").read_text()
+            match = re.search(r"^VmHWM:\s+(\d+)\s+kB", status, re.MULTILINE)
+            if match:
+                print(f"::notice::Coordinator ComfyUI peak RSS: {int(match.group(1)) / 1048576:.2f} GiB", flush=True)
+            output.flush()
+            log = (temp / "comfy.log").read_text(errors="replace")
+            if "SDXL_DEGRADED" in log or log.count("SDXL_GLOBAL_FULL") != 2:
+                raise RuntimeError("crop experiment did not run as requested")
+            success = True
+            return 0
 
         if os.environ.get("SDXL_TEST_SCENARIO") == "full-context-first":
             from io import BytesIO

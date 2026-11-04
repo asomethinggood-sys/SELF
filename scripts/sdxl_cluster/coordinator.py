@@ -2,7 +2,8 @@
 
 This node must be explicitly included in a graph; normal ComfyUI jobs are never
 modified. One tile runs locally and three run on authenticated remote workers.
-A worker error aborts the image rather than silently mixing an incomplete step.
+A worker error aborts the image by default. An explicitly enabled fallback
+reruns the entire step locally; partial tile predictions are never mixed.
 """
 from __future__ import annotations
 
@@ -31,6 +32,32 @@ def _workers() -> list[dict[str, str]]:
     return workers
 
 
+def _crop_conditioning(conditions: dict[str, Any], top: int, left: int) -> dict[str, Any]:
+    """Experiment with SDXL crop metadata; preserve the full-frame size.
+
+    SDXL's ADM vector contains the pooled CLIP embedding followed by six
+    256-dimensional size/crop embeddings. This is not positional attention and
+    may not improve composition. Never guess how to modify other model types or
+    already-cropped inputs: reject them instead.
+    """
+    import torch
+    from comfy.ldm.modules.diffusionmodules.openaimodel import Timestep
+
+    y = conditions.get("y")
+    if not isinstance(y, torch.Tensor) or y.ndim != 2 or y.shape[1] != 2816:
+        raise ValueError("crop-aware tiling requires a standard SDXL ADM vector")
+    embed = Timestep(256)
+    zero = embed(torch.tensor([0.0])).to(device=y.device, dtype=y.dtype)
+    if not torch.allclose(y[:, 1792:2048], zero.expand(y.shape[0], -1), rtol=1e-4, atol=1e-4):
+        raise ValueError("nonzero input crop is not supported")
+    if not torch.allclose(y[:, 2048:2304], zero.expand(y.shape[0], -1), rtol=1e-4, atol=1e-4):
+        raise ValueError("nonzero input crop is not supported")
+    replacement = y.clone()
+    replacement[:, 1792:2048] = embed(torch.tensor([float(top * 8)])).to(device=y.device, dtype=y.dtype)
+    replacement[:, 2048:2304] = embed(torch.tensor([float(left * 8)])).to(device=y.device, dtype=y.dtype)
+    return {**conditions, "y": replacement}
+
+
 def _portable_conditions(conditions: dict[str, Any]) -> dict[str, Any]:
     """Fail closed for graph features whose semantics we cannot distribute."""
     if set(conditions) - {"c_crossattn", "y", "transformer_options"}:
@@ -53,14 +80,16 @@ class FourWorkerSDXL:
         return {"required": {"model": ("MODEL",), "overlap": ("INT", {"default": 8, "min": 0, "max": 48, "step": 8})},
                 "optional": {"global_weight": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.05}),
                              "global_first_only": ("BOOLEAN", {"default": False}),
-                             "global_full_res": ("BOOLEAN", {"default": False})}}
+                             "global_full_res": ("BOOLEAN", {"default": False}),
+                             "spatial_crops": ("BOOLEAN", {"default": False})}}
 
     RETURN_TYPES = ("MODEL",)
     FUNCTION = "patch"
     CATEGORY = "experimental/distributed"
 
     def patch(self, model: Any, overlap: int, global_weight: float = 0.0,
-              global_first_only: bool = False, global_full_res: bool = False) -> tuple[Any]:
+              global_first_only: bool = False, global_full_res: bool = False,
+              spatial_crops: bool = False) -> tuple[Any]:
         if not 0.0 <= global_weight <= 1.0:
             raise ValueError("global weight must be between zero and one")
         workers = _workers()
@@ -103,10 +132,11 @@ class FourWorkerSDXL:
                 nonlocal global_prediction
                 start = time.monotonic()
                 try:
+                    tile_conditions = _crop_conditioning(conditions, tile.top, tile.left) if spatial_crops else conditions
                     if tile.index == 0:
                         import torch
                         with torch.inference_mode():
-                            tile_prediction = apply_model(data, sigma, **conditions)
+                            tile_prediction = apply_model(data, sigma, **tile_conditions)
                             if active_global:
                                 if global_full_res:
                                     # One full UNet pass retains global attention,
@@ -121,7 +151,8 @@ class FourWorkerSDXL:
                                     global_prediction = functional.interpolate(coarse, size=x.shape[-2:], mode="bilinear", align_corners=False)
                             return tile_prediction
                     worker = workers[tile.index - 1]
-                    return predict(worker["url"], worker["token"], data, sigma, portable)
+                    tile_portable = _portable_conditions(tile_conditions) if spatial_crops else portable
+                    return predict(worker["url"], worker["token"], data, sigma, tile_portable)
                 finally:
                     elapsed[tile.index] = time.monotonic() - start
 
