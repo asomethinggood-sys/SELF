@@ -1,14 +1,14 @@
 {
   "service": "ollama",
-  "url": "https://brush-drunk-advancement-packed.trycloudflare.com",
-  "run_id": "41780040915",
-  "started_at": "2026-11-04T11:09:54Z",
-  "expires_at": "2026-11-04T17:09:54Z",
+  "url": "https://explained-annex-positions-jonathan.trycloudflare.com",
+  "run_id": "41819020979",
+  "started_at": "2026-11-04T16:45:29Z",
+  "expires_at": "2026-11-04T22:45:29Z",
   "gate_port": 9003,
   "upstream_port": 11434,
   "model": "qwen2.5:0.5b",
   "version": "ollama/qwen2.5:0.5b",
-  "published_at": "2026-11-04T11:12:43Z",
+  "published_at": "2026-11-04T16:46:55Z",
   "gated": true,
   "public": false
 }
