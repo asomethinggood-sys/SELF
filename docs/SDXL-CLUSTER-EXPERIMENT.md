@@ -48,11 +48,22 @@ Two further experiments improved those two samples:
   coherent. Overlap 24 for the portrait took 114.1 s. RGB differences were
   lower than the original tiled version, but are not a perceptual score.
 
+The multi-prompt runs `41840414228` (crop coordinates, overlap 16) and
+`41840895066` (overlap 24, no crop coordinates) each tested three more same-seed
+cases against a warm full-frame reference: three people at a table, a hand
+holding an apple, and a cat. In the crop run, distributed versus single times
+were 108.1 vs 120.1 s, 93.0 vs 120.1 s, and 93.3 vs 120.1 s respectively.
+In the wide-overlap run, the corresponding times were 126.1 vs 138.3 s, 114.1
+vs 135.1 s, and 111.1 vs 135.1 s. At 256-pixel preview size, the generated
+subjects remained recognisable and major duplicates were not apparent, though
+compositions and details changed and these are not professional quality reviews.
+
 These are individual matched-run samples on variable shared runners, not a
 quality guarantee or robust speed estimate. The coordinator's ComfyUI process
-peaked at 14.52–14.55 GiB RSS in these tests; worker processes peaked around
-14 GiB, leaving little margin on a 16 GB machine. Three further prompts are
-being tested before considering either variant suitable for an opt-in service.
+peaked at 14.39–14.55 GiB RSS in these tests; worker processes peaked around
+14 GiB, leaving little margin on a 16 GB machine. The image model and tiled
+method can still make anatomical or other mistakes; five prompts are insufficient
+to establish general reliability.
 
 One stress run, `41836644947`, failed when a worker treated a transient GitHub
 504 while polling rendezvous state as fatal. The harness now retries bounded

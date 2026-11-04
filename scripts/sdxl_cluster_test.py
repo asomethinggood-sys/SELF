@@ -40,6 +40,10 @@ INDEX = int(os.environ["WORKER_INDEX"])
 DIRECTORY = f".cluster-probes/{RUN}"
 API = f"https://api.github.com/repos/{REPO}/contents/{DIRECTORY}"
 TIMEOUT = 1500
+# A fast worker can join many minutes before a slow worker finishes downloading
+# the checkpoint. Give it time for both rendezvous and the full comparison; the
+# workflow's 45-minute job timeout remains the ultimate bound.
+WORKER_WAIT_TIMEOUT = 2400
 
 
 def b64(data: bytes) -> str:
@@ -238,7 +242,7 @@ def worker(temp: Path) -> int:
         proxy, tunnel_output, url = tunnel(temp / "tunnel.log")
         write(name, seal(un64(leader["public"]), {"url": url, "token": token}))
         print(f"::notice::Worker {INDEX}: loaded model and joined securely", flush=True)
-        deadline = time.monotonic() + TIMEOUT
+        deadline = time.monotonic() + WORKER_WAIT_TIMEOUT
         while time.monotonic() < deadline:
             stop_signal, _ = read(f"stop-{INDEX}.json")
             if stop_signal is not None:
