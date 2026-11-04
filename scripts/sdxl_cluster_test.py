@@ -39,7 +39,7 @@ TOKEN = os.environ["GITHUB_TOKEN"]
 INDEX = int(os.environ["WORKER_INDEX"])
 DIRECTORY = f".cluster-probes/{RUN}"
 API = f"https://api.github.com/repos/{REPO}/contents/{DIRECTORY}"
-TIMEOUT = 1200
+TIMEOUT = 1500
 
 
 def b64(data: bytes) -> str:
@@ -278,7 +278,11 @@ def leader(temp: Path) -> int:
     try:
         write("leader.json", {"public": b64(public(private))})
         workers = [open_envelope(private, wait_for(f"worker-{i}.json")) for i in (1, 2, 3)]
-        env = {**os.environ, "SDXL_COORDINATOR_WORKERS": json.dumps(workers), "SDXL_FALLBACK_LOCAL": "1"}
+        # Quality comparisons must not silently use local fallback; the legacy
+        # scenario enables it specifically to test actual worker loss.
+        scenario = os.environ.get("SDXL_TEST_SCENARIO", "legacy")
+        env = {**os.environ, "SDXL_COORDINATOR_WORKERS": json.dumps(workers),
+               "SDXL_FALLBACK_LOCAL": "1" if scenario in {"", "legacy"} else "0"}
         child, output = server(env, temp / "comfy.log")
         resolution = int(os.environ.get("SDXL_TEST_RESOLUTION", "512"))
         if resolution not in {512, 768, 1024}:
@@ -334,6 +338,44 @@ def leader(temp: Path) -> int:
                         return elapsed, blob
                 time.sleep(3)
             raise TimeoutError("render timed out")
+
+        if os.environ.get("SDXL_TEST_SCENARIO") == "crop-stress":
+            from io import BytesIO
+
+            from PIL import Image, ImageChops, ImageStat
+
+            # Multiple prompts and seeds; each comparison uses a fresh sampler
+            # node, fixed settings and the same seed as its full-frame reference.
+            cases = (
+                ("group", "three friends sitting together at a cafe table, cinematic photo", 2927),
+                ("hand", "a close-up of a hand holding a red apple, studio photography", 7041),
+                ("cat", "an orange cat sitting on a wooden chair by a window, natural light", 3582),
+            )
+            render(distributed=False, seed=1234, label="warmup")
+            results = []
+            for index, (name, prompt, seed) in enumerate(cases):
+                cluster_time, actual = render(distributed=True, seed=seed, overlap=16,
+                    sampler_id=str(20 + index * 2), label=f"{name}-cluster", spatial_crops=True,
+                    global_weight=1.0, global_first_only=True, global_full_res=True, prompt=prompt)
+                single_time, baseline = render(distributed=False, seed=seed, sampler_id=str(21 + index * 2),
+                    label=f"{name}-baseline", prompt=prompt)
+                a = Image.open(BytesIO(actual)).convert("RGB")
+                b = Image.open(BytesIO(baseline)).convert("RGB")
+                if a.size != b.size:
+                    raise ValueError("quality comparison size mismatch")
+                mae = sum(ImageStat.Stat(ImageChops.difference(a, b)).mean) / 3
+                results.append(f"{name}: cluster {cluster_time:.1f}s vs single {single_time:.1f}s, RGB MAE {mae:.2f}")
+            print("::notice::" + "; ".join(results) + "; RGB MAE is not a perceptual score", flush=True)
+            output.flush()
+            log = (temp / "comfy.log").read_text(errors="replace")
+            if "SDXL_DEGRADED" in log or log.count("SDXL_GLOBAL_FULL") != len(cases):
+                raise RuntimeError("stress experiment did not run as requested")
+            status = Path(f"/proc/{child.pid}/status").read_text()
+            match = re.search(r"^VmHWM:\s+(\d+)\s+kB", status, re.MULTILINE)
+            if match:
+                print(f"::notice::Coordinator ComfyUI peak RSS: {int(match.group(1)) / 1048576:.2f} GiB", flush=True)
+            success = True
+            return 0
 
         if os.environ.get("SDXL_TEST_SCENARIO") == "wide-overlap":
             from io import BytesIO
