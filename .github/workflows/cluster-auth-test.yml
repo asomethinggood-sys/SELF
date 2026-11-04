@@ -7,6 +7,8 @@ on:
       - .github/workflows/cluster-auth-test.yml
       - scripts/check_cluster_auth.py
       - scripts/sdxl_oidc.py
+      - scripts/sdxl_oidc_gate.py
+      - scripts/check_oidc_gate.py
 
 permissions:
   contents: read
@@ -24,3 +26,5 @@ jobs:
       - run: python -m pip install -q cryptography
       - name: Verify scoped GitHub Actions OIDC identity
         run: python scripts/check_cluster_auth.py
+      - name: Exercise authenticated HTTP gateway
+        run: python scripts/check_oidc_gate.py
