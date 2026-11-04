@@ -9,7 +9,7 @@ from pathlib import Path
 
 from PIL import Image
 
-names = ("single-baseline", "tiled-overlap-8", "tiled-overlap-16")
+names = ("single-baseline", "tiled-overlap-8", "tiled-overlap-16", "tiled-global-035")
 selected = os.environ.get("SDXL_PREVIEW", "")
 if selected not in names:
     raise SystemExit("invalid preview selection")

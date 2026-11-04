@@ -19,9 +19,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: sdxl-quality-41819920341
+          name: sdxl-quality-41822127223
           path: .reports/sdxl-quality
-          run-id: 41819920341
+          run-id: 41822127223
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - run: python -m pip install -q Pillow
       - run: python scripts/show_sdxl_thumbnails.py
@@ -33,3 +33,6 @@ jobs:
       - run: python scripts/show_sdxl_thumbnails.py
         env:
           SDXL_PREVIEW: tiled-overlap-16
+      - run: python scripts/show_sdxl_thumbnails.py
+        env:
+          SDXL_PREVIEW: tiled-global-035
