@@ -92,7 +92,17 @@ FP32 versus 0.0040 s BF16 on a runner advertising native BF16 instructions.
 That is not an image benchmark. ComfyUI normally avoids BF16 CPU computation,
 even when BF16 UNet weights are requested, so the opt-in precision experiment
 requires native instruction flags and verifies there is no FP32 manual cast.
-Its actual image speed and visual impact must be established before deployment.
+In three native-BF16 runner jobs (`41859564033`), same-seed 768px warmed
+renders took 96.1, 134.2 and 202.1 s in FP32 versus 34.0, 34.0 and 58.0 s in
+BF16 respectively. The sampler was explicitly checked not to have been cached;
+FP32 and BF16 weights used separate ComfyUI processes on each same host. The
+BF16 UNet was confirmed to use no FP32 manual cast. Each pair had an RGB MAE
+of 1.12/255. The lighthouse previews looked very similar at 256px, but that is
+one prompt/seed and not a perceptual-quality guarantee. Peak process RSS was
+13.59 GiB in BF16 and 14.41–14.58 GiB in FP32. A runner without native BF16
+instructions cannot use this optimization; it must retain a safe fallback.
+The experimental extension is not installed in production. Broader image and
+lifecycle testing, including both bots, is required before deployment.
 
 ## Worker loss
 

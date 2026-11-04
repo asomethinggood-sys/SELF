@@ -30,6 +30,17 @@ def main() -> None:
     print("::notice::CPU BF16 capabilities: " + ", ".join(f"{flag}={flag in cpuinfo}" for flag in ("avx512_bf16", "amx_bf16")), flush=True)
     if "avx512_bf16" not in cpuinfo and "amx_bf16" not in cpuinfo:
         raise RuntimeError("runner lacks native CPU BF16; no precision comparison performed")
+    cases = {
+        "0": ("lighthouse", "a lighthouse on a rocky coast at sunrise", 1234),
+        "1": ("portrait", "portrait of a woman in natural window light, detailed face", 4321),
+        "2": ("hand", "a hand holding a red apple, natural light, realistic photograph", 9876),
+        "3": ("group", "three friends together outdoors, realistic photograph", 2468),
+    }
+    case = os.environ.get("SDXL_BF16_CASE", "0")
+    if case not in cases:
+        raise ValueError("unknown synthetic test case")
+    label, prompt, seed = cases[case]
+    print(f"::notice::Synthetic precision case: {label}; seed {seed}", flush=True)
     generator = ImageGenerator(checkpoint="DreamShaperXL_Lightning.safetensors", width=768, height=768)
     times, images, peaks = {}, {}, {}
     with tempfile.TemporaryDirectory(prefix="sdxl-bf16-") as directory:
@@ -61,7 +72,7 @@ def main() -> None:
                         raise TimeoutError(f"{mode} server did not start")
 
                     def render(sampler_id: str, *, mode: str = mode, child: subprocess.Popen = child) -> tuple[float, bytes]:
-                        graph, _, _ = generator._builtin("a lighthouse on a rocky coast at sunrise", 1234, steps=4)
+                        graph, _, _ = generator._builtin(prompt, seed, steps=4)
                         graph["3"]["inputs"].update({"cfg": 1.0, "scheduler": "sgm_uniform", "model": ["20", 0]})
                         graph["20"] = {"class_type": "ForceFreshSampler", "inputs": {"model": ["4", 0], "nonce": int(sampler_id)}}
                         if sampler_id != "3":
