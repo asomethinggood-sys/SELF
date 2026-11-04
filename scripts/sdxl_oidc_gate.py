@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from scripts.sdxl_oidc import github_keys, verify  # noqa: E402
+from scripts.sdxl_oidc import _OPENER, github_keys, verify  # noqa: E402
 
 MAX_BODY = 8 * 1024 * 1024
 MAX_RESPONSE = 16 * 1024 * 1024
@@ -109,13 +109,13 @@ class Gate(BaseHTTPRequestHandler):
         req = urllib.request.Request("http://127.0.0.1:8188" + self.path, method=method, data=body,
                                      headers={"Content-Type": "application/json"})
         try:
-            with urllib.request.urlopen(req, timeout=300) as response:  # noqa: S310 - fixed loopback
+            with _OPENER.open(req, timeout=300) as response:  # noqa: S310 - fixed loopback; redirects disabled
                 data = response.read(MAX_RESPONSE + 1)
                 status = response.status
                 content_type = response.headers.get("Content-Type", "application/octet-stream")
         except urllib.error.HTTPError as exc:
             # Do not forward upstream error bodies that might contain a prompt.
-            self.send_error(exc.code)
+            self.send_error(502 if 300 <= exc.code < 400 else exc.code)
             return
         except (OSError, urllib.error.URLError):
             self.send_error(502)

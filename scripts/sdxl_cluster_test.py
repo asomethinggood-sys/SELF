@@ -316,6 +316,7 @@ def leader(temp: Path) -> int:
         single_time, baseline = render(distributed=False, seed=1234, sampler_id="12", label="single-baseline")
         print(f"::notice::Same-seed warm comparison: overlap 8 {cluster_time:.1f}s, overlap 16 {overlap_time:.1f}s, single {single_time:.1f}s", flush=True)
         from io import BytesIO
+
         from PIL import Image, ImageChops, ImageStat
         reference = Image.open(BytesIO(baseline)).convert("RGB")
         for name, blob in (("overlap 8", image8), ("overlap 16", image16)):

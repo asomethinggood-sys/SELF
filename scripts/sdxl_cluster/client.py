@@ -13,13 +13,24 @@ class WorkerError(RuntimeError):
     """A worker failed, refused a call, or returned invalid data."""
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # A tunnel or intermediary must never redirect the worker credential or
+        # conditioning tensors to a different host, even another HTTPS host.
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect())
+
+
 def validate_worker(url: str, token: str, *, local_test: bool = False) -> str:
     parts = urllib.parse.urlsplit(url)
     host = (parts.hostname or "").lower()
     allowed_local = local_test and parts.scheme == "http" and host in {"127.0.0.1", "localhost", "::1"}
     if not ((parts.scheme == "https" and host.endswith(".trycloudflare.com")) or allowed_local):
         raise ValueError("worker must use a Cloudflare HTTPS tunnel")
-    if parts.username or parts.password or parts.query or parts.fragment or parts.path not in {"", "/"}:
+    if (parts.username or parts.password or parts.query or parts.fragment or parts.path not in {"", "/"}
+            or (not allowed_local and parts.port not in {None, 443})):
         raise ValueError("invalid worker URL")
     if len(token) < 32 or len(token) > 256 or any(not (c.isalnum() or c in "-_") for c in token):
         raise ValueError("invalid worker token")
@@ -33,7 +44,7 @@ def predict(url: str, token: str, latent: Any, sigma: Any, conditioning: dict, *
         "Authorization": f"Bearer {token}", "Content-Type": "application/json",
     })
     try:
-        with urllib.request.urlopen(req, timeout=max(1, min(timeout, 300))) as response:  # noqa: S310 - strict URL validation above
+        with _OPENER.open(req, timeout=max(1, min(timeout, 300))) as response:  # noqa: S310 - strict URL validation above
             data = response.read(wire.MAX_BODY + 1)
     except (OSError, urllib.error.URLError) as exc:
         # Do not log the URL, token, or any response body: the worker is private.

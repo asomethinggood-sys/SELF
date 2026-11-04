@@ -19,6 +19,15 @@ ISSUER = "https://token.actions.githubusercontent.com"
 JWKS_URL = ISSUER + "/.well-known/jwks"
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # Never forward the runner's OIDC request credential to a redirect.
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect())
+
+
 def _un64(value: str) -> bytes:
     return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
 
@@ -39,7 +48,7 @@ def get_token(audience: str = AUDIENCE) -> str:
     query.append(("audience", audience))
     url = urllib.parse.urlunsplit((parts.scheme, parts.netloc, parts.path, urllib.parse.urlencode(query), ""))
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {request_token}"})
-    with urllib.request.urlopen(req, timeout=20) as response:  # noqa: S310 - GitHub-provided runtime endpoint
+    with _OPENER.open(req, timeout=20) as response:  # noqa: S310 - GitHub-provided runtime endpoint, no redirects
         data = json.load(response)
     token = data.get("value")
     if not isinstance(token, str) or len(token) > 16000:
