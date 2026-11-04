@@ -34,10 +34,15 @@ def main() -> None:
         for mode, extra in (("fp32", ["--fp32-unet"]), ("bf16", ["--bf16-unet"])):
             logpath = Path(directory) / f"{mode}.log"
             with logpath.open("w+") as output:
+                env = os.environ.copy()
+                if mode == "bf16":
+                    env["SDXL_ALLOW_CPU_BF16"] = "1"
+                else:
+                    env.pop("SDXL_ALLOW_CPU_BF16", None)
                 child = subprocess.Popen(  # noqa: S603 - fixed executable and arguments
                     [sys.executable, "main.py", "--cpu", "--listen", "127.0.0.1", "--port", "8188",
                      "--disable-auto-launch", "--dont-print-server", *extra],
-                    cwd=os.environ["COMFY_DIR"], env=os.environ.copy(), stdout=output,
+                    cwd=os.environ["COMFY_DIR"], env=env, stdout=output,
                     stderr=subprocess.STDOUT, start_new_session=True,
                 )
                 try:
@@ -89,7 +94,7 @@ def main() -> None:
                     text = logpath.read_text(errors="replace")
                     expected = f"model weight dtype torch.{mode if mode == 'bf16' else 'float32'}"
                     if mode == "bf16":
-                        expected = "model weight dtype torch.bfloat16"
+                        expected = "model weight dtype torch.bfloat16, manual cast: None"
                     if expected not in text:
                         raise RuntimeError(f"{mode} UNet dtype was not confirmed")
                     print(f"::notice::{mode}: cold {cold:.1f}s; warm {times[mode]:.1f}s; peak {peaks[mode]:.2f} GiB; PNG hash {hashlib.sha256(images[mode]).hexdigest()[:12]}", flush=True)
