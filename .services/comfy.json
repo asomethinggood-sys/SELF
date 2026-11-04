@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://expanding-focus-webshots-escape.trycloudflare.com",
-  "run_id": "41695638286",
-  "started_at": "2026-11-04T00:14:22Z",
-  "expires_at": "2026-11-04T06:14:22Z",
+  "url": "https://sponsorship-saw-entered-sussex.trycloudflare.com",
+  "run_id": "41745253661",
+  "started_at": "2026-11-04T05:50:22Z",
+  "expires_at": "2026-11-04T11:50:22Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-04T00:20:43Z",
+  "published_at": "2026-11-04T05:54:27Z",
   "gated": true,
   "public": false
 }
