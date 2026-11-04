@@ -1,0 +1,51 @@
+run_id=41892529076
+event=push
+comfy_main=yes
+custom_node=/home/runner/work/SELF/SELF/scripts/sdxl_cpu_bf16
+checkpoint=6.5G
+cloudflared=yes
+marker=absent
+failure=absent
+--- runner.log
+::notice::Private experimental image service is available for up to 65 minutes; precision FP32 fallback.
+--- comfy.log
+m', 'capabilities': []}
+[32m[INFO][0m Checkpoint files will always be loaded safely.
+[32m[INFO][0m Total VRAM 15984 MB, total RAM 15984 MB
+[32m[INFO][0m pytorch version: 2.15.0+cpu
+[32m[INFO][0m Set vram state to: DISABLED
+[32m[INFO][0m Device: cpu
+[32m[INFO][0m Using sub quadratic optimization for attention, if you have memory or speed issues try using: --use-split-cross-attention
+[32m[INFO][0m Python version: 3.11.17 (main, Oct  1 2026, 14:32:31) [GCC 13.3.0]
+[32m[INFO][0m ComfyUI version: 0.43.2
+[32m[INFO][0m comfy-aimdo version: 0.6.0
+[32m[INFO][0m comfy-kitchen version: 0.2.40
+[32m[INFO][0m comfyui-frontend-package version: 1.57.4
+[32m[INFO][0m comfyui-workflow-templates version: 0.11.100
+[32m[INFO][0m comfyui-embedded-docs version: 0.5.15
+[32m[INFO][0m comfy-aimdo version: 0.6.0
+[32m[INFO][0m comfy-kitchen version: 0.2.40
+[32m[INFO][0m [Prompt Server] web root: /opt/hostedtoolcache/Python/3.11.17/x64/lib/python3.11/site-packages/comfyui_frontend_package/static
+[32m[INFO][0m Asset seeder disabled
+[32m[INFO][0m No OpenGL_accelerate module loaded: No module named 'OpenGL_accelerate'
+[32m[INFO][0m 
+Import times for custom nodes:
+[32m[INFO][0m    0.0 seconds: /home/runner/work/SELF/SELF/.runtime/sdxl-experimental/ComfyUI/custom_nodes/websocket_image_save.py
+[32m[INFO][0m    0.0 seconds: /home/runner/work/SELF/SELF/.runtime/sdxl-experimental/ComfyUI/custom_nodes/sdxl_cpu_bf16
+[32m[INFO][0m 
+[32m[INFO][0m Using RAM pressure cache.
+--- gate.log
+--- tunnel.log
+tatus=pass target=region2.v2.argotunnel.com
+2026-11-04T19:02:13Z INF precheck component="UDP Connectivity" details="QUIC connection successful" run_id=6d75c5a9-a41b-4f85-b166-773ca6d09ec6 status=pass target=region1.v2.argotunnel.com
+2026-11-04T19:02:13Z INF precheck component="UDP Connectivity" details="QUIC connection successful" run_id=6d75c5a9-a41b-4f85-b166-773ca6d09ec6 status=pass target=region2.v2.argotunnel.com
+2026-11-04T19:02:13Z INF precheck component="TCP Connectivity" details="HTTP/2 connection successful" run_id=6d75c5a9-a41b-4f85-b166-773ca6d09ec6 status=pass target=region1.v2.argotunnel.com
+2026-11-04T19:02:13Z INF precheck component="TCP Connectivity" details="HTTP/2 connection successful" run_id=6d75c5a9-a41b-4f85-b166-773ca6d09ec6 status=pass target=region2.v2.argotunnel.com
+2026-11-04T19:02:13Z INF precheck component="Cloudflare API" details="API is reachable" run_id=6d75c5a9-a41b-4f85-b166-773ca6d09ec6 status=pass target=api.cloudflare.com:443
+2026-11-04T19:02:13Z INF precheck complete hard_fail=false run_id=6d75c5a9-a41b-4f85-b166-773ca6d09ec6 suggested_protocol=quic
+2026-11-04T20:07:14Z INF Initiating graceful shutdown due to signal terminated ...
+2026-11-04T20:07:14Z INF Retrying connection in up to 2s connIndex=0 event=0 ip=198.41.200.13
+2026-11-04T20:07:14Z ERR Connection terminated connIndex=0
+2026-11-04T20:07:14Z ERR no more connections active and exiting
+2026-11-04T20:07:14Z INF Tunnel server stopped
+2026-11-04T20:07:14Z INF Metrics server stopped
