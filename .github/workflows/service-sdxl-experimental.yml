@@ -82,14 +82,22 @@ jobs:
               https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
             chmod +x "$runtime/cloudflared"
           fi
+          # A cache restored while the previous job was still writing it can be
+          # truncated, and a truncated ComfyUI tree makes the server exit at once.
+          if [ ! -f "$runtime/ComfyUI/main.py" ] \
+             || [ ! -f "$runtime/ComfyUI/custom_nodes/sdxl_cpu_bf16/__init__.py" ] \
+             || [ ! -s "$runtime/ComfyUI/models/checkpoints/DreamShaperXL_Lightning.safetensors" ]; then
+            echo "::warning::cached runtime is incomplete; rebuilding ComfyUI from scratch"
+            rm -rf "$runtime/ComfyUI"
+          fi
           if [ ! -f "$runtime/ComfyUI/main.py" ]; then
             git clone --depth 1 --branch "${COMFY_TAG:-v0.43.2}" https://github.com/comfyanonymous/ComfyUI.git "$runtime/ComfyUI"
             python -m pip install -q --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch torchvision
             python -m pip install -q --no-cache-dir -r "$runtime/ComfyUI/requirements.txt" filelock cryptography Pillow
           fi
-          # The custom node supplies the --bf16-unet/--fp32-unet flags ComfyUI is
-          # started with. A cache round-trip can drop the link, and a missing node
-          # makes ComfyUI exit at once on an unrecognised flag.
+          # ComfyUI registers the precision flags itself; the custom node only
+          # opts into BF16 CPU compute. A cache round-trip can drop the link, so
+          # it is re-created here rather than assumed.
           node_dir="$runtime/ComfyUI/custom_nodes/sdxl_cpu_bf16"
           if [ ! -e "$node_dir/__init__.py" ]; then
             rm -rf "$node_dir"
@@ -141,8 +149,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           rm -f .services/sdxl-experimental.json
 
-      # The log viewer needs a redirect GitHub's API will not hand out here, so the
-      # outcome is written into the repository where it can be read back.
+      # The log viewer needs a redirect this environment cannot fetch, so the
+      # outcome is written into the repository, where it can be read back.
       - name: Record what the service did
         if: always()
         shell: bash
@@ -167,4 +175,6 @@ jobs:
               tail -c 1500 "$runtime/service-logs/$name.log" 2>/dev/null || echo "(no log)"
             done
           } > "$report"
-          python scripts/record_service_run.py "$report" "sdxl-service-run-${GITHUB_RUN_ID}.json"
+          rel="${report#"$GITHUB_WORKSPACE"/}"
+          python -c 'import base64,json,sys; print(json.dumps({"message": "Experimental service run report", "branch": sys.argv[3], "content": base64.b64encode(open(sys.argv[1],"rb").read()).decode()}))' "$report" "$rel" "$GITHUB_REF_NAME" > /tmp/svc-payload.json
+          gh api "repos/${GITHUB_REPOSITORY}/contents/${rel}" --method PUT --input /tmp/svc-payload.json
