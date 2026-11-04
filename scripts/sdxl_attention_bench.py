@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import hmac
+import http.client
 import secrets
 import sys
 import tempfile
@@ -39,6 +40,9 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 OPENER = urllib.request.build_opener(NoRedirect())
+# Each worker has one in-flight request at a time. Persistent HTTPS connections
+# avoid a TLS handshake per layer; never reuse a connection across workers.
+CONNECTIONS: dict[str, http.client.HTTPSConnection] = {}
 
 
 def attention(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
@@ -83,6 +87,8 @@ class AttentionServer(ThreadingHTTPServer):
 
 
 class Handler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
     def log_message(self, _format, *_args):
         pass
 
@@ -123,16 +129,29 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(response)
 
 
-def remote(worker: dict, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
+def remote(worker: dict, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, *, keepalive: bool) -> torch.Tensor:
     url = valid_url(worker["url"], worker["token"])
     body = save({"q": q.contiguous(), "k": k.contiguous(), "v": v.contiguous()})
     if len(body) > MAX_BODY:
         raise ValueError("request too large")
-    req = urllib.request.Request(url + "/attention", data=body, headers={
-        "Authorization": f"Bearer {worker['token']}", "Content-Type": "application/octet-stream"})
+    headers = {"Authorization": f"Bearer {worker['token']}", "Content-Type": "application/octet-stream"}
     try:
-        with OPENER.open(req, timeout=120) as response:  # noqa: S310 - validated HTTPS, redirects disabled
+        if keepalive:
+            # http.client never follows redirects. The host is validated above;
+            # the default SSL context verifies the public tunnel certificate.
+            connection = CONNECTIONS.get(url)
+            if connection is None:
+                connection = http.client.HTTPSConnection(urllib.parse.urlsplit(url).hostname, timeout=120)
+                CONNECTIONS[url] = connection
+            connection.request("POST", "/attention", body=body, headers=headers)
+            response = connection.getresponse()
             raw = response.read(MAX_BODY + 1)
+            if response.status != 200:
+                raise ValueError("worker refused request")
+        else:
+            req = urllib.request.Request(url + "/attention", data=body, headers=headers)
+            with OPENER.open(req, timeout=120) as response:  # noqa: S310 - validated HTTPS, redirects disabled
+                raw = response.read(MAX_BODY + 1)
         if len(raw) > MAX_BODY:
             raise ValueError("response too large")
         value = load(raw)
@@ -140,15 +159,18 @@ def remote(worker: dict, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor) -> t
         if set(value) != {"output"} or result is None or result.shape != q.shape or result.dtype != q.dtype or not torch.isfinite(result).all():
             raise ValueError("invalid worker response")
         return result
-    except (OSError, urllib.error.URLError, ValueError) as exc:
+    except (OSError, urllib.error.URLError, ValueError, http.client.HTTPException) as exc:
+        connection = CONNECTIONS.pop(url, None)
+        if connection:
+            connection.close()
         raise RuntimeError(f"attention worker failed: {type(exc).__name__}") from None
 
 
-def distributed(workers: list[dict], q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, count: int) -> torch.Tensor:
+def distributed(workers: list[dict], q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, count: int, *, keepalive: bool) -> torch.Tensor:
     chunks = torch.tensor_split(q, count, dim=1)
     with concurrent.futures.ThreadPoolExecutor(max_workers=count) as pool:
         futures = [pool.submit(attention, chunks[0].contiguous(), k, v)]
-        futures += [pool.submit(remote, workers[i - 1], chunks[i], k, v) for i in range(1, count)]
+        futures += [pool.submit(remote, workers[i - 1], chunks[i], k, v, keepalive=keepalive) for i in range(1, count)]
         parts = [future.result() for future in futures]
     return torch.cat(parts, dim=1)
 
@@ -208,19 +230,23 @@ def leader(temp: Path) -> int:
         for label, tokens, channels in (("48x48-self", 2304, 640), ("24x24-self", 576, 1280)):
             q, k, v = (torch.randn((1, tokens, channels), dtype=torch.float32) for _ in range(3))
             reference = attention(q, k, v)
-            baseline, four, eight = [], [], []
+            baseline: list[float] = []
+            series: dict[tuple[int, bool], list[float]] = {(count, keep): [] for count in (4, 8) for keep in (False, True)}
             for _ in range(ITERATIONS):
                 start = time.perf_counter()
                 reference = attention(q, k, v)
                 baseline.append(time.perf_counter() - start)
-                for count, series in ((4, four), (8, eight)):
+                for (count, keepalive), times in series.items():
                     start = time.perf_counter()
-                    result = distributed(workers, q, k, v, count)
-                    series.append(time.perf_counter() - start)
+                    result = distributed(workers, q, k, v, count, keepalive=keepalive)
+                    times.append(time.perf_counter() - start)
                     if not torch.allclose(reference, result, atol=2e-5, rtol=2e-5):
                         raise ValueError("split attention differed from full attention")
             median = lambda values: sorted(values)[len(values) // 2]  # noqa: E731
-            print(f"::notice::{label}: median local {median(baseline):.3f}s, 4-runner {median(four):.3f}s, 8-runner {median(eight):.3f}s; exactness tolerance 2e-5; {ITERATIONS} iterations", flush=True)
+            print(f"::notice::{label}: median local {median(baseline):.3f}s, "
+                  f"4-runner reconnect {median(series[4, False]):.3f}s, keepalive {median(series[4, True]):.3f}s; "
+                  f"8-runner reconnect {median(series[8, False]):.3f}s, keepalive {median(series[8, True]):.3f}s; "
+                  f"exactness tolerance 2e-5; {ITERATIONS} iterations", flush=True)
         success = True
         return 0
     finally:
