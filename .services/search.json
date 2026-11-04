@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://chemical-uploaded-bids-adam.trycloudflare.com",
-  "run_id": "41693211520",
-  "started_at": "2026-11-03T23:58:32Z",
-  "expires_at": "2026-11-04T05:58:32Z",
+  "url": "https://strange-boxes-examining-controllers.trycloudflare.com",
+  "run_id": "41743267722",
+  "started_at": "2026-11-04T05:34:11Z",
+  "expires_at": "2026-11-04T11:34:11Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-03T23:58:48Z",
+  "published_at": "2026-11-04T05:34:31Z",
   "gated": true,
   "public": false
 }
