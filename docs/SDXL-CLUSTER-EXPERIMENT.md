@@ -70,6 +70,30 @@ One stress run, `41836644947`, failed when a worker treated a transient GitHub
 transient HTTP/network failures; its recovery is exercised against an actual
 local HTTP server. The failed render is not counted as a quality result.
 
+## Exact operation sharding and CPU precision
+
+Exact full-context attention was also tested separately by splitting queries
+across authenticated hosted runners while sharing the complete keys and values.
+The outputs matched local attention within `2e-5`, but network overhead made
+this slower even with persistent HTTPS. In run `41852393364`, 48×48 attention
+was 0.064 s locally versus 1.418 s across four runners; 24×24 was 0.010 s
+versus 1.123 s. These are synthetic operator timings, not whole-image times.
+This exact sharding has **not** been integrated into the service.
+
+A real 768px render (`41857076387`) recorded 137.20 s in the UNet, of which
+18.07 s was attention math across 560 calls, excluding Q/K/V projections.
+There were 40 full 48×48 self-attention calls (13.26 s) and 240 full 24×24
+self-attention calls (3.91 s). The cold profiled render took 198.2 s; its
+image was not compared against an unprofiled image. On these measurements,
+networking each attention call is unlikely to improve end-to-end latency.
+
+A separate synthetic 320-channel convolution (`41856218029`) measured 0.0142 s
+FP32 versus 0.0040 s BF16 on a runner advertising native BF16 instructions.
+That is not an image benchmark. ComfyUI normally avoids BF16 CPU computation,
+even when BF16 UNet weights are requested, so the opt-in precision experiment
+requires native instruction flags and verifies there is no FP32 manual cast.
+Its actual image speed and visual impact must be established before deployment.
+
 ## Worker loss
 
 Run `41821054697` deliberately stopped a remote worker after both tiled renders.
