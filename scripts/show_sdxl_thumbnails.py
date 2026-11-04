@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import base64
+import os
 from io import BytesIO
 from pathlib import Path
 
 from PIL import Image
 
-for name in ("single-baseline", "tiled-overlap-8", "tiled-overlap-16"):
+names = ("single-baseline", "tiled-overlap-8", "tiled-overlap-16")
+selected = os.environ.get("SDXL_PREVIEW", "")
+if selected not in names:
+    raise SystemExit("invalid preview selection")
+for name in (selected,):
     path = Path(".reports/sdxl-quality") / f"{name}.png"
     image = Image.open(path).convert("RGB")
     image.thumbnail((256, 256))

@@ -25,3 +25,11 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - run: python -m pip install -q Pillow
       - run: python scripts/show_sdxl_thumbnails.py
+        env:
+          SDXL_PREVIEW: single-baseline
+      - run: python scripts/show_sdxl_thumbnails.py
+        env:
+          SDXL_PREVIEW: tiled-overlap-8
+      - run: python scripts/show_sdxl_thumbnails.py
+        env:
+          SDXL_PREVIEW: tiled-overlap-16
