@@ -52,13 +52,15 @@ class FourWorkerSDXL:
     def INPUT_TYPES(cls) -> dict:
         return {"required": {"model": ("MODEL",), "overlap": ("INT", {"default": 8, "min": 0, "max": 48, "step": 8})},
                 "optional": {"global_weight": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.05}),
-                             "global_first_only": ("BOOLEAN", {"default": False})}}
+                             "global_first_only": ("BOOLEAN", {"default": False}),
+                             "global_full_res": ("BOOLEAN", {"default": False})}}
 
     RETURN_TYPES = ("MODEL",)
     FUNCTION = "patch"
     CATEGORY = "experimental/distributed"
 
-    def patch(self, model: Any, overlap: int, global_weight: float = 0.0, global_first_only: bool = False) -> tuple[Any]:
+    def patch(self, model: Any, overlap: int, global_weight: float = 0.0,
+              global_first_only: bool = False, global_full_res: bool = False) -> tuple[Any]:
         if not 0.0 <= global_weight <= 1.0:
             raise ValueError("global weight must be between zero and one")
         workers = _workers()
@@ -83,6 +85,17 @@ class FourWorkerSDXL:
                 if not torch.isclose(sigma.flatten()[0], samples.flatten()[0].to(sigma), rtol=0.0001):
                     active_global = 0.0
 
+            if active_global == 1.0 and global_full_res:
+                # The exact full-frame pass entirely determines this step. Do
+                # not waste three network/model calls computing tiles whose
+                # mathematical contribution would be zero.
+                import torch
+                start = time.monotonic()
+                with torch.inference_mode():
+                    result = apply_model(x, sigma, **conditions)
+                print(f"SDXL_GLOBAL_FULL step_seconds={time.monotonic() - start:.2f}", flush=True)
+                return result
+
             elapsed: dict[int, float] = {}
             global_prediction: Any = None
 
@@ -95,13 +108,17 @@ class FourWorkerSDXL:
                         with torch.inference_mode():
                             tile_prediction = apply_model(data, sigma, **conditions)
                             if active_global:
-                                # The global pass runs alongside remote tiles on
-                                # the coordinator, not as another full-size UNet.
-                                # It is an approximation, not full attention.
-                                import torch.nn.functional as functional
-                                scaled = functional.interpolate(x, scale_factor=0.5, mode="bilinear", align_corners=False)
-                                coarse = apply_model(scaled, sigma, **conditions)
-                                global_prediction = functional.interpolate(coarse, size=x.shape[-2:], mode="bilinear", align_corners=False)
+                                if global_full_res:
+                                    # One full UNet pass retains global attention,
+                                    # at extra cost. Remote tile work still runs
+                                    # concurrently and contributes to the blend.
+                                    global_prediction = apply_model(x, sigma, **conditions)
+                                else:
+                                    # Cheaper coarse approximation, not full attention.
+                                    import torch.nn.functional as functional
+                                    scaled = functional.interpolate(x, scale_factor=0.5, mode="bilinear", align_corners=False)
+                                    coarse = apply_model(scaled, sigma, **conditions)
+                                    global_prediction = functional.interpolate(coarse, size=x.shape[-2:], mode="bilinear", align_corners=False)
                             return tile_prediction
                     worker = workers[tile.index - 1]
                     return predict(worker["url"], worker["token"], data, sigma, portable)

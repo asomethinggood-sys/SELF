@@ -248,6 +248,14 @@ def worker(temp: Path) -> int:
             time.sleep(5)
         raise TimeoutError("coordinator timed out")
     finally:
+        if child and child.poll() is None:
+            try:
+                status = Path(f"/proc/{child.pid}/status").read_text()
+                peak = re.search(r"^VmHWM:\s+(\d+)\s+kB", status, re.MULTILINE)
+                if peak:
+                    print(f"::notice::Worker {INDEX}: ComfyUI peak RSS {int(peak.group(1)) / 1048576:.2f} GiB", flush=True)
+            except OSError:
+                pass
         stop(proxy)
         stop(gate)
         stop(child)
@@ -277,8 +285,9 @@ def leader(temp: Path) -> int:
             raise ValueError("unsupported test resolution")
         generator = ImageGenerator(checkpoint="DreamShaperXL_Lightning.safetensors", width=resolution, height=resolution)
         def render(*, distributed: bool, seed: int, overlap: int = 8, sampler_id: str = "3", label: str,
-                   global_weight: float = 0.0, global_first_only: bool = False) -> tuple[float, bytes]:
-            graph, _, _ = generator._builtin("a lighthouse on a rocky coast at sunrise", seed, steps=4)
+                   global_weight: float = 0.0, global_first_only: bool = False, global_full_res: bool = False,
+                   prompt: str = "a lighthouse on a rocky coast at sunrise") -> tuple[float, bytes]:
+            graph, _, _ = generator._builtin(prompt, seed, steps=4)
             graph["3"]["inputs"].update({"cfg": 1.0, "scheduler": "sgm_uniform"})
             if distributed:
                 graph["3"]["inputs"]["model"] = ["10", 0]
@@ -287,6 +296,8 @@ def leader(temp: Path) -> int:
                     graph["10"]["inputs"]["global_weight"] = global_weight
                     if global_first_only:
                         graph["10"]["inputs"]["global_first_only"] = True
+                    if global_full_res:
+                        graph["10"]["inputs"]["global_full_res"] = True
             if sampler_id != "3":
                 # A fresh sampler node prevents Comfy's graph cache from turning
                 # the same-seed baseline into a near-instant cached result.
@@ -321,6 +332,42 @@ def leader(temp: Path) -> int:
                         return elapsed, blob
                 time.sleep(3)
             raise TimeoutError("render timed out")
+
+        if os.environ.get("SDXL_TEST_SCENARIO") == "full-context-first":
+            from io import BytesIO
+
+            from PIL import Image, ImageChops, ImageStat
+
+            render(distributed=False, seed=1234, label="warmup")
+            blended_time, blended = render(distributed=True, seed=1234, overlap=16, sampler_id="11", label="full-first-blend", global_weight=0.75, global_first_only=True, global_full_res=True)
+            anchored_time, anchored = render(distributed=True, seed=1234, overlap=16, sampler_id="12", label="full-first-anchor", global_weight=1.0, global_first_only=True, global_full_res=True)
+            baseline_time, baseline = render(distributed=False, seed=1234, sampler_id="13", label="single-baseline")
+            portrait = "a portrait of a woman with brown hair in a forest, cinematic photography"
+            portrait_time, portrait_anchored = render(distributed=True, seed=4321, overlap=16, sampler_id="14", label="portrait-anchor", global_weight=1.0, global_first_only=True, global_full_res=True, prompt=portrait)
+            portrait_baseline_time, portrait_baseline = render(distributed=False, seed=4321, sampler_id="15", label="portrait-baseline", prompt=portrait)
+            def difference(first: bytes, second: bytes) -> float:
+                a = Image.open(BytesIO(first)).convert("RGB")
+                b = Image.open(BytesIO(second)).convert("RGB")
+                if a.size != b.size:
+                    raise ValueError("quality comparison size mismatch")
+                return sum(ImageStat.Stat(ImageChops.difference(a, b)).mean) / 3
+            print("::notice::Same-seed comparison: "
+                  f"lighthouse baseline {baseline_time:.1f}s, first-full-75% {blended_time:.1f}s (RGB MAE {difference(blended, baseline):.2f}), "
+                  f"first-full-100% {anchored_time:.1f}s (RGB MAE {difference(anchored, baseline):.2f}); "
+                  f"portrait baseline {portrait_baseline_time:.1f}s, first-full-100% {portrait_time:.1f}s (RGB MAE {difference(portrait_anchored, portrait_baseline):.2f}). "
+                  "RGB difference is not a perceptual quality score.", flush=True)
+            status = Path(f"/proc/{child.pid}/status").read_text()
+            match = re.search(r"^VmHWM:\s+(\d+)\s+kB", status, re.MULTILINE)
+            if match:
+                print(f"::notice::Coordinator ComfyUI peak RSS: {int(match.group(1)) / 1048576:.2f} GiB", flush=True)
+            output.flush()
+            log = (temp / "comfy.log").read_text(errors="replace")
+            if "SDXL_DEGRADED" in log:
+                raise RuntimeError("comparison silently fell back instead of distributing")
+            if log.count("SDXL_GLOBAL_FULL") != 2:
+                raise RuntimeError("expected exactly one full-frame anchor for each anchored render")
+            success = True
+            return 0
 
         render(distributed=False, seed=1234, label="warmup")
         cluster_time, image8 = render(distributed=True, seed=1234, overlap=8, label="tiled-overlap-8")
