@@ -69,6 +69,9 @@ jobs:
           ln -s "$GITHUB_WORKSPACE/scripts/sdxl_cluster" "$COMFY_DIR/custom_nodes/yura_sdxl_cluster"
           curl -fsSL --retry 3 --connect-timeout 30 -o "$RUNNER_TEMP/cloudflared" https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
           chmod +x "$RUNNER_TEMP/cloudflared"
+      - name: Exercise transient rendezvous recovery
+        if: matrix.worker == 0
+        run: python scripts/check_sdxl_rendezvous.py
       - name: Execute one synchronized distributed render
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
