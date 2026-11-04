@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://online-thehun-required-reached.trycloudflare.com",
-  "run_id": "41780025060",
-  "started_at": "2026-11-04T11:09:49Z",
-  "expires_at": "2026-11-04T17:09:49Z",
+  "url": "https://stanley-spent-nails-sandwich.trycloudflare.com",
+  "run_id": "41819010028",
+  "started_at": "2026-11-04T16:45:29Z",
+  "expires_at": "2026-11-04T22:45:29Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-04T11:11:30Z",
+  "published_at": "2026-11-04T16:45:53Z",
   "gated": true,
   "public": false
 }
