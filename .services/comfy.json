@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://sponsorship-saw-entered-sussex.trycloudflare.com",
-  "run_id": "41745253661",
-  "started_at": "2026-11-04T05:50:22Z",
-  "expires_at": "2026-11-04T11:50:22Z",
+  "url": "https://stood-nobody-laser-stones.trycloudflare.com",
+  "run_id": "41781645948",
+  "started_at": "2026-11-04T11:26:24Z",
+  "expires_at": "2026-11-04T17:26:24Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-04T05:54:27Z",
+  "published_at": "2026-11-04T11:30:25Z",
   "gated": true,
   "public": false
 }
