@@ -20,3 +20,4 @@
 23:58:53Z run 41693211520 · published https://chemical-uploaded-bids-adam.trycloudflare.com
 11:09:49Z run 41780025060 · starting search on this runner
 11:10:23Z run 41780025060 · search is up behind the gate
+11:10:54Z run 41780025060 · proving it through the gate with a real request
