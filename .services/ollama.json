@@ -1,14 +1,14 @@
 {
   "service": "ollama",
-  "url": "https://burton-shield-heat-instantly.trycloudflare.com",
-  "run_id": "41693243240",
-  "started_at": "2026-11-03T23:58:48Z",
-  "expires_at": "2026-11-04T05:58:48Z",
+  "url": "https://monster-remarks-tri-tee.trycloudflare.com",
+  "run_id": "41743298384",
+  "started_at": "2026-11-04T05:34:21Z",
+  "expires_at": "2026-11-04T11:34:21Z",
   "gate_port": 9003,
   "upstream_port": 11434,
   "model": "qwen2.5:0.5b",
   "version": "ollama/qwen2.5:0.5b",
-  "published_at": "2026-11-03T23:59:44Z",
+  "published_at": "2026-11-04T05:35:22Z",
   "gated": true,
   "public": false
 }
