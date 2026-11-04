@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://stanley-spent-nails-sandwich.trycloudflare.com",
-  "run_id": "41819010028",
-  "started_at": "2026-11-04T16:45:29Z",
-  "expires_at": "2026-11-04T22:45:29Z",
+  "url": "https://laboratories-announced-introduced-model.trycloudflare.com",
+  "run_id": "41871758422",
+  "started_at": "2026-11-04T22:21:01Z",
+  "expires_at": "2026-11-05T04:21:01Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-04T16:45:53Z",
+  "published_at": "2026-11-04T22:21:23Z",
   "gated": true,
   "public": false
 }
