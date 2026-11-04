@@ -19,6 +19,32 @@ from scripts import sdxl_cluster_test as rendezvous  # noqa: E402
 
 rendezvous.API = f"https://api.github.com/repos/{rendezvous.REPO}/contents/.services"
 NAME = "sdxl-experimental.json"
+FAILURE = "sdxl-experimental-failure.json"
+
+# Logs go under the cached runtime rather than the scratch directory, so that a
+# failed start can still be read back and published as a diagnostic.
+LOG_DIR = Path(os.environ.get("SDXL_SERVICE_LOGS", str(ROOT / ".runtime" / "sdxl-experimental" / "service-logs")))
+
+_STAGE = "start"
+
+
+def _tails() -> dict[str, str]:
+    out: dict[str, str] = {}
+    for name in ("comfy.log", "gate.log", "tunnel.log"):
+        try:
+            out[name] = (LOG_DIR / name).read_text(errors="replace")[-4000:]
+        except OSError:
+            continue
+    return out
+
+
+def _report(error: str) -> None:
+    """Publish what went wrong, so a failed start is readable after the runner is gone."""
+    try:
+        rendezvous.write(FAILURE, {"run_id": rendezvous.RUN, "stage": _STAGE,
+                                   "error": error, "logs": _tails()})
+    except Exception as exc:  # noqa: BLE001 - the report must never hide the original failure
+        print(f"::warning::Could not publish failure diagnostics: {exc}", flush=True)
 
 
 def main() -> None:
@@ -28,6 +54,7 @@ def main() -> None:
     try:
         with tempfile.TemporaryDirectory(prefix="sdxl-service-") as temp:
             folder = Path(temp)
+            LOG_DIR.mkdir(parents=True, exist_ok=True)
             env = os.environ.copy()
             cpu = Path("/proc/cpuinfo").read_text(errors="replace").lower()
             bf16 = "avx512_bf16" in cpu or "amx_bf16" in cpu
@@ -35,7 +62,11 @@ def main() -> None:
                 env["SDXL_ALLOW_CPU_BF16"] = "1"
             command = [sys.executable, "main.py", "--cpu", "--listen", "127.0.0.1", "--port", "8188",
                        "--disable-auto-launch", "--dont-print-server", "--bf16-unet" if bf16 else "--fp32-unet"]
-            comfy_log = (folder / "comfy.log").open("w+")
+            if not (Path(env["COMFY_DIR"]) / "custom_nodes" / "sdxl_cpu_bf16" / "main.py").is_file():
+                raise RuntimeError(f"SDXL CPU BF16 custom node is missing from {env['COMFY_DIR']}")
+            comfy_log = (LOG_DIR / "comfy.log").open("w+")
+            global _STAGE
+            _STAGE = "comfy-start"
             handles.append(comfy_log)
             child = subprocess.Popen(command, cwd=env["COMFY_DIR"], env=env, stdout=comfy_log,  # noqa: S603
                                      stderr=subprocess.STDOUT, start_new_session=True)
@@ -50,11 +81,13 @@ def main() -> None:
                     time.sleep(2)
             else:
                 raise TimeoutError("image server startup timed out")
-            gateway_log = (folder / "gate.log").open("w+")
+            _STAGE = "gate-start"
+            gateway_log = (LOG_DIR / "gate.log").open("w+")
             handles.append(gateway_log)
             gateway = subprocess.Popen([sys.executable, str(ROOT / "scripts/sdxl_experimental_gate.py")],  # noqa: S603
                                        env=env, stdout=gateway_log, stderr=subprocess.STDOUT, start_new_session=True)
-            tunnel_log = (folder / "tunnel.log").open("w+")
+            _STAGE = "tunnel-start"
+            tunnel_log = (LOG_DIR / "tunnel.log").open("w+")
             handles.append(tunnel_log)
             tunnel = subprocess.Popen([env["CLOUDFLARED"], "tunnel", "--url", "http://127.0.0.1:9009", "--no-autoupdate"],  # noqa: S603
                                       stdout=tunnel_log, stderr=subprocess.STDOUT, start_new_session=True)
@@ -72,6 +105,7 @@ def main() -> None:
             if not url:
                 raise TimeoutError("tunnel startup timed out")
             from scripts.sdxl_oidc import _OPENER
+            _STAGE = "health"
             healthy = False
             deadline = time.monotonic() + 90
             while time.monotonic() < deadline:
@@ -92,6 +126,7 @@ def main() -> None:
                     raise RuntimeError("experimental gateway authentication check failed") from None
             else:
                 raise RuntimeError("experimental gateway accepted an unauthenticated request")
+            _STAGE = "serving"
             start = datetime.now(UTC)
             expires = start + timedelta(minutes=65)
             rendezvous.write(NAME, {"url": url, "run_id": rendezvous.RUN, "started_at": start.isoformat(),
@@ -121,5 +156,7 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as exc:
-        print(f"::error::Experimental image service failed: {type(exc).__name__}", flush=True)
+        print(f"::error::Experimental image service failed at {_STAGE}: {type(exc).__name__}: {exc}",
+              flush=True)
+        _report(f"{type(exc).__name__}: {exc}")
         raise SystemExit(1) from None

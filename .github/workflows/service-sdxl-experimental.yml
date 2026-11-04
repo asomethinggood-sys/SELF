@@ -86,8 +86,18 @@ jobs:
             git clone --depth 1 --branch "${COMFY_TAG:-v0.43.2}" https://github.com/comfyanonymous/ComfyUI.git "$runtime/ComfyUI"
             python -m pip install -q --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch torchvision
             python -m pip install -q --no-cache-dir -r "$runtime/ComfyUI/requirements.txt" filelock cryptography Pillow
+          fi
+          # The custom node supplies the --bf16-unet/--fp32-unet flags ComfyUI is
+          # started with. A cache round-trip can drop the link, and a missing node
+          # makes ComfyUI exit at once on an unrecognised flag.
+          if [ ! -f "$runtime/ComfyUI/custom_nodes/sdxl_cpu_bf16/main.py" ]; then
+            rm -rf "$runtime/ComfyUI/custom_nodes/sdxl_cpu_bf16"
             ln -s "$GITHUB_WORKSPACE/scripts/sdxl_cpu_bf16" "$runtime/ComfyUI/custom_nodes/sdxl_cpu_bf16"
           fi
+          python - "$runtime/ComfyUI/custom_nodes/sdxl_cpu_bf16/main.py" <<'PY'
+import sys
+print(f"::notice::custom node present: {sys.argv[1]}")
+PY
           mkdir -p "$runtime/ComfyUI/models/checkpoints"
           dest="$runtime/ComfyUI/models/checkpoints/DreamShaperXL_Lightning.safetensors"
           if [ ! -s "$dest" ]; then
