@@ -24,9 +24,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: sdxl-quality-${{ inputs.run_id || '41826005417' }}
+          name: sdxl-quality-${{ inputs.run_id || '41831019971' }}
           path: .reports/sdxl-quality
-          run-id: ${{ inputs.run_id || '41826005417' }}
+          run-id: ${{ inputs.run_id || '41831019971' }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - run: python -m pip install -q Pillow
       - run: python scripts/show_sdxl_thumbnails.py
@@ -34,13 +34,13 @@ jobs:
           SDXL_PREVIEW: single-baseline
       - run: python scripts/show_sdxl_thumbnails.py
         env:
-          SDXL_PREVIEW: tiled-overlap-8
+          SDXL_PREVIEW: full-first-blend
       - run: python scripts/show_sdxl_thumbnails.py
         env:
-          SDXL_PREVIEW: tiled-overlap-16
+          SDXL_PREVIEW: full-first-anchor
       - run: python scripts/show_sdxl_thumbnails.py
         env:
-          SDXL_PREVIEW: tiled-global-035
+          SDXL_PREVIEW: portrait-baseline
       - run: python scripts/show_sdxl_thumbnails.py
         env:
-          SDXL_PREVIEW: tiled-global-first
+          SDXL_PREVIEW: portrait-anchor
