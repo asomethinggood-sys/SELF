@@ -57,11 +57,22 @@ def github(method: str, path: str, body: dict | None = None) -> tuple[int, dict]
         "Authorization": f"Bearer {TOKEN}", "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json",
     })
-    try:
-        with urllib.request.urlopen(req, timeout=30) as response:  # noqa: S310 - fixed GitHub API
-            return response.status, json.load(response)
-    except urllib.error.HTTPError as exc:
-        return exc.code, {}
+    # A transient GitHub API error must not immediately kill a warm worker.
+    # Bound retries and never print the request or response, which can contain
+    # credentials or encrypted rendezvous material. PUT/DELETE callers still
+    # handle conflicts by re-reading the current file SHA.
+    for attempt in range(5):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as response:  # noqa: S310 - fixed GitHub API
+                return response.status, json.load(response)
+        except urllib.error.HTTPError as exc:
+            if exc.code not in {429, 500, 502, 503, 504} or attempt == 4:
+                return exc.code, {}
+        except (OSError, urllib.error.URLError):
+            if attempt == 4:
+                raise RuntimeError("GitHub rendezvous network request failed") from None
+        time.sleep(min(10, 2**attempt) + secrets.randbelow(1000) / 1000)
+    raise RuntimeError("GitHub rendezvous retries exhausted")
 
 
 def read(name: str) -> tuple[dict | None, str]:
