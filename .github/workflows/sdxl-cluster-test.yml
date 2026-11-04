@@ -68,3 +68,11 @@ jobs:
           MKL_NUM_THREADS: '4'
           SDXL_TEST_RESOLUTION: '768'
         run: python -u scripts/sdxl_cluster_test.py
+      - name: Preserve synthetic quality comparisons
+        if: always() && matrix.worker == 0
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdxl-quality-${{ github.run_id }}
+          path: .reports/sdxl-quality/*.png
+          if-no-files-found: ignore
+          retention-days: 7
