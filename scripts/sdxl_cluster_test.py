@@ -199,7 +199,7 @@ def tunnel(logpath: Path) -> tuple[subprocess.Popen, object, str]:
 
 def worker(temp: Path) -> int:
     child = proxy = gate = None
-    output = tunnel_output = None
+    output = tunnel_output = gate_output = None
     token = secrets.token_urlsafe(32)
     name = f"worker-{INDEX}.json"
     try:
@@ -207,9 +207,10 @@ def worker(temp: Path) -> int:
         env = {**os.environ, "SDXL_WORKER_TOKEN": token, "SDXL_WORKER_CHECKPOINT": "DreamShaperXL_Lightning.safetensors"}
         child, output = server(env, temp / "comfy.log")
         http("/sdxl-worker/warm", data={}, token=token, timeout=300)
+        gate_output = (temp / "gate.log").open("w+")
         gate = subprocess.Popen(  # noqa: S603 - fixed repository script
             [sys.executable, str(ROOT / "scripts" / "sdxl_cluster_gate.py")],
-            env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
+            env=env, stdout=gate_output, stderr=subprocess.DEVNULL, start_new_session=True,
         )
         import socket
         deadline = time.monotonic() + 20
@@ -230,6 +231,10 @@ def worker(temp: Path) -> int:
         while time.monotonic() < deadline:
             done, _ = read("done.json")
             if done is not None:
+                calls = (temp / "gate.log").read_text(errors="replace").count("SDXL_GATE_PREDICT ok")
+                if done.get("success") and calls < 4:
+                    print(f"::error::Worker {INDEX}: expected at least four real predictions, got {calls}", flush=True)
+                    return 1
                 return 0 if done.get("success") else 1
             if child.poll() is not None or proxy.poll() is not None:
                 raise RuntimeError("worker process exited")
@@ -239,6 +244,10 @@ def worker(temp: Path) -> int:
         stop(proxy)
         stop(gate)
         stop(child)
+        if gate_output:
+            gate_output.close()
+            calls = (temp / "gate.log").read_text(errors="replace").count("SDXL_GATE_PREDICT ok")
+            print(f"::notice::Worker {INDEX}: {calls} authenticated tile predictions", flush=True)
         if output:
             output.close()
         if tunnel_output:
@@ -260,37 +269,46 @@ def leader(temp: Path) -> int:
         if resolution not in {512, 768, 1024}:
             raise ValueError("unsupported test resolution")
         generator = ImageGenerator(checkpoint="DreamShaperXL_Lightning.safetensors", width=resolution, height=resolution)
-        graph, _, _ = generator._builtin("a lighthouse on a rocky coast at sunrise", 1234, steps=4)
-        graph["3"]["inputs"].update({"cfg": 1.0, "scheduler": "sgm_uniform", "model": ["10", 0]})
-        graph["10"] = {"class_type": "FourWorkerSDXL", "inputs": {"model": ["4", 0], "overlap": 8}}
-        started = time.monotonic()
-        result = json.loads(http("/prompt", data={"prompt": graph}, timeout=60))
-        prompt_id = result.get("prompt_id")
-        if not prompt_id:
-            raise RuntimeError("ComfyUI refused the distributed graph")
-        deadline = time.monotonic() + TIMEOUT
-        while time.monotonic() < deadline:
-            if child.poll() is not None:
-                raise RuntimeError("coordinator ComfyUI exited")
-            entry = json.loads(http(f"/history/{prompt_id}")).get(prompt_id, {})
-            if entry.get("status", {}).get("status_str") == "error":
-                # Print only error type, never prompts or model inputs.
-                raise RuntimeError("distributed graph failed; see sanitized error report")
-            for node in entry.get("outputs", {}).values():
-                images = node.get("images", [])
-                if images:
-                    blob = http("/view?" + urllib.parse.urlencode(images[0]), timeout=60)
-                    if len(blob) < 1024 or not blob.startswith(b"\x89PNG\r\n\x1a\n"):
-                        raise RuntimeError("invalid image")
-                    print(f"::notice::Four-worker SDXL: {resolution}x{resolution}; PNG {len(blob)} bytes; render {time.monotonic()-started:.1f}s; sha256 {hashlib.sha256(blob).hexdigest()[:16]}", flush=True)
-                    output.flush()
-                    for line in (temp / "comfy.log").read_text(errors="replace").splitlines():
-                        if line.startswith("SDXL_TILE_STATS "):
-                            print(f"::notice::{line}", flush=True)
-                    success = True
-                    return 0
-            time.sleep(3)
-        raise TimeoutError("distributed render timed out")
+        def render(*, distributed: bool, seed: int) -> float:
+            graph, _, _ = generator._builtin("a lighthouse on a rocky coast at sunrise", seed, steps=4)
+            graph["3"]["inputs"].update({"cfg": 1.0, "scheduler": "sgm_uniform"})
+            if distributed:
+                graph["3"]["inputs"]["model"] = ["10", 0]
+                graph["10"] = {"class_type": "FourWorkerSDXL", "inputs": {"model": ["4", 0], "overlap": 8}}
+            started = time.monotonic()
+            result = json.loads(http("/prompt", data={"prompt": graph}, timeout=60))
+            prompt_id = result.get("prompt_id")
+            if not prompt_id:
+                raise RuntimeError("ComfyUI refused the graph")
+            deadline = time.monotonic() + TIMEOUT
+            while time.monotonic() < deadline:
+                if child.poll() is not None:
+                    raise RuntimeError("coordinator ComfyUI exited")
+                entry = json.loads(http(f"/history/{prompt_id}")).get(prompt_id, {})
+                if entry.get("status", {}).get("status_str") == "error":
+                    raise RuntimeError("render graph failed")
+                for node in entry.get("outputs", {}).values():
+                    images = node.get("images", [])
+                    if images:
+                        blob = http("/view?" + urllib.parse.urlencode(images[0]), timeout=60)
+                        if len(blob) < 1024 or not blob.startswith(b"\x89PNG\r\n\x1a\n"):
+                            raise RuntimeError("invalid image")
+                        elapsed = time.monotonic() - started
+                        label = "four-worker" if distributed else "single-worker"
+                        print(f"::notice::{label}: {resolution}x{resolution}; PNG {len(blob)} bytes; render {elapsed:.1f}s; sha256 {hashlib.sha256(blob).hexdigest()[:16]}", flush=True)
+                        return elapsed
+                time.sleep(3)
+            raise TimeoutError("render timed out")
+
+        render(distributed=False, seed=1234)  # Warm the coordinator's model first.
+        cluster_time = render(distributed=True, seed=1234)
+        single_time = render(distributed=False, seed=1235)  # Different seed defeats ComfyUI caching.
+        print(f"::notice::Warm comparison: four-worker {cluster_time:.1f}s vs single-worker {single_time:.1f}s", flush=True)
+        output.flush()
+        for match in re.finditer(r"SDXL_TILE_STATS step_seconds=[0-9.]+ tile_seconds=[0-9.,]+", (temp / "comfy.log").read_text(errors="replace")):
+            print(f"::notice::{match.group(0)}", flush=True)
+        success = True
+        return 0
     finally:
         try:
             write("done.json", {"success": success})

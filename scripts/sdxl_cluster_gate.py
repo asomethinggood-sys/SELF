@@ -48,6 +48,7 @@ class Gate(BaseHTTPRequestHandler):
         except (OSError, urllib.error.URLError):
             self.send_error(502)
             return
+        print("SDXL_GATE_PREDICT ok", flush=True)
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(response)))
