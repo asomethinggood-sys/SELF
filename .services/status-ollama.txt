@@ -21,3 +21,4 @@
 05:34:21Z run 41743298384 · starting ollama on this runner
 05:35:11Z run 41743298384 · ollama is up behind the gate
 05:35:13Z run 41743298384 · proving it through the gate with a real request
+05:35:24Z run 41743298384 · published https://monster-remarks-tri-tee.trycloudflare.com
