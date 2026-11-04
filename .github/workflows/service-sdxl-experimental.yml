@@ -94,10 +94,8 @@ jobs:
             rm -rf "$runtime/ComfyUI/custom_nodes/sdxl_cpu_bf16"
             ln -s "$GITHUB_WORKSPACE/scripts/sdxl_cpu_bf16" "$runtime/ComfyUI/custom_nodes/sdxl_cpu_bf16"
           fi
-          python - "$runtime/ComfyUI/custom_nodes/sdxl_cpu_bf16/main.py" <<'PY'
-import sys
-print(f"::notice::custom node present: {sys.argv[1]}")
-PY
+          test -f "$runtime/ComfyUI/custom_nodes/sdxl_cpu_bf16/main.py"
+          echo "::notice::SDXL CPU BF16 custom node is present"
           mkdir -p "$runtime/ComfyUI/models/checkpoints"
           dest="$runtime/ComfyUI/models/checkpoints/DreamShaperXL_Lightning.safetensors"
           if [ ! -s "$dest" ]; then
