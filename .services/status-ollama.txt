@@ -19,3 +19,4 @@
 18:24:23Z run 41640430175 · proving it through the gate with a real request
 18:25:37Z run 41640430175 · published https://serves-hereby-pool-directly.trycloudflare.com
 05:34:21Z run 41743298384 · starting ollama on this runner
+05:35:11Z run 41743298384 · ollama is up behind the gate
