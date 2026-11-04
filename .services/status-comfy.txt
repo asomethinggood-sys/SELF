@@ -26,7 +26,4 @@
 11:28:44Z run 41781645948 · comfy is up behind the gate
 11:28:46Z run 41781645948 · proving it through the gate with a real request
 11:30:27Z run 41781645948 · published https://stood-nobody-laser-stones.trycloudflare.com
-17:02:45Z run 41871758476 · starting comfy on this runner
-17:05:04Z run 41871758476 · comfy is up behind the gate
-17:05:08Z run 41871758476 · proving it through the gate with a real request
-17:07:43Z run 41871758476 · published https://feeling-gis-norfolk-seas.trycloudflare.com
+22:38:47Z run 41873499421 · starting comfy on this runner
