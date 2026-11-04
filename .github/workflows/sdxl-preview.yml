@@ -2,6 +2,11 @@ name: Inspect synthetic SDXL comparisons
 
 on:
   workflow_dispatch:
+    inputs:
+      run_id:
+        description: Completed synthetic cluster test run ID with quality artifact
+        required: true
+        type: string
   push:
     paths:
       - .github/workflows/sdxl-preview.yml
@@ -19,9 +24,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: sdxl-quality-41826005417
+          name: sdxl-quality-${{ inputs.run_id || '41826005417' }}
           path: .reports/sdxl-quality
-          run-id: 41826005417
+          run-id: ${{ inputs.run_id || '41826005417' }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - run: python -m pip install -q Pillow
       - run: python scripts/show_sdxl_thumbnails.py
