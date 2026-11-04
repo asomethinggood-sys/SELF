@@ -115,6 +115,27 @@ results advancing a scheduler; it does not prove production restart, queue,
 network-partition, 24/7 handover or Telegram delivery behavior. The default is
 still to fail the experiment rather than silently enable fallback.
 
+## Experimental single-runner service and `.fastdraw`
+
+A separate, opt-in service workflow (`.github/workflows/service-sdxl-experimental.yml`)
+starts one runner on a marker push (`[telegram-sdxl-service]`), serves
+DreamShaper XL Lightning at 4 Euler/SGM-uniform steps, CFG 1, 768×768, and
+publishes `.services/sdxl-experimental.json` for about an hour. It is a
+different runner from the chat bots and a different gate from `.draw`.
+
+`.fastdraw <prompt>` is a hidden, owner-only command registered by
+`havoc/features/experimental_draw.py`. It reads that discovery file, submits a
+graph that is checked byte for byte by `scripts/sdxl_experimental_gate.py`
+before ComfyUI sees it, polls `/history`, downloads the PNG through the same
+gate and sends it to the chat. It holds at most two jobs and clears its own
+entry from the queue when it finishes. It never changes `.draw`, and when the
+experiment is offline, expired or starting it replies that it is unavailable
+and points back at `.draw`.
+
+This is still experimental: one model, one resolution, one scheduler, one
+runner, and a short lifetime. It is not a 24/7 service, not a quality
+guarantee and not a production switch.
+
 ## Access controls
 
 Worker tunnels expose only the authenticated prediction route, not ComfyUI.
