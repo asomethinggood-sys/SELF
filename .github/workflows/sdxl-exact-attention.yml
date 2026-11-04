@@ -1,0 +1,48 @@
+name: Experimental exact split attention
+
+# Synthetic tensors only. This benchmarks the actual transport and attention
+# operation, not a generated image or a claim of a full-model speedup.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/sdxl-exact-attention.yml
+      - scripts/sdxl_attention_bench.py
+
+permissions:
+  contents: write
+
+concurrency:
+  group: experimental-exact-attention-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  attention:
+    name: Exact attention runner ${{ matrix.worker }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        worker: [0, 1, 2, 3, 4, 5, 6, 7]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prepare CPU attention and HTTPS tunnel
+        run: |
+          set -euo pipefail
+          python -m pip install -q --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install -q --no-cache-dir safetensors cryptography
+          curl -fsSL --retry 3 --connect-timeout 30 -o "$RUNNER_TEMP/cloudflared" https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          chmod +x "$RUNNER_TEMP/cloudflared"
+      - name: Compare full-context attention across runners
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WORKER_INDEX: ${{ matrix.worker }}
+          CLOUDFLARED: ${{ runner.temp }}/cloudflared
+          PYTHONPATH: ${{ github.workspace }}
+          OMP_NUM_THREADS: '4'
+          MKL_NUM_THREADS: '4'
+        run: python -u scripts/sdxl_attention_bench.py

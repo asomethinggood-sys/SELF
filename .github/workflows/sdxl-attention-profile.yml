@@ -1,0 +1,41 @@
+name: Experimental SDXL attention profile
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/sdxl-attention-profile.yml
+      - scripts/profile_sdxl_attention.py
+      - scripts/sdxl_attention_profile/**
+
+permissions:
+  contents: read
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prepare isolated CPU model
+        run: |
+          set -euo pipefail
+          export COMFY_DIR="$GITHUB_WORKSPACE/.runtime/sdxl-profile/ComfyUI"
+          git clone --depth 1 --branch v0.43.2 https://github.com/comfyanonymous/ComfyUI.git "$COMFY_DIR"
+          python -m pip install -q --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          python -m pip install -q --no-cache-dir -r "$COMFY_DIR/requirements.txt" filelock cryptography Pillow
+          mkdir -p "$COMFY_DIR/models/checkpoints" "$COMFY_DIR/custom_nodes"
+          dest="$COMFY_DIR/models/checkpoints/DreamShaperXL_Lightning.safetensors"
+          curl -fsSL --retry 3 --connect-timeout 30 --max-time 900 -o "$dest" https://huggingface.co/Lykon/dreamshaper-xl-lightning/resolve/a33ea52a3da2dfaf6e9001940bdb04daae06e944/DreamShaperXL_Lightning.safetensors
+          echo 'fdbe56354b8f876b736f24d3ad867ecd4140c019f57642ec8ddd878088d44f64  '"$dest" | sha256sum -c -
+          ln -s "$GITHUB_WORKSPACE/scripts/sdxl_attention_profile" "$COMFY_DIR/custom_nodes/yura_attention_profile"
+      - name: Profile a real fixed-prompt 768px image
+        env:
+          COMFY_DIR: ${{ github.workspace }}/.runtime/sdxl-profile/ComfyUI
+          PYTHONPATH: ${{ github.workspace }}
+          OMP_NUM_THREADS: '4'
+          MKL_NUM_THREADS: '4'
+        run: python -u scripts/profile_sdxl_attention.py
