@@ -90,12 +90,13 @@ jobs:
           # The custom node supplies the --bf16-unet/--fp32-unet flags ComfyUI is
           # started with. A cache round-trip can drop the link, and a missing node
           # makes ComfyUI exit at once on an unrecognised flag.
-          if [ ! -f "$runtime/ComfyUI/custom_nodes/sdxl_cpu_bf16/main.py" ]; then
-            rm -rf "$runtime/ComfyUI/custom_nodes/sdxl_cpu_bf16"
-            ln -s "$GITHUB_WORKSPACE/scripts/sdxl_cpu_bf16" "$runtime/ComfyUI/custom_nodes/sdxl_cpu_bf16"
+          node_dir="$runtime/ComfyUI/custom_nodes/sdxl_cpu_bf16"
+          if [ ! -e "$node_dir/__init__.py" ]; then
+            rm -rf "$node_dir"
+            mkdir -p "$runtime/ComfyUI/custom_nodes"
+            ln -s "$GITHUB_WORKSPACE/scripts/sdxl_cpu_bf16" "$node_dir"
           fi
-          test -f "$runtime/ComfyUI/custom_nodes/sdxl_cpu_bf16/main.py"
-          echo "::notice::SDXL CPU BF16 custom node is present"
+          echo "::notice::SDXL CPU BF16 custom node: $(readlink -f "$node_dir" 2>/dev/null || echo missing)"
           mkdir -p "$runtime/ComfyUI/models/checkpoints"
           dest="$runtime/ComfyUI/models/checkpoints/DreamShaperXL_Lightning.safetensors"
           if [ ! -s "$dest" ]; then
@@ -135,3 +136,32 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
           rm -f .services/sdxl-experimental.json
+
+      # The log viewer needs a redirect GitHub's API will not hand out here, so the
+      # outcome is written into the repository where it can be read back.
+      - name: Record what the service did
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          runtime="$GITHUB_WORKSPACE/.runtime/sdxl-experimental"
+          report=".reports/sdxl-service-run-${GITHUB_RUN_ID}.txt"
+          checkpoint="$runtime/ComfyUI/models/checkpoints/DreamShaperXL_Lightning.safetensors"
+          {
+            echo "run_id=$GITHUB_RUN_ID"
+            echo "event=$GITHUB_EVENT_NAME"
+            echo "comfy_main=$(test -f "$runtime/ComfyUI/main.py" && echo yes || echo no)"
+            echo "custom_node=$(readlink -f "$runtime/ComfyUI/custom_nodes/sdxl_cpu_bf16" 2>/dev/null || echo missing)"
+            echo "checkpoint=$(du -h "$checkpoint" 2>/dev/null | cut -f1 || echo missing)"
+            echo "cloudflared=$(test -x "$runtime/cloudflared" && echo yes || echo no)"
+            echo "marker=$(test -f .services/sdxl-experimental.json && echo present || echo absent)"
+            echo "failure=$(test -f .services/sdxl-experimental-failure.json && echo present || echo absent)"
+            for name in comfy gate tunnel; do
+              echo "--- $name.log"
+              tail -c 1500 "$runtime/service-logs/$name.log" 2>/dev/null || echo "(no log)"
+            done
+          } > "$report"
+          git add "$report"
+          git -c user.name='Yura automation' -c user.email='yura-automation@users.noreply.github.com' \
+            commit -q -m "Experimental service run $GITHUB_RUN_ID [skip ci]" || true
+          git push -q "origin HEAD:${GITHUB_REF_NAME}" || echo "::warning::could not publish the service report"

@@ -61,9 +61,14 @@ def main() -> None:
             if bf16:
                 env["SDXL_ALLOW_CPU_BF16"] = "1"
             command = [sys.executable, "main.py", "--cpu", "--listen", "127.0.0.1", "--port", "8188",
-                       "--disable-auto-launch", "--dont-print-server", "--bf16-unet" if bf16 else "--fp32-unet"]
-            if not (Path(env["COMFY_DIR"]) / "custom_nodes" / "sdxl_cpu_bf16" / "main.py").is_file():
-                raise RuntimeError(f"SDXL CPU BF16 custom node is missing from {env['COMFY_DIR']}")
+                       "--disable-auto-launch", "--dont-print-server"]
+            # The custom node registers the precision flags. Without it ComfyUI
+            # rejects the unknown argument and exits before it serves anything.
+            if (Path(env["COMFY_DIR"]) / "custom_nodes" / "sdxl_cpu_bf16" / "__init__.py").is_file():
+                command.append("--bf16-unet" if bf16 else "--fp32-unet")
+            else:
+                print("::warning::SDXL CPU BF16 custom node is missing; starting ComfyUI without a "
+                      "precision flag", flush=True)
             comfy_log = (LOG_DIR / "comfy.log").open("w+")
             global _STAGE
             _STAGE = "comfy-start"
