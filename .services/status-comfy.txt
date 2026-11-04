@@ -29,3 +29,4 @@
 22:38:47Z run 41873499421 · starting comfy on this runner
 22:41:03Z run 41873499421 · comfy is up behind the gate
 22:41:05Z run 41873499421 · proving it through the gate with a real request
+22:43:40Z run 41873499421 · published https://minimize-fails-omaha-james.trycloudflare.com
