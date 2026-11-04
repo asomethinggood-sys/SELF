@@ -29,7 +29,12 @@ _OPENER = urllib.request.build_opener(_NoRedirect())
 
 
 def _un64(value: str) -> bytes:
-    return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
+    if not isinstance(value, str) or not value or "=" in value:
+        raise ValueError("invalid base64url")
+    raw = base64.b64decode(value + "=" * (-len(value) % 4), altchars=b"-_", validate=True)
+    if base64.urlsafe_b64encode(raw).decode().rstrip("=") != value:
+        raise ValueError("noncanonical base64url")
+    return raw
 
 
 def get_token(audience: str = AUDIENCE) -> str:
