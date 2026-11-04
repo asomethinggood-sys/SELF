@@ -4,6 +4,16 @@ name: Experimental four-runner SDXL
 # Four jobs collaborate on each denoising step; user prompts are never used here.
 on:
   workflow_dispatch:
+    inputs:
+      scenario:
+        description: Experimental quality comparison to run
+        type: choice
+        default: wide-overlap
+        options:
+          - wide-overlap
+          - crop-conditioning
+          - full-context-first
+          - legacy
   push:
     paths:
       - .github/workflows/sdxl-cluster-test.yml
@@ -67,7 +77,7 @@ jobs:
           OMP_NUM_THREADS: '4'
           MKL_NUM_THREADS: '4'
           SDXL_TEST_RESOLUTION: '768'
-          SDXL_TEST_SCENARIO: 'crop-conditioning'
+          SDXL_TEST_SCENARIO: ${{ inputs.scenario || 'wide-overlap' }}
         run: python -u scripts/sdxl_cluster_test.py
       - name: Preserve synthetic quality comparisons
         if: always() && matrix.worker == 0

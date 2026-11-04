@@ -335,6 +335,40 @@ def leader(temp: Path) -> int:
                 time.sleep(3)
             raise TimeoutError("render timed out")
 
+        if os.environ.get("SDXL_TEST_SCENARIO") == "wide-overlap":
+            from io import BytesIO
+
+            from PIL import Image, ImageChops, ImageStat
+
+            render(distributed=False, seed=1234, label="warmup")
+            lighthouse_time, lighthouse = render(distributed=True, seed=1234, overlap=32, sampler_id="11", label="lighthouse-wide32", global_weight=1.0, global_first_only=True, global_full_res=True)
+            baseline_time, baseline = render(distributed=False, seed=1234, sampler_id="12", label="single-baseline")
+            portrait = "a portrait of a woman with brown hair in a forest, cinematic photography"
+            portrait24_time, portrait24 = render(distributed=True, seed=4321, overlap=24, sampler_id="13", label="portrait-wide24", global_weight=1.0, global_first_only=True, global_full_res=True, prompt=portrait)
+            portrait32_time, portrait32 = render(distributed=True, seed=4321, overlap=32, sampler_id="14", label="portrait-wide32", global_weight=1.0, global_first_only=True, global_full_res=True, prompt=portrait)
+            portrait_baseline_time, portrait_baseline = render(distributed=False, seed=4321, sampler_id="15", label="portrait-baseline", prompt=portrait)
+            def difference(first: bytes, second: bytes) -> float:
+                a = Image.open(BytesIO(first)).convert("RGB")
+                b = Image.open(BytesIO(second)).convert("RGB")
+                if a.size != b.size:
+                    raise ValueError("quality comparison size mismatch")
+                return sum(ImageStat.Stat(ImageChops.difference(a, b)).mean) / 3
+            print("::notice::Same-seed wide-overlap experiment: "
+                  f"lighthouse baseline {baseline_time:.1f}s, 32 overlap {lighthouse_time:.1f}s (RGB MAE {difference(lighthouse, baseline):.2f}); "
+                  f"portrait baseline {portrait_baseline_time:.1f}s, 24 overlap {portrait24_time:.1f}s (RGB MAE {difference(portrait24, portrait_baseline):.2f}), "
+                  f"32 overlap {portrait32_time:.1f}s (RGB MAE {difference(portrait32, portrait_baseline):.2f}). "
+                  "RGB difference is not a perceptual quality score.", flush=True)
+            status = Path(f"/proc/{child.pid}/status").read_text()
+            match = re.search(r"^VmHWM:\s+(\d+)\s+kB", status, re.MULTILINE)
+            if match:
+                print(f"::notice::Coordinator ComfyUI peak RSS: {int(match.group(1)) / 1048576:.2f} GiB", flush=True)
+            output.flush()
+            log = (temp / "comfy.log").read_text(errors="replace")
+            if "SDXL_DEGRADED" in log or log.count("SDXL_GLOBAL_FULL") != 3:
+                raise RuntimeError("wide-overlap experiment did not run as requested")
+            success = True
+            return 0
+
         if os.environ.get("SDXL_TEST_SCENARIO") == "crop-conditioning":
             from io import BytesIO
 
