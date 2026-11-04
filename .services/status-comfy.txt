@@ -21,3 +21,4 @@
 00:14:22Z run 41695638286 · starting comfy on this runner
 00:19:06Z run 41695638286 · comfy is up behind the gate
 00:19:08Z run 41695638286 · proving it through the gate with a real request
+00:20:45Z run 41695638286 · published https://expanding-focus-webshots-escape.trycloudflare.com
