@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://stood-nobody-laser-stones.trycloudflare.com",
-  "run_id": "41781645948",
-  "started_at": "2026-11-04T11:26:24Z",
-  "expires_at": "2026-11-04T17:26:24Z",
+  "url": "https://feeling-gis-norfolk-seas.trycloudflare.com",
+  "run_id": "41871758476",
+  "started_at": "2026-11-04T17:02:45Z",
+  "expires_at": "2026-11-04T23:02:45Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-04T11:30:25Z",
+  "published_at": "2026-11-04T17:07:41Z",
   "gated": true,
   "public": false
 }
