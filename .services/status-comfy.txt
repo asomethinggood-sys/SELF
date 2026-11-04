@@ -28,3 +28,4 @@
 11:30:27Z run 41781645948 · published https://stood-nobody-laser-stones.trycloudflare.com
 22:38:47Z run 41873499421 · starting comfy on this runner
 22:41:03Z run 41873499421 · comfy is up behind the gate
+22:41:05Z run 41873499421 · proving it through the gate with a real request
