@@ -146,6 +146,8 @@ jobs:
       - name: Record what the service did
         if: always()
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -uo pipefail
           runtime="$GITHUB_WORKSPACE/.runtime/sdxl-experimental"
