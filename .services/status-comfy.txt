@@ -21,3 +21,4 @@
 05:50:22Z run 41745253661 · starting comfy on this runner
 05:52:35Z run 41745253661 · comfy is up behind the gate
 05:52:37Z run 41745253661 · proving it through the gate with a real request
+05:54:29Z run 41745253661 · published https://sponsorship-saw-entered-sussex.trycloudflare.com
