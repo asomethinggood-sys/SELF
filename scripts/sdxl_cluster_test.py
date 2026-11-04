@@ -229,6 +229,13 @@ def worker(temp: Path) -> int:
         print(f"::notice::Worker {INDEX}: loaded model and joined securely", flush=True)
         deadline = time.monotonic() + TIMEOUT
         while time.monotonic() < deadline:
+            stop_signal, _ = read(f"stop-{INDEX}.json")
+            if stop_signal is not None:
+                calls = (temp / "gate.log").read_text(errors="replace").count("SDXL_GATE_PREDICT ok")
+                if calls < 8:
+                    raise RuntimeError("cannot inject failure before both distributed renders completed")
+                print(f"::notice::Worker {INDEX}: intentional shutdown to test coordinator fallback", flush=True)
+                return 0
             done, _ = read("done.json")
             if done is not None:
                 calls = (temp / "gate.log").read_text(errors="replace").count("SDXL_GATE_PREDICT ok")
@@ -263,7 +270,7 @@ def leader(temp: Path) -> int:
     try:
         write("leader.json", {"public": b64(public(private))})
         workers = [open_envelope(private, wait_for(f"worker-{i}.json")) for i in (1, 2, 3)]
-        env = {**os.environ, "SDXL_COORDINATOR_WORKERS": json.dumps(workers)}
+        env = {**os.environ, "SDXL_COORDINATOR_WORKERS": json.dumps(workers), "SDXL_FALLBACK_LOCAL": "1"}
         child, output = server(env, temp / "comfy.log")
         resolution = int(os.environ.get("SDXL_TEST_RESOLUTION", "512"))
         if resolution not in {512, 768, 1024}:
@@ -325,7 +332,19 @@ def leader(temp: Path) -> int:
                 raise RuntimeError("quality comparison size mismatch")
             mae = sum(ImageStat.Stat(ImageChops.difference(reference, candidate)).mean) / 3
             print(f"::notice::{name}: mean absolute RGB difference vs same-seed full-frame {mae:.2f}/255 (not a perceptual quality score)", flush=True)
+        # A real remote worker is stopped, not mocked. The next distributed
+        # graph must finish locally without advancing on partial predictions.
+        write("stop-1.json", {"reason": "exercise local fallback"})
+        end = time.monotonic() + 60
+        while time.monotonic() < end and read("worker-1.json")[0] is not None:
+            time.sleep(2)
+        if read("worker-1.json")[0] is not None:
+            raise TimeoutError("failure injection worker did not stop")
+        fallback_time, _ = render(distributed=True, seed=1236, sampler_id="13", label="local-fallback")
         output.flush()
+        if "SDXL_DEGRADED switching to full-frame local inference" not in (temp / "comfy.log").read_text(errors="replace"):
+            raise RuntimeError("worker failure did not trigger local fallback")
+        print(f"::notice::Actual worker loss recovered via local inference in {fallback_time:.1f}s", flush=True)
         for match in re.finditer(r"SDXL_TILE_STATS step_seconds=[0-9.]+ tile_seconds=[0-9.,]+", (temp / "comfy.log").read_text(errors="replace")):
             print(f"::notice::{match.group(0)}", flush=True)
         success = True
@@ -350,6 +369,7 @@ def leader(temp: Path) -> int:
             time.sleep(3)
         delete("leader.json")
         delete("done.json")
+        delete("stop-1.json")
 
 
 def main() -> int:

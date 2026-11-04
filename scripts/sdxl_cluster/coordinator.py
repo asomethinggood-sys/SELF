@@ -13,7 +13,7 @@ from typing import Any
 
 from scripts.experimental_tiled_denoise import predict_four
 
-from .client import predict, validate_worker
+from .client import WorkerError, predict, validate_worker
 
 
 def _workers() -> list[dict[str, str]]:
@@ -59,9 +59,16 @@ class FourWorkerSDXL:
     def patch(self, model: Any, overlap: int) -> tuple[Any]:
         workers = _workers()
         patched = model.clone()
+        fallback_enabled = os.environ.get("SDXL_FALLBACK_LOCAL", "").lower() in {"1", "true", "yes"}
+        degraded = False
 
         def wrapper(apply_model: Any, args: dict[str, Any]) -> Any:
+            nonlocal degraded
             x, sigma, conditions = args["input"], args["timestep"], args["c"]
+            if degraded:
+                import torch
+                with torch.inference_mode():
+                    return apply_model(x, sigma, **conditions)
             portable = _portable_conditions(conditions)
 
             elapsed: dict[int, float] = {}
@@ -79,7 +86,18 @@ class FourWorkerSDXL:
                     elapsed[tile.index] = time.monotonic() - start
 
             start = time.monotonic()
-            result = predict_four(x, run_tile, overlap=overlap)
+            try:
+                result = predict_four(x, run_tile, overlap=overlap)
+            except (WorkerError, ValueError):
+                if not fallback_enabled:
+                    raise
+                # Never use partial predictions. Finish this and subsequent
+                # steps on the coordinator until this patched model is rebuilt.
+                degraded = True
+                print("SDXL_DEGRADED switching to full-frame local inference", flush=True)
+                import torch
+                with torch.inference_mode():
+                    return apply_model(x, sigma, **conditions)
             print("SDXL_TILE_STATS step_seconds=" + f"{time.monotonic() - start:.2f}" +
                   " tile_seconds=" + ",".join(f"{elapsed[i]:.2f}" for i in range(4)), flush=True)
             return result
