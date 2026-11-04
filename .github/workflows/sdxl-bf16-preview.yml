@@ -1,0 +1,41 @@
+name: Inspect synthetic SDXL precision images
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Precision benchmark run ID
+        required: true
+        type: string
+      runner:
+        description: Matrix runner number
+        required: true
+        type: string
+  push:
+    paths:
+      - .github/workflows/sdxl-bf16-preview.yml
+      - scripts/show_sdxl_precision_thumbnail.py
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdxl-bf16-${{ inputs.run_id || '41859564033' }}-${{ inputs.runner || '1' }}
+          path: .reports/sdxl-bf16
+          run-id: ${{ inputs.run_id || '41859564033' }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: python -m pip install -q Pillow
+      - run: python scripts/show_sdxl_precision_thumbnail.py
+        env:
+          SDXL_PREVIEW: fp32
+      - run: python scripts/show_sdxl_precision_thumbnail.py
+        env:
+          SDXL_PREVIEW: bf16
