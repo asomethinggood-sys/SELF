@@ -1,0 +1,27 @@
+name: Inspect synthetic SDXL comparisons
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/sdxl-preview.yml
+      - scripts/show_sdxl_thumbnails.py
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdxl-quality-41819920341
+          path: .reports/sdxl-quality
+          run-id: 41819920341
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: python -m pip install -q Pillow
+      - run: python scripts/show_sdxl_thumbnails.py
