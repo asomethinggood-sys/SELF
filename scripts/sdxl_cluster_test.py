@@ -339,7 +339,7 @@ def leader(temp: Path) -> int:
                 time.sleep(3)
             raise TimeoutError("render timed out")
 
-        if os.environ.get("SDXL_TEST_SCENARIO") == "crop-stress":
+        if os.environ.get("SDXL_TEST_SCENARIO") in {"crop-stress", "wide-stress"}:
             from io import BytesIO
 
             from PIL import Image, ImageChops, ImageStat
@@ -353,9 +353,10 @@ def leader(temp: Path) -> int:
             )
             render(distributed=False, seed=1234, label="warmup")
             results = []
+            wide = os.environ.get("SDXL_TEST_SCENARIO") == "wide-stress"
             for index, (name, prompt, seed) in enumerate(cases):
-                cluster_time, actual = render(distributed=True, seed=seed, overlap=16,
-                    sampler_id=str(20 + index * 2), label=f"{name}-cluster", spatial_crops=True,
+                cluster_time, actual = render(distributed=True, seed=seed, overlap=24 if wide else 16,
+                    sampler_id=str(20 + index * 2), label=f"{name}-cluster", spatial_crops=not wide,
                     global_weight=1.0, global_first_only=True, global_full_res=True, prompt=prompt)
                 single_time, baseline = render(distributed=False, seed=seed, sampler_id=str(21 + index * 2),
                     label=f"{name}-baseline", prompt=prompt)
