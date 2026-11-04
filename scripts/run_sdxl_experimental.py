@@ -52,8 +52,7 @@ def main() -> None:
     handles = []
     published = False
     try:
-        with tempfile.TemporaryDirectory(prefix="sdxl-service-") as temp:
-            folder = Path(temp)
+        with tempfile.TemporaryDirectory(prefix="sdxl-service-"):
             LOG_DIR.mkdir(parents=True, exist_ok=True)
             env = os.environ.copy()
             cpu = Path("/proc/cpuinfo").read_text(errors="replace").lower()

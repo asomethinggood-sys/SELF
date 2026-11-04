@@ -165,16 +165,4 @@ jobs:
               tail -c 1500 "$runtime/service-logs/$name.log" 2>/dev/null || echo "(no log)"
             done
           } > "$report"
-          git add "$report"
-          git -c user.name='Yura automation' -c user.email='yura-automation@users.noreply.github.com' \
-            commit -q -m "Experimental service run $GITHUB_RUN_ID [skip ci]" || true
-          for _ in 1 2 3 4 5 6; do
-            if git push -q "origin HEAD:${GITHUB_REF_NAME}"; then
-              break
-            fi
-            git fetch -q "origin ${GITHUB_REF_NAME}" || true
-            git -c user.name='Yura automation' -c user.email='yura-automation@users.noreply.github.com' \
-              rebase -q "origin/${GITHUB_REF_NAME}" || git rebase --abort || true
-            sleep 10
-          done
-          test -f "$report" && echo "::notice::service report: $report"
+          python scripts/record_service_run.py "$report" "sdxl-service-run-${GITHUB_RUN_ID}.json"
