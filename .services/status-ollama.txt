@@ -27,3 +27,4 @@
 16:46:45Z run 41819020979 · proving it through the gate with a real request
 16:46:56Z run 41819020979 · published https://explained-annex-positions-jonathan.trycloudflare.com
 22:21:02Z run 41871758439 · starting ollama on this runner
+22:21:57Z run 41871758439 · ollama is up behind the gate
