@@ -420,6 +420,16 @@ jobs:
           # Immutable, unique key; later runs restore it with the prefix above.
           key: havoc-her-session-${{ github.run_id }}
 
+      - name: Fetch the opt-in experimental SDXL sample
+        if: contains(github.event.head_commit.message, '[telegram-sdxl-sample]')
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: sdxl-bf16-41859564033-1
+          path: .runtime/sdxl-telegram-sample
+          run-id: '41859564033'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Run her userbot
         # always(): a failed AI probe or a stale cache must never keep her down.
         if: always() && (steps.login.outputs.logged_in == 'yes' || steps.existing.outputs.have_session == 'yes')
@@ -446,6 +456,7 @@ jobs:
           LIVE_DOWNLOADER_PROBE: ${{ contains(github.event.head_commit.message, '[telegram-download-probe]') && '1' || '0' }}
           LIVE_DRAW_PROBE: ${{ contains(github.event.head_commit.message, '[telegram-draw-probe]') && '1' || '0' }}
           LIVE_REPLY_PROBE: ${{ contains(github.event.head_commit.message, '[telegram-reply-probe]') && '1' || '0' }}
+          LIVE_SDXL_SAMPLE: ${{ contains(github.event.head_commit.message, '[telegram-sdxl-sample]') && '1' || '0' }}
           DRAW_PROBE_ACCOUNT: her
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Her own snapshot file: his is committed by his bot every five minutes
@@ -471,6 +482,9 @@ jobs:
           if [ -z "${SESSION_STRING:-}" ]; then
             echo "::error::No session for her account; nothing to run."
             exit 1
+          fi
+          if [ "${LIVE_SDXL_SAMPLE:-0}" = 1 ]; then
+            timeout --signal=INT 100s python scripts/probe_telegram_sdxl_sample.py || echo '::warning::Experimental sample delivery failed; starting the userbot anyway.'
           fi
           if [ "${LIVE_DOWNLOADER_PROBE:-0}" = 1 ]; then
             probe_status=0

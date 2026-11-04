@@ -512,6 +512,16 @@ jobs:
             echo "- her account — \`$her\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Fetch the opt-in experimental SDXL sample
+        if: contains(github.event.head_commit.message, '[telegram-sdxl-sample]')
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: sdxl-bf16-41859564033-1
+          path: .runtime/sdxl-telegram-sample
+          run-id: '41859564033'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Run the userbot
         # always(): a failure in any earlier step must not keep the bot down.
         if: always() && (steps.verify.outputs.logged_in == 'yes' || steps.existing.outputs.have_session == 'yes')
@@ -537,6 +547,7 @@ jobs:
           LIVE_DOWNLOADER_PROBE: ${{ contains(github.event.head_commit.message, '[telegram-download-probe]') && '1' || '0' }}
           LIVE_DRAW_PROBE: ${{ contains(github.event.head_commit.message, '[telegram-draw-probe]') && '1' || '0' }}
           LIVE_REPLY_PROBE: ${{ contains(github.event.head_commit.message, '[telegram-reply-probe]') && '1' || '0' }}
+          LIVE_SDXL_SAMPLE: ${{ contains(github.event.head_commit.message, '[telegram-sdxl-sample]') && '1' || '0' }}
           DRAW_PROBE_ACCOUNT: own
           # Her id when her own Yura has logged in (see "Who else may command
           # her"). Empty means "nobody extra": this account is always an owner.
@@ -576,6 +587,9 @@ jobs:
           if [ -z "${SESSION_STRING:-}" ]; then
             echo "::error::No session available to run with."
             exit 1
+          fi
+          if [ "${LIVE_SDXL_SAMPLE:-0}" = 1 ]; then
+            timeout --signal=INT 100s python scripts/probe_telegram_sdxl_sample.py || echo '::warning::Experimental sample delivery failed; starting the userbot anyway.'
           fi
           if [ "${LIVE_DOWNLOADER_PROBE:-0}" = 1 ]; then
             probe_status=0
