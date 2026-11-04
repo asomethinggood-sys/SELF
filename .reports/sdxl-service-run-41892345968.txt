@@ -1,0 +1,22 @@
+run_id=41892345968
+event=push
+comfy_main=yes
+custom_node=/home/runner/work/SELF/SELF/scripts/sdxl_cpu_bf16
+checkpoint=6.5G
+cloudflared=yes
+marker=absent
+failure=absent
+--- runner.log
+Traceback (most recent call last):
+  File "/home/runner/work/SELF/SELF/scripts/run_sdxl_experimental.py", line 18, in <module>
+    from scripts import sdxl_cluster_test as rendezvous  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/SELF/SELF/scripts/sdxl_cluster_test.py", line 26, in <module>
+    from cryptography.hazmat.primitives import hashes, serialization
+ModuleNotFoundError: No module named 'cryptography'
+--- comfy.log
+(no log)
+--- gate.log
+(no log)
+--- tunnel.log
+(no log)
