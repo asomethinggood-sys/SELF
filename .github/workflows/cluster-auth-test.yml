@@ -1,0 +1,33 @@
+name: Experimental cluster authentication preflight
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/cluster-auth-test.yml
+      - scripts/check_cluster_auth.py
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify this job's identity without exposing its token
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/check_cluster_auth.py
+  readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure read-only jobs cannot impersonate a bot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/check_cluster_auth.py --expect-readonly
