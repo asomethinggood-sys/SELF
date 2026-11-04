@@ -39,7 +39,7 @@ TOKEN = os.environ["GITHUB_TOKEN"]
 INDEX = int(os.environ["WORKER_INDEX"])
 DIRECTORY = f".cluster-probes/{RUN}"
 API = f"https://api.github.com/repos/{REPO}/contents/{DIRECTORY}"
-TIMEOUT = 900
+TIMEOUT = 1200
 
 
 def b64(data: bytes) -> str:
@@ -277,7 +277,7 @@ def leader(temp: Path) -> int:
             raise ValueError("unsupported test resolution")
         generator = ImageGenerator(checkpoint="DreamShaperXL_Lightning.safetensors", width=resolution, height=resolution)
         def render(*, distributed: bool, seed: int, overlap: int = 8, sampler_id: str = "3", label: str,
-                   global_weight: float = 0.0) -> tuple[float, bytes]:
+                   global_weight: float = 0.0, global_first_only: bool = False) -> tuple[float, bytes]:
             graph, _, _ = generator._builtin("a lighthouse on a rocky coast at sunrise", seed, steps=4)
             graph["3"]["inputs"].update({"cfg": 1.0, "scheduler": "sgm_uniform"})
             if distributed:
@@ -285,6 +285,8 @@ def leader(temp: Path) -> int:
                 graph["10"] = {"class_type": "FourWorkerSDXL", "inputs": {"model": ["4", 0], "overlap": overlap}}
                 if global_weight:
                     graph["10"]["inputs"]["global_weight"] = global_weight
+                    if global_first_only:
+                        graph["10"]["inputs"]["global_first_only"] = True
             if sampler_id != "3":
                 # A fresh sampler node prevents Comfy's graph cache from turning
                 # the same-seed baseline into a near-instant cached result.
@@ -324,13 +326,14 @@ def leader(temp: Path) -> int:
         cluster_time, image8 = render(distributed=True, seed=1234, overlap=8, label="tiled-overlap-8")
         overlap_time, image16 = render(distributed=True, seed=1234, overlap=16, sampler_id="11", label="tiled-overlap-16")
         guided_time, guided = render(distributed=True, seed=1234, overlap=16, sampler_id="14", label="tiled-global-035", global_weight=0.35)
+        first_time, first_guided = render(distributed=True, seed=1234, overlap=16, sampler_id="15", label="tiled-global-first", global_weight=0.35, global_first_only=True)
         single_time, baseline = render(distributed=False, seed=1234, sampler_id="12", label="single-baseline")
-        print(f"::notice::Same-seed warm comparison: overlap 8 {cluster_time:.1f}s, overlap 16 {overlap_time:.1f}s, guided {guided_time:.1f}s, single {single_time:.1f}s", flush=True)
+        print(f"::notice::Same-seed warm comparison: overlap 8 {cluster_time:.1f}s, overlap 16 {overlap_time:.1f}s, guided {guided_time:.1f}s, first-only {first_time:.1f}s, single {single_time:.1f}s", flush=True)
         from io import BytesIO
 
         from PIL import Image, ImageChops, ImageStat
         reference = Image.open(BytesIO(baseline)).convert("RGB")
-        for name, blob in (("overlap 8", image8), ("overlap 16", image16), ("global 0.35", guided)):
+        for name, blob in (("overlap 8", image8), ("overlap 16", image16), ("global 0.35", guided), ("global first", first_guided)):
             candidate = Image.open(BytesIO(blob)).convert("RGB")
             if candidate.size != reference.size:
                 raise RuntimeError("quality comparison size mismatch")

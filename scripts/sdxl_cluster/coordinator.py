@@ -51,13 +51,14 @@ class FourWorkerSDXL:
     @classmethod
     def INPUT_TYPES(cls) -> dict:
         return {"required": {"model": ("MODEL",), "overlap": ("INT", {"default": 8, "min": 0, "max": 48, "step": 8})},
-                "optional": {"global_weight": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.05})}}
+                "optional": {"global_weight": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.05}),
+                             "global_first_only": ("BOOLEAN", {"default": False})}}
 
     RETURN_TYPES = ("MODEL",)
     FUNCTION = "patch"
     CATEGORY = "experimental/distributed"
 
-    def patch(self, model: Any, overlap: int, global_weight: float = 0.0) -> tuple[Any]:
+    def patch(self, model: Any, overlap: int, global_weight: float = 0.0, global_first_only: bool = False) -> tuple[Any]:
         if not 0.0 <= global_weight <= 1.0:
             raise ValueError("global weight must be between zero and one")
         workers = _workers()
@@ -73,6 +74,14 @@ class FourWorkerSDXL:
                 with torch.inference_mode():
                     return apply_model(x, sigma, **conditions)
             portable = _portable_conditions(conditions)
+            active_global = global_weight
+            if global_weight and global_first_only:
+                import torch
+                samples = conditions.get("transformer_options", {}).get("sample_sigmas")
+                if not isinstance(samples, torch.Tensor) or not samples.numel():
+                    raise ValueError("first-step global guidance requires the sampler sigma schedule")
+                if not torch.isclose(sigma.flatten()[0], samples.flatten()[0].to(sigma), rtol=0.0001):
+                    active_global = 0.0
 
             elapsed: dict[int, float] = {}
             global_prediction: Any = None
@@ -85,7 +94,7 @@ class FourWorkerSDXL:
                         import torch
                         with torch.inference_mode():
                             tile_prediction = apply_model(data, sigma, **conditions)
-                            if global_weight:
+                            if active_global:
                                 # The global pass runs alongside remote tiles on
                                 # the coordinator, not as another full-size UNet.
                                 # It is an approximation, not full attention.
@@ -112,11 +121,11 @@ class FourWorkerSDXL:
                 import torch
                 with torch.inference_mode():
                     return apply_model(x, sigma, **conditions)
-            if global_weight:
+            if active_global:
                 import torch
                 if global_prediction is None or global_prediction.shape != x.shape or not torch.isfinite(global_prediction).all():
                     raise ValueError("invalid coarse global prediction")
-                result = result.lerp(global_prediction, global_weight)
+                result = result.lerp(global_prediction, active_global)
             print("SDXL_TILE_STATS step_seconds=" + f"{time.monotonic() - start:.2f}" +
                   " tile_seconds=" + ",".join(f"{elapsed[i]:.2f}" for i in range(4)), flush=True)
             return result
