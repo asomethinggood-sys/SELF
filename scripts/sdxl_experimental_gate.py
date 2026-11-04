@@ -67,9 +67,8 @@ class ExperimentalGate(gate.Gate):
             return
         with _queue_lock:
             try:
-                request = urllib.request.Request(
-                    gate.BACKEND + "/queue", data=b"{}", method="POST",
-                    headers={"Content-Type": "application/json"})
+                # ComfyUI lists its queue with GET and deletes from it with POST.
+                request = urllib.request.Request(gate.BACKEND + "/queue", method="GET")
                 with gate._OPENER.open(request, timeout=5) as response:  # noqa: S310 - fixed loopback
                     raw = response.read(65537)
                 if len(raw) > 65536:

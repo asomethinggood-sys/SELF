@@ -181,3 +181,49 @@ def test_feature_registers_an_owner_only_hidden_command():
     assert registry.registered[0].owner_only is True
     assert registry.registered[0].hidden is True
     assert registry.registered[0].category == "media"
+
+
+def _directory(service: dict | None = None, root: str = "/tmp/yura-cluster") -> SimpleNamespace:
+    override = {"sdxl-experimental": service} if service is not None else {}
+    return SimpleNamespace(
+        override=override, branch="arena/b9a136e7-self",
+        root=root, pull_now=lambda force=True: False,
+    )
+
+
+TEXT = {
+    "fastdraw.title": "experimental draw",
+    "fastdraw.not_configured": "not configured",
+    "fastdraw.between_runs": "between runs",
+    "fastdraw.usage_hint": "usage hint",
+}
+
+
+def _ctx(prefix: str = ".") -> SimpleNamespace:
+    return SimpleNamespace(
+        t=lambda key, **variables: TEXT.get(key, key),
+        runtime=SimpleNamespace(prefix=prefix),
+        chat_id=1,
+    )
+
+
+def test_info_reports_the_published_service():
+    from havoc.features import experimental_draw
+
+    directory = _directory(service=discovery(precision="bf16"))
+    text = experimental_draw._info(_ctx(), directory)
+    assert "bf16" in text and "768" in text
+
+
+def test_info_reports_an_absent_service(tmp_path):
+    from havoc.features import experimental_draw
+
+    text = experimental_draw._info(_ctx(), _directory(root=str(tmp_path)))
+    assert "between runs" in text
+
+
+def test_info_reports_a_not_configured_bot():
+    from havoc.features import experimental_draw
+
+    text = experimental_draw._info(_ctx(), None)
+    assert "not configured" in text

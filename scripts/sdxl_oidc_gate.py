@@ -57,6 +57,11 @@ def allowed(method: str, path: str) -> bool:
         return False
     clean = parts.path
     if method == "GET":
+        if clean == "/queue":
+            # ComfyUI reads its queue with GET and deletes from it with POST. The
+            # listing holds prompt ids only, and the caller already proved who
+            # it is before this route is reached.
+            return not parts.query
         if clean in {"/object_info/CheckpointLoaderSimple", "/system_stats"}:
             return not parts.query
         if re.fullmatch(r"/history/[a-zA-Z0-9-]{1,80}", clean):

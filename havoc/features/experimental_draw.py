@@ -18,7 +18,7 @@ from typing import Any
 
 from .. import ui
 from ..command_registry import Command, CommandContext, CommandError
-from ..services.experimental_sdxl import ExperimentalError, generate
+from ..services import experimental_sdxl
 from ..services.sender import SendError
 from ..utils.formatting import escape
 from ..utils.text import truncate
@@ -94,13 +94,13 @@ async def cmd_fastdraw(ctx: CommandContext) -> None:
 
     try:
         path = await asyncio.wait_for(
-            generate(directory, prompt, seed=seed, outdir=folder),
+            experimental_sdxl.generate(directory, prompt, seed=seed, outdir=folder),
             timeout=GENERATE_TIMEOUT,
         )
     except TimeoutError:
         await _edit(ctx, notice_message, _error(ctx, ctx.t("fastdraw.too_slow")))
         return
-    except ExperimentalError as exc:
+    except experimental_sdxl.ExperimentalError as exc:
         await _edit(ctx, notice_message, _error(ctx, escape(str(exc))))
         return
     except asyncio.CancelledError:
@@ -160,28 +160,27 @@ def _error(ctx: CommandContext, reason: str) -> str:
 def _info(ctx: CommandContext, directory: Any) -> str:
     rows: list[tuple[str, str]] = []
     if directory is None:
-        rows.append((ui.inline("state", "off"), ui.inline("detail", ctx.t("fastdraw.not_configured"))))
+        rows.append(ui.fact_line("state", "off · " + ctx.t("fastdraw.not_configured")))
         return "\n\n".join(
             [
                 ui.title("⚡", ctx.t("fastdraw.title")),
-                ui.panel("\n".join(rows)),
+                ui.panel(rows),
                 ui.footer(ctx.t("fastdraw.usage_hint", prefix=ctx.runtime.prefix)),
             ]
         )
+    # Read the discovery file the way the client does. The generic resolver
+    # would look for an HMAC token here, and this gate authenticates with
+    # GitHub OIDC instead, so its "broken" state would be a lie.
     try:
-        endpoint = directory.resolve("sdxl-experimental", force=True)
-    except Exception:  # noqa: BLE001 - an unreachable discovery file is a status, not a crash
-        endpoint = None
-    if endpoint is None or not getattr(endpoint, "ok", False):
-        reason = getattr(endpoint, "state", "unavailable")
-        rows.append((ui.inline("state", str(reason)), ui.inline("detail", ctx.t("fastdraw.between_runs"))))
-    else:
-        rows.append((ui.inline("state", "online"), ui.inline("detail", str(getattr(endpoint, "model", "SDXL Lightning")))))
-        rows.append((ui.inline("steps", "4"), ui.inline("detail", "768×768 · owner-only")))
+        item = experimental_sdxl._discover(directory)
+        rows.append(ui.fact_line("state", "online · " + str(item.get("precision", "SDXL Lightning"))))
+        rows.append(ui.fact_line("size", "768×768 · 4 steps · owner-only"))
+    except experimental_sdxl.ExperimentalError:
+        rows.append(ui.fact_line("state", "off · " + ctx.t("fastdraw.between_runs")))
     return "\n\n".join(
         [
             ui.title("⚡", ctx.t("fastdraw.title")),
-            ui.panel("\n".join(rows)),
+            ui.panel(rows),
             ui.footer(ctx.t("fastdraw.usage_hint", prefix=ctx.runtime.prefix)),
         ]
     )

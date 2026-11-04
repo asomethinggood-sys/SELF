@@ -73,6 +73,8 @@ class Comfy(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):  # noqa: N802
+        if self.path == "/queue":
+            return self._send(json.dumps(Comfy.queue).encode())
         if self.path == "/system_stats":
             return self._send(b'{"system":{}}')
         if self.path == "/history/job-1":
@@ -202,7 +204,9 @@ def test_gate_lets_the_caller_clear_its_own_pending_job(stack):
     assert _call(stack, "POST", "/queue", body={"delete": ["job-1"]}, token=token)[0] == 200
 
 
-def test_gate_does_not_answer_unlisted_paths(stack):
+def test_gate_answers_the_queue_listing_and_nothing_else(stack):
     token = _token(stack.private, stack.key["kid"], now=time.time())
-    assert _call(stack, "GET", "/queue")[0] == 404
+    assert _call(stack, "GET", "/queue")[0] == 401  # unsigned: refused
+    assert _call(stack, "GET", "/queue", token=token)[0] == 200
     assert _call(stack, "GET", "/system_stats", token=token)[0] == 200
+    assert _call(stack, "GET", "/prompt", token=token)[0] == 404
