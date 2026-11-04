@@ -2,6 +2,7 @@
 """Hosted live HTTP preflight for the experimental authenticated gateway."""
 from __future__ import annotations
 
+import json
 import os
 import sys
 import threading
@@ -24,12 +25,17 @@ class Upstream(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"stub-comfy")
 
+    def do_POST(self):  # noqa: N802
+        self.rfile.read(int(self.headers.get("Content-Length", "0")))
+        self.do_GET()
+
     def log_message(self, _format, *_args):
         pass
 
 
-def call(path: str, token: str = "") -> tuple[int, bytes]:
+def call(path: str, token: str = "", body: dict | None = None) -> tuple[int, bytes]:
     request = urllib.request.Request("http://127.0.0.1:19009" + path,
+                                     data=json.dumps(body).encode() if body is not None else None,
                                      headers={"Authorization": "Bearer " + token} if token else {})
     try:
         with urllib.request.urlopen(request, timeout=25) as response:  # noqa: S310 - loopback only
@@ -48,12 +54,23 @@ def main() -> int:
         threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
         token = get_token()
+        from havoc.services.imagegen import ImageGenerator
+        generator = ImageGenerator(checkpoint="DreamShaperXL_Lightning.safetensors", width=768, height=768)
+        graph, _, _ = generator._builtin("a lighthouse", 1234, steps=4)
+        graph["3"]["inputs"].update({"cfg": 1.0, "scheduler": "sgm_uniform", "model": ["10", 0]})
+        graph["10"] = {"class_type": "FourWorkerSDXL", "inputs": {"model": ["4", 0], "overlap": 8}}
+        good_graph = {"prompt": graph}
+        bad_graph = {"prompt": {"1": {"class_type": "CustomNode", "inputs": {}}}}
         checks = (
             call("/system_stats", token) == (200, b"stub-comfy"),
             call("/system_stats")[0] == 401,
             call("/system_stats", token + "x")[0] == 401,
             call("/queue", token)[0] == 404,
             call("/sdxl-worker/predict", token)[0] == 404,
+            call("/prompt", token, good_graph) == (200, b"stub-comfy"),
+            call("/prompt", token, bad_graph)[0] == 400,
+            call("/queue", token, {"clear": True})[0] == 400,
+            call("/view?filename=../../secrets.png", token)[0] == 404,
         )
         if not all(checks):
             print("::error::Scoped gateway HTTP preflight failed")
