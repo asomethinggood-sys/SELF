@@ -18,7 +18,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from types import SimpleNamespace
 
 import pytest
-from cryptography.hazmat.primitives import hashes
+
+pytest.importorskip("cryptography")
+
+from cryptography.hazmat.primitives import hashes  # noqa: E402
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 from scripts import sdxl_experimental_gate as gate
