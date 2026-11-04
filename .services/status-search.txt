@@ -20,3 +20,4 @@
 18:24:34Z run 41640429804 · published https://sitting-queensland-allergy-tue.trycloudflare.com
 05:34:11Z run 41743267722 · starting search on this runner
 05:34:16Z run 41743267722 · search is up behind the gate
+05:34:18Z run 41743267722 · proving it through the gate with a real request
