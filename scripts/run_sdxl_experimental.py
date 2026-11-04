@@ -102,7 +102,8 @@ def main() -> None:
                 if gateway.poll() is not None or tunnel.poll() is not None:
                     raise RuntimeError("private gateway or tunnel failed")
                 tunnel_log.flush()
-                found = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", (folder / "tunnel.log").read_text(errors="replace"))
+                found = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com",
+                               (LOG_DIR / "tunnel.log").read_text(errors="replace"))
                 if found:
                     url = found.group()
                     break
