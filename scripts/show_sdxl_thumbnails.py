@@ -10,7 +10,7 @@ from pathlib import Path
 from PIL import Image
 
 names = ("single-baseline", "full-first-blend", "full-first-anchor", "portrait-anchor", "portrait-baseline",
-         "crop-only", "crop-anchor", "portrait-crop-anchor")
+         "crop-only", "crop-anchor", "portrait-crop-anchor", "lighthouse-wide32", "portrait-wide24", "portrait-wide32")
 selected = os.environ.get("SDXL_PREVIEW", "")
 if selected not in names:
     raise SystemExit("invalid preview selection")
