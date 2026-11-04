@@ -27,6 +27,38 @@ also demonstrate substantial runner variability: run `41821054697` recorded
 69.1 s, 75.1 s and 303.5 s for the same three modes. These are individual
 samples, not stable guarantees or independent confidence intervals.
 
+## Full-frame anchor and better tile context
+
+The newer experimental mode performs the **first denoising step on the full
+frame**, then coordinates all four runners on the remaining three steps. This is
+not four-way sharding of every step. GitHub Actions run `41831019971` compared
+it with same-seed single-worker images. For a lighthouse, the anchored image
+no longer repeated the scene; it took 78.1 s versus 69.0 s single-worker. For a
+portrait, it took 72.0 s versus 69.0 s, but a ghosted second face remained.
+
+Two further experiments improved those two samples:
+
+- Run `41831766188` encoded each tile's SDXL crop coordinates, retaining the
+  full-frame anchor. The inspected lighthouse and portrait no longer showed the
+  prominent duplication. Their times were 114.1 s vs 141.1 s and 108.1 s vs
+  138.1 s, respectively, on that run's coordinator.
+- Run `41833849828` used the full-frame anchor and a wider overlap instead of
+  crop metadata. At overlap 32 it took 129.1 s vs 144.1 s for the lighthouse,
+  and 120.1 s vs 135.2 s for the portrait; both inspected thumbnails appeared
+  coherent. Overlap 24 for the portrait took 114.1 s. RGB differences were
+  lower than the original tiled version, but are not a perceptual score.
+
+These are individual matched-run samples on variable shared runners, not a
+quality guarantee or robust speed estimate. The coordinator's ComfyUI process
+peaked at 14.52–14.55 GiB RSS in these tests; worker processes peaked around
+14 GiB, leaving little margin on a 16 GB machine. Three further prompts are
+being tested before considering either variant suitable for an opt-in service.
+
+One stress run, `41836644947`, failed when a worker treated a transient GitHub
+504 while polling rendezvous state as fatal. The harness now retries bounded
+transient HTTP/network failures; its recovery is exercised against an actual
+local HTTP server. The failed render is not counted as a quality result.
+
 ## Worker loss
 
 Run `41821054697` deliberately stopped a remote worker after both tiled renders.
