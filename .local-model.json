@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-04T03:24:14Z",
+  "at": "2026-11-04T11:24:02Z",
   "checks": [
     {
       "name": "local · something is configured",
@@ -14,12 +14,12 @@
     {
       "name": "local · answered: In one sentence: what are you?",
       "ok": true,
-      "detail": "0.5s · I am a virtual assistant created by Alibaba Cloud."
+      "detail": "0.6s · I am a large language model created by Alibaba Cloud, capable of natural languag"
     },
     {
       "name": "local · answered: Write a single line of poetry abou",
       "ok": true,
-      "detail": "0.3s · In the rain, the world changes."
+      "detail": "0.4s · Rain falls gently, washing away the dirt, and leaves the earth fresh and bright."
     },
     {
       "name": "local · answered: Answer with one word: two plus two",
@@ -29,7 +29,7 @@
     {
       "name": "local · the router answers with zero keys",
       "ok": true,
-      "detail": "Hello! How can I assist you today?"
+      "detail": "Hello! It's nice to meet you too. How can I assist you today?"
     },
     {
       "name": "local · the router labels it local",
@@ -50,11 +50,11 @@
   "answers": [
     {
       "question": "In one sentence: what are you?",
-      "reply": "I am a virtual assistant created by Alibaba Cloud."
+      "reply": "I am a large language model created by Alibaba Cloud, capable of natural language processing and generating human-like text."
     },
     {
       "question": "Write a single line of poetry about rain.",
-      "reply": "In the rain, the world changes."
+      "reply": "Rain falls gently, washing away the dirt, and leaves the earth fresh and bright."
     },
     {
       "question": "Answer with one word: two plus two?",
