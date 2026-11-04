@@ -276,12 +276,15 @@ def leader(temp: Path) -> int:
         if resolution not in {512, 768, 1024}:
             raise ValueError("unsupported test resolution")
         generator = ImageGenerator(checkpoint="DreamShaperXL_Lightning.safetensors", width=resolution, height=resolution)
-        def render(*, distributed: bool, seed: int, overlap: int = 8, sampler_id: str = "3", label: str) -> tuple[float, bytes]:
+        def render(*, distributed: bool, seed: int, overlap: int = 8, sampler_id: str = "3", label: str,
+                   global_weight: float = 0.0) -> tuple[float, bytes]:
             graph, _, _ = generator._builtin("a lighthouse on a rocky coast at sunrise", seed, steps=4)
             graph["3"]["inputs"].update({"cfg": 1.0, "scheduler": "sgm_uniform"})
             if distributed:
                 graph["3"]["inputs"]["model"] = ["10", 0]
                 graph["10"] = {"class_type": "FourWorkerSDXL", "inputs": {"model": ["4", 0], "overlap": overlap}}
+                if global_weight:
+                    graph["10"]["inputs"]["global_weight"] = global_weight
             if sampler_id != "3":
                 # A fresh sampler node prevents Comfy's graph cache from turning
                 # the same-seed baseline into a near-instant cached result.
@@ -320,13 +323,14 @@ def leader(temp: Path) -> int:
         render(distributed=False, seed=1234, label="warmup")
         cluster_time, image8 = render(distributed=True, seed=1234, overlap=8, label="tiled-overlap-8")
         overlap_time, image16 = render(distributed=True, seed=1234, overlap=16, sampler_id="11", label="tiled-overlap-16")
+        guided_time, guided = render(distributed=True, seed=1234, overlap=16, sampler_id="14", label="tiled-global-035", global_weight=0.35)
         single_time, baseline = render(distributed=False, seed=1234, sampler_id="12", label="single-baseline")
-        print(f"::notice::Same-seed warm comparison: overlap 8 {cluster_time:.1f}s, overlap 16 {overlap_time:.1f}s, single {single_time:.1f}s", flush=True)
+        print(f"::notice::Same-seed warm comparison: overlap 8 {cluster_time:.1f}s, overlap 16 {overlap_time:.1f}s, guided {guided_time:.1f}s, single {single_time:.1f}s", flush=True)
         from io import BytesIO
 
         from PIL import Image, ImageChops, ImageStat
         reference = Image.open(BytesIO(baseline)).convert("RGB")
-        for name, blob in (("overlap 8", image8), ("overlap 16", image16)):
+        for name, blob in (("overlap 8", image8), ("overlap 16", image16), ("global 0.35", guided)):
             candidate = Image.open(BytesIO(blob)).convert("RGB")
             if candidate.size != reference.size:
                 raise RuntimeError("quality comparison size mismatch")

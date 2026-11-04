@@ -50,13 +50,16 @@ def _portable_conditions(conditions: dict[str, Any]) -> dict[str, Any]:
 class FourWorkerSDXL:
     @classmethod
     def INPUT_TYPES(cls) -> dict:
-        return {"required": {"model": ("MODEL",), "overlap": ("INT", {"default": 8, "min": 0, "max": 48, "step": 8})}}
+        return {"required": {"model": ("MODEL",), "overlap": ("INT", {"default": 8, "min": 0, "max": 48, "step": 8})},
+                "optional": {"global_weight": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.05})}}
 
     RETURN_TYPES = ("MODEL",)
     FUNCTION = "patch"
     CATEGORY = "experimental/distributed"
 
-    def patch(self, model: Any, overlap: int) -> tuple[Any]:
+    def patch(self, model: Any, overlap: int, global_weight: float = 0.0) -> tuple[Any]:
+        if not 0.0 <= global_weight <= 1.0:
+            raise ValueError("global weight must be between zero and one")
         workers = _workers()
         patched = model.clone()
         fallback_enabled = os.environ.get("SDXL_FALLBACK_LOCAL", "").lower() in {"1", "true", "yes"}
@@ -72,14 +75,25 @@ class FourWorkerSDXL:
             portable = _portable_conditions(conditions)
 
             elapsed: dict[int, float] = {}
+            global_prediction: Any = None
 
             def run_tile(tile: Any, data: Any) -> Any:
+                nonlocal global_prediction
                 start = time.monotonic()
                 try:
                     if tile.index == 0:
                         import torch
                         with torch.inference_mode():
-                            return apply_model(data, sigma, **conditions)
+                            tile_prediction = apply_model(data, sigma, **conditions)
+                            if global_weight:
+                                # The global pass runs alongside remote tiles on
+                                # the coordinator, not as another full-size UNet.
+                                # It is an approximation, not full attention.
+                                import torch.nn.functional as functional
+                                scaled = functional.interpolate(x, scale_factor=0.5, mode="bilinear", align_corners=False)
+                                coarse = apply_model(scaled, sigma, **conditions)
+                                global_prediction = functional.interpolate(coarse, size=x.shape[-2:], mode="bilinear", align_corners=False)
+                            return tile_prediction
                     worker = workers[tile.index - 1]
                     return predict(worker["url"], worker["token"], data, sigma, portable)
                 finally:
@@ -98,6 +112,11 @@ class FourWorkerSDXL:
                 import torch
                 with torch.inference_mode():
                     return apply_model(x, sigma, **conditions)
+            if global_weight:
+                import torch
+                if global_prediction is None or global_prediction.shape != x.shape or not torch.isfinite(global_prediction).all():
+                    raise ValueError("invalid coarse global prediction")
+                result = result.lerp(global_prediction, global_weight)
             print("SDXL_TILE_STATS step_seconds=" + f"{time.monotonic() - start:.2f}" +
                   " tile_seconds=" + ",".join(f"{elapsed[i]:.2f}" for i in range(4)), flush=True)
             return result
