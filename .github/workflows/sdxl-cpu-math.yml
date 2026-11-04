@@ -1,0 +1,27 @@
+name: Experimental SDXL CPU math probe
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/sdxl-cpu-math.yml
+      - scripts/check_sdxl_cpu_math.py
+
+permissions:
+  contents: read
+
+jobs:
+  math:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -q --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch
+      - name: Compare representative CPU convolutions
+        env:
+          OMP_NUM_THREADS: '4'
+          MKL_NUM_THREADS: '4'
+        run: python scripts/check_sdxl_cpu_math.py
