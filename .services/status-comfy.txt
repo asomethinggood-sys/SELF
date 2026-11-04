@@ -20,3 +20,4 @@
 18:44:31Z run 41640687271 · published https://where-putting-islands-ceramic.trycloudflare.com
 05:50:22Z run 41745253661 · starting comfy on this runner
 05:52:35Z run 41745253661 · comfy is up behind the gate
+05:52:37Z run 41745253661 · proving it through the gate with a real request
