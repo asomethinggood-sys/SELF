@@ -82,8 +82,10 @@ jobs:
               https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
             chmod +x "$runtime/cloudflared"
           fi
-          # A cache restored while the previous job was still writing it can be
-          # truncated, and a truncated ComfyUI tree makes the server exit at once.
+          # A cache holds the ComfyUI tree but not the packages installed into
+          # this job's Python, and the runner image ships no torch. Both are
+          # checked and installed when missing, or ComfyUI exits at once on an
+          # import error and the service never comes up.
           if [ ! -f "$runtime/ComfyUI/main.py" ] \
              || [ ! -f "$runtime/ComfyUI/custom_nodes/sdxl_cpu_bf16/__init__.py" ] \
              || [ ! -s "$runtime/ComfyUI/models/checkpoints/DreamShaperXL_Lightning.safetensors" ]; then
@@ -92,7 +94,11 @@ jobs:
           fi
           if [ ! -f "$runtime/ComfyUI/main.py" ]; then
             git clone --depth 1 --branch "${COMFY_TAG:-v0.43.2}" https://github.com/comfyanonymous/ComfyUI.git "$runtime/ComfyUI"
+          fi
+          if ! python -c "import torch, torchvision" >/dev/null 2>&1; then
             python -m pip install -q --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          fi
+          if ! python -c "import aiohttp, filelock, PIL, safetensors, tqdm, cryptography" >/dev/null 2>&1; then
             python -m pip install -q --no-cache-dir -r "$runtime/ComfyUI/requirements.txt" filelock cryptography Pillow
           fi
           # ComfyUI registers the precision flags itself; the custom node only
@@ -112,6 +118,7 @@ jobs:
               https://huggingface.co/Lykon/dreamshaper-xl-lightning/resolve/a33ea52a3da2dfaf6e9001940bdb04daae06e944/DreamShaperXL_Lightning.safetensors
             echo 'fdbe56354b8f876b736f24d3ad867ecd4140c019f57642ec8ddd878088d44f64  '"$dest" | sha256sum -c -
           fi
+          python -c "import torch; print(f'::notice::torch {torch.__version__}')"
           du -sh "$runtime/ComfyUI" "$dest"
 
       - name: Serve
