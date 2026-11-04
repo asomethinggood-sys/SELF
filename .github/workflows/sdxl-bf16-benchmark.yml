@@ -15,12 +15,26 @@ jobs:
   benchmark:
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [1, 2, 3]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Check for native BF16
+        id: cpu
+        run: |
+          if grep -Eq '(^|[[:space:]])(avx512_bf16|amx_bf16)([[:space:]]|$)' /proc/cpuinfo; then
+            echo 'native=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'native=false' >> "$GITHUB_OUTPUT"
+            echo '::notice::No native BF16 on this runner; precision benchmark skipped.'
+          fi
       - name: Prepare isolated CPU model
+        if: steps.cpu.outputs.native == 'true'
         run: |
           set -euo pipefail
           export COMFY_DIR="$GITHUB_WORKSPACE/.runtime/sdxl-bf16/ComfyUI"
@@ -33,6 +47,7 @@ jobs:
           curl -fsSL --retry 3 --connect-timeout 30 --max-time 900 -o "$dest" https://huggingface.co/Lykon/dreamshaper-xl-lightning/resolve/a33ea52a3da2dfaf6e9001940bdb04daae06e944/DreamShaperXL_Lightning.safetensors
           echo 'fdbe56354b8f876b736f24d3ad867ecd4140c019f57642ec8ddd878088d44f64  '"$dest" | sha256sum -c -
       - name: Compare warmed FP32 and BF16 renders on the same runner
+        if: steps.cpu.outputs.native == 'true'
         env:
           COMFY_DIR: ${{ github.workspace }}/.runtime/sdxl-bf16/ComfyUI
           PYTHONPATH: ${{ github.workspace }}
@@ -43,7 +58,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sdxl-bf16-${{ github.run_id }}
+          name: sdxl-bf16-${{ github.run_id }}-${{ matrix.runner }}
           path: .reports/sdxl-bf16/*.png
           if-no-files-found: ignore
           retention-days: 7

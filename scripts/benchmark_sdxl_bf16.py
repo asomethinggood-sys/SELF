@@ -28,6 +28,8 @@ from scripts.sdxl_cluster_test import http, stop  # noqa: E402
 def main() -> None:
     cpuinfo = Path("/proc/cpuinfo").read_text(errors="replace").lower()
     print("::notice::CPU BF16 capabilities: " + ", ".join(f"{flag}={flag in cpuinfo}" for flag in ("avx512_bf16", "amx_bf16")), flush=True)
+    if "avx512_bf16" not in cpuinfo and "amx_bf16" not in cpuinfo:
+        raise RuntimeError("runner lacks native CPU BF16; no precision comparison performed")
     generator = ImageGenerator(checkpoint="DreamShaperXL_Lightning.safetensors", width=768, height=768)
     times, images, peaks = {}, {}, {}
     with tempfile.TemporaryDirectory(prefix="sdxl-bf16-") as directory:
@@ -60,7 +62,8 @@ def main() -> None:
 
                     def render(sampler_id: str, *, mode: str = mode, child: subprocess.Popen = child) -> tuple[float, bytes]:
                         graph, _, _ = generator._builtin("a lighthouse on a rocky coast at sunrise", 1234, steps=4)
-                        graph["3"]["inputs"].update({"cfg": 1.0, "scheduler": "sgm_uniform"})
+                        graph["3"]["inputs"].update({"cfg": 1.0, "scheduler": "sgm_uniform", "model": ["20", 0]})
+                        graph["20"] = {"class_type": "ForceFreshSampler", "inputs": {"model": ["4", 0], "nonce": int(sampler_id)}}
                         if sampler_id != "3":
                             graph[sampler_id] = graph.pop("3")
                             graph["8"]["inputs"]["samples"] = [sampler_id, 0]
@@ -76,6 +79,9 @@ def main() -> None:
                             entry = json.loads(http(f"/history/{prompt_id}")).get(prompt_id, {})
                             if entry.get("status", {}).get("status_str") == "error":
                                 raise RuntimeError(f"{mode} graph failed")
+                            for kind, detail in entry.get("status", {}).get("messages", []):
+                                if kind == "execution_cached" and sampler_id in detail.get("nodes", []):
+                                    raise RuntimeError(f"{mode} sampler was cached; timing is invalid")
                             for node in entry.get("outputs", {}).values():
                                 if node.get("images"):
                                     blob = http("/view?" + urllib.parse.urlencode(node["images"][0]), timeout=60)

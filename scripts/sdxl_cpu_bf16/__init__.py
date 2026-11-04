@@ -9,7 +9,23 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-NODE_CLASS_MAPPINGS = {}
+
+class ForceFreshSampler:
+    """Pass through the same model but invalidate the sampler cache per run."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"model": ("MODEL",), "nonce": ("INT", {"default": 0})}}
+
+    RETURN_TYPES = ("MODEL",)
+    FUNCTION = "forward"
+    CATEGORY = "experimental"
+
+    def forward(self, model, nonce):
+        return (model,)
+
+
+NODE_CLASS_MAPPINGS = {"ForceFreshSampler": ForceFreshSampler}
 
 if os.environ.get("SDXL_ALLOW_CPU_BF16") == "1":
     import comfy.model_management as management
