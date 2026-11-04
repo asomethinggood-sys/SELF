@@ -41,6 +41,7 @@ MODULE_ORDER: tuple[str, ...] = (
     "media",
     "downloader",
     "art",
+    "experimental_draw",
     "services",
     "stickers",
     "detection",

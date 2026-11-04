@@ -1,0 +1,129 @@
+name: Service · experimental SDXL Lightning
+
+# A temporary, owner-only image service. One push with the marker
+# `[telegram-sdxl-service]` starts a runner that serves DreamShaper XL Lightning
+# at 4 steps on a private Cloudflare tunnel, in front of an OIDC-only gate, and
+# publishes `.services/sdxl-experimental.json` for about an hour.
+#
+# It is deliberately a different runner from the bots, so a render cannot stop
+# the chat, and a different gate from `.draw`: `.draw` keeps its own generator,
+# and `.fastdraw` says so when this experiment is offline.
+#
+# The gate accepts only a GitHub-signed, short-lived token for this repository,
+# branch and workflow file (`scripts/sdxl_oidc_gate.py`). It forwards only a
+# fixed SDXL graph — model, sampler, resolution and negative prompt checked
+# before ComfyUI sees the request — and holds at most two jobs. No session and
+# no repository secret is involved.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/service-sdxl-experimental.yml
+      - scripts/run_sdxl_experimental.py
+      - scripts/sdxl_experimental_gate.py
+      - scripts/sdxl_oidc.py
+      - scripts/sdxl_oidc_gate.py
+      - scripts/sdxl_cluster_test.py
+      - havoc/services/experimental_sdxl.py
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sdxl-experimental
+  cancel-in-progress: false
+
+jobs:
+  serve:
+    name: experimental
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Only an explicit experiment push
+        id: gate
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "manual=true" >> "$GITHUB_OUTPUT"
+          elif printf '%s' '${{ github.event.head_commit.message }}' | grep -q '\[telegram-sdxl-service\]'; then
+            echo "manual=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "manual=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.manual == 'true'
+        with:
+          python-version: '3.11'
+
+      - name: Restore the model
+        if: steps.gate.outputs.manual == 'true'
+        uses: actions/cache@v4
+        with:
+          path: .runtime/sdxl-experimental
+          key: sdxl-experimental-${{ vars.COMFY_TAG || 'v0.43.2' }}-${{ hashFiles('scripts/sdxl_cpu_bf16/**') }}
+          restore-keys: sdxl-experimental-
+
+      - name: Prepare ComfyUI, the checkpoint and cloudflared
+        if: steps.gate.outputs.manual == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime="$GITHUB_WORKSPACE/.runtime/sdxl-experimental"
+          mkdir -p "$runtime"
+          if [ ! -x "$runtime/cloudflared" ]; then
+            curl -fsSL --retry 3 --connect-timeout 30 --max-time 300 \
+              -o "$runtime/cloudflared" \
+              https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+            chmod +x "$runtime/cloudflared"
+          fi
+          if [ ! -f "$runtime/ComfyUI/main.py" ]; then
+            git clone --depth 1 --branch "${COMFY_TAG:-v0.43.2}" https://github.com/comfyanonymous/ComfyUI.git "$runtime/ComfyUI"
+            python -m pip install -q --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch torchvision
+            python -m pip install -q --no-cache-dir -r "$runtime/ComfyUI/requirements.txt" filelock cryptography Pillow
+            ln -s "$GITHUB_WORKSPACE/scripts/sdxl_cpu_bf16" "$runtime/ComfyUI/custom_nodes/sdxl_cpu_bf16"
+          fi
+          mkdir -p "$runtime/ComfyUI/models/checkpoints"
+          dest="$runtime/ComfyUI/models/checkpoints/DreamShaperXL_Lightning.safetensors"
+          if [ ! -s "$dest" ]; then
+            curl -fsSL --retry 3 --connect-timeout 30 --max-time 900 -o "$dest" \
+              https://huggingface.co/Lykon/dreamshaper-xl-lightning/resolve/a33ea52a3da2dfaf6e9001940bdb04daae06e944/DreamShaperXL_Lightning.safetensors
+            echo 'fdbe56354b8f876b736f24d3ad867ecd4140c019f57642ec8ddd878088d44f64  '"$dest" | sha256sum -c -
+          fi
+          du -sh "$runtime/ComfyUI" "$dest"
+
+      - name: Serve
+        if: steps.gate.outputs.manual == 'true'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMFY_DIR: ${{ github.workspace }}/.runtime/sdxl-experimental/ComfyUI
+          CLOUDFLARED: ${{ github.workspace }}/.runtime/sdxl-experimental/cloudflared
+          COMFY_TAG: ${{ vars.COMFY_TAG || 'v0.43.2' }}
+          PYTHONPATH: ${{ github.workspace }}
+          OMP_NUM_THREADS: '4'
+          MKL_NUM_THREADS: '4'
+        run: python -u scripts/run_sdxl_experimental.py
+
+      - name: Publish what was published
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          {
+            echo '### Experimental SDXL service'
+            echo ''
+            if [ -f .services/sdxl-experimental.json ]; then
+              echo '```json'
+              cat .services/sdxl-experimental.json
+              echo '```'
+            else
+              echo '_no address was published — the service never came up_'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          rm -f .services/sdxl-experimental.json

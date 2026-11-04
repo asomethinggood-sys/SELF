@@ -35,7 +35,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from havoc.services.service_directory import ServiceDirectory  # noqa: E402
-from havoc.services.service_token import SERVICES  # noqa: E402
+from havoc.services.service_token import SUPERVISED  # noqa: E402
 
 # GitHub Enterprise (and this repo's own probes) point elsewhere; the default is
 # the public API. Overridable so the supervisor can be run against a stub.
@@ -175,7 +175,7 @@ def describe(delta: timedelta) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--service", action="append", choices=list(SERVICES), help="limit to one service (repeatable)")
+    parser.add_argument("--service", action="append", choices=list(SUPERVISED), help="limit to one service (repeatable)")
     parser.add_argument("--ref", default="", help="branch to run on (default: this checkout's branch)")
     parser.add_argument("--dry-run", action="store_true", help="say what would happen, dispatch nothing")
     parser.add_argument("--json", action="store_true", help="print the decision as JSON")
@@ -197,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
         # stale file would say "expired" about a service that has just published.
         directory.pull_now(force=True)
 
-    wanted = args.service or list(SERVICES)
+    wanted = args.service or list(SUPERVISED)
     report: dict[str, Any] = {"checked_at": now.isoformat(timespec="seconds"), "ref": ref, "services": {}}
     started = 0
 

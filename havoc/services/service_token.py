@@ -39,7 +39,12 @@ import hmac
 import os
 
 #: What a caller may be authorised to use. One name per hosted service.
-SERVICES = ("search", "comfy", "ollama")
+SERVICES = ("search", "comfy", "ollama", "sdxl-experimental")
+
+#: The long-lived services the supervisor keeps alive. The experimental SDXL
+#: service is deliberately not one of them: it is short-lived, opt-in and
+#: started by an explicit marker push, not by a five-minute heartbeat.
+SUPERVISED = ("search", "comfy", "ollama")
 
 #: Used when ``SERVICE_SHARED_SECRET`` is not set, so a runner publishes and
 #: serves with nothing configured. Public by construction — see the module

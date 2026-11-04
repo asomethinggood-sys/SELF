@@ -72,6 +72,9 @@ permissions:
   contents: write
   # Write, not read: the run queues its own successor and records who she is.
   actions: write
+  # The experimental image gate authenticates this job with a short-lived
+  # GitHub OIDC token — no repository secret, and nothing reachable without it.
+  id-token: write
 
 concurrency:
   # Never cancels: a push waits its turn and the running bot steps aside itself.

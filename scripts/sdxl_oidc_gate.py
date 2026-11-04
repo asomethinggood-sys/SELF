@@ -25,6 +25,9 @@ from scripts.sdxl_oidc import _OPENER, github_keys, verify  # noqa: E402
 
 MAX_BODY = 8 * 1024 * 1024
 MAX_RESPONSE = 16 * 1024 * 1024
+#: Loopback only. The public tunnel points *here*, so the thing behind it is
+#: this machine's ComfyUI, never another address.
+BACKEND = "http://127.0.0.1:8188"
 REPOSITORY = os.environ.get("GITHUB_REPOSITORY", "")
 BRANCH = os.environ.get("GITHUB_REF_NAME", "")
 WORKFLOWS = {"auth-and-run.yml", "yura-her.yml"}
@@ -111,6 +114,10 @@ class Gate(BaseHTTPRequestHandler):
     def log_message(self, _format, *_args):
         pass
 
+    def permitted_body(self, path: str, body: bytes) -> bool:
+        """Subclasses may tighten this; the default is the fixed graph."""
+        return permitted_body(path, body)
+
     def do_GET(self):  # noqa: N802
         if self.path == "/healthz":
             data = b'{"ok":true,"service":"sdxl-cluster"}'
@@ -147,10 +154,10 @@ class Gate(BaseHTTPRequestHandler):
                 self.send_error(413)
                 return
             body = self.rfile.read(size)
-            if len(body) != size or not permitted_body(self.path, body):
+            if len(body) != size or not self.permitted_body(self.path, body):
                 self.send_error(400)
                 return
-        req = urllib.request.Request("http://127.0.0.1:8188" + self.path, method=method, data=body,
+        req = urllib.request.Request(BACKEND + self.path, method=method, data=body,
                                      headers={"Content-Type": "application/json"})
         try:
             with _OPENER.open(req, timeout=300) as response:  # noqa: S310 - fixed loopback; redirects disabled
