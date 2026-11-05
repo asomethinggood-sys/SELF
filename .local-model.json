@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-05T01:00:19Z",
+  "at": "2026-11-05T06:41:48Z",
   "checks": [
     {
       "name": "local · something is configured",
@@ -14,22 +14,22 @@
     {
       "name": "local · answered: In one sentence: what are you?",
       "ok": true,
-      "detail": "0.3s · I am a language model created by Alibaba Cloud."
+      "detail": "0.5s · I am an artificial intelligence developed by Alibaba Cloud."
     },
     {
       "name": "local · answered: Write a single line of poetry abou",
       "ok": true,
-      "detail": "0.6s · Raindrops, falling from the sky,\nWhispering secrets to the earth,\nA gentle lulla"
+      "detail": "0.9s · Raindrops dance on the quiet, white world,  \nPainting a canvas of shimmering lig"
     },
     {
       "name": "local · answered: Answer with one word: two plus two",
       "ok": true,
-      "detail": "0.1s · Four"
+      "detail": "0.2s · Four"
     },
     {
       "name": "local · the router answers with zero keys",
       "ok": true,
-      "detail": "Hello! How can I help you today?"
+      "detail": "Hello! How may I assist you today?"
     },
     {
       "name": "local · the router labels it local",
@@ -50,11 +50,11 @@
   "answers": [
     {
       "question": "In one sentence: what are you?",
-      "reply": "I am a language model created by Alibaba Cloud."
+      "reply": "I am an artificial intelligence developed by Alibaba Cloud."
     },
     {
       "question": "Write a single line of poetry about rain.",
-      "reply": "Raindrops, falling from the sky,\nWhispering secrets to the earth,\nA gentle lullaby, a joyful refrain,\nIn nature's symphony, they sing."
+      "reply": "Raindrops dance on the quiet, white world,  \nPainting a canvas of shimmering light.  \nNature's masterpiece, a fleeting sight,  \nIn the timeless dance of seasons, it flows."
     },
     {
       "question": "Answer with one word: two plus two?",
