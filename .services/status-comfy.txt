@@ -35,3 +35,4 @@
 04:17:51Z run 41927006916 · proving it through the gate with a real request
 04:20:00Z run 41927006916 · published https://column-modes-emission-belt.trycloudflare.com
 15:27:05Z run 42005734953 · starting comfy on this runner
+15:29:54Z run 42005734953 · comfy is up behind the gate
