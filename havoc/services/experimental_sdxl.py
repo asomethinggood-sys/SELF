@@ -105,12 +105,18 @@ def _render(directory: Any, prompt: str, seed: int, output: Path) -> Path:
         ident = response.get("prompt_id", "")
         if not isinstance(ident, str) or not re.fullmatch(r"[a-zA-Z0-9-]{1,80}", ident):
             raise ExperimentalError("The experimental service returned an invalid job ID.")
-        deadline = time.monotonic() + 300
+        # A cold 768 px fp32 render on a shared runner runs several minutes, so
+        # the window has to clear the slowest case rather than the average one.
+        deadline = time.monotonic() + 900
+        last_status = ""
         try:
             while time.monotonic() < deadline:
                 time.sleep(3)
                 entry = json.loads(client.request("/history/" + ident)).get(ident, {})
-                if entry.get("status", {}).get("status_str") == "error":
+                status = entry.get("status", {}).get("status_str", "")
+                if status:
+                    last_status = status
+                if status == "error":
                     raise ExperimentalError("The experimental render failed. Normal .draw remains available.")
                 for node in entry.get("outputs", {}).values():
                     for image in node.get("images", []):
@@ -125,7 +131,10 @@ def _render(directory: Any, prompt: str, seed: int, output: Path) -> Path:
                         path = output / f"experimental-{secrets.token_hex(12)}.png"
                         path.write_bytes(raw)
                         return path
-            raise ExperimentalError("The experimental render timed out. Normal .draw remains available.")
+            raise ExperimentalError(
+                "The experimental render timed out after 15 minutes"
+                + (f" (last status: {last_status})" if last_status else "")
+                + ". Normal .draw remains available.")
         finally:
             # Only remove this request if still queued; do not interrupt another owner's running image.
             try:
