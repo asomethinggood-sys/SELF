@@ -1,0 +1,39 @@
+run_id=41983664135
+event=push
+comfy_main=yes
+custom_node=/home/runner/work/SELF/SELF/scripts/sdxl_cpu_bf16
+checkpoint=6.5G
+cloudflared=yes
+marker=absent
+failure=absent
+--- runner.log
+::notice::Private experimental image service is available for up to 65 minutes; precision FP32 fallback.
+--- comfy.log
+��███| 4/4 [02:54<00:00, 43.60s/it]
+[32m[INFO][0m Requested to load AutoencoderKL
+[32m[INFO][0m loaded completely;  319.11 MB loaded, full load: True
+[32m[INFO][0m [32mPrompt executed in 234.49 seconds[0m
+[32m[INFO][0m got prompt
+  0%|          | 0/4 [00:00<?, ?it/s] 25%|██▌       | 1/4 [00:26<01:19, 26.34s/it] 50%|█████     | 2/4 [00:49<00:49, 24.55s/it] 75%|███████▌  | 3/4 [01:12<00:23, 23.96s/it]100%|██████████| 4/4 [01:36<00:00, 23.71s/it]100%|██████████| 4/4 [01:36<00:00, 24.06s/it]
+[32m[INFO][0m [32mPrompt executed in 136.79 seconds[0m
+[32m[INFO][0m got prompt
+  0%|          | 0/4 [00:00<?, ?it/s] 25%|██▌       | 1/4 [00:30<01:32, 30.88s/it] 50%|█████     | 2/4 [00:54<00:52, 26.44s/it] 75%|███████▌  | 3/4 [01:17<00:25, 25.03s/it]100%|██████████| 4/4 [01:40<00:00, 24.36s/it]100%|██████████| 4/4 [01:40<00:00, 25.23s/it]
+[32m[INFO][0m [32mPrompt executed in 140.58 seconds[0m
+[32m[INFO][0m got prompt
+  0%|          | 0/4 [00:00<?, ?it/s] 25%|██▌       | 1/4 [00:24<01:13, 24.42s/it] 50%|█████     | 2/4 [00:47<00:47, 23.82s/it] 75%|███████▌  | 3/4 [01:11<00:23, 23.64s/it]100%|██████████| 4/4 [01:34<00:00, 23.55s/it]100%|██████████| 4/4 [01:34<00:00, 23.67s/it]
+[32m[INFO][0m [32mPrompt executed in 136.26 seconds[0m
+--- gate.log
+--- tunnel.log
+status=pass target=region2.v2.argotunnel.com
+2026-11-05T06:57:25Z INF precheck component="UDP Connectivity" details="QUIC connection successful" run_id=33aa2284-bca6-49c4-a13b-0a0f0ee2aa73 status=pass target=region1.v2.argotunnel.com
+2026-11-05T06:57:25Z INF precheck component="UDP Connectivity" details="QUIC connection successful" run_id=33aa2284-bca6-49c4-a13b-0a0f0ee2aa73 status=pass target=region2.v2.argotunnel.com
+2026-11-05T06:57:25Z INF precheck component="TCP Connectivity" details="HTTP/2 connection successful" run_id=33aa2284-bca6-49c4-a13b-0a0f0ee2aa73 status=pass target=region1.v2.argotunnel.com
+2026-11-05T06:57:25Z INF precheck component="TCP Connectivity" details="HTTP/2 connection successful" run_id=33aa2284-bca6-49c4-a13b-0a0f0ee2aa73 status=pass target=region2.v2.argotunnel.com
+2026-11-05T06:57:25Z INF precheck component="Cloudflare API" details="API is reachable" run_id=33aa2284-bca6-49c4-a13b-0a0f0ee2aa73 status=pass target=api.cloudflare.com:443
+2026-11-05T06:57:25Z INF precheck complete hard_fail=false run_id=33aa2284-bca6-49c4-a13b-0a0f0ee2aa73 suggested_protocol=quic
+2026-11-05T08:02:30Z INF Initiating graceful shutdown due to signal terminated ...
+2026-11-05T08:02:30Z INF Retrying connection in up to 2s connIndex=0 event=0 ip=198.41.192.7
+2026-11-05T08:02:30Z ERR Connection terminated connIndex=0
+2026-11-05T08:02:30Z ERR no more connections active and exiting
+2026-11-05T08:02:30Z INF Tunnel server stopped
+2026-11-05T08:02:30Z INF Metrics server stopped
