@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://column-modes-emission-belt.trycloudflare.com",
-  "run_id": "41927006916",
-  "started_at": "2026-11-05T04:14:59Z",
-  "expires_at": "2026-11-05T10:14:59Z",
+  "url": "https://metro-threaded-experiencing-vatican.trycloudflare.com",
+  "run_id": "41966566288",
+  "started_at": "2026-11-05T09:51:05Z",
+  "expires_at": "2026-11-05T15:51:05Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-05T04:19:59Z",
+  "published_at": "2026-11-05T09:55:57Z",
   "gated": true,
   "public": false
 }
