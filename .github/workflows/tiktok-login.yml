@@ -82,9 +82,16 @@ jobs:
           echo "== install $(date -u +%FT%TZ) on $(. /etc/os-release; echo "$PRETTY_NAME")"
           python -m pip install --upgrade pip -q
           python -m pip install -e ".[browser]" -q
-          sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends xvfb x11vnc novnc websockify
-          python -m playwright install --with-deps chromium
+          # Bounded apt: Azure's mirror stalled mid-download on one run and the
+          # step sat for 12 minutes. A slow mirror should fail in seconds.
+          APT="-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20"
+          sudo apt-get $APT update -q
+          sudo apt-get $APT install -y -q --no-install-recommends xvfb x11vnc novnc websockify
+          # No --with-deps: the 24.04 image already carries Chromium's shared
+          # libraries (the log lists every one as "already the newest"); what
+          # --with-deps added was 21 MB of CJK/Thai fonts, which is where the
+          # stall happened. Emoji and Latin fonts are present already.
+          python -m playwright install chromium
           echo "== install done $(date -u +%FT%TZ)"
 
       - name: Install cloudflared
