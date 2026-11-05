@@ -263,3 +263,64 @@ def test_the_challenge_message_does_not_offer_a_retry() -> None:
     text = challenge_notice().lower()
     assert "stopped" in text
     assert "try again" not in text and "retry" not in text
+
+
+def test_first_login_starts_without_a_jar(tmp_path, monkeypatch) -> None:
+    """`havoc tt login` on an empty workspace must reach TikTok's page.
+
+    It used to call `store.load()` while launching and die with `no_session`
+    before opening the window: the one command meant for "there is no session
+    yet" required a session. Measured on a runner as a 1-minute login job.
+    """
+    import asyncio
+    import types
+
+    from havoc.tiktok import browser as browser_mod
+
+    class _Page:
+        def __init__(self) -> None:
+            self.visited: list[str] = []
+
+        def set_default_timeout(self, _ms: int) -> None:
+            return None
+
+    page = _Page()
+
+    class _Ctx:
+        pages = [page]
+
+        async def close(self) -> None:
+            return None
+
+    class _Chromium:
+        async def launch_persistent_context(self, **_kwargs):
+            return _Ctx()
+
+    class _PW:
+        chromium = _Chromium()
+
+        async def stop(self) -> None:
+            return None
+
+    class _Starter:
+        async def start(self):
+            return _PW()
+
+    fake = types.ModuleType("playwright.async_api")
+    fake.async_playwright = lambda: _Starter()
+    monkeypatch.setitem(sys.modules, "playwright", types.ModuleType("playwright"))
+    monkeypatch.setitem(sys.modules, "playwright.async_api", fake)
+    monkeypatch.setattr(browser_mod, "browser_available", lambda: True)
+
+    store = TikTokSessionStore(tmp_path)
+    with pytest.raises(SessionError):
+        store.load()  # the precondition: nothing saved
+
+    b = browser_mod.TikTokBrowser(store, headless=True, pace=Pace())
+    asyncio.run(b.start(with_jar=False))  # must not raise no_session
+    assert b._page is page
+
+    restoring = browser_mod.TikTokBrowser(store, headless=True, pace=Pace())
+    with pytest.raises(SessionError) as err:
+        asyncio.run(restoring.start())  # a normal run still demands the jar
+    assert err.value.kind == "no_session"

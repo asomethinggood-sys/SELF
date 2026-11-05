@@ -142,7 +142,8 @@ async def command_login(args: argparse.Namespace) -> int:
     print(f"The window waits up to {int(args.timeout)}s. Close it early and nothing is saved.\n")
     browser = TikTokBrowser(store, headless=False, pace=Pace())
     try:
-        await browser.start()
+        # No jar on purpose: this command exists because there isn't a usable one.
+        await browser.start(with_jar=False)
         result = await browser.login(timeout=args.timeout)
         if not result.ok:
             print(f"login: failed — {result.detail}", file=sys.stderr)

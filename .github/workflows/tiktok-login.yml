@@ -57,8 +57,12 @@ concurrency:
 
 jobs:
   login:
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # Pinned: `ubuntu-latest` is migrating to 26.04, and a run on it sat in the
+    # browser install for over ten minutes. Playwright's --with-deps knows 24.04.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      DEBIAN_FRONTEND: noninteractive
     steps:
       - uses: actions/checkout@v4
         with:
@@ -70,14 +74,21 @@ jobs:
           cache: pip
 
       - name: Install the browser side
+        timeout-minutes: 12
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[browser]"
+          set -euo pipefail
+          mkdir -p .reports
+          exec > >(tee -a .reports/tiktok-login.log) 2>&1
+          echo "== install $(date -u +%FT%TZ) on $(. /etc/os-release; echo "$PRETTY_NAME")"
+          python -m pip install --upgrade pip -q
+          python -m pip install -e ".[browser]" -q
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends xvfb x11vnc novnc websockify
           python -m playwright install --with-deps chromium
-          sudo apt-get update
-          sudo apt-get install -y xvfb x11vnc novnc websockify
+          echo "== install done $(date -u +%FT%TZ)"
 
       - name: Install cloudflared
+        timeout-minutes: 3
         run: |
           curl -fsSL -o /tmp/cloudflared \
             https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
@@ -85,10 +96,12 @@ jobs:
 
       - name: Open the window and the stream
         id: stream
+        timeout-minutes: 4
         run: |
           set -euo pipefail
+          echo "== stream $(date -u +%FT%TZ)" >> .reports/tiktok-login.log
           # A display with no monitor, which the owner can still see.
-          Xvfb :99 -screen 0 1100x900x24 >/tmp/xvfb.log 2>&1 &
+          Xvfb :99 -screen 0 1280x960x24 >/tmp/xvfb.log 2>&1 &
           sleep 2
           export DISPLAY=:99
 
@@ -110,8 +123,11 @@ jobs:
             sleep 2
           done
           if [ -z "${URL:-}" ]; then
-            echo "::error::the tunnel did not come up"; tail -30 /tmp/cloudflared.log; exit 1
+            echo "::error::the tunnel did not come up"
+            { echo "-- cloudflared"; tail -30 /tmp/cloudflared.log; } | tee -a .reports/tiktok-login.log
+            exit 1
           fi
+          echo "tunnel up: ${URL}" >> .reports/tiktok-login.log
 
           LINK="${URL}/vnc.html?autoconnect=1&resize=scale&reconnect=1"
           echo "link=$LINK" >> "$GITHUB_OUTPUT"
@@ -153,16 +169,26 @@ jobs:
           HAVOC_TIKTOK_DIR: .auth/tiktok
         run: |
           set +e
+          echo "== login $(date -u +%FT%TZ)" >> .reports/tiktok-login.log
+          started=$(date +%s)
           timeout "$(( ${{ inputs.minutes || 25 }} * 60 ))" \
-            havoc tt login --timeout 1500 2>&1 | tee /tmp/login.log
+            havoc tt login --timeout 1500 2>&1 | tee -a .reports/tiktok-login.log
           code=${PIPESTATUS[0]}
+          lasted=$(( $(date +%s) - started ))
+          echo "== login exit=${code} after ${lasted}s" >> .reports/tiktok-login.log
           echo "login-exit=${code}" >> "$GITHUB_ENV"
+          # A window that closes in under a minute was never open for a human:
+          # say so, loudly, instead of reporting "no sign-in before the timeout".
+          if [ "$code" -ne 0 ] && [ "$lasted" -lt 60 ]; then
+            echo "::error::login exited after ${lasted}s (code ${code}) — the window crashed, see .reports/tiktok-login.log"
+          fi
 
       - name: Commit the jar, close the window
         if: always()
         run: |
           git config user.name "yura-tiktok"
           git config user.email "yura-tiktok@users.noreply.github.com"
+          git pull -q --rebase || true
           saved=no
           if [ -f .auth/tiktok/default.json ]; then
             if python scripts/tiktok_check_jar.py; then saved=yes; fi
@@ -173,7 +199,16 @@ jobs:
           # would mean a stale password in the repository and a workflow that
           # reopens a window on every later push.
           rm -f .auth/tiktok/live.json .auth/tiktok/request-login
+          # The run's own log, committed, because Actions logs are not readable
+          # from every place this gets debugged. It never contains the VNC
+          # password (that is written only to the summary and live.json).
+          {
+            echo "== x11vnc"; tail -15 /tmp/x11vnc.log 2>/dev/null || true
+            echo "== websockify"; tail -10 /tmp/websockify.log 2>/dev/null || true
+            echo "== saved=${saved} $(date -u +%FT%TZ)"
+          } >> .reports/tiktok-login.log
           git add -A .auth/tiktok
+          git add -f .reports/tiktok-login.log
           if git diff --cached --quiet; then
             echo "nothing to commit"
           else

@@ -177,7 +177,13 @@ class TikTokBrowser:
     async def __aexit__(self, *_exc: Any) -> None:
         await self.close()
 
-    async def start(self) -> None:
+    async def start(self, *, with_jar: bool = True) -> None:
+        """Launch Chromium; restore the saved jar unless this *is* the login.
+
+        ``with_jar=False`` is the first-login path: there is no jar yet (or the
+        old one is signed out), and demanding one here is exactly the bug that
+        made ``havoc tt login`` die before TikTok's page ever opened.
+        """
         if not browser_available():
             raise SessionError("browser engine not installed", kind="no_engine", hint=install_hint())
         from playwright.async_api import async_playwright
@@ -197,7 +203,8 @@ class TikTokBrowser:
         )
         self._page = self._ctx.pages[0] if self._ctx.pages else await self._ctx.new_page()
         self._page.set_default_timeout(30_000)
-        await self._install_jar(self.store.load())
+        if with_jar:
+            await self._install_jar(self.store.load())
 
     async def close(self) -> None:
         for closer in (self._ctx, self._pw):
