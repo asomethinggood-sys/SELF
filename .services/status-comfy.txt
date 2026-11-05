@@ -32,3 +32,4 @@
 17:07:43Z run 41871758476 · published https://feeling-gis-norfolk-seas.trycloudflare.com
 04:14:59Z run 41927006916 · starting comfy on this runner
 04:17:49Z run 41927006916 · comfy is up behind the gate
+04:17:51Z run 41927006916 · proving it through the gate with a real request
