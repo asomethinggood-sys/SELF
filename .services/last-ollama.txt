@@ -1,14 +1,10 @@
-ollama · run 41964667208 · 2026-11-05T09:33:01Z
+ollama · run 42003119569 · 2026-11-05T15:08:36Z
 -----------------------------------------------
-ok   gate /healthz without a token — 200 {"ok": true, "service": "ollama", "run_id": "41964667208", "started_at": "2026-1
+ok   gate /healthz without a token — 200 {"ok": true, "service": "ollama", "run_id": "42003119569", "started_at": "2026-1
   ok   upstream /api/tags directly — 200
   ok   the same path through the gate without a token — 401 
   ok   a wrong token is refused — 401
-  ok   /api/tags through the gate with the real token — 200 {"models":[{"name":"qwen2.5:0.5b","model":"qwen2.5:0.5b","modified_at":"2026-11-05T09:32:56.78271953Z","size":397821319,
-  ok   the model is listed — {"models":[{"name":"qwen2.5:0.5b","model":"qwen2.5:0.5b","modified_at":"2026-11-05T09:32:56.78271953Z","size":397821319,"digest":"a8b0c51577010a279d933d14c2a8ab4b268079d44c5c8830c0a93900f1827c67","det
-  ok   a real reply through the gate — A transformer is a type of neural network architecture that can learn and process sequences of data, making it particularly effective for tasks like natural language processing, speech recognition, an
+  ok   /api/tags through the gate with the real token — 200 {"models":[{"name":"qwen2.5:0.5b","model":"qwen2.5:0.5b","modified_at":"2026-11-05T15:08:31.521990255Z","size":397821319
+  ok   the model is listed — {"models":[{"name":"qwen2.5:0.5b","model":"qwen2.5:0.5b","modified_at":"2026-11-05T15:08:31.521990255Z","size":397821319,"digest":"a8b0c51577010a279d933d14c2a8ab4b268079d44c5c8830c0a93900f1827c67","de
+  ok   a real reply through the gate — A transformer is a type of machine learning model designed to analyze, process, and generate language, using a novel architecture that captures both its inherent structure and context.
 self-test: 7/7 checks passed
-
-public: https://accordingly-buys-dive-chains.trycloudflare.com
-reachable from the internet: yes — GET /healthz through the tunnel answered 200
-the bot needs no configuration: it reads .services/ollama.json
