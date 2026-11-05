@@ -35,3 +35,4 @@
 09:32:58Z run 41964667208 · proving it through the gate with a real request
 09:33:09Z run 41964667208 · published https://accordingly-buys-dive-chains.trycloudflare.com
 20:43:10Z run 42051735544 · starting ollama on this runner
+20:44:00Z run 42051735544 · ollama is up behind the gate
