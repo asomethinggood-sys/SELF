@@ -20,7 +20,32 @@ That last row is the honest one. This is automation of a personal account, and
 the account is the collateral. Everything in `havoc/tiktok/limits.py` exists
 because of it.
 
-## Setup, once, on your machine
+## Setup, once — from a phone, with no terminal
+
+`python -m playwright install` has no Android build, so the browser has to live
+where an x86_64 Linux box is: a runner. The login can therefore run **in
+Actions**, with the window streamed to your phone's browser:
+
+1. **Actions → "TikTok login (from a phone)" → Run workflow.**
+2. Open the job summary. It prints one `https://…trycloudflare.com/vnc.html` link
+   and a per-run VNC password, then keeps the window open for 25 minutes.
+3. Sign in on TikTok's own page in that stream — pinch to zoom, tap through.
+   Prefer QR or "continue with Google" over typing the password: the page is
+   TikTok's, but the machine drawing it is not yours.
+4. When `sessionid` appears the job saves the jar and **commits it** to this
+   branch. Nothing to copy anywhere.
+
+Then dispatch **"TikTok run"** and leave it. `havoc tt status` reports the jar
+from the log; `.reports/tiktok-status.json` says how the run went.
+
+The tunnel is public but ephemeral: it exists only while that job runs, the VNC
+password is generated per run and printed only into the summary, and the runner
+is destroyed afterwards. Cancel the job the moment you are signed in.
+
+## Setup, once, on a machine with a terminal
+
+(If you ever have a laptop in front of you, this is the shorter route — same
+result, same file, no tunnel.)
 
 ```bash
 pip install -e ".[browser]"
@@ -130,3 +155,5 @@ a fixed interval is itself a fingerprint.
 | exit 3 | a selector moved | `havoc tt probe` prints what is actually on the page |
 | exit 1 + challenge | captcha | clear it by hand, dispatch again |
 | `browser engine not installed` | Playwright or its Chromium is missing | the two install commands above |
+| the phone login link shows "connection failed" | the job ended, or the tunnel died | dispatch the login workflow again — a quick tunnel is per-run |
+| login window is tiny on a phone | noVNC scales a 1100×900 desktop into a phone viewport | pinch to zoom; the page is a desktop page, not a mock |

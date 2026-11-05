@@ -115,7 +115,6 @@ jobs:
             --minutes "${{ inputs.minutes || 285 }}" \
             $( [ "${{ inputs.owner_only }}" = "true" ] && echo --owner-only ) \
             2>&1 | tee -a .runtime/tiktok-run.log
-          echo "exit=$?" >> "$GITHUB_OUTPUT"
 
       - name: Probe what the session can see
         if: inputs.login_hint == true

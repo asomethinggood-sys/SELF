@@ -1,0 +1,161 @@
+name: TikTok login (from a phone)
+
+# The one step that needs a human, made available to a human with no terminal.
+#
+# `havoc tt login` opens a real Chromium and waits for a person to sign in. On a
+# laptop that is a window. Here it is an Xvfb display, an x11vnc server and a
+# noVNC page published through a Cloudflare quick tunnel — so the owner can open
+# one https:// URL on an Android phone, tap through TikTok's own login page, and
+# let the runner save the jar.
+#
+# Why not Termux: Playwright publishes no Chromium build for Android/arm64. The
+# browser exists only on x86_64 Linux, so the browser has to live where a runner
+# is — and the human has to reach it some other way than a window.
+#
+# What this does NOT do: type anything for you. The streamed page is TikTok's
+# login page and the keystrokes are yours. Prefer QR / "continue with Google" if
+# offered — a password typed into a streamed runner is a password on someone
+# else's machine, even when that machine is ephemeral and yours.
+#
+# Security of the tunnel
+# ----------------------
+# A quick tunnel is a public URL. Three things bound the exposure: it exists only
+# while this job runs (<= 30 minutes), it requires a VNC password that is
+# generated per run and printed only into the job summary (visible to people who
+# can already see the repository), and the runner is destroyed afterwards. Close
+# the job as soon as the login lands.
+#
+# When it finishes
+# ----------------
+# The jar is committed to the branch automatically, so `tiktok.yml` can restore
+# it. Nothing else to copy, no secret to paste.
+
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "How long the login window stays open (default 25)"
+        required: false
+        default: "25"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: havoc-tiktok-login
+  cancel-in-progress: true
+
+jobs:
+  login:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install the browser side
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[browser]"
+          python -m playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install -y xvfb x11vnc novnc websockify
+
+      - name: Install cloudflared
+        run: |
+          curl -fsSL -o /tmp/cloudflared \
+            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          chmod +x /tmp/cloudflared
+
+      - name: Open the window and the stream
+        id: stream
+        run: |
+          set -euo pipefail
+          # A display with no monitor, which the owner can still see.
+          Xvfb :99 -screen 0 1100x900x24 >/tmp/xvfb.log 2>&1 &
+          sleep 2
+          export DISPLAY=:99
+
+          VNC_PASS="$(python -c 'import secrets; print(secrets.token_urlsafe(9))')"
+          echo "::add-mask::$VNC_PASS"
+          x11vnc -storepasswd "$VNC_PASS" /tmp/vncpass >/dev/null 2>&1
+          x11vnc -display :99 -rfbauth /tmp/vncpass -forever -shared -noxdamage \
+            >/tmp/x11vnc.log 2>&1 &
+          sleep 2
+
+          websockify --web=/usr/share/novnc 6080 localhost:5900 >/tmp/websockify.log 2>&1 &
+          sleep 2
+
+          /tmp/cloudflared tunnel --url http://localhost:6080 --no-autoupdate \
+            >/tmp/cloudflared.log 2>&1 &
+          for _ in $(seq 1 40); do
+            URL="$(grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/cloudflared.log | head -1 || true)"
+            [ -n "$URL" ] && break
+            sleep 2
+          done
+          if [ -z "${URL:-}" ]; then
+            echo "::error::the tunnel did not come up"; tail -30 /tmp/cloudflared.log; exit 1
+          fi
+
+          LINK="${URL}/vnc.html?autoconnect=1&resize=scale&reconnect=1"
+          echo "link=$LINK" >> "$GITHUB_OUTPUT"
+          echo "vnc_pass=$VNC_PASS" >> "$GITHUB_OUTPUT"
+          {
+            echo "## TikTok login window"
+            echo ""
+            echo "1. Open this on your phone: **[${URL}/vnc.html](${LINK})**"
+            echo "2. Password: \`${VNC_PASS}\`"
+            echo "3. Sign in to TikTok normally. The page may look small — pinch to zoom."
+            echo "4. When you are in, nothing else is needed: this job saves the session and stops."
+            echo ""
+            echo "The link dies when this job ends. Close it yourself once you are signed in."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Wait for the owner to sign in
+        env:
+          DISPLAY: ":99"
+          HAVOC_TIKTOK_DIR: .auth/tiktok
+        run: |
+          set +e
+          timeout "$(( ${{ inputs.minutes || 25 }} * 60 ))" \
+            havoc tt login --timeout 1500 2>&1 | tee /tmp/login.log
+          code=${PIPESTATUS[0]}
+          echo "login-exit=${code}" >> "$GITHUB_ENV"
+
+      - name: Commit the jar
+        if: always()
+        run: |
+          git config user.name "yura-tiktok"
+          git config user.email "yura-tiktok@users.noreply.github.com"
+          if [ -f .auth/tiktok/default.json ]; then
+            python scripts/tiktok_check_jar.py || echo "::warning::the jar has no authenticating cookie"
+            if git diff --quiet -- .auth/tiktok/default.json 2>/dev/null && [ -z "$(git status --porcelain .auth/tiktok)" ]; then
+              echo "jar unchanged"
+            else
+              git add .auth/tiktok/default.json
+              git commit -m "tiktok: session from the login window [skip ci]"
+              git push || echo "::warning::could not push the jar"
+            fi
+            echo "::notice::Session saved. Dispatch the 'TikTok run' workflow now."
+          else
+            echo "::warning::No jar was written — the sign-in did not complete before the timeout."
+          fi
+
+      - name: What to do next
+        if: always()
+        run: |
+          {
+            echo "### Next"
+            echo ""
+            if [ -f .auth/tiktok/default.json ]; then
+              echo "The session is committed. Open **Actions → TikTok run → Run workflow** and leave it alone."
+            else
+              echo "No session was saved. Dispatch this workflow again and complete the sign-in within the window."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
