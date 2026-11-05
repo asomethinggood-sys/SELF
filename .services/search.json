@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://malpractice-enabled-fool-zoo.trycloudflare.com",
-  "run_id": "41964679375",
-  "started_at": "2026-11-05T09:32:12Z",
-  "expires_at": "2026-11-05T15:32:12Z",
+  "url": "https://mounts-cattle-jpeg-thought.trycloudflare.com",
+  "run_id": "42003135411",
+  "started_at": "2026-11-05T15:07:57Z",
+  "expires_at": "2026-11-05T21:07:57Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-05T09:32:27Z",
+  "published_at": "2026-11-05T15:08:13Z",
   "gated": true,
   "public": false
 }
