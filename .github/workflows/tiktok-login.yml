@@ -38,12 +38,13 @@ on:
         required: false
         default: "25"
   push:
-    # Pushing this file is the request. Chosen because a token without the
-    # `actions` permission cannot dispatch a workflow (403) while it can always
-    # push, and this repository's automation token is exactly that kind: the
-    # handover chain has to work by push or it does not work at all.
-    # Nothing else in `.auth/tiktok/` triggers this, so the job's own commits
-    # (the jar, the live link) cannot restart it.
+    # Pushing the request marker is the request. Chosen because a token without
+    # the `actions` permission cannot dispatch a workflow (403) while it can
+    # always push, and this repository's automation token is exactly that kind.
+    #
+    # Exactly one path is watched, and it is a file nothing else ever writes:
+    # the job's own commits (the jar, the published link) cannot restart it, and
+    # neither can an edit to this file. The marker is deleted when the job ends.
     paths:
       - ".auth/tiktok/request-login"
 
@@ -56,8 +57,6 @@ concurrency:
 
 jobs:
   login:
-    # A push only opens a window when it brought the request marker with it.
-    if: github.event_name == 'workflow_dispatch' || hashFiles('.auth/tiktok/request-login') != ''
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
