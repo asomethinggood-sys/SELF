@@ -8,3 +8,7 @@ ok   gate /healthz without a token — 200 {"ok": true, "service": "ollama", "ru
   ok   the model is listed — {"models":[{"name":"qwen2.5:0.5b","model":"qwen2.5:0.5b","modified_at":"2026-11-05T15:08:31.521990255Z","size":397821319,"digest":"a8b0c51577010a279d933d14c2a8ab4b268079d44c5c8830c0a93900f1827c67","de
   ok   a real reply through the gate — A transformer is a type of machine learning model designed to analyze, process, and generate language, using a novel architecture that captures both its inherent structure and context.
 self-test: 7/7 checks passed
+
+public: https://auto-kate-training-stamp.trycloudflare.com
+reachable from the internet: yes — GET /healthz through the tunnel answered 200
+the bot needs no configuration: it reads .services/ollama.json
