@@ -167,7 +167,7 @@ jobs:
           # The branch moves under a running job (other workflows commit
           # snapshots), and a plain push lost the link once. Rebase and retry.
           for attempt in 1 2 3 4 5; do
-            if out=$( { git pull -q --rebase && git push -q; } 2>&1 ); then echo "link published"; break; fi
+            if out=$( { git -c rebase.autoStash=true pull -q --rebase && git push -q; } 2>&1 ); then echo "link published"; break; fi
             echo "::warning::publish attempt ${attempt} failed: $(echo "$out" | tail -2 | tr '\n' ' ')"
             sleep $(( attempt * 3 ))
           done
@@ -197,7 +197,7 @@ jobs:
         run: |
           git config user.name "yura-tiktok"
           git config user.email "yura-tiktok@users.noreply.github.com"
-          git pull -q --rebase || true
+          git -c rebase.autoStash=true pull -q --rebase || true
           saved=no
           if [ -f .auth/tiktok/default.json ]; then
             if python scripts/tiktok_check_jar.py; then saved=yes; fi
