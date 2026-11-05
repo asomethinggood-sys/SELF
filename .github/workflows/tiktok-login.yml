@@ -161,7 +161,13 @@ jobs:
           git config user.email "yura-tiktok@users.noreply.github.com"
           git add .auth/tiktok/live.json
           git commit -q -m "tiktok: login window open [skip ci]" || true
-          git push -q || echo "::warning::could not publish the live link"
+          # The branch moves under a running job (other workflows commit
+          # snapshots), and a plain push lost the link once. Rebase and retry.
+          for attempt in 1 2 3 4 5; do
+            git pull -q --rebase && git push -q && { echo "link published"; break; }
+            echo "::warning::publish attempt ${attempt} failed; retrying"
+            sleep $(( attempt * 3 ))
+          done
 
       - name: Wait for the owner to sign in
         env:
