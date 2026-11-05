@@ -9,6 +9,10 @@ name: Service · experimental SDXL Lightning
 # the chat, and a different gate from `.draw`: `.draw` keeps its own generator,
 # and `.fastdraw` says so when this experiment is offline.
 #
+# To bring it back, push any change to one of the paths below with the marker
+# `[telegram-sdxl-service]` in the commit message. The runner publishes for
+# about an hour and then removes its own discovery file.
+#
 # The gate accepts only a GitHub-signed, short-lived token for this repository,
 # branch and workflow file (`scripts/sdxl_oidc_gate.py`). It forwards only a
 # fixed SDXL graph — model, sampler, resolution and negative prompt checked
