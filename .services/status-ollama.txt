@@ -31,3 +31,4 @@
 03:57:18Z run 41924457987 · proving it through the gate with a real request
 03:57:28Z run 41924457987 · published https://provides-ton-soldiers-enhancing.trycloudflare.com
 15:07:38Z run 42003119569 · starting ollama on this runner
+15:08:31Z run 42003119569 · ollama is up behind the gate
