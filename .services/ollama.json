@@ -1,14 +1,14 @@
 {
   "service": "ollama",
-  "url": "https://middle-vendor-drives-dinner.trycloudflare.com",
-  "run_id": "41871758439",
-  "started_at": "2026-11-04T22:21:02Z",
-  "expires_at": "2026-11-05T04:21:02Z",
+  "url": "https://provides-ton-soldiers-enhancing.trycloudflare.com",
+  "run_id": "41924457987",
+  "started_at": "2026-11-05T03:56:30Z",
+  "expires_at": "2026-11-05T09:56:30Z",
   "gate_port": 9003,
   "upstream_port": 11434,
   "model": "qwen2.5:0.5b",
   "version": "ollama/qwen2.5:0.5b",
-  "published_at": "2026-11-04T22:22:07Z",
+  "published_at": "2026-11-05T03:57:26Z",
   "gated": true,
   "public": false
 }
