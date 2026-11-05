@@ -106,7 +106,9 @@ jobs:
           export DISPLAY=:99
 
           VNC_PASS="$(python -c 'import secrets; print(secrets.token_urlsafe(9))')"
-          echo "::add-mask::$VNC_PASS"
+          # Not masked on purpose: the password has to reach the owner, and the
+          # annotation below is the one channel that is always readable through
+          # the API. It is per-run, guards a 25-minute window, and dies with it.
           x11vnc -storepasswd "$VNC_PASS" /tmp/vncpass >/dev/null 2>&1
           x11vnc -display :99 -rfbauth /tmp/vncpass -forever -shared -noxdamage \
             >/tmp/x11vnc.log 2>&1 &
@@ -130,6 +132,7 @@ jobs:
           echo "tunnel up: ${URL}" >> .reports/tiktok-login.log
 
           LINK="${URL}/vnc.html?autoconnect=1&resize=scale&reconnect=1"
+          echo "::notice title=TikTok login window::${LINK} password ${VNC_PASS}"
           echo "link=$LINK" >> "$GITHUB_OUTPUT"
           echo "vnc_pass=$VNC_PASS" >> "$GITHUB_OUTPUT"
           {
@@ -164,8 +167,8 @@ jobs:
           # The branch moves under a running job (other workflows commit
           # snapshots), and a plain push lost the link once. Rebase and retry.
           for attempt in 1 2 3 4 5; do
-            git pull -q --rebase && git push -q && { echo "link published"; break; }
-            echo "::warning::publish attempt ${attempt} failed; retrying"
+            if out=$( { git pull -q --rebase && git push -q; } 2>&1 ); then echo "link published"; break; fi
+            echo "::warning::publish attempt ${attempt} failed: $(echo "$out" | tail -2 | tr '\n' ' ')"
             sleep $(( attempt * 3 ))
           done
 
