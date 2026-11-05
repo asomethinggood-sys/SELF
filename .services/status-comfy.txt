@@ -35,3 +35,4 @@
 09:53:25Z run 41966566288 · proving it through the gate with a real request
 09:55:59Z run 41966566288 · published https://metro-threaded-experiencing-vatican.trycloudflare.com
 21:02:57Z run 42055011736 · starting comfy on this runner
+21:09:13Z run 42055011736 · comfy is up behind the gate
