@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://laboratories-announced-introduced-model.trycloudflare.com",
-  "run_id": "41871758422",
-  "started_at": "2026-11-04T22:21:01Z",
-  "expires_at": "2026-11-05T04:21:01Z",
+  "url": "https://connections-epson-accessed-findlaw.trycloudflare.com",
+  "run_id": "41924450563",
+  "started_at": "2026-11-05T03:56:37Z",
+  "expires_at": "2026-11-05T09:56:37Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-04T22:21:23Z",
+  "published_at": "2026-11-05T03:56:54Z",
   "gated": true,
   "public": false
 }
