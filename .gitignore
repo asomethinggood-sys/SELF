@@ -55,6 +55,13 @@ Thumbs.db
 
 # --- Local notes (not part of the project) ---
 .runtime/
+# A TikTok cookie jar is a login, not a cache. The tracked copy is the one the
+# workflow restores (`.auth/tiktok/default.json`); everything the browser writes
+# beside it — profiles, temp jars, spend ledgers — stays out.
+.auth/tiktok/*-profile/
+.auth/tiktok/*.tmp
+.auth/tiktok/*.state.json
+.venv-tt/
 
 # --- Pictures the owner drops in for the agent to read (not shipped) ---
 google_drive/

@@ -1,0 +1,159 @@
+name: TikTok run
+
+# Yura on TikTok: one long run that restores the owner's browser session, opens
+# the inbox, answers people as Yura, and hands over to a successor before GitHub
+# kills it — the same shape as `auth-and-run.yml`, with a browser instead of
+# Telethon.
+#
+# Why it looks like the Telegram workflow and not like a cron job: a cron job
+# would poll every N minutes and answer late. This keeps one process alive for
+# ~5 hours with the messages page open, so replies arrive on the page's own push.
+#
+# The session is the whole thing
+# ------------------------------
+# `havoc tt login` is run *by a human*, locally, once. It writes a cookie jar to
+# `.auth/tiktok/default.json`; that file is the login, exactly like
+# `.auth/session.txt` is the Telegram one. The jar is committed on purpose (this
+# branch, this repository, the owner's account) so a runner can restore it, and
+# it is also cached under a key the next run reuses.
+#
+# TikTok rotates `msToken`/`ttwid` while a page is open, so the run re-saves the
+# jar every few minutes and commits the refreshed copy at the end. A successor
+# that only had the cookies from the *start* of the previous run can come back
+# logged out — that is the failure this workflow is built around.
+#
+# A challenge stops the chain
+# ---------------------------
+# If TikTok shows a captcha, `havoc tt run` exits 1 and this workflow does NOT
+# queue a successor. Retrying into a challenge is the fastest way to lose the
+# account; the owner clears it on a phone and dispatches the run again.
+
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "How long this run may live (default 285)"
+        required: false
+        default: "285"
+      owner_only:
+        description: "Only answer the owner (true/false)"
+        required: false
+        default: "false"
+      login_hint:
+        description: "Smoke test: open the inbox, print what is visible, exit"
+        required: false
+        type: boolean
+        default: false
+  push:
+    paths:
+      - "havoc/tiktok/**"
+      - ".auth/tiktok/**"
+      - ".github/workflows/tiktok.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  # One run at a time. Two browsers on one account, clicking, is exactly the
+  # pattern that looks automated.
+  group: havoc-tiktok
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[browser]"
+          python -m playwright install --with-deps chromium
+
+      - name: Restore the session jar
+        uses: actions/cache@v4
+        with:
+          path: .auth/tiktok
+          key: havoc-tt-jar-${{ github.run_id }}
+          restore-keys: |
+            havoc-tt-jar-
+
+      - name: Check the session
+        id: gate
+        run: |
+          set +e
+          havoc tt status --json > .tt-status.json
+          code=$?
+          cat .tt-status.json
+          if [ $code -ne 0 ]; then
+            echo "::error::No usable TikTok session. Run \`havoc tt login\` locally and commit .auth/tiktok/default.json."
+            echo "have_session=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "have_session=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run
+        if: steps.gate.outputs.have_session == 'true' && inputs.login_hint != true
+        env:
+          HAVOC_TIKTOK_DIR: .auth/tiktok
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          DATA_DIR: .runtime/tiktok/data
+          DATABASE_PATH: .runtime/tiktok/data/havoc.db
+          LOG_DIR: .runtime/tiktok/logs
+        run: |
+          set -o pipefail
+          havoc tt run \
+            --minutes "${{ inputs.minutes || 285 }}" \
+            $( [ "${{ inputs.owner_only }}" = "true" ] && echo --owner-only ) \
+            2>&1 | tee -a .runtime/tiktok-run.log
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Probe what the session can see
+        if: inputs.login_hint == true
+        env:
+          HAVOC_TIKTOK_DIR: .auth/tiktok
+        run: havoc tt probe 2>&1 | tee -a .runtime/tiktok-probe.log || true
+
+      - name: Keep the refreshed jar
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .auth/tiktok
+          key: havoc-tt-jar-${{ github.run_id }}
+
+      - name: Commit the refreshed jar and the status file
+        if: always()
+        run: |
+          git config user.name "yura-tiktok"
+          git config user.email "yura-tiktok@users.noreply.github.com"
+          mkdir -p .reports
+          [ -f .tt-status.json ] && cp .tt-status.json .reports/tiktok-status.json || true
+          git add -A .auth/tiktok .reports/tiktok-status.json
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+          else
+            git commit -m "tiktok: session and status after run ${{ github.run_id }} [skip ci]"
+            git push || echo "::warning::could not push the refreshed jar"
+          fi
+
+      - name: Queue the successor
+        # Not after a challenge: a chain that retries into a captcha is a chain
+        # that gets the account restricted. The owner dispatches again by hand.
+        if: success() && steps.gate.outputs.have_session == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run tiktok.yml \
+            --ref "${GITHUB_REF_NAME}" \
+            -f minutes="${{ inputs.minutes || 285 }}" \
+            -f owner_only="${{ inputs.owner_only || 'false' }}" \
+            || echo "::warning::could not queue the successor run"

@@ -45,6 +45,13 @@ download = [
     "yt-dlp>=2024.8.6",
     "gallery-dl>=1.32",
 ]
+# The TikTok side: a real Chromium wearing the owner's cookies, not the TikTok
+# API (which cannot like, follow, block or open an inbox). Optional for the same
+# reason as `download` — a clone without it boots and says what to install.
+# `python -m playwright install --with-deps chromium` fetches the browser itself.
+browser = [
+    "playwright>=1.45",
+]
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.23",
@@ -54,6 +61,7 @@ dev = [
 
 [project.scripts]
 havoc = "havoc.main:cli"
+yura = "havoc.main:cli"
 
 [tool.setuptools]
 packages = [
@@ -61,6 +69,7 @@ packages = [
     "havoc.features",
     "havoc.services",
     "havoc.utils",
+    "havoc.tiktok",
 ]
 
 [tool.setuptools.package-data]

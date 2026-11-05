@@ -686,6 +686,19 @@ def command_data(args: argparse.Namespace) -> int:
     return asyncio.run(_data_report(args))
 
 
+def command_tt(args: argparse.Namespace) -> int:
+    """Hand off to ``havoc tt``.
+
+    The TikTok family owns its own parser and its own exit codes (0 ok, 1
+    refused, 2 usage, 3 page drift), and its commands have options ``run`` and
+    ``login`` have no business knowing. A thin hand-off keeps both parsers
+    honest instead of duplicating flags in two places.
+    """
+    from .tiktok.cli import main as tiktok_main
+
+    return tiktok_main(list(getattr(args, "tt_args", []) or []))
+
+
 def command_version(_args: argparse.Namespace) -> int:
     print(label())
     print(f"Python: {sys.version.split()[0]}")
@@ -752,6 +765,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="increment a boot counter first (used to prove persistence across restarts)",
     )
     data.set_defaults(func=command_data)
+
+    tt = subparsers.add_parser(
+        "tt",
+        help="operate your own TikTok account through a real browser session",
+    )
+    tt.add_argument(
+        "tt_args",
+        nargs=argparse.REMAINDER,
+        help="login | run | status | probe | like | follow | block | logout …",
+    )
+    tt.set_defaults(func=command_tt)
 
     version = subparsers.add_parser("version", help="show version information")
     version.set_defaults(func=command_version)
