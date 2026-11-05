@@ -693,3 +693,583 @@ WebSocket server settings:
   - No SSL/TLS support (no cert file)
   - proxying from :6080 to localhost:5900
 == saved=no 2026-11-05T16:57:02Z
+== install 2026-11-05T17:54:37Z on Ubuntu 24.04.5 LTS
+  /tmp/pip-build-env-70lui0nd/overlay/lib/python3.11/site-packages/setuptools/config/_apply_pyprojecttoml.py:82: BuildBackendWarning: `project.license` as a TOML table is deprecated
+  !!
+  
+          ********************************************************************************
+          Please use a simple string containing a SPDX expression for `project.license`. You can also use `project.license-files`. (Both options available on setuptools>=77.0.0).
+  
+          By 2027-Feb-18, you need to update your project and remove deprecated calls
+          or your builds will no longer be supported.
+  
+          See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+          ********************************************************************************
+  
+  !!
+    corresp(dist, value, root_dir)
+  /tmp/pip-build-env-70lui0nd/overlay/lib/python3.11/site-packages/setuptools/config/_apply_pyprojecttoml.py:82: BuildBackendWarning: `project.license` as a TOML table is deprecated
+  !!
+  
+          ********************************************************************************
+          Please use a simple string containing a SPDX expression for `project.license`. You can also use `project.license-files`. (Both options available on setuptools>=77.0.0).
+  
+          By 2027-Feb-18, you need to update your project and remove deprecated calls
+          or your builds will no longer be supported.
+  
+          See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+          ********************************************************************************
+  
+  !!
+    corresp(dist, value, root_dir)
+  /tmp/pip-build-env-70lui0nd/overlay/lib/python3.11/site-packages/setuptools/config/_apply_pyprojecttoml.py:82: BuildBackendWarning: `project.license` as a TOML table is deprecated
+  !!
+  
+          ********************************************************************************
+          Please use a simple string containing a SPDX expression for `project.license`. You can also use `project.license-files`. (Both options available on setuptools>=77.0.0).
+  
+          By 2027-Feb-18, you need to update your project and remove deprecated calls
+          or your builds will no longer be supported.
+  
+          See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+          ********************************************************************************
+  
+  !!
+    corresp(dist, value, root_dir)
+  /tmp/pip-build-env-70lui0nd/overlay/lib/python3.11/site-packages/setuptools/command/build_py.py:215: BuildBackendWarning: Package 'havoc.assets.fonts' is absent from the `packages` configuration.
+  !!
+  
+          ********************************************************************************
+          ############################
+          # Package would be ignored #
+          ############################
+          Python recognizes 'havoc.assets.fonts' as an importable package[^1],
+          but it is absent from setuptools' `packages` configuration.
+  
+          This leads to an ambiguous overall configuration. If you want to distribute this
+          package, please make sure that 'havoc.assets.fonts' is explicitly added
+          to the `packages` configuration field.
+  
+          Alternatively, you can also rely on setuptools' discovery methods
+          (for example by using `find_namespace_packages(...)`/`find_namespace:`
+          instead of `find_packages(...)`/`find:`).
+  
+          You can read more about "package discovery" on setuptools documentation page:
+  
+          - https://setuptools.pypa.io/en/latest/userguide/package_discovery.html
+  
+          If you don't want 'havoc.assets.fonts' to be distributed and are
+          already explicitly excluding 'havoc.assets.fonts' via
+          `find_namespace_packages(...)/find_namespace` or `find_packages(...)/find`,
+          you can try to use `exclude_package_data`, or `include-package-data=False` in
+          combination with a more fine grained `package-data` configuration.
+  
+          You can read more about "package data files" on setuptools documentation page:
+  
+          - https://setuptools.pypa.io/en/latest/userguide/datafiles.html
+  
+  
+          [^1]: For Python, any directory (with suitable naming) can be imported,
+                even if it does not contain any `.py` files.
+                On the other hand, currently there is no concept of package data
+                directory, all directories are treated like packages.
+          ********************************************************************************
+  
+  !!
+    check.warn(importable)
+  /tmp/pip-build-env-70lui0nd/overlay/lib/python3.11/site-packages/setuptools/command/build_py.py:215: BuildBackendWarning: Package 'havoc.data' is absent from the `packages` configuration.
+  !!
+  
+          ********************************************************************************
+          ############################
+          # Package would be ignored #
+          ############################
+          Python recognizes 'havoc.data' as an importable package[^1],
+          but it is absent from setuptools' `packages` configuration.
+  
+          This leads to an ambiguous overall configuration. If you want to distribute this
+          package, please make sure that 'havoc.data' is explicitly added
+          to the `packages` configuration field.
+  
+          Alternatively, you can also rely on setuptools' discovery methods
+          (for example by using `find_namespace_packages(...)`/`find_namespace:`
+          instead of `find_packages(...)`/`find:`).
+  
+          You can read more about "package discovery" on setuptools documentation page:
+  
+          - https://setuptools.pypa.io/en/latest/userguide/package_discovery.html
+  
+          If you don't want 'havoc.data' to be distributed and are
+          already explicitly excluding 'havoc.data' via
+          `find_namespace_packages(...)/find_namespace` or `find_packages(...)/find`,
+          you can try to use `exclude_package_data`, or `include-package-data=False` in
+          combination with a more fine grained `package-data` configuration.
+  
+          You can read more about "package data files" on setuptools documentation page:
+  
+          - https://setuptools.pypa.io/en/latest/userguide/datafiles.html
+  
+  
+          [^1]: For Python, any directory (with suitable naming) can be imported,
+                even if it does not contain any `.py` files.
+                On the other hand, currently there is no concept of package data
+                directory, all directories are treated like packages.
+          ********************************************************************************
+  
+  !!
+    check.warn(importable)
+  /tmp/pip-build-env-70lui0nd/overlay/lib/python3.11/site-packages/setuptools/command/build_py.py:215: BuildBackendWarning: Package 'havoc.locales' is absent from the `packages` configuration.
+  !!
+  
+          ********************************************************************************
+          ############################
+          # Package would be ignored #
+          ############################
+          Python recognizes 'havoc.locales' as an importable package[^1],
+          but it is absent from setuptools' `packages` configuration.
+  
+          This leads to an ambiguous overall configuration. If you want to distribute this
+          package, please make sure that 'havoc.locales' is explicitly added
+          to the `packages` configuration field.
+  
+          Alternatively, you can also rely on setuptools' discovery methods
+          (for example by using `find_namespace_packages(...)`/`find_namespace:`
+          instead of `find_packages(...)`/`find:`).
+  
+          You can read more about "package discovery" on setuptools documentation page:
+  
+          - https://setuptools.pypa.io/en/latest/userguide/package_discovery.html
+  
+          If you don't want 'havoc.locales' to be distributed and are
+          already explicitly excluding 'havoc.locales' via
+          `find_namespace_packages(...)/find_namespace` or `find_packages(...)/find`,
+          you can try to use `exclude_package_data`, or `include-package-data=False` in
+          combination with a more fine grained `package-data` configuration.
+  
+          You can read more about "package data files" on setuptools documentation page:
+  
+          - https://setuptools.pypa.io/en/latest/userguide/datafiles.html
+  
+  
+          [^1]: For Python, any directory (with suitable naming) can be imported,
+                even if it does not contain any `.py` files.
+                On the other hand, currently there is no concept of package data
+                directory, all directories are treated like packages.
+          ********************************************************************************
+  
+  !!
+    check.warn(importable)
+  /tmp/pip-build-env-70lui0nd/overlay/lib/python3.11/site-packages/setuptools/command/editable_wheel.py:354: BuildBackendWarning: Editable installation.
+  !!
+  
+          ********************************************************************************
+          Please be careful with folders in your working directory with the same
+          name as your package as they may take precedence during imports.
+          ********************************************************************************
+  
+  !!
+    with strategy, WheelFile(wheel_path, "w") as wheel_obj:
+Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+Get:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+Get:7 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [664 kB]
+Get:8 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [732 kB]
+Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+Get:9 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1408 kB]
+Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [311 kB]
+Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1708 kB]
+Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe Translation-en [343 kB]
+Get:13 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1157 kB]
+Get:14 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [234 kB]
+Get:15 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1225 kB]
+Get:16 http://azure.archive.ubuntu.com/ubuntu noble-security/universe Translation-en [247 kB]
+Get:17 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [1721 kB]
+Get:18 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted Translation-en [394 kB]
+Get:19 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse Translation-en [12.4 kB]
+Fetched 10.5 MB in 1s (10.9 MB/s)
+Reading package lists...
+Reading package lists...
+Building dependency tree...
+Reading state information...
+xvfb is already the newest version (2:21.1.12-1ubuntu1.9).
+The following additional packages will be installed:
+  docutils-common libblas3 libimagequant0 liblapack3 libnode109 libraqm0
+  libvncclient1 libvncserver1 node-acorn node-busboy node-cjs-module-lexer
+  node-undici node-xtend nodejs python3-debtcollector python3-deprecated
+  python3-dnspython python3-docutils python3-eventlet python3-greenlet
+  python3-importlib-metadata python3-iso8601 python3-jwcrypto
+  python3-monotonic python3-more-itertools python3-msgpack python3-novnc
+  python3-numpy python3-oslo.config python3-oslo.context python3-oslo.i18n
+  python3-oslo.log python3-oslo.serialization python3-oslo.utils python3-pbr
+  python3-pil python3-pyasyncore python3-pyinotify python3-rfc3986
+  python3-roman python3-stevedore python3-websockify python3-wrapt
+  python3-zipp
+Suggested packages:
+  npm python-nova python-debtcollector-doc python3-trio python3-aioquic
+  python3-h2 python3-httpx python3-httpcore docutils-doc fonts-linuxlibertine
+  | ttf-linux-libertine texlive-lang-french texlive-latex-base
+  texlive-latex-recommended python-eventlet-doc python-greenlet-dev
+  python-greenlet-doc python3-nova python3-pytest python-oslo.log-doc
+  python-pil-doc python-pyinotify-doc
+Recommended packages:
+  nodejs-doc libpaper-utils python3-olefile x11-utils
+The following NEW packages will be installed:
+  docutils-common libblas3 libimagequant0 liblapack3 libnode109 libraqm0
+  libvncclient1 libvncserver1 node-acorn node-busboy node-cjs-module-lexer
+  node-undici node-xtend nodejs novnc python3-debtcollector python3-deprecated
+  python3-dnspython python3-docutils python3-eventlet python3-greenlet
+  python3-importlib-metadata python3-iso8601 python3-jwcrypto
+  python3-monotonic python3-more-itertools python3-msgpack python3-novnc
+  python3-numpy python3-oslo.config python3-oslo.context python3-oslo.i18n
+  python3-oslo.log python3-oslo.serialization python3-oslo.utils python3-pbr
+  python3-pil python3-pyasyncore python3-pyinotify python3-rfc3986
+  python3-roman python3-stevedore python3-websockify python3-wrapt
+  python3-zipp websockify x11vnc
+0 upgraded, 47 newly installed, 0 to remove and 24 not upgraded.
+Need to get 23.6 MB of archives.
+After this operation, 101 MB of additional disk space will be used.
+Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+Get:2 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 docutils-common all 0.20.1+dfsg-3 [132 kB]
+Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libblas3 amd64 3.12.0-3build1.1 [238 kB]
+Get:4 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libimagequant0 amd64 2.18.0-1build1 [36.3 kB]
+Get:5 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 liblapack3 amd64 3.12.0-3build1.1 [2646 kB]
+Get:6 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 node-xtend all 4.0.2-3 [3902 B]
+Get:7 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 nodejs amd64 18.19.1+dfsg-6ubuntu5 [306 kB]
+Get:8 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 node-acorn all 8.8.1+ds+~cs25.17.7-2 [115 kB]
+Get:9 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 node-cjs-module-lexer all 1.2.3+dfsg-1 [32.1 kB]
+Get:10 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 node-busboy all 1.6.0+~cs2.6.0-2 [17.3 kB]
+Get:11 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 node-undici all 5.26.3+dfsg1+~cs23.10.12-2 [325 kB]
+Get:12 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 libnode109 amd64 18.19.1+dfsg-6ubuntu5 [11.6 MB]
+Ign:12 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 libnode109 amd64 18.19.1+dfsg-6ubuntu5
+Get:13 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libraqm0 amd64 0.10.1-1build1 [15.0 kB]
+Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libvncclient1 amd64 0.9.14+dfsg-1ubuntu0.2 [76.9 kB]
+Get:15 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libvncserver1 amd64 0.9.14+dfsg-1ubuntu0.2 [134 kB]
+Get:16 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-pbr all 5.11.1-0ubuntu1 [66.5 kB]
+Get:17 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-wrapt amd64 1.15.0-2build3 [34.8 kB]
+Get:18 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-more-itertools all 10.2.0-1 [52.9 kB]
+Get:19 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 python3-zipp all 1.0.0-6ubuntu0.1 [6774 B]
+Get:20 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-importlib-metadata all 4.12.0-1 [17.8 kB]
+Get:21 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-debtcollector all 2.5.0-3 [13.3 kB]
+Get:22 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-roman all 3.3-3 [9632 B]
+Get:23 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-docutils all 0.20.1+dfsg-3 [393 kB]
+Get:24 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-oslo.i18n all 6.3.0-0ubuntu1 [22.2 kB]
+Get:25 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 python3-greenlet amd64 3.0.3-0ubuntu5.1 [154 kB]
+Get:26 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-dnspython all 2.6.1-1ubuntu1 [163 kB]
+Get:27 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-monotonic all 1.6-2 [5732 B]
+Get:28 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 python3-eventlet all 0.35.2-0ubuntu1.1 [274 kB]
+Get:29 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-oslo.context all 1:5.5.0-0ubuntu1 [13.7 kB]
+Get:30 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-msgpack amd64 1.0.3-3build2 [80.1 kB]
+Get:31 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-iso8601 all 1.0.2-1 [15.8 kB]
+Get:32 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-oslo.utils all 7.1.0-0ubuntu1 [63.2 kB]
+Get:33 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-oslo.serialization all 5.4.0-0ubuntu1 [15.6 kB]
+Get:34 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-pyasyncore all 1.0.2-2 [10.1 kB]
+Get:35 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-pyinotify all 0.9.6-2ubuntu1 [25.0 kB]
+Get:36 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-oslo.log all 5.5.1-0ubuntu1 [46.9 kB]
+Get:37 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-rfc3986 all 2.0.0-2 [21.9 kB]
+Get:38 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-stevedore all 1:5.1.0-0ubuntu1 [21.0 kB]
+Get:39 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-oslo.config all 1:9.4.0-0ubuntu1 [88.0 kB]
+Get:40 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 python3-pil amd64 10.2.0-1ubuntu1.4 [453 kB]
+Get:41 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 python3-novnc all 1:1.3.0-2 [12.8 kB]
+Get:42 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-numpy amd64 1:1.26.4+ds-6ubuntu1 [4437 kB]
+Ign:42 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-numpy amd64 1:1.26.4+ds-6ubuntu1
+Get:43 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 python3-deprecated all 1.2.14-1 [10.5 kB]
+Get:44 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 python3-jwcrypto all 1.5.4-1 [31.9 kB]
+Get:45 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-websockify amd64 0.10.0+dfsg1-5build2 [42.2 kB]
+Get:46 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 websockify amd64 0.10.0+dfsg1-5build2 [24.3 kB]
+Get:47 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 novnc all 1:1.3.0-2 [248 kB]
+Get:48 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 x11vnc amd64 0.9.16-10 [1018 kB]
+Get:12 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 libnode109 amd64 18.19.1+dfsg-6ubuntu5 [11.6 MB]
+Ign:12 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 libnode109 amd64 18.19.1+dfsg-6ubuntu5
+Get:12 https://archive.ubuntu.com/ubuntu noble/universe amd64 libnode109 amd64 18.19.1+dfsg-6ubuntu5 [11.6 MB]
+Ign:42 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 python3-numpy amd64 1:1.26.4+ds-6ubuntu1
+Get:42 https://archive.ubuntu.com/ubuntu noble/main amd64 python3-numpy amd64 1:1.26.4+ds-6ubuntu1 [4437 kB]
+Fetched 15.8 MB in 8min 44s (30.2 kB/s)
+Selecting previously unselected package docutils-common.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 215960 files and directories currently installed.)
+Preparing to unpack .../00-docutils-common_0.20.1+dfsg-3_all.deb ...
+Unpacking docutils-common (0.20.1+dfsg-3) ...
+Selecting previously unselected package libblas3:amd64.
+Preparing to unpack .../01-libblas3_3.12.0-3build1.1_amd64.deb ...
+Unpacking libblas3:amd64 (3.12.0-3build1.1) ...
+Selecting previously unselected package libimagequant0:amd64.
+Preparing to unpack .../02-libimagequant0_2.18.0-1build1_amd64.deb ...
+Unpacking libimagequant0:amd64 (2.18.0-1build1) ...
+Selecting previously unselected package liblapack3:amd64.
+Preparing to unpack .../03-liblapack3_3.12.0-3build1.1_amd64.deb ...
+Unpacking liblapack3:amd64 (3.12.0-3build1.1) ...
+Selecting previously unselected package node-xtend.
+Preparing to unpack .../04-node-xtend_4.0.2-3_all.deb ...
+Unpacking node-xtend (4.0.2-3) ...
+Selecting previously unselected package nodejs.
+Preparing to unpack .../05-nodejs_18.19.1+dfsg-6ubuntu5_amd64.deb ...
+Unpacking nodejs (18.19.1+dfsg-6ubuntu5) ...
+Selecting previously unselected package node-acorn.
+Preparing to unpack .../06-node-acorn_8.8.1+ds+~cs25.17.7-2_all.deb ...
+Unpacking node-acorn (8.8.1+ds+~cs25.17.7-2) ...
+Selecting previously unselected package node-cjs-module-lexer.
+Preparing to unpack .../07-node-cjs-module-lexer_1.2.3+dfsg-1_all.deb ...
+Unpacking node-cjs-module-lexer (1.2.3+dfsg-1) ...
+Selecting previously unselected package node-busboy.
+Preparing to unpack .../08-node-busboy_1.6.0+~cs2.6.0-2_all.deb ...
+Unpacking node-busboy (1.6.0+~cs2.6.0-2) ...
+Selecting previously unselected package node-undici.
+Preparing to unpack .../09-node-undici_5.26.3+dfsg1+~cs23.10.12-2_all.deb ...
+Unpacking node-undici (5.26.3+dfsg1+~cs23.10.12-2) ...
+Selecting previously unselected package libnode109:amd64.
+Preparing to unpack .../10-libnode109_18.19.1+dfsg-6ubuntu5_amd64.deb ...
+Unpacking libnode109:amd64 (18.19.1+dfsg-6ubuntu5) ...
+Selecting previously unselected package libraqm0:amd64.
+Preparing to unpack .../11-libraqm0_0.10.1-1build1_amd64.deb ...
+Unpacking libraqm0:amd64 (0.10.1-1build1) ...
+Selecting previously unselected package libvncclient1:amd64.
+Preparing to unpack .../12-libvncclient1_0.9.14+dfsg-1ubuntu0.2_amd64.deb ...
+Unpacking libvncclient1:amd64 (0.9.14+dfsg-1ubuntu0.2) ...
+Selecting previously unselected package libvncserver1:amd64.
+Preparing to unpack .../13-libvncserver1_0.9.14+dfsg-1ubuntu0.2_amd64.deb ...
+Unpacking libvncserver1:amd64 (0.9.14+dfsg-1ubuntu0.2) ...
+Selecting previously unselected package python3-pbr.
+Preparing to unpack .../14-python3-pbr_5.11.1-0ubuntu1_all.deb ...
+Unpacking python3-pbr (5.11.1-0ubuntu1) ...
+Selecting previously unselected package python3-wrapt.
+Preparing to unpack .../15-python3-wrapt_1.15.0-2build3_amd64.deb ...
+Unpacking python3-wrapt (1.15.0-2build3) ...
+Selecting previously unselected package python3-more-itertools.
+Preparing to unpack .../16-python3-more-itertools_10.2.0-1_all.deb ...
+Unpacking python3-more-itertools (10.2.0-1) ...
+Selecting previously unselected package python3-zipp.
+Preparing to unpack .../17-python3-zipp_1.0.0-6ubuntu0.1_all.deb ...
+Unpacking python3-zipp (1.0.0-6ubuntu0.1) ...
+Selecting previously unselected package python3-importlib-metadata.
+Preparing to unpack .../18-python3-importlib-metadata_4.12.0-1_all.deb ...
+Unpacking python3-importlib-metadata (4.12.0-1) ...
+Selecting previously unselected package python3-debtcollector.
+Preparing to unpack .../19-python3-debtcollector_2.5.0-3_all.deb ...
+Unpacking python3-debtcollector (2.5.0-3) ...
+Selecting previously unselected package python3-roman.
+Preparing to unpack .../20-python3-roman_3.3-3_all.deb ...
+Unpacking python3-roman (3.3-3) ...
+Selecting previously unselected package python3-docutils.
+Preparing to unpack .../21-python3-docutils_0.20.1+dfsg-3_all.deb ...
+Unpacking python3-docutils (0.20.1+dfsg-3) ...
+Selecting previously unselected package python3-oslo.i18n.
+Preparing to unpack .../22-python3-oslo.i18n_6.3.0-0ubuntu1_all.deb ...
+Unpacking python3-oslo.i18n (6.3.0-0ubuntu1) ...
+Selecting previously unselected package python3-greenlet.
+Preparing to unpack .../23-python3-greenlet_3.0.3-0ubuntu5.1_amd64.deb ...
+Unpacking python3-greenlet (3.0.3-0ubuntu5.1) ...
+Selecting previously unselected package python3-dnspython.
+Preparing to unpack .../24-python3-dnspython_2.6.1-1ubuntu1_all.deb ...
+Unpacking python3-dnspython (2.6.1-1ubuntu1) ...
+Selecting previously unselected package python3-monotonic.
+Preparing to unpack .../25-python3-monotonic_1.6-2_all.deb ...
+Unpacking python3-monotonic (1.6-2) ...
+Selecting previously unselected package python3-eventlet.
+Preparing to unpack .../26-python3-eventlet_0.35.2-0ubuntu1.1_all.deb ...
+Unpacking python3-eventlet (0.35.2-0ubuntu1.1) ...
+Selecting previously unselected package python3-oslo.context.
+Preparing to unpack .../27-python3-oslo.context_1%3a5.5.0-0ubuntu1_all.deb ...
+Unpacking python3-oslo.context (1:5.5.0-0ubuntu1) ...
+Selecting previously unselected package python3-msgpack.
+Preparing to unpack .../28-python3-msgpack_1.0.3-3build2_amd64.deb ...
+Unpacking python3-msgpack (1.0.3-3build2) ...
+Selecting previously unselected package python3-iso8601.
+Preparing to unpack .../29-python3-iso8601_1.0.2-1_all.deb ...
+Unpacking python3-iso8601 (1.0.2-1) ...
+Selecting previously unselected package python3-oslo.utils.
+Preparing to unpack .../30-python3-oslo.utils_7.1.0-0ubuntu1_all.deb ...
+Unpacking python3-oslo.utils (7.1.0-0ubuntu1) ...
+Selecting previously unselected package python3-oslo.serialization.
+Preparing to unpack .../31-python3-oslo.serialization_5.4.0-0ubuntu1_all.deb ...
+Unpacking python3-oslo.serialization (5.4.0-0ubuntu1) ...
+Selecting previously unselected package python3-pyasyncore.
+Preparing to unpack .../32-python3-pyasyncore_1.0.2-2_all.deb ...
+Unpacking python3-pyasyncore (1.0.2-2) ...
+Selecting previously unselected package python3-pyinotify.
+Preparing to unpack .../33-python3-pyinotify_0.9.6-2ubuntu1_all.deb ...
+Unpacking python3-pyinotify (0.9.6-2ubuntu1) ...
+Selecting previously unselected package python3-oslo.log.
+Preparing to unpack .../34-python3-oslo.log_5.5.1-0ubuntu1_all.deb ...
+Unpacking python3-oslo.log (5.5.1-0ubuntu1) ...
+Selecting previously unselected package python3-rfc3986.
+Preparing to unpack .../35-python3-rfc3986_2.0.0-2_all.deb ...
+Unpacking python3-rfc3986 (2.0.0-2) ...
+Selecting previously unselected package python3-stevedore.
+Preparing to unpack .../36-python3-stevedore_1%3a5.1.0-0ubuntu1_all.deb ...
+Unpacking python3-stevedore (1:5.1.0-0ubuntu1) ...
+Selecting previously unselected package python3-oslo.config.
+Preparing to unpack .../37-python3-oslo.config_1%3a9.4.0-0ubuntu1_all.deb ...
+Unpacking python3-oslo.config (1:9.4.0-0ubuntu1) ...
+Selecting previously unselected package python3-pil:amd64.
+Preparing to unpack .../38-python3-pil_10.2.0-1ubuntu1.4_amd64.deb ...
+Unpacking python3-pil:amd64 (10.2.0-1ubuntu1.4) ...
+Selecting previously unselected package python3-novnc.
+Preparing to unpack .../39-python3-novnc_1%3a1.3.0-2_all.deb ...
+Unpacking python3-novnc (1:1.3.0-2) ...
+Selecting previously unselected package python3-numpy.
+Preparing to unpack .../40-python3-numpy_1%3a1.26.4+ds-6ubuntu1_amd64.deb ...
+Unpacking python3-numpy (1:1.26.4+ds-6ubuntu1) ...
+Selecting previously unselected package python3-deprecated.
+Preparing to unpack .../41-python3-deprecated_1.2.14-1_all.deb ...
+Unpacking python3-deprecated (1.2.14-1) ...
+Selecting previously unselected package python3-jwcrypto.
+Preparing to unpack .../42-python3-jwcrypto_1.5.4-1_all.deb ...
+Unpacking python3-jwcrypto (1.5.4-1) ...
+Selecting previously unselected package python3-websockify.
+Preparing to unpack .../43-python3-websockify_0.10.0+dfsg1-5build2_amd64.deb ...
+Unpacking python3-websockify (0.10.0+dfsg1-5build2) ...
+Selecting previously unselected package websockify.
+Preparing to unpack .../44-websockify_0.10.0+dfsg1-5build2_amd64.deb ...
+Unpacking websockify (0.10.0+dfsg1-5build2) ...
+Selecting previously unselected package novnc.
+Preparing to unpack .../45-novnc_1%3a1.3.0-2_all.deb ...
+Unpacking novnc (1:1.3.0-2) ...
+Selecting previously unselected package x11vnc.
+Preparing to unpack .../46-x11vnc_0.9.16-10_amd64.deb ...
+Unpacking x11vnc (0.9.16-10) ...
+Setting up python3-more-itertools (10.2.0-1) ...
+Setting up python3-pbr (5.11.1-0ubuntu1) ...
+Setting up node-cjs-module-lexer (1.2.3+dfsg-1) ...
+Setting up python3-zipp (1.0.0-6ubuntu0.1) ...
+Setting up libvncserver1:amd64 (0.9.14+dfsg-1ubuntu0.2) ...
+Setting up python3-monotonic (1.6-2) ...
+Setting up libvncclient1:amd64 (0.9.14+dfsg-1ubuntu0.2) ...
+Setting up python3-roman (3.3-3) ...
+Setting up libblas3:amd64 (3.12.0-3build1.1) ...
+update-alternatives: using /usr/lib/x86_64-linux-gnu/blas/libblas.so.3 to provide /usr/lib/x86_64-linux-gnu/libblas.so.3 (libblas.so.3-x86_64-linux-gnu) in auto mode
+Setting up python3-iso8601 (1.0.2-1) ...
+Setting up python3-rfc3986 (2.0.0-2) ...
+Setting up libraqm0:amd64 (0.10.1-1build1) ...
+Setting up python3-greenlet (3.0.3-0ubuntu5.1) ...
+Setting up libimagequant0:amd64 (2.18.0-1build1) ...
+Setting up python3-wrapt (1.15.0-2build3) ...
+Setting up python3-dnspython (2.6.1-1ubuntu1) ...
+Setting up docutils-common (0.20.1+dfsg-3) ...
+Setting up python3-msgpack (1.0.3-3build2) ...
+Setting up python3-pyasyncore (1.0.2-2) ...
+Setting up node-xtend (4.0.2-3) ...
+Setting up python3-deprecated (1.2.14-1) ...
+Setting up python3-oslo.i18n (6.3.0-0ubuntu1) ...
+Setting up node-busboy (1.6.0+~cs2.6.0-2) ...
+Setting up liblapack3:amd64 (3.12.0-3build1.1) ...
+update-alternatives: using /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3 to provide /usr/lib/x86_64-linux-gnu/liblapack.so.3 (liblapack.so.3-x86_64-linux-gnu) in auto mode
+Setting up python3-importlib-metadata (4.12.0-1) ...
+Setting up python3-pyinotify (0.9.6-2ubuntu1) ...
+Setting up python3-debtcollector (2.5.0-3) ...
+Setting up x11vnc (0.9.16-10) ...
+Setting up python3-pil:amd64 (10.2.0-1ubuntu1.4) ...
+Setting up python3-eventlet (0.35.2-0ubuntu1.1) ...
+Setting up python3-oslo.context (1:5.5.0-0ubuntu1) ...
+Setting up python3-jwcrypto (1.5.4-1) ...
+Setting up python3-numpy (1:1.26.4+ds-6ubuntu1) ...
+Setting up node-undici (5.26.3+dfsg1+~cs23.10.12-2) ...
+Setting up python3-websockify (0.10.0+dfsg1-5build2) ...
+/usr/lib/python3/dist-packages/websockify/token_plugins.py:35: SyntaxWarning: invalid escape sequence '\s'
+  tok, target = re.split(':\s', line)
+Setting up python3-stevedore (1:5.1.0-0ubuntu1) ...
+Setting up websockify (0.10.0+dfsg1-5build2) ...
+Setting up python3-oslo.utils (7.1.0-0ubuntu1) ...
+Setting up python3-oslo.serialization (5.4.0-0ubuntu1) ...
+Setting up node-acorn (8.8.1+ds+~cs25.17.7-2) ...
+Setting up libnode109:amd64 (18.19.1+dfsg-6ubuntu5) ...
+Setting up nodejs (18.19.1+dfsg-6ubuntu5) ...
+update-alternatives: using /usr/bin/nodejs to provide /usr/bin/js (js) in auto mode
+Processing triggers for man-db (2.12.0-4build2) ...
+Not building database; man-db/auto-update is not 'true'.
+Processing triggers for sgml-base (1.31) ...
+Setting up python3-docutils (0.20.1+dfsg-3) ...
+Processing triggers for libc-bin (2.39-0ubuntu8.9) ...
+Setting up python3-oslo.config (1:9.4.0-0ubuntu1) ...
+Setting up python3-oslo.log (5.5.1-0ubuntu1) ...
+Setting up python3-novnc (1:1.3.0-2) ...
+Setting up novnc (1:1.3.0-2) ...
+
+Running kernel seems to be up-to-date.
+
+No services need to be restarted.
+
+No containers need to be restarted.
+
+No user sessions are running outdated binaries.
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+Installing dependencies...
+Switching to root user to install dependencies...
+Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+Hit:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease
+Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+Hit:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease
+Hit:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease
+Hit:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease
+Reading package lists...
+Reading package lists...
+Building dependency tree...
+Reading state information...
+libasound2t64 is already the newest version (1.2.11-1ubuntu0.3).
+libasound2t64 set to manually installed.
+libatk-bridge2.0-0t64 is already the newest version (2.52.0-1build1).
+libatk-bridge2.0-0t64 set to manually installed.
+libatk1.0-0t64 is already the newest version (2.52.0-1build1).
+libatk1.0-0t64 set to manually installed.
+libatspi2.0-0t64 is already the newest version (2.52.0-1build1).
+libatspi2.0-0t64 set to manually installed.
+libcairo2 is already the newest version (1.18.0-3build1).
+libcairo2 set to manually installed.
+libcups2t64 is already the newest version (2.4.7-1.2ubuntu7.14).
+libcups2t64 set to manually installed.
+libdbus-1-3 is already the newest version (1.14.10-4ubuntu4.1).
+libdbus-1-3 set to manually installed.
+libdrm2 is already the newest version (2.4.125-1ubuntu0.1~24.04.2).
+libdrm2 set to manually installed.
+libgbm1 is already the newest version (25.2.8-0ubuntu0.24.04.4).
+libgbm1 set to manually installed.
+libglib2.0-0t64 is already the newest version (2.80.0-6ubuntu3.10).
+libglib2.0-0t64 set to manually installed.
+libnspr4 is already the newest version (2:4.35-1.1build1).
+libnspr4 set to manually installed.
+libnss3 is already the newest version (2:3.98-1ubuntu0.3).
+libnss3 set to manually installed.
+libpango-1.0-0 is already the newest version (1.52.1+ds-1build1).
+libpango-1.0-0 set to manually installed.
+libx11-6 is already the newest version (2:1.8.7-1ubuntu0.1).
+libx11-6 set to manually installed.
+libxcb1 is already the newest version (1.15-1ubuntu2).
+libxcb1 set to manually installed.
+libxcomposite1 is already the newest version (1:0.4.5-1build3).
+libxcomposite1 set to manually installed.
+libxdamage1 is already the newest version (1:1.1.6-1build1).
+libxdamage1 set to manually installed.
+libxext6 is already the newest version (2:1.3.4-1build2).
+libxext6 set to manually installed.
+libxfixes3 is already the newest version (1:6.0.0-2build1).
+libxfixes3 set to manually installed.
+libxkbcommon0 is already the newest version (1.6.0-1build1).
+libxkbcommon0 set to manually installed.
+libxrandr2 is already the newest version (2:1.5.2-2build1).
+libxrandr2 set to manually installed.
+xvfb is already the newest version (2:21.1.12-1ubuntu1.9).
+fonts-noto-color-emoji is already the newest version (2.047-0ubuntu0.24.04.1).
+libfontconfig1 is already the newest version (2.15.0-1.1ubuntu2).
+libfontconfig1 set to manually installed.
+libfreetype6 is already the newest version (2.13.2+dfsg-1ubuntu0.2).
+libfreetype6 set to manually installed.
+fonts-liberation is already the newest version (1:2.1.5-3).
+fonts-liberation set to manually installed.
+The following additional packages will be installed:
+  xfonts-encodings xfonts-utils
+Recommended packages:
+  fonts-ipafont-mincho fonts-tlwg-loma
+The following NEW packages will be installed:
+  fonts-freefont-ttf fonts-ipafont-gothic fonts-tlwg-loma-otf fonts-unifont
+  fonts-wqy-zenhei xfonts-cyrillic xfonts-encodings xfonts-scalable
+  xfonts-utils
+0 upgraded, 9 newly installed, 0 to remove and 24 not upgraded.
+Need to get 21.1 MB of archives.
+After this operation, 79.5 MB of additional disk space will be used.
+Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+Get:2 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-ipafont-gothic all 00303-21ubuntu1 [3513 kB]
+Get:3 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 fonts-freefont-ttf all 20211204+svn4273-2 [5641 kB]
+== x11vnc
+== websockify
+== saved=no 2026-11-05T18:06:50Z
