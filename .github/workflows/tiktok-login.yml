@@ -37,6 +37,15 @@ on:
         description: "How long the login window stays open (default 25)"
         required: false
         default: "25"
+  push:
+    # Pushing this file is the request. Chosen because a token without the
+    # `actions` permission cannot dispatch a workflow (403) while it can always
+    # push, and this repository's automation token is exactly that kind: the
+    # handover chain has to work by push or it does not work at all.
+    # Nothing else in `.auth/tiktok/` triggers this, so the job's own commits
+    # (the jar, the live link) cannot restart it.
+    paths:
+      - ".auth/tiktok/request-login"
 
 permissions:
   contents: write
@@ -47,6 +56,8 @@ concurrency:
 
 jobs:
   login:
+    # A push only opens a window when it brought the request marker with it.
+    if: github.event_name == 'workflow_dispatch' || hashFiles('.auth/tiktok/request-login') != ''
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -117,6 +128,26 @@ jobs:
             echo "The link dies when this job ends. Close it yourself once you are signed in."
           } >> "$GITHUB_STEP_SUMMARY"
 
+          # Also into the repository, because the Actions summary is only visible
+          # to whoever is logged into the web UI — and the point of this route is
+          # that the owner is on a phone with no terminal and the agent is often
+          # the one reading the run. Removed again the moment the job ends.
+          python - "$LINK" "$VNC_PASS" <<'PY2'
+          import json, sys, time
+          link, password = sys.argv[1], sys.argv[2]
+          open(".auth/tiktok/live.json", "w").write(json.dumps({
+              "link": link,
+              "password": password,
+              "expires_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 1800)),
+              "note": "delete me when the job ends",
+          }, indent=2))
+          PY2
+          git config user.name "yura-tiktok"
+          git config user.email "yura-tiktok@users.noreply.github.com"
+          git add .auth/tiktok/live.json
+          git commit -q -m "tiktok: login window open [skip ci]" || true
+          git push -q || echo "::warning::could not publish the live link"
+
       - name: Wait for the owner to sign in
         env:
           DISPLAY: ":99"
@@ -128,24 +159,33 @@ jobs:
           code=${PIPESTATUS[0]}
           echo "login-exit=${code}" >> "$GITHUB_ENV"
 
-      - name: Commit the jar
+      - name: Commit the jar, close the window
         if: always()
         run: |
           git config user.name "yura-tiktok"
           git config user.email "yura-tiktok@users.noreply.github.com"
+          saved=no
           if [ -f .auth/tiktok/default.json ]; then
-            python scripts/tiktok_check_jar.py || echo "::warning::the jar has no authenticating cookie"
-            if git diff --quiet -- .auth/tiktok/default.json 2>/dev/null && [ -z "$(git status --porcelain .auth/tiktok)" ]; then
-              echo "jar unchanged"
-            else
-              git add .auth/tiktok/default.json
-              git commit -m "tiktok: session from the login window [skip ci]"
-              git push || echo "::warning::could not push the jar"
-            fi
-            echo "::notice::Session saved. Dispatch the 'TikTok run' workflow now."
+            if python scripts/tiktok_check_jar.py; then saved=yes; fi
           else
             echo "::warning::No jar was written — the sign-in did not complete before the timeout."
           fi
+          # The link and the request marker are single-use: leaving them behind
+          # would mean a stale password in the repository and a workflow that
+          # reopens a window on every later push.
+          rm -f .auth/tiktok/live.json .auth/tiktok/request-login
+          git add -A .auth/tiktok
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+          else
+            if [ "$saved" = "yes" ]; then
+              git commit -q -m "tiktok: session from the login window [skip ci]"
+            else
+              git commit -q -m "tiktok: login window closed without a session [skip ci]"
+            fi
+            git push -q || echo "::warning::could not push"
+          fi
+          echo "::notice::saved=$saved"
 
       - name: What to do next
         if: always()

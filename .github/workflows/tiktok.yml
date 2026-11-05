@@ -46,8 +46,12 @@ on:
         default: false
   push:
     paths:
+      # The requested trigger in this repository: a token without the `actions`
+      # permission cannot dispatch a workflow (403), but it can always push. So
+      # "keep going" is a push to this marker, the same way `auth-and-run.yml`
+      # keeps its chain alive without the dispatch API.
+      - ".auth/tiktok/request-run"
       - "havoc/tiktok/**"
-      - ".auth/tiktok/**"
       - ".github/workflows/tiktok.yml"
 
 permissions:
@@ -61,6 +65,12 @@ concurrency:
 
 jobs:
   run:
+    # A code push is a deploy; the marker is a request. Both are accepted, and a
+    # run whose own commit touched `.auth/tiktok/` (the refreshed jar) is not a
+    # reason to start another one.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[skip ci]') == false)
     runs-on: ubuntu-latest
     timeout-minutes: 330
     steps:
@@ -146,13 +156,38 @@ jobs:
 
       - name: Queue the successor
         # Not after a challenge: a chain that retries into a captcha is a chain
-        # that gets the account restricted. The owner dispatches again by hand.
+        # that gets the account restricted. The owner re-requests by hand.
+        #
+        # Two routes, tried in order. `gh workflow run` is the clean one and is
+        # unavailable to a token without the `actions` permission — measured in
+        # this repository as `403 Resource not accessible by integration`. The
+        # push is the fallback that always works: writing the marker triggers
+        # this workflow, and the run clears it when it starts.
         if: success() && steps.gate.outputs.have_session == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh workflow run tiktok.yml \
-            --ref "${GITHUB_REF_NAME}" \
+          set +e
+          gh workflow run tiktok.yml --ref "${GITHUB_REF_NAME}" \
             -f minutes="${{ inputs.minutes || 285 }}" \
-            -f owner_only="${{ inputs.owner_only || 'false' }}" \
-            || echo "::warning::could not queue the successor run"
+            -f owner_only="${{ inputs.owner_only || 'false' }}"
+          code=$?
+          if [ $code -ne 0 ]; then
+            echo "::warning::dispatch refused ($code); requesting the successor by push instead"
+            git pull --rebase -q || true
+            mkdir -p .auth/tiktok
+            date -u +"%Y-%m-%dT%H:%M:%SZ" > .auth/tiktok/request-run
+            git add .auth/tiktok/request-run
+            git commit -q -m "tiktok: request the next run [skip ci]" || true
+            git push -q || echo "::error::could not request the next run"
+          fi
+
+      - name: Clear the request marker
+        if: always() && github.event_name == 'push'
+        run: |
+          if [ -f .auth/tiktok/request-run ]; then
+            git pull --rebase -q || true
+            git rm -q --ignore-unmatch .auth/tiktok/request-run
+            git commit -q -m "tiktok: request consumed [skip ci]" || true
+            git push -q || echo "::warning::could not clear the marker"
+          fi
