@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-05T06:41:48Z",
+  "at": "2026-11-05T12:52:22Z",
   "checks": [
     {
       "name": "local · something is configured",
@@ -9,27 +9,27 @@
     {
       "name": "local · start() reaches the endpoint",
       "ok": true,
-      "detail": "1.0s · http://127.0.0.1:8080/v1"
+      "detail": "1.1s · http://127.0.0.1:8080/v1"
     },
     {
       "name": "local · answered: In one sentence: what are you?",
       "ok": true,
-      "detail": "0.5s · I am an artificial intelligence developed by Alibaba Cloud."
+      "detail": "0.4s · I'm a language model created by Alibaba Cloud."
     },
     {
       "name": "local · answered: Write a single line of poetry abou",
       "ok": true,
-      "detail": "0.9s · Raindrops dance on the quiet, white world,  \nPainting a canvas of shimmering lig"
+      "detail": "0.4s · Rain falls, soft and gentle, on the earth, a gentle whisper to the quiet."
     },
     {
       "name": "local · answered: Answer with one word: two plus two",
       "ok": true,
-      "detail": "0.2s · Four"
+      "detail": "0.1s · four"
     },
     {
       "name": "local · the router answers with zero keys",
       "ok": true,
-      "detail": "Hello! How may I assist you today?"
+      "detail": "Hello! It's nice to meet you. How can I assist you today?"
     },
     {
       "name": "local · the router labels it local",
@@ -50,15 +50,15 @@
   "answers": [
     {
       "question": "In one sentence: what are you?",
-      "reply": "I am an artificial intelligence developed by Alibaba Cloud."
+      "reply": "I'm a language model created by Alibaba Cloud."
     },
     {
       "question": "Write a single line of poetry about rain.",
-      "reply": "Raindrops dance on the quiet, white world,  \nPainting a canvas of shimmering light.  \nNature's masterpiece, a fleeting sight,  \nIn the timeless dance of seasons, it flows."
+      "reply": "Rain falls, soft and gentle, on the earth, a gentle whisper to the quiet."
     },
     {
       "question": "Answer with one word: two plus two?",
-      "reply": "Four"
+      "reply": "four"
     }
   ],
   "fetch": [
