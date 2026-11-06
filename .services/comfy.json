@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://places-altered-tommy-similarly.trycloudflare.com",
-  "run_id": "42108949618",
-  "started_at": "2026-11-06T02:38:56Z",
-  "expires_at": "2026-11-06T08:38:56Z",
+  "url": "https://knife-trunk-soonest-group.trycloudflare.com",
+  "run_id": "42151605318",
+  "started_at": "2026-11-06T08:15:05Z",
+  "expires_at": "2026-11-06T14:15:05Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-06T02:43:26Z",
+  "published_at": "2026-11-06T08:20:13Z",
   "gated": true,
   "public": false
 }
