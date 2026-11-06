@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-05T19:12:48Z",
+  "at": "2026-11-06T00:33:39Z",
   "checks": [
     {
       "name": "local · something is configured",
@@ -14,22 +14,22 @@
     {
       "name": "local · answered: In one sentence: what are you?",
       "ok": true,
-      "detail": "0.8s · I am a large language model created by Alibaba Cloud, capable of generating huma"
+      "detail": "0.4s · I am a large language model created by Alibaba Cloud."
     },
     {
       "name": "local · answered: Write a single line of poetry abou",
       "ok": true,
-      "detail": "0.8s · The rain on the river's surface,  \nSoaks the earth in silver,  \nA gentle gift fr"
+      "detail": "0.4s · Raindrops dance on the windows, \nAs night falls, the world awakes."
     },
     {
       "name": "local · answered: Answer with one word: two plus two",
       "ok": true,
-      "detail": "0.2s · four"
+      "detail": "0.1s · four"
     },
     {
       "name": "local · the router answers with zero keys",
       "ok": true,
-      "detail": "Hello! How can I help you today?"
+      "detail": "Hello! How can I assist you today?"
     },
     {
       "name": "local · the router labels it local",
@@ -50,11 +50,11 @@
   "answers": [
     {
       "question": "In one sentence: what are you?",
-      "reply": "I am a large language model created by Alibaba Cloud, capable of generating human-like text based on the input I receive."
+      "reply": "I am a large language model created by Alibaba Cloud."
     },
     {
       "question": "Write a single line of poetry about rain.",
-      "reply": "The rain on the river's surface,  \nSoaks the earth in silver,  \nA gentle gift from the gods,  \nTo all who can hear and see."
+      "reply": "Raindrops dance on the windows, \nAs night falls, the world awakes."
     },
     {
       "question": "Answer with one word: two plus two?",
