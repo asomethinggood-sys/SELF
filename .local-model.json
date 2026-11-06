@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-06T06:14:42Z",
+  "at": "2026-11-06T11:56:33Z",
   "checks": [
     {
       "name": "local · something is configured",
@@ -14,12 +14,12 @@
     {
       "name": "local · answered: In one sentence: what are you?",
       "ok": true,
-      "detail": "0.3s · I am Qwen, a large language model developed by Alibaba Cloud."
+      "detail": "0.4s · I am a large language model created by Alibaba Cloud, capable of understanding a"
     },
     {
       "name": "local · answered: Write a single line of poetry abou",
       "ok": true,
-      "detail": "0.5s · Rain dances in the sky,\nA fleeting dance of nature's magic,\nWhispering secrets t"
+      "detail": "0.3s · Rain falls, a gentle, carefree gift, bringing rainbows to our lives."
     },
     {
       "name": "local · answered: Answer with one word: two plus two",
@@ -29,7 +29,7 @@
     {
       "name": "local · the router answers with zero keys",
       "ok": true,
-      "detail": "Hello! How can I assist you today?"
+      "detail": "Hello! It's nice to meet you! How can I assist you today?"
     },
     {
       "name": "local · the router labels it local",
@@ -50,11 +50,11 @@
   "answers": [
     {
       "question": "In one sentence: what are you?",
-      "reply": "I am Qwen, a large language model developed by Alibaba Cloud."
+      "reply": "I am a large language model created by Alibaba Cloud, capable of understanding and generating human language."
     },
     {
       "question": "Write a single line of poetry about rain.",
-      "reply": "Rain dances in the sky,\nA fleeting dance of nature's magic,\nWhispering secrets to the breeze,\nA symphony of life in the air."
+      "reply": "Rain falls, a gentle, carefree gift, bringing rainbows to our lives."
     },
     {
       "question": "Answer with one word: two plus two?",
