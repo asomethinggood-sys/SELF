@@ -1,14 +1,10 @@
-ollama · run 42183914267 · 2026-11-06T13:30:39Z
+ollama · run 42225906223 · 2026-11-06T19:06:53Z
 -----------------------------------------------
-ok   gate /healthz without a token — 200 {"ok": true, "service": "ollama", "run_id": "42183914267", "started_at": "2026-1
+ok   gate /healthz without a token — 200 {"ok": true, "service": "ollama", "run_id": "42225906223", "started_at": "2026-1
   ok   upstream /api/tags directly — 200
   ok   the same path through the gate without a token — 401 
   ok   a wrong token is refused — 401
-  ok   /api/tags through the gate with the real token — 200 {"models":[{"name":"qwen2.5:0.5b","model":"qwen2.5:0.5b","modified_at":"2026-11-06T13:30:34.045644412Z","size":397821319
-  ok   the model is listed — {"models":[{"name":"qwen2.5:0.5b","model":"qwen2.5:0.5b","modified_at":"2026-11-06T13:30:34.045644412Z","size":397821319,"digest":"a8b0c51577010a279d933d14c2a8ab4b268079d44c5c8830c0a93900f1827c67","de
-  ok   a real reply through the gate — A transformer is a type of artificial intelligence model designed to simulate the processing capabilities of human brains, allowing for more efficient and effective decision-making and language compre
+  ok   /api/tags through the gate with the real token — 200 {"models":[{"name":"qwen2.5:0.5b","model":"qwen2.5:0.5b","modified_at":"2026-11-06T19:06:48.423949687Z","size":397821319
+  ok   the model is listed — {"models":[{"name":"qwen2.5:0.5b","model":"qwen2.5:0.5b","modified_at":"2026-11-06T19:06:48.423949687Z","size":397821319,"digest":"a8b0c51577010a279d933d14c2a8ab4b268079d44c5c8830c0a93900f1827c67","de
+  ok   a real reply through the gate — A transformer is a type of artificial intelligence model designed to understand and generate human language through deep neural networks.
 self-test: 7/7 checks passed
-
-public: https://concern-creature-rev-motherboard.trycloudflare.com
-reachable from the internet: yes — GET /healthz through the tunnel answered 200
-the bot needs no configuration: it reads .services/ollama.json
