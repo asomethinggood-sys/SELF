@@ -44,3 +44,4 @@
 08:20:14Z run 42151605318 · published https://knife-trunk-soonest-group.trycloudflare.com
 19:27:14Z run 42228768005 · starting comfy on this runner
 19:29:31Z run 42228768005 · comfy is up behind the gate
+19:29:33Z run 42228768005 · proving it through the gate with a real request
