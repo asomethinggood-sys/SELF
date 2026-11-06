@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://products-sought-demonstrates-controversial.trycloudflare.com",
-  "run_id": "42055011736",
-  "started_at": "2026-11-05T21:02:57Z",
-  "expires_at": "2026-11-06T03:02:57Z",
+  "url": "https://places-altered-tommy-similarly.trycloudflare.com",
+  "run_id": "42108949618",
+  "started_at": "2026-11-06T02:38:56Z",
+  "expires_at": "2026-11-06T08:38:56Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-05T21:11:45Z",
+  "published_at": "2026-11-06T02:43:26Z",
   "gated": true,
   "public": false
 }
