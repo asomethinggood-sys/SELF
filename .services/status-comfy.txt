@@ -39,3 +39,4 @@
 15:29:56Z run 42005734953 · proving it through the gate with a real request
 15:32:13Z run 42005734953 · published https://vip-chapters-appointment-pushed.trycloudflare.com
 02:38:56Z run 42108949618 · starting comfy on this runner
+02:41:32Z run 42108949618 · comfy is up behind the gate
