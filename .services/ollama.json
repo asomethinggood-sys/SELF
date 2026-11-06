@@ -1,14 +1,14 @@
 {
   "service": "ollama",
-  "url": "https://answered-effectiveness-cameron-geographic.trycloudflare.com",
-  "run_id": "42149472136",
-  "started_at": "2026-11-06T07:54:17Z",
-  "expires_at": "2026-11-06T13:54:17Z",
+  "url": "https://concern-creature-rev-motherboard.trycloudflare.com",
+  "run_id": "42183914267",
+  "started_at": "2026-11-06T13:29:44Z",
+  "expires_at": "2026-11-06T19:29:44Z",
   "gate_port": 9003,
   "upstream_port": 11434,
   "model": "qwen2.5:0.5b",
   "version": "ollama/qwen2.5:0.5b",
-  "published_at": "2026-11-06T07:55:04Z",
+  "published_at": "2026-11-06T13:30:44Z",
   "gated": true,
   "public": false
 }
