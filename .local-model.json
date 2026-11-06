@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-06T11:56:33Z",
+  "at": "2026-11-06T18:19:57Z",
   "checks": [
     {
       "name": "local · something is configured",
@@ -14,22 +14,22 @@
     {
       "name": "local · answered: In one sentence: what are you?",
       "ok": true,
-      "detail": "0.4s · I am a large language model created by Alibaba Cloud, capable of understanding a"
+      "detail": "0.5s · I am a large language model created by Alibaba Cloud."
     },
     {
       "name": "local · answered: Write a single line of poetry abou",
       "ok": true,
-      "detail": "0.3s · Rain falls, a gentle, carefree gift, bringing rainbows to our lives."
+      "detail": "0.6s · Rain falls gently, nourishing earth, \nLeaves whisper secrets, raindrops fall,\nNa"
     },
     {
       "name": "local · answered: Answer with one word: two plus two",
       "ok": true,
-      "detail": "0.1s · four"
+      "detail": "0.2s · four"
     },
     {
       "name": "local · the router answers with zero keys",
       "ok": true,
-      "detail": "Hello! It's nice to meet you! How can I assist you today?"
+      "detail": "Hello! How may I assist you today?"
     },
     {
       "name": "local · the router labels it local",
@@ -50,11 +50,11 @@
   "answers": [
     {
       "question": "In one sentence: what are you?",
-      "reply": "I am a large language model created by Alibaba Cloud, capable of understanding and generating human language."
+      "reply": "I am a large language model created by Alibaba Cloud."
     },
     {
       "question": "Write a single line of poetry about rain.",
-      "reply": "Rain falls, a gentle, carefree gift, bringing rainbows to our lives."
+      "reply": "Rain falls gently, nourishing earth, \nLeaves whisper secrets, raindrops fall,\nNature's gentle caress, all alive."
     },
     {
       "question": "Answer with one word: two plus two?",
