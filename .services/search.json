@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://javascript-flag-border-membrane.trycloudflare.com",
-  "run_id": "42105990082",
-  "started_at": "2026-11-06T02:27:58Z",
-  "expires_at": "2026-11-06T08:27:58Z",
+  "url": "https://guitar-what-lender-pirates.trycloudflare.com",
+  "run_id": "42213817243",
+  "started_at": "2026-11-06T11:56:03Z",
+  "expires_at": "2026-11-06T17:56:03Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-06T02:28:16Z",
+  "published_at": "2026-11-06T11:56:21Z",
   "gated": true,
   "public": false
 }
