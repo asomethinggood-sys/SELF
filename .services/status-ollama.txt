@@ -35,3 +35,4 @@
 15:08:33Z run 42003119569 · proving it through the gate with a real request
 15:08:44Z run 42003119569 · published https://auto-kate-training-stamp.trycloudflare.com
 02:18:37Z run 42105943638 · starting ollama on this runner
+02:19:47Z run 42105943638 · ollama is up behind the gate
