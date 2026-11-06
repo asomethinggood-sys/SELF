@@ -41,3 +41,4 @@
 13:29:44Z run 42183914267 · starting ollama on this runner
 13:30:34Z run 42183914267 · ollama is up behind the gate
 13:30:36Z run 42183914267 · proving it through the gate with a real request
+13:30:46Z run 42183914267 · published https://concern-creature-rev-motherboard.trycloudflare.com
