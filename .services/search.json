@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://battery-meetup-solaris-discovered.trycloudflare.com",
-  "run_id": "42339615327",
-  "started_at": "2026-11-07T10:18:27Z",
-  "expires_at": "2026-11-07T16:18:27Z",
+  "url": "https://indicator-respected-closure-sue.trycloudflare.com",
+  "run_id": "42363367403",
+  "started_at": "2026-11-07T15:54:06Z",
+  "expires_at": "2026-11-07T21:54:06Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-07T10:18:45Z",
+  "published_at": "2026-11-07T15:54:23Z",
   "gated": true,
   "public": false
 }
