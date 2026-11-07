@@ -47,3 +47,4 @@
 19:06:50Z run 42225906223 · proving it through the gate with a real request
 19:07:01Z run 42225906223 · published https://direct-nyc-shares-thursday.trycloudflare.com
 06:16:53Z run 42319696453 · starting ollama on this runner
+06:17:46Z run 42319696453 · ollama is up behind the gate
