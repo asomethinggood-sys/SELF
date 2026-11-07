@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://skin-ser-farms-electronic.trycloudflare.com",
-  "run_id": "42228768005",
-  "started_at": "2026-11-06T19:27:14Z",
-  "expires_at": "2026-11-07T01:27:14Z",
+  "url": "https://collaborative-dom-payments-jimmy.trycloudflare.com",
+  "run_id": "42279678579",
+  "started_at": "2026-11-07T01:03:06Z",
+  "expires_at": "2026-11-07T07:03:06Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-06T19:32:07Z",
+  "published_at": "2026-11-07T01:08:04Z",
   "gated": true,
   "public": false
 }
