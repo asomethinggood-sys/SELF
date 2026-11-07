@@ -51,3 +51,4 @@
 01:05:55Z run 42279678579 · proving it through the gate with a real request
 01:08:06Z run 42279678579 · published https://collaborative-dom-payments-jimmy.trycloudflare.com
 12:15:24Z run 42347920131 · starting comfy on this runner
+12:17:56Z run 42347920131 · comfy is up behind the gate
