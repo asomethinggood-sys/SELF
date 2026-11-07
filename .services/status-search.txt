@@ -51,3 +51,4 @@
 10:18:35Z run 42339615327 · proving it through the gate with a real request
 10:18:46Z run 42339615327 · published https://battery-meetup-solaris-discovered.trycloudflare.com
 21:29:44Z run 42388589607 · starting search on this runner
+21:29:50Z run 42388589607 · search is up behind the gate
