@@ -44,3 +44,4 @@
 17:32:11Z run 42213833735 · published https://extended-tiles-roland-paradise.trycloudflare.com
 04:42:47Z run 42309665651 · starting search on this runner
 04:42:53Z run 42309665651 · search is up behind the gate
+04:42:54Z run 42309665651 · proving it through the gate with a real request
