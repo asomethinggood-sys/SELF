@@ -1,6 +1,6 @@
 {
   "app": "havoc",
-  "created_at": "2026-11-07T18:27:57+00:00",
+  "created_at": "2026-11-07T20:12:59+00:00",
   "tables": {
     "aliases": [],
     "autoreplies": [],
@@ -344,13 +344,13 @@
       },
       {
         "key": "ai.usage",
-        "updated_at": "2026-11-07T18:27:44+00:00",
-        "value": "{\"2b9beacf67a2|google:gemini-3.5-flash-lite\":{\"day\":\"2026-11-07\",\"count\":2},\"e8bfd373256a|google:gemini-3.5-flash-lite\":{\"day\":\"2026-11-07\",\"count\":1}}"
+        "updated_at": "2026-11-07T20:11:51+00:00",
+        "value": "{\"2b9beacf67a2|google:gemini-3.5-flash-lite\":{\"day\":\"2026-11-07\",\"count\":5},\"e8bfd373256a|google:gemini-3.5-flash-lite\":{\"day\":\"2026-11-07\",\"count\":5}}"
       },
       {
         "key": "ai.health",
-        "updated_at": "2026-11-07T18:27:44+00:00",
-        "value": "{\"2b9beacf67a2\":{\"disabled\":false,\"cooldown_until\":\"2026-11-05T16:18:27.066192+00:00\",\"error\":\"\",\"successes\":417,\"failures\":24},\"e8bfd373256a\":{\"disabled\":false,\"cooldown_until\":\"2026-10-31T19:36:58.320628+00:00\",\"error\":\"\",\"successes\":407,\"failures\":22},\"90d9d7b7c27e\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":4,\"failures\":1},\"bcf26c2f3c33\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":2,\"failures\":0}}"
+        "updated_at": "2026-11-07T20:11:51+00:00",
+        "value": "{\"2b9beacf67a2\":{\"disabled\":false,\"cooldown_until\":\"2026-11-05T16:18:27.066192+00:00\",\"error\":\"\",\"successes\":420,\"failures\":24},\"e8bfd373256a\":{\"disabled\":false,\"cooldown_until\":\"2026-10-31T19:36:58.320628+00:00\",\"error\":\"\",\"successes\":411,\"failures\":22},\"90d9d7b7c27e\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":4,\"failures\":1},\"bcf26c2f3c33\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":2,\"failures\":0}}"
       },
       {
         "key": "clock.timezone",
@@ -364,8 +364,8 @@
       },
       {
         "key": "ai.model",
-        "updated_at": "2026-11-05T16:17:05+00:00",
-        "value": "\"hosted:runner\""
+        "updated_at": "2026-11-07T20:08:48+00:00",
+        "value": "\"google:gemini-3.5-flash-lite\""
       },
       {
         "key": "yura.last_picture.7542695649",
@@ -604,8 +604,8 @@
       },
       {
         "key": "persona.mode",
-        "updated_at": "2026-11-02T18:49:03+00:00",
-        "value": "\"assistant\""
+        "updated_at": "2026-11-07T20:11:38+00:00",
+        "value": "\"egirl\""
       },
       {
         "key": "yura.own_ids.8593849662",
@@ -636,6 +636,16 @@
         "key": "yura.sent_ids.5360488345",
         "updated_at": "2026-11-05T10:11:02+00:00",
         "value": "[179634,179636,179637,179965,179967,179968,179999,180001,180002,180006,180008,180015,180017,180018,180022,180024,180031,180033,180034,180038,180041,180055,180057,180058,180062,180064,180071,180073,180074,180078,180081,180094,180096,180097,180100,180103,180113,180115,180116,180120,180122]"
+      },
+      {
+        "key": "yura.sent_ids.8896395891",
+        "updated_at": "2026-11-07T20:12:26+00:00",
+        "value": "[180240,180242,180244,180246,180248,180249,180251,180256,180257,180258,180259,180263,180267,180271,180272,180275,180282]"
+      },
+      {
+        "key": "yura.said.8896395891",
+        "updated_at": "2026-11-07T20:11:51+00:00",
+        "value": "[\"⌘ 4 ◈ calc 2+2 ـــــــــ❖ـــــــــ ∑ Result 2+2 = 4 ✧ asked at 23:38\",\"⁙ Merlyyn feels unnecessarily heavy with the double 'y', making a classic name look cluttered. (¬‿¬ )\",\"✾ Marlin is a strong choice. It carries the clean sound of the ocean without the spelling weight of your earlier idea. ✮ ⤞ It is distinct, easy to spell, and ages well. (˶ᵔᗜᵔ˶)\",\"⋆ Specify who to block. ⌓ Tell me the name or handle and I will do it immediately. ⸎ ◈ block · this person ـــــــــ✦ـــــــــ who? .block @someone ◗ asked at 23:40\",\"meow i am the tiny voice saying do it, do the silly thing >_< ◈ whois · my good girl ـــــــــ✧ـــــــــ I can't find my good girl in your chats ⁘ asked at 23:41\"]"
       }
     ],
     "templates": [],
