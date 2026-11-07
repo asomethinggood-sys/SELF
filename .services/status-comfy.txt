@@ -48,3 +48,4 @@
 19:32:08Z run 42228768005 · published https://skin-ser-farms-electronic.trycloudflare.com
 06:39:10Z run 42321821366 · starting comfy on this runner
 06:42:00Z run 42321821366 · comfy is up behind the gate
+06:42:02Z run 42321821366 · proving it through the gate with a real request
