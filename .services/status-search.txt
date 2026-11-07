@@ -47,3 +47,4 @@
 23:07:29Z run 42262436605 · proving it through the gate with a real request
 23:07:42Z run 42262436605 · published https://meter-reserve-collect-movie.trycloudflare.com
 10:18:27Z run 42339615327 · starting search on this runner
+10:18:33Z run 42339615327 · search is up behind the gate
