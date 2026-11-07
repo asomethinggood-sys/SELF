@@ -1,14 +1,14 @@
 {
   "service": "ollama",
-  "url": "https://direct-nyc-shares-thursday.trycloudflare.com",
-  "run_id": "42225906223",
-  "started_at": "2026-11-06T19:05:24Z",
-  "expires_at": "2026-11-07T01:05:24Z",
+  "url": "https://motivation-permitted-really-pairs.trycloudflare.com",
+  "run_id": "42276503792",
+  "started_at": "2026-11-07T00:41:08Z",
+  "expires_at": "2026-11-07T06:41:08Z",
   "gate_port": 9003,
   "upstream_port": 11434,
   "model": "qwen2.5:0.5b",
   "version": "ollama/qwen2.5:0.5b",
-  "published_at": "2026-11-06T19:06:59Z",
+  "published_at": "2026-11-07T00:42:05Z",
   "gated": true,
   "public": false
 }
