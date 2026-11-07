@@ -1,14 +1,14 @@
 {
   "service": "ollama",
-  "url": "https://motivation-permitted-really-pairs.trycloudflare.com",
-  "run_id": "42276503792",
-  "started_at": "2026-11-07T00:41:08Z",
-  "expires_at": "2026-11-07T06:41:08Z",
+  "url": "https://refinance-debian-subcommittee-plus.trycloudflare.com",
+  "run_id": "42319696453",
+  "started_at": "2026-11-07T06:16:53Z",
+  "expires_at": "2026-11-07T12:16:53Z",
   "gate_port": 9003,
   "upstream_port": 11434,
   "model": "qwen2.5:0.5b",
   "version": "ollama/qwen2.5:0.5b",
-  "published_at": "2026-11-07T00:42:05Z",
+  "published_at": "2026-11-07T06:17:57Z",
   "gated": true,
   "public": false
 }
