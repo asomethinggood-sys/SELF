@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://fitness-cholesterol-area-dryer.trycloudflare.com",
-  "run_id": "42321821366",
-  "started_at": "2026-11-07T06:39:10Z",
-  "expires_at": "2026-11-07T12:39:10Z",
+  "url": "https://sorted-models-sir-maintain.trycloudflare.com",
+  "run_id": "42347920131",
+  "started_at": "2026-11-07T12:15:24Z",
+  "expires_at": "2026-11-07T18:15:24Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-07T06:43:46Z",
+  "published_at": "2026-11-07T12:20:06Z",
   "gated": true,
   "public": false
 }
