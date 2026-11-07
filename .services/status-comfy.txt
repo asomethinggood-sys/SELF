@@ -52,3 +52,4 @@
 06:43:47Z run 42321821366 · published https://fitness-cholesterol-area-dryer.trycloudflare.com
 17:51:26Z run 42371627526 · starting comfy on this runner
 17:54:10Z run 42371627526 · comfy is up behind the gate
+17:54:12Z run 42371627526 · proving it through the gate with a real request
