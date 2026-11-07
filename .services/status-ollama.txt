@@ -49,3 +49,4 @@
 11:52:32Z run 42346282650 · starting ollama on this runner
 11:53:13Z run 42346282650 · ollama is up behind the gate
 11:53:15Z run 42346282650 · proving it through the gate with a real request
+11:53:25Z run 42346282650 · published https://affordable-demonstrate-reduction-myspace.trycloudflare.com
