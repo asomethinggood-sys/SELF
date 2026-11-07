@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://meter-reserve-collect-movie.trycloudflare.com",
-  "run_id": "42262436605",
-  "started_at": "2026-11-06T23:07:22Z",
-  "expires_at": "2026-11-07T05:07:22Z",
+  "url": "https://students-marijuana-skip-teaches.trycloudflare.com",
+  "run_id": "42309665651",
+  "started_at": "2026-11-07T04:42:47Z",
+  "expires_at": "2026-11-07T10:42:47Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-06T23:07:41Z",
+  "published_at": "2026-11-07T04:43:02Z",
   "gated": true,
   "public": false
 }
