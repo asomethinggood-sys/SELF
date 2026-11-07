@@ -52,3 +52,4 @@
 06:17:58Z run 42319696453 · published https://refinance-debian-subcommittee-plus.trycloudflare.com
 17:28:19Z run 42369993911 · starting ollama on this runner
 17:29:13Z run 42369993911 · ollama is up behind the gate
+17:29:15Z run 42369993911 · proving it through the gate with a real request
