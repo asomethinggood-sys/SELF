@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://collaborative-dom-payments-jimmy.trycloudflare.com",
-  "run_id": "42279678579",
-  "started_at": "2026-11-07T01:03:06Z",
-  "expires_at": "2026-11-07T07:03:06Z",
+  "url": "https://fitness-cholesterol-area-dryer.trycloudflare.com",
+  "run_id": "42321821366",
+  "started_at": "2026-11-07T06:39:10Z",
+  "expires_at": "2026-11-07T12:39:10Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-07T01:08:04Z",
+  "published_at": "2026-11-07T06:43:46Z",
   "gated": true,
   "public": false
 }
