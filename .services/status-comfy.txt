@@ -55,3 +55,4 @@
 12:17:58Z run 42347920131 · proving it through the gate with a real request
 12:20:07Z run 42347920131 · published https://sorted-models-sir-maintain.trycloudflare.com
 23:27:24Z run 42398322137 · starting comfy on this runner
+23:30:02Z run 42398322137 · comfy is up behind the gate
