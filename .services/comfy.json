@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://sorted-models-sir-maintain.trycloudflare.com",
-  "run_id": "42347920131",
-  "started_at": "2026-11-07T12:15:24Z",
-  "expires_at": "2026-11-07T18:15:24Z",
+  "url": "https://col-dem-caps-cite.trycloudflare.com",
+  "run_id": "42371627526",
+  "started_at": "2026-11-07T17:51:26Z",
+  "expires_at": "2026-11-07T23:51:26Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-07T12:20:06Z",
+  "published_at": "2026-11-07T17:55:55Z",
   "gated": true,
   "public": false
 }
