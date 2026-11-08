@@ -1,6 +1,6 @@
 {
   "service": "ollama",
-  "url": "",
+  "url": "https://reasons-boost-attempted-dictionary.trycloudflare.com",
   "run_id": "42470877917",
   "started_at": "2026-11-08T10:19:20Z",
   "expires_at": "2026-11-08T16:19:20Z",
@@ -8,7 +8,7 @@
   "upstream_port": 11434,
   "model": "qwen2.5:0.5b",
   "version": "ollama/qwen2.5:0.5b",
-  "published_at": "2026-11-08T10:26:32Z",
+  "published_at": "2026-11-08T10:26:56Z",
   "gated": true,
   "public": false
 }
