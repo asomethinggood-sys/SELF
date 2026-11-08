@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://rank-metallica-violations-rid.trycloudflare.com",
-  "run_id": "42425287341",
-  "started_at": "2026-11-08T05:03:25Z",
-  "expires_at": "2026-11-08T11:03:25Z",
+  "url": "https://stores-fonts-sauce-favour.trycloudflare.com",
+  "run_id": "42449215832",
+  "started_at": "2026-11-08T10:39:23Z",
+  "expires_at": "2026-11-08T16:39:23Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-08T05:07:32Z",
+  "published_at": "2026-11-08T10:44:14Z",
   "gated": true,
   "public": false
 }
