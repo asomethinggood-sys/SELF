@@ -65,3 +65,4 @@
 21:51:19Z run 42498900229 · starting comfy on this runner
 21:53:54Z run 42498900229 · comfy is up behind the gate
 21:53:55Z run 42498900229 · proving it through the gate with a real request
+21:55:38Z run 42498900229 · published https://formed-rapids-customise-terminals.trycloudflare.com
