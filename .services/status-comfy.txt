@@ -59,3 +59,4 @@
 23:30:04Z run 42398322137 · proving it through the gate with a real request
 23:32:11Z run 42398322137 · published https://lawrence-calculate-salon-wider.trycloudflare.com
 10:39:23Z run 42449215832 · starting comfy on this runner
+10:41:43Z run 42449215832 · comfy is up behind the gate
