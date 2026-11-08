@@ -1,14 +1,14 @@
 {
   "service": "ollama",
-  "url": "https://highest-literacy-combines-billion.trycloudflare.com",
-  "run_id": "42423484886",
-  "started_at": "2026-11-08T04:39:35Z",
-  "expires_at": "2026-11-08T10:39:35Z",
+  "url": "",
+  "run_id": "42470877917",
+  "started_at": "2026-11-08T10:19:20Z",
+  "expires_at": "2026-11-08T16:19:20Z",
   "gate_port": 9003,
   "upstream_port": 11434,
   "model": "qwen2.5:0.5b",
   "version": "ollama/qwen2.5:0.5b",
-  "published_at": "2026-11-08T04:40:39Z",
+  "published_at": "2026-11-08T10:20:30Z",
   "gated": true,
   "public": false
 }
