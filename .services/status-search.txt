@@ -52,3 +52,4 @@
 15:54:24Z run 42363367403 · published https://indicator-respected-closure-sue.trycloudflare.com
 03:05:22Z run 42416096679 · starting search on this runner
 03:05:29Z run 42416096679 · search is up behind the gate
+03:05:31Z run 42416096679 · proving it through the gate with a real request
