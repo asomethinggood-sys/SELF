@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-08T04:06:46Z",
+  "at": "2026-11-08T09:48:20Z",
   "checks": [
     {
       "name": "local · something is configured",
@@ -14,12 +14,12 @@
     {
       "name": "local · answered: In one sentence: what are you?",
       "ok": true,
-      "detail": "0.8s · I am an AI language model developed by Alibaba Cloud, capable of providing text-"
+      "detail": "0.7s · I am a large language model created by Alibaba Cloud, capable of natural languag"
     },
     {
       "name": "local · answered: Write a single line of poetry abou",
       "ok": true,
-      "detail": "0.8s · Raindrops, falling from the sky,\nWhispering secrets to the earth,\nA symphony of "
+      "detail": "0.8s · In the rain, the world turns into a canvas of vibrant colors, and the spirits of"
     },
     {
       "name": "local · answered: Answer with one word: two plus two",
@@ -29,7 +29,7 @@
     {
       "name": "local · the router answers with zero keys",
       "ok": true,
-      "detail": "Hello! It's me, Qwen, created by Alibaba Cloud. How may I assist you today?"
+      "detail": "Hello! How can I assist you today?"
     },
     {
       "name": "local · the router labels it local",
@@ -50,11 +50,11 @@
   "answers": [
     {
       "question": "In one sentence: what are you?",
-      "reply": "I am an AI language model developed by Alibaba Cloud, capable of providing text-based responses and answering questions in various fields."
+      "reply": "I am a large language model created by Alibaba Cloud, capable of natural language understanding and generation."
     },
     {
       "question": "Write a single line of poetry about rain.",
-      "reply": "Raindrops, falling from the sky,\nWhispering secrets to the earth,\nA symphony of nature's melody,\nA reminder of life's fleeting moment."
+      "reply": "In the rain, the world turns into a canvas of vibrant colors, and the spirits of the rain dance on the clouds, making the world a beautiful tapestry of life."
     },
     {
       "question": "Answer with one word: two plus two?",
