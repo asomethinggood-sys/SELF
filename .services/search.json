@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://rec-sophisticated-financing-maintained.trycloudflare.com",
-  "run_id": "42388589607",
-  "started_at": "2026-11-07T21:29:44Z",
-  "expires_at": "2026-11-08T03:29:44Z",
+  "url": "https://voluntary-engineers-supporters-everything.trycloudflare.com",
+  "run_id": "42416096679",
+  "started_at": "2026-11-08T03:05:22Z",
+  "expires_at": "2026-11-08T09:05:22Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-07T21:30:01Z",
+  "published_at": "2026-11-08T03:05:41Z",
   "gated": true,
   "public": false
 }
