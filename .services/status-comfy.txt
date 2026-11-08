@@ -61,3 +61,4 @@
 16:15:20Z run 42472306628 · starting comfy on this runner
 16:17:42Z run 42472306628 · comfy is up behind the gate
 16:17:44Z run 42472306628 · proving it through the gate with a real request
+16:19:24Z run 42472306628 · published https://cab-exit-consistency-profession.trycloudflare.com
