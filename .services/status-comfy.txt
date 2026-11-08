@@ -60,3 +60,4 @@
 05:07:33Z run 42425287341 · published https://rank-metallica-violations-rid.trycloudflare.com
 16:15:20Z run 42472306628 · starting comfy on this runner
 16:17:42Z run 42472306628 · comfy is up behind the gate
+16:17:44Z run 42472306628 · proving it through the gate with a real request
