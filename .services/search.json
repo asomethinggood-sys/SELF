@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://voluntary-engineers-supporters-everything.trycloudflare.com",
-  "run_id": "42416096679",
-  "started_at": "2026-11-08T03:05:22Z",
-  "expires_at": "2026-11-08T09:05:22Z",
+  "url": "https://expand-tent-likely-separated.trycloudflare.com",
+  "run_id": "42441188073",
+  "started_at": "2026-11-08T08:41:03Z",
+  "expires_at": "2026-11-08T14:41:03Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-08T03:05:41Z",
+  "published_at": "2026-11-08T08:41:20Z",
   "gated": true,
   "public": false
 }
