@@ -1,6 +1,10 @@
-ollama · run 42470697552 · 2026-11-08T10:17:18Z
+ollama · run 42470877917 · 2026-11-08T10:20:29Z
 -----------------------------------------------
-the ollama upstream never came up
-
---- log tail ---
-(the starter produced no log)
+ok   gate /healthz without a token — 200 {"ok": true, "service": "ollama", "run_id": "42470877917", "started_at": "2026-1
+  ok   upstream /api/tags directly — 200
+  ok   the same path through the gate without a token — 401 
+  ok   a wrong token is refused — 401
+  ok   /api/tags through the gate with the real token — 200 {"models":[{"name":"qwen2.5:0.5b","model":"qwen2.5:0.5b","modified_at":"2026-11-08T10:20:24.634149589Z","size":397821319
+  ok   the model is listed — {"models":[{"name":"qwen2.5:0.5b","model":"qwen2.5:0.5b","modified_at":"2026-11-08T10:20:24.634149589Z","size":397821319,"digest":"a8b0c51577010a279d933d14c2a8ab4b268079d44c5c8830c0a93900f1827c67","de
+  ok   a real reply through the gate — A transformer is a neural network architecture that allows for the efficient processing of sequential data by utilizing a universal function key and value mechanism.
+self-test: 7/7 checks passed
