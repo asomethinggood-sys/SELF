@@ -38,23 +38,20 @@
 02:28:03Z run 42105990082 · search is up behind the gate
 02:28:05Z run 42105990082 · proving it through the gate with a real request
 02:28:17Z run 42105990082 · published https://javascript-flag-border-membrane.trycloudflare.com
-11:56:03Z run 42213817243 · starting search on this runner
-11:56:11Z run 42213817243 · search is up behind the gate
-11:56:12Z run 42213817243 · proving it through the gate with a real request
-11:56:22Z run 42213817243 · published https://guitar-what-lender-pirates.trycloudflare.com
-23:07:22Z run 42262436605 · starting search on this runner
-23:07:27Z run 42262436605 · search is up behind the gate
-23:07:29Z run 42262436605 · proving it through the gate with a real request
-23:07:42Z run 42262436605 · published https://meter-reserve-collect-movie.trycloudflare.com
-10:18:27Z run 42339615327 · starting search on this runner
-10:18:33Z run 42339615327 · search is up behind the gate
-10:18:35Z run 42339615327 · proving it through the gate with a real request
-10:18:46Z run 42339615327 · published https://battery-meetup-solaris-discovered.trycloudflare.com
-21:29:44Z run 42388589607 · starting search on this runner
-21:29:50Z run 42388589607 · search is up behind the gate
-21:29:52Z run 42388589607 · proving it through the gate with a real request
-21:30:02Z run 42388589607 · published https://rec-sophisticated-financing-maintained.trycloudflare.com
-08:41:03Z run 42441188073 · starting search on this runner
-08:41:09Z run 42441188073 · search is up behind the gate
-08:41:11Z run 42441188073 · proving it through the gate with a real request
-08:41:21Z run 42441188073 · published https://expand-tent-likely-separated.trycloudflare.com
+17:31:51Z run 42213833735 · starting search on this runner
+17:31:56Z run 42213833735 · search is up behind the gate
+17:31:59Z run 42213833735 · proving it through the gate with a real request
+17:32:11Z run 42213833735 · published https://extended-tiles-roland-paradise.trycloudflare.com
+04:42:47Z run 42309665651 · starting search on this runner
+04:42:53Z run 42309665651 · search is up behind the gate
+04:42:54Z run 42309665651 · proving it through the gate with a real request
+04:43:03Z run 42309665651 · published https://students-marijuana-skip-teaches.trycloudflare.com
+15:54:06Z run 42363367403 · starting search on this runner
+15:54:11Z run 42363367403 · search is up behind the gate
+15:54:13Z run 42363367403 · proving it through the gate with a real request
+15:54:24Z run 42363367403 · published https://indicator-respected-closure-sue.trycloudflare.com
+03:05:22Z run 42416096679 · starting search on this runner
+03:05:29Z run 42416096679 · search is up behind the gate
+03:05:31Z run 42416096679 · proving it through the gate with a real request
+03:05:42Z run 42416096679 · published https://voluntary-engineers-supporters-everything.trycloudflare.com
+14:16:36Z run 42463947140 · starting search on this runner
