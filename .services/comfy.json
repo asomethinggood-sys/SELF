@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://cab-exit-consistency-profession.trycloudflare.com",
-  "run_id": "42472306628",
-  "started_at": "2026-11-08T16:15:20Z",
-  "expires_at": "2026-11-08T22:15:20Z",
+  "url": "https://formed-rapids-customise-terminals.trycloudflare.com",
+  "run_id": "42498900229",
+  "started_at": "2026-11-08T21:51:19Z",
+  "expires_at": "2026-11-09T03:51:19Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-08T16:19:22Z",
+  "published_at": "2026-11-08T21:55:36Z",
   "gated": true,
   "public": false
 }
