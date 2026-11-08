@@ -1,14 +1,6 @@
-ollama · run 42423484886 · 2026-11-08T04:40:33Z
+ollama · run 42470697552 · 2026-11-08T10:17:18Z
 -----------------------------------------------
-ok   gate /healthz without a token — 200 {"ok": true, "service": "ollama", "run_id": "42423484886", "started_at": "2026-1
-  ok   upstream /api/tags directly — 200
-  ok   the same path through the gate without a token — 401 
-  ok   a wrong token is refused — 401
-  ok   /api/tags through the gate with the real token — 200 {"models":[{"name":"qwen2.5:0.5b","model":"qwen2.5:0.5b","modified_at":"2026-11-08T04:40:28.932152699Z","size":397821319
-  ok   the model is listed — {"models":[{"name":"qwen2.5:0.5b","model":"qwen2.5:0.5b","modified_at":"2026-11-08T04:40:28.932152699Z","size":397821319,"digest":"a8b0c51577010a279d933d14c2a8ab4b268079d44c5c8830c0a93900f1827c67","de
-  ok   a real reply through the gate — A transformer is a type of neural network model that uses self-attention mechanisms to process sequential data.
-self-test: 7/7 checks passed
+the ollama upstream never came up
 
-public: https://highest-literacy-combines-billion.trycloudflare.com
-reachable from the internet: yes — GET /healthz through the tunnel answered 200
-the bot needs no configuration: it reads .services/ollama.json
+--- log tail ---
+(the starter produced no log)
