@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://lawrence-calculate-salon-wider.trycloudflare.com",
-  "run_id": "42398322137",
-  "started_at": "2026-11-07T23:27:24Z",
-  "expires_at": "2026-11-08T05:27:24Z",
+  "url": "https://rank-metallica-violations-rid.trycloudflare.com",
+  "run_id": "42425287341",
+  "started_at": "2026-11-08T05:03:25Z",
+  "expires_at": "2026-11-08T11:03:25Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-07T23:32:10Z",
+  "published_at": "2026-11-08T05:07:32Z",
   "gated": true,
   "public": false
 }
