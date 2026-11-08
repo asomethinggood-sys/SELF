@@ -26,32 +26,36 @@
 16:46:43Z run 41819020979 · ollama is up behind the gate
 16:46:45Z run 41819020979 · proving it through the gate with a real request
 16:46:56Z run 41819020979 · published https://explained-annex-positions-jonathan.trycloudflare.com
-03:56:30Z run 41924457987 · starting ollama on this runner
-03:57:16Z run 41924457987 · ollama is up behind the gate
-03:57:18Z run 41924457987 · proving it through the gate with a real request
-03:57:28Z run 41924457987 · published https://provides-ton-soldiers-enhancing.trycloudflare.com
-15:07:38Z run 42003119569 · starting ollama on this runner
-15:08:31Z run 42003119569 · ollama is up behind the gate
-15:08:33Z run 42003119569 · proving it through the gate with a real request
-15:08:44Z run 42003119569 · published https://auto-kate-training-stamp.trycloudflare.com
-02:18:37Z run 42105943638 · starting ollama on this runner
-02:19:47Z run 42105943638 · ollama is up behind the gate
-02:19:49Z run 42105943638 · proving it through the gate with a real request
-02:20:00Z run 42105943638 · published https://purpose-appears-introduces-views.trycloudflare.com
-13:29:44Z run 42183914267 · starting ollama on this runner
-13:30:34Z run 42183914267 · ollama is up behind the gate
-13:30:36Z run 42183914267 · proving it through the gate with a real request
-13:30:46Z run 42183914267 · published https://concern-creature-rev-motherboard.trycloudflare.com
-00:41:08Z run 42276503792 · starting ollama on this runner
-00:41:53Z run 42276503792 · ollama is up behind the gate
-00:41:55Z run 42276503792 · proving it through the gate with a real request
-00:42:06Z run 42276503792 · published https://motivation-permitted-really-pairs.trycloudflare.com
-11:52:32Z run 42346282650 · starting ollama on this runner
-11:53:13Z run 42346282650 · ollama is up behind the gate
-11:53:15Z run 42346282650 · proving it through the gate with a real request
-11:53:25Z run 42346282650 · published https://affordable-demonstrate-reduction-myspace.trycloudflare.com
-23:03:52Z run 42396448120 · starting ollama on this runner
-23:04:15Z run 42396448120 · ollama is up behind the gate
-23:04:17Z run 42396448120 · proving it through the gate with a real request
-23:04:27Z run 42396448120 · published https://collectible-consult-cheaper-species.trycloudflare.com
-10:15:02Z run 42447685202 · starting ollama on this runner
+22:21:02Z run 41871758439 · starting ollama on this runner
+22:21:57Z run 41871758439 · ollama is up behind the gate
+22:21:59Z run 41871758439 · proving it through the gate with a real request
+22:22:09Z run 41871758439 · published https://middle-vendor-drives-dinner.trycloudflare.com
+09:32:03Z run 41964667208 · starting ollama on this runner
+09:32:56Z run 41964667208 · ollama is up behind the gate
+09:32:58Z run 41964667208 · proving it through the gate with a real request
+09:33:09Z run 41964667208 · published https://accordingly-buys-dive-chains.trycloudflare.com
+20:43:10Z run 42051735544 · starting ollama on this runner
+20:44:00Z run 42051735544 · ollama is up behind the gate
+20:44:01Z run 42051735544 · proving it through the gate with a real request
+20:44:11Z run 42051735544 · published https://humans-rats-modify-related.trycloudflare.com
+07:54:17Z run 42149472136 · starting ollama on this runner
+07:54:54Z run 42149472136 · ollama is up behind the gate
+07:54:56Z run 42149472136 · proving it through the gate with a real request
+07:55:05Z run 42149472136 · published https://answered-effectiveness-cameron-geographic.trycloudflare.com
+19:05:24Z run 42225906223 · starting ollama on this runner
+19:06:48Z run 42225906223 · ollama is up behind the gate
+19:06:50Z run 42225906223 · proving it through the gate with a real request
+19:07:01Z run 42225906223 · published https://direct-nyc-shares-thursday.trycloudflare.com
+06:16:53Z run 42319696453 · starting ollama on this runner
+06:17:46Z run 42319696453 · ollama is up behind the gate
+06:17:48Z run 42319696453 · proving it through the gate with a real request
+06:17:58Z run 42319696453 · published https://refinance-debian-subcommittee-plus.trycloudflare.com
+17:28:19Z run 42369993911 · starting ollama on this runner
+17:29:13Z run 42369993911 · ollama is up behind the gate
+17:29:15Z run 42369993911 · proving it through the gate with a real request
+17:29:25Z run 42369993911 · published https://jpeg-critical-planes-judy.trycloudflare.com
+04:39:35Z run 42423484886 · starting ollama on this runner
+04:40:28Z run 42423484886 · ollama is up behind the gate
+04:40:30Z run 42423484886 · proving it through the gate with a real request
+04:40:41Z run 42423484886 · published https://highest-literacy-combines-billion.trycloudflare.com
+10:15:28Z run 42470606868 · starting ollama on this runner
