@@ -64,3 +64,4 @@
 10:20:32Z run 42470877917 · published (loopback only)
 21:30:29Z run 42497177641 · starting ollama on this runner
 21:31:16Z run 42497177641 · ollama is up behind the gate
+21:31:18Z run 42497177641 · proving it through the gate with a real request
