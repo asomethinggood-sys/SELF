@@ -55,3 +55,4 @@
 21:29:52Z run 42388589607 · proving it through the gate with a real request
 21:30:02Z run 42388589607 · published https://rec-sophisticated-financing-maintained.trycloudflare.com
 08:41:03Z run 42441188073 · starting search on this runner
+08:41:09Z run 42441188073 · search is up behind the gate
