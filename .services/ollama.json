@@ -8,7 +8,7 @@
   "upstream_port": 11434,
   "model": "qwen2.5:0.5b",
   "version": "ollama/qwen2.5:0.5b",
-  "published_at": "2026-11-08T10:20:30Z",
+  "published_at": "2026-11-08T10:20:53Z",
   "gated": true,
   "public": false
 }
