@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://expand-tent-likely-separated.trycloudflare.com",
-  "run_id": "42441188073",
-  "started_at": "2026-11-08T08:41:03Z",
-  "expires_at": "2026-11-08T14:41:03Z",
+  "url": "https://wild-tuner-biology-meetings.trycloudflare.com",
+  "run_id": "42463947140",
+  "started_at": "2026-11-08T14:16:36Z",
+  "expires_at": "2026-11-08T20:16:36Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-08T08:41:20Z",
+  "published_at": "2026-11-08T14:16:53Z",
   "gated": true,
   "public": false
 }
