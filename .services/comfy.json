@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://formed-rapids-customise-terminals.trycloudflare.com",
-  "run_id": "42498900229",
-  "started_at": "2026-11-08T21:51:19Z",
-  "expires_at": "2026-11-09T03:51:19Z",
+  "url": "https://garcia-pick-promises-treo.trycloudflare.com",
+  "run_id": "42527228922",
+  "started_at": "2026-11-09T03:27:29Z",
+  "expires_at": "2026-11-09T09:27:29Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-08T21:55:36Z",
+  "published_at": "2026-11-09T03:32:44Z",
   "gated": true,
   "public": false
 }
