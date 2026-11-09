@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://remedy-fork-classifieds-belfast.trycloudflare.com",
-  "run_id": "42590464402",
-  "started_at": "2026-11-09T14:40:09Z",
-  "expires_at": "2026-11-09T20:40:09Z",
+  "url": "https://pmc-baptist-northwest-break.trycloudflare.com",
+  "run_id": "42636829724",
+  "started_at": "2026-11-09T20:16:07Z",
+  "expires_at": "2026-11-10T02:16:07Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-09T14:45:00Z",
+  "published_at": "2026-11-09T20:21:13Z",
   "gated": true,
   "public": false
 }
