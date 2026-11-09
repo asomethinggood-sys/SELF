@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://garcia-pick-promises-treo.trycloudflare.com",
-  "run_id": "42527228922",
-  "started_at": "2026-11-09T03:27:29Z",
-  "expires_at": "2026-11-09T09:27:29Z",
+  "url": "https://ground-nato-served-biblical.trycloudflare.com",
+  "run_id": "42556461259",
+  "started_at": "2026-11-09T09:04:05Z",
+  "expires_at": "2026-11-09T15:04:05Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-09T03:32:44Z",
+  "published_at": "2026-11-09T09:11:28Z",
   "gated": true,
   "public": false
 }
