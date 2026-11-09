@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://framing-burn-mold-incl.trycloudflare.com",
-  "run_id": "42576846130",
-  "started_at": "2026-11-09T12:39:12Z",
-  "expires_at": "2026-11-09T18:39:12Z",
+  "url": "https://parallel-compiled-reception-dome.trycloudflare.com",
+  "run_id": "42688530324",
+  "started_at": "2026-11-09T19:59:22Z",
+  "expires_at": "2026-11-10T01:59:22Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-09T12:39:31Z",
+  "published_at": "2026-11-09T19:59:39Z",
   "gated": true,
   "public": false
 }
