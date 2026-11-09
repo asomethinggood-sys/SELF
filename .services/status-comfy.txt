@@ -67,3 +67,4 @@
 03:30:12Z run 42527228922 · proving it through the gate with a real request
 03:32:46Z run 42527228922 · published https://garcia-pick-promises-treo.trycloudflare.com
 14:40:09Z run 42590464402 · starting comfy on this runner
+14:42:48Z run 42590464402 · comfy is up behind the gate
