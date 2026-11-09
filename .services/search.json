@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://remind-label-transform-partner.trycloudflare.com",
-  "run_id": "42488981152",
-  "started_at": "2026-11-08T19:52:14Z",
-  "expires_at": "2026-11-09T01:52:14Z",
+  "url": "https://disciplinary-removing-minor-eternal.trycloudflare.com",
+  "run_id": "42517170000",
+  "started_at": "2026-11-09T01:27:43Z",
+  "expires_at": "2026-11-09T07:27:43Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-08T19:52:32Z",
+  "published_at": "2026-11-09T01:27:59Z",
   "gated": true,
   "public": false
 }
