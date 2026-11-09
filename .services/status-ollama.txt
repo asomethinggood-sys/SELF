@@ -71,3 +71,4 @@
 08:42:27Z run 42554459160 · proving it through the gate with a real request
 08:42:35Z run 42554459160 · published https://calendars-bishop-sunrise-kitchen.trycloudflare.com
 19:53:03Z run 42633161265 · starting ollama on this runner
+19:53:44Z run 42633161265 · ollama is up behind the gate
