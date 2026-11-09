@@ -72,3 +72,4 @@
 09:11:30Z run 42556461259 · published https://ground-nato-served-biblical.trycloudflare.com
 20:16:07Z run 42636829724 · starting comfy on this runner
 20:18:40Z run 42636829724 · comfy is up behind the gate
+20:18:41Z run 42636829724 · proving it through the gate with a real request
