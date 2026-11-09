@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://hardwood-mem-brunswick-generation.trycloudflare.com",
-  "run_id": "42545673936",
-  "started_at": "2026-11-09T07:03:29Z",
-  "expires_at": "2026-11-09T13:03:29Z",
+  "url": "https://framing-burn-mold-incl.trycloudflare.com",
+  "run_id": "42576846130",
+  "started_at": "2026-11-09T12:39:12Z",
+  "expires_at": "2026-11-09T18:39:12Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-09T07:03:46Z",
+  "published_at": "2026-11-09T12:39:31Z",
   "gated": true,
   "public": false
 }
