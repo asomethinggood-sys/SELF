@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://ground-nato-served-biblical.trycloudflare.com",
-  "run_id": "42556461259",
-  "started_at": "2026-11-09T09:04:05Z",
-  "expires_at": "2026-11-09T15:04:05Z",
+  "url": "https://remedy-fork-classifieds-belfast.trycloudflare.com",
+  "run_id": "42590464402",
+  "started_at": "2026-11-09T14:40:09Z",
+  "expires_at": "2026-11-09T20:40:09Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-09T09:11:28Z",
+  "published_at": "2026-11-09T14:45:00Z",
   "gated": true,
   "public": false
 }
