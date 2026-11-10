@@ -79,3 +79,4 @@
 07:04:38Z run 42736018556 · proving it through the gate with a real request
 07:04:49Z run 42736018556 · published https://pale-vhs-changed-lewis.trycloudflare.com
 18:15:13Z run 42817634751 · starting ollama on this runner
+18:15:53Z run 42817634751 · ollama is up behind the gate
