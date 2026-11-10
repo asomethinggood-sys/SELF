@@ -80,3 +80,4 @@
 07:33:23Z run 42738730730 · published https://recording-bring-treated-idle.trycloudflare.com
 18:40:20Z run 42821113461 · starting comfy on this runner
 18:42:44Z run 42821113461 · comfy is up behind the gate
+18:42:46Z run 42821113461 · proving it through the gate with a real request
