@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://recording-bring-treated-idle.trycloudflare.com",
-  "run_id": "42738730730",
-  "started_at": "2026-11-10T07:28:15Z",
-  "expires_at": "2026-11-10T13:28:15Z",
+  "url": "https://unknown-assign-obtaining-contained.trycloudflare.com",
+  "run_id": "42775445805",
+  "started_at": "2026-11-10T13:04:24Z",
+  "expires_at": "2026-11-10T19:04:24Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-10T07:33:22Z",
+  "published_at": "2026-11-10T13:11:20Z",
   "gated": true,
   "public": false
 }
