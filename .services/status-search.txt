@@ -71,3 +71,4 @@
 19:59:29Z run 42688530324 · proving it through the gate with a real request
 19:59:40Z run 42688530324 · published https://parallel-compiled-reception-dome.trycloudflare.com
 07:10:37Z run 42736766848 · starting search on this runner
+07:10:42Z run 42736766848 · search is up behind the gate
