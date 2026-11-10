@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://loads-merchant-dial-relevant.trycloudflare.com",
-  "run_id": "42688554065",
-  "started_at": "2026-11-10T01:34:56Z",
-  "expires_at": "2026-11-10T07:34:56Z",
+  "url": "https://ways-curtis-substances-thinkpad.trycloudflare.com",
+  "run_id": "42736766848",
+  "started_at": "2026-11-10T07:10:37Z",
+  "expires_at": "2026-11-10T13:10:37Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-10T01:35:14Z",
+  "published_at": "2026-11-10T07:10:52Z",
   "gated": true,
   "public": false
 }
