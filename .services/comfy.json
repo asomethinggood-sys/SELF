@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://unknown-assign-obtaining-contained.trycloudflare.com",
-  "run_id": "42775445805",
-  "started_at": "2026-11-10T13:04:24Z",
-  "expires_at": "2026-11-10T19:04:24Z",
+  "url": "https://deaf-contributing-relax-bloom.trycloudflare.com",
+  "run_id": "42821113461",
+  "started_at": "2026-11-10T18:40:20Z",
+  "expires_at": "2026-11-11T00:40:20Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-10T13:11:20Z",
+  "published_at": "2026-11-10T18:45:32Z",
   "gated": true,
   "public": false
 }
