@@ -1,14 +1,14 @@
 {
   "service": "ollama",
-  "url": "https://peak-essex-utilities-muscle.trycloudflare.com",
-  "run_id": "42633161265",
-  "started_at": "2026-11-09T19:53:03Z",
-  "expires_at": "2026-11-10T01:53:03Z",
+  "url": "https://scientific-numeric-amber-loved.trycloudflare.com",
+  "run_id": "42687559689",
+  "started_at": "2026-11-10T01:28:42Z",
+  "expires_at": "2026-11-10T07:28:42Z",
   "gate_port": 9003,
   "upstream_port": 11434,
   "model": "qwen2.5:0.5b",
   "version": "ollama/qwen2.5:0.5b",
-  "published_at": "2026-11-09T19:53:56Z",
+  "published_at": "2026-11-10T01:31:15Z",
   "gated": true,
   "public": false
 }
