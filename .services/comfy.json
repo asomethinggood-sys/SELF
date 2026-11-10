@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://pmc-baptist-northwest-break.trycloudflare.com",
-  "run_id": "42636829724",
-  "started_at": "2026-11-09T20:16:07Z",
-  "expires_at": "2026-11-10T02:16:07Z",
+  "url": "https://investigations-courier-easter-drawn.trycloudflare.com",
+  "run_id": "42691255835",
+  "started_at": "2026-11-10T01:52:09Z",
+  "expires_at": "2026-11-10T07:52:09Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-09T20:21:13Z",
+  "published_at": "2026-11-10T01:57:26Z",
   "gated": true,
   "public": false
 }
