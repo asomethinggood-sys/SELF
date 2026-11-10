@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://ways-curtis-substances-thinkpad.trycloudflare.com",
-  "run_id": "42736766848",
-  "started_at": "2026-11-10T07:10:37Z",
-  "expires_at": "2026-11-10T13:10:37Z",
+  "url": "https://medicaid-wash-calculate-auburn.trycloudflare.com",
+  "run_id": "42773430828",
+  "started_at": "2026-11-10T12:46:04Z",
+  "expires_at": "2026-11-10T18:46:04Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-10T07:10:52Z",
+  "published_at": "2026-11-10T12:46:19Z",
   "gated": true,
   "public": false
 }
