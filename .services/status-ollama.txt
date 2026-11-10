@@ -75,3 +75,4 @@
 19:53:46Z run 42633161265 · proving it through the gate with a real request
 19:53:57Z run 42633161265 · published https://peak-essex-utilities-muscle.trycloudflare.com
 07:04:13Z run 42736018556 · starting ollama on this runner
+07:04:36Z run 42736018556 · ollama is up behind the gate
