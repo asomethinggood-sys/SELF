@@ -1,13 +1,9 @@
-search · run 42736766848 · 2026-11-10T07:10:46Z
+search · run 42773430828 · 2026-11-10T12:46:14Z
 -----------------------------------------------
-ok   gate /healthz without a token — 200 {"ok": true, "service": "search", "run_id": "42736766848", "started_at": "2026-1
+ok   gate /healthz without a token — 200 {"ok": true, "service": "search", "run_id": "42773430828", "started_at": "2026-1
   ok   upstream /search?q=ping&format=json directly — 200
   ok   the same path through the gate without a token — 401 
   ok   a wrong token is refused — 401
-  ok   /search through the gate with the real token — 200 {"query": "transformers", "results": [{"template": "default.html", "title": "Transformers (2007) \u2b50 7.1 | Action, Ad
-  ok   the answer is JSON with results — {"query": "transformers", "results": [{"template": "default.html", "title": "Transformers (2007) \u2b50 7.1 | Action, Adventure, Sci-Fi", "content": "With Shia LaBeouf, Megan Fox, Josh Duhamel, Tyrese
+  ok   /search through the gate with the real token — 200 {"query": "transformers", "results": [{"template": "default.html", "title": "Transformers (film series) - Wikipedia", "c
+  ok   the answer is JSON with results — {"query": "transformers", "results": [{"template": "default.html", "title": "Transformers (film series) - Wikipedia", "content": "Transformers is a series of science fiction action films based on the 
 self-test: 6/6 checks passed
-
-public: https://ways-curtis-substances-thinkpad.trycloudflare.com
-reachable from the internet: yes — GET /healthz through the tunnel answered 200
-the bot needs no configuration: it reads .services/search.json
