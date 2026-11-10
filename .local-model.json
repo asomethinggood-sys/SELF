@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-10T13:16:25Z",
+  "at": "2026-11-10T16:28:48Z",
   "checks": [
     {
       "name": "local · something is configured",
@@ -14,22 +14,22 @@
     {
       "name": "local · answered: In one sentence: what are you?",
       "ok": true,
-      "detail": "0.9s · I am a large language model created by Alibaba Cloud, designed to assist with va"
+      "detail": "0.5s · I am a large language model created by Alibaba Cloud."
     },
     {
       "name": "local · answered: Write a single line of poetry abou",
       "ok": true,
-      "detail": "1.1s · Rain falls like tears, \nDrops of water on the earth. \nIt washes away our sins, \n"
+      "detail": "0.7s · Rain, gentle and crisp, pours down like a quilt of white,  \nAwakening me from my"
     },
     {
       "name": "local · answered: Answer with one word: two plus two",
       "ok": true,
-      "detail": "0.2s · four"
+      "detail": "0.2s · Four"
     },
     {
       "name": "local · the router answers with zero keys",
       "ok": true,
-      "detail": "Hello! How can I assist you today?"
+      "detail": "Hello! It's me, Qwen, created by Alibaba Cloud. How can I assist you today?"
     },
     {
       "name": "local · the router labels it local",
@@ -50,15 +50,15 @@
   "answers": [
     {
       "question": "In one sentence: what are you?",
-      "reply": "I am a large language model created by Alibaba Cloud, designed to assist with various tasks such as text generation, translation, and knowledge-based applications."
+      "reply": "I am a large language model created by Alibaba Cloud."
     },
     {
       "question": "Write a single line of poetry about rain.",
-      "reply": "Rain falls like tears, \nDrops of water on the earth. \nIt washes away our sins, \nAnd fills the sky with gold. \nWith each drop, we make a new beginning, \nAnd each rain brings hope and warmth."
+      "reply": "Rain, gentle and crisp, pours down like a quilt of white,  \nAwakening me from my slumber, bringing a cool and crisp taste."
     },
     {
       "question": "Answer with one word: two plus two?",
-      "reply": "four"
+      "reply": "Four"
     }
   ],
   "fetch": [
