@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-10T16:28:48Z",
+  "at": "2026-11-10T22:10:34Z",
   "checks": [
     {
       "name": "local · something is configured",
@@ -14,22 +14,22 @@
     {
       "name": "local · answered: In one sentence: what are you?",
       "ok": true,
-      "detail": "0.5s · I am a large language model created by Alibaba Cloud."
+      "detail": "0.3s · I am a language model created by Alibaba Cloud."
     },
     {
       "name": "local · answered: Write a single line of poetry abou",
       "ok": true,
-      "detail": "0.7s · Rain, gentle and crisp, pours down like a quilt of white,  \nAwakening me from my"
+      "detail": "0.4s · Raindrops dance on the quiet riverbank, creating a symphony of softness and sorr"
     },
     {
       "name": "local · answered: Answer with one word: two plus two",
       "ok": true,
-      "detail": "0.2s · Four"
+      "detail": "0.1s · four"
     },
     {
       "name": "local · the router answers with zero keys",
       "ok": true,
-      "detail": "Hello! It's me, Qwen, created by Alibaba Cloud. How can I assist you today?"
+      "detail": "Hello! How can I assist you today?"
     },
     {
       "name": "local · the router labels it local",
@@ -50,15 +50,15 @@
   "answers": [
     {
       "question": "In one sentence: what are you?",
-      "reply": "I am a large language model created by Alibaba Cloud."
+      "reply": "I am a language model created by Alibaba Cloud."
     },
     {
       "question": "Write a single line of poetry about rain.",
-      "reply": "Rain, gentle and crisp, pours down like a quilt of white,  \nAwakening me from my slumber, bringing a cool and crisp taste."
+      "reply": "Raindrops dance on the quiet riverbank, creating a symphony of softness and sorrow."
     },
     {
       "question": "Answer with one word: two plus two?",
-      "reply": "Four"
+      "reply": "four"
     }
   ],
   "fetch": [
