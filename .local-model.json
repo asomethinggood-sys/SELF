@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-10T01:44:16Z",
+  "at": "2026-11-10T07:35:10Z",
   "checks": [
     {
       "name": "local · something is configured",
@@ -14,12 +14,12 @@
     {
       "name": "local · answered: In one sentence: what are you?",
       "ok": true,
-      "detail": "0.7s · I am Qwen, a large language model created by Alibaba Cloud."
+      "detail": "0.5s · I am a large language model developed by Alibaba Cloud, capable of answering que"
     },
     {
       "name": "local · answered: Write a single line of poetry abou",
       "ok": true,
-      "detail": "0.7s · Rain, with its softness and grace, gently washes away the dust and dirt, bringin"
+      "detail": "0.7s · Raindrops fall, soft and gentle,\nWhispering secrets to the earth,\nMist dances in"
     },
     {
       "name": "local · answered: Answer with one word: two plus two",
@@ -50,11 +50,11 @@
   "answers": [
     {
       "question": "In one sentence: what are you?",
-      "reply": "I am Qwen, a large language model created by Alibaba Cloud."
+      "reply": "I am a large language model developed by Alibaba Cloud, capable of answering questions and providing insights."
     },
     {
       "question": "Write a single line of poetry about rain.",
-      "reply": "Rain, with its softness and grace, gently washes away the dust and dirt, bringing with it a fresh start."
+      "reply": "Raindrops fall, soft and gentle,\nWhispering secrets to the earth,\nMist dances in the air,\nMelting the snow and water, it is so free."
     },
     {
       "question": "Answer with one word: two plus two?",
