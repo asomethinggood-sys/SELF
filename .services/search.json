@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://medicaid-wash-calculate-auburn.trycloudflare.com",
-  "run_id": "42773430828",
-  "started_at": "2026-11-10T12:46:04Z",
-  "expires_at": "2026-11-10T18:46:04Z",
+  "url": "https://conventional-critics-location-conclusions.trycloudflare.com",
+  "run_id": "42818520158",
+  "started_at": "2026-11-10T18:21:54Z",
+  "expires_at": "2026-11-11T00:21:54Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-10T12:46:19Z",
+  "published_at": "2026-11-10T18:22:09Z",
   "gated": true,
   "public": false
 }
