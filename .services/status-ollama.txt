@@ -83,3 +83,4 @@
 12:40:30Z run 42772699359 · proving it through the gate with a real request
 12:40:40Z run 42772699359 · published https://council-apr-may-yen.trycloudflare.com
 23:50:58Z run 42873265375 · starting ollama on this runner
+23:51:53Z run 42873265375 · ollama is up behind the gate
