@@ -73,3 +73,4 @@
 01:52:09Z run 42691255835 · starting comfy on this runner
 01:55:33Z run 42691255835 · comfy is up behind the gate
 01:55:36Z run 42691255835 · proving it through the gate with a real request
+01:57:28Z run 42691255835 · published https://investigations-courier-easter-drawn.trycloudflare.com
