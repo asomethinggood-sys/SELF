@@ -76,3 +76,4 @@
 20:21:14Z run 42636829724 · published https://pmc-baptist-northwest-break.trycloudflare.com
 07:28:15Z run 42738730730 · starting comfy on this runner
 07:30:42Z run 42738730730 · comfy is up behind the gate
+07:30:44Z run 42738730730 · proving it through the gate with a real request
