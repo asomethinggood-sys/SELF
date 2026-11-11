@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://gnu-pat-our-trustee.trycloudflare.com",
-  "run_id": "43009430215",
-  "started_at": "2026-11-11T16:44:14Z",
-  "expires_at": "2026-11-11T22:44:14Z",
+  "url": "https://glass-los-shanghai-plugins.trycloudflare.com",
+  "run_id": "43061196633",
+  "started_at": "2026-11-11T22:19:54Z",
+  "expires_at": "2026-11-12T04:19:54Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-11T16:44:29Z",
+  "published_at": "2026-11-11T22:20:12Z",
   "gated": true,
   "public": false
 }
