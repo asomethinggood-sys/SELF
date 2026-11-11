@@ -87,3 +87,4 @@
 23:51:54Z run 42873265375 · proving it through the gate with a real request
 23:52:03Z run 42873265375 · published https://obligations-been-pal-population.trycloudflare.com
 11:02:22Z run 42965747833 · starting ollama on this runner
+11:03:21Z run 42965747833 · ollama is up behind the gate
