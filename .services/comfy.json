@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://deaf-contributing-relax-bloom.trycloudflare.com",
-  "run_id": "42821113461",
-  "started_at": "2026-11-10T18:40:20Z",
-  "expires_at": "2026-11-11T00:40:20Z",
+  "url": "https://troops-constraints-topic-data.trycloudflare.com",
+  "run_id": "42877476188",
+  "started_at": "2026-11-11T00:16:13Z",
+  "expires_at": "2026-11-11T06:16:13Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-10T18:45:32Z",
+  "published_at": "2026-11-11T00:21:31Z",
   "gated": true,
   "public": false
 }
