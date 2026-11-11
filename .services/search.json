@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://sociology-stocks-telecom-armor.trycloudflare.com",
-  "run_id": "42966453613",
-  "started_at": "2026-11-11T11:08:34Z",
-  "expires_at": "2026-11-11T17:08:34Z",
+  "url": "https://gnu-pat-our-trustee.trycloudflare.com",
+  "run_id": "43009430215",
+  "started_at": "2026-11-11T16:44:14Z",
+  "expires_at": "2026-11-11T22:44:14Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-11T11:08:55Z",
+  "published_at": "2026-11-11T16:44:29Z",
   "gated": true,
   "public": false
 }
