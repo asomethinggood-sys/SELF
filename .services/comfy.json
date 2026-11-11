@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://mathematics-receipt-closes-experiences.trycloudflare.com",
-  "run_id": "42929955893",
-  "started_at": "2026-11-11T05:52:23Z",
-  "expires_at": "2026-11-11T11:52:23Z",
+  "url": "https://vegetation-shortly-excel-nights.trycloudflare.com",
+  "run_id": "42968497668",
+  "started_at": "2026-11-11T11:29:03Z",
+  "expires_at": "2026-11-11T17:29:03Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-11T05:57:26Z",
+  "published_at": "2026-11-11T11:32:54Z",
   "gated": true,
   "public": false
 }
