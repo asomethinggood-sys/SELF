@@ -88,3 +88,4 @@
 11:32:55Z run 42968497668 · published https://vegetation-shortly-excel-nights.trycloudflare.com
 22:41:19Z run 43064568620 · starting comfy on this runner
 22:44:16Z run 43064568620 · comfy is up behind the gate
+22:44:18Z run 43064568620 · proving it through the gate with a real request
