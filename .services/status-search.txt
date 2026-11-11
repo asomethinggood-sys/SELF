@@ -84,3 +84,4 @@
 11:08:57Z run 42966453613 · published https://sociology-stocks-telecom-armor.trycloudflare.com
 22:19:54Z run 43061196633 · starting search on this runner
 22:20:00Z run 43061196633 · search is up behind the gate
+22:20:02Z run 43061196633 · proving it through the gate with a real request
