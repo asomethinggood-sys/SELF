@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://andreas-motherboard-burning-urgent.trycloudflare.com",
-  "run_id": "43012244620",
-  "started_at": "2026-11-11T17:05:14Z",
-  "expires_at": "2026-11-11T23:05:14Z",
+  "url": "https://accompanied-prepaid-vacation-classic.trycloudflare.com",
+  "run_id": "43064568620",
+  "started_at": "2026-11-11T22:41:19Z",
+  "expires_at": "2026-11-12T04:41:19Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-11T17:10:35Z",
+  "published_at": "2026-11-11T22:46:31Z",
   "gated": true,
   "public": false
 }
