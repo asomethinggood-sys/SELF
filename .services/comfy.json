@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://vegetation-shortly-excel-nights.trycloudflare.com",
-  "run_id": "42968497668",
-  "started_at": "2026-11-11T11:29:03Z",
-  "expires_at": "2026-11-11T17:29:03Z",
+  "url": "https://andreas-motherboard-burning-urgent.trycloudflare.com",
+  "run_id": "43012244620",
+  "started_at": "2026-11-11T17:05:14Z",
+  "expires_at": "2026-11-11T23:05:14Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-11T11:32:54Z",
+  "published_at": "2026-11-11T17:10:35Z",
   "gated": true,
   "public": false
 }
