@@ -84,3 +84,4 @@
 18:45:34Z run 42821113461 · published https://deaf-contributing-relax-bloom.trycloudflare.com
 05:52:23Z run 42929955893 · starting comfy on this runner
 05:55:14Z run 42929955893 · comfy is up behind the gate
+05:55:16Z run 42929955893 · proving it through the gate with a real request
