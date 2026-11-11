@@ -79,3 +79,4 @@
 13:09:40Z run 42775445805 · proving it through the gate with a real request
 13:11:22Z run 42775445805 · published https://unknown-assign-obtaining-contained.trycloudflare.com
 00:16:13Z run 42877476188 · starting comfy on this runner
+00:19:21Z run 42877476188 · comfy is up behind the gate
