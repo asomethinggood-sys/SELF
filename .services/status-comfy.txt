@@ -88,3 +88,4 @@
 05:57:27Z run 42929955893 · published https://mathematics-receipt-closes-experiences.trycloudflare.com
 17:05:14Z run 43012244620 · starting comfy on this runner
 17:07:58Z run 43012244620 · comfy is up behind the gate
+17:08:00Z run 43012244620 · proving it through the gate with a real request
