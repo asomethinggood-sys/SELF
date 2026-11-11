@@ -88,3 +88,4 @@
 05:27:28Z run 42926659763 · published https://exercise-nhs-donated-implied.trycloudflare.com
 16:38:02Z run 43008580081 · starting ollama on this runner
 16:40:09Z run 43008580081 · ollama is up behind the gate
+16:40:11Z run 43008580081 · proving it through the gate with a real request
