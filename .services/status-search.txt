@@ -80,3 +80,4 @@
 18:22:10Z run 42818520158 · published https://conventional-critics-location-conclusions.trycloudflare.com
 05:32:57Z run 42927507043 · starting search on this runner
 05:33:03Z run 42927507043 · search is up behind the gate
+05:33:05Z run 42927507043 · proving it through the gate with a real request
