@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-11T16:33:54Z",
+  "at": "2026-11-11T21:16:29Z",
   "checks": [
     {
       "name": "local · something is configured",
@@ -14,22 +14,22 @@
     {
       "name": "local · answered: In one sentence: what are you?",
       "ok": true,
-      "detail": "0.4s · I am a language model created by Alibaba Cloud."
+      "detail": "0.5s · I am a language model created by Alibaba Cloud."
     },
     {
       "name": "local · answered: Write a single line of poetry abou",
       "ok": true,
-      "detail": "0.9s · In the evening mist, the rain dances,\nA silver ribbon falls, a soft embrace,\nA s"
+      "detail": "0.9s · Rain falls softly on the earth,  \nWhispering to the plants and trees,  \nDancing "
     },
     {
       "name": "local · answered: Answer with one word: two plus two",
       "ok": true,
-      "detail": "0.1s · four"
+      "detail": "0.1s · Four"
     },
     {
       "name": "local · the router answers with zero keys",
       "ok": true,
-      "detail": "Hello! It's nice to meet you. How can I assist you today?"
+      "detail": "Hello! How can I assist you today?"
     },
     {
       "name": "local · the router labels it local",
@@ -54,11 +54,11 @@
     },
     {
       "question": "Write a single line of poetry about rain.",
-      "reply": "In the evening mist, the rain dances,\nA silver ribbon falls, a soft embrace,\nA symphony of sound,\nIn the dark, it whispers,\nA promise of rain, a promise of peace."
+      "reply": "Rain falls softly on the earth,  \nWhispering to the plants and trees,  \nDancing in the breeze,  \nCreating a symphony of life."
     },
     {
       "question": "Answer with one word: two plus two?",
-      "reply": "four"
+      "reply": "Four"
     }
   ],
   "fetch": [
