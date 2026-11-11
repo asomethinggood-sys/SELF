@@ -91,3 +91,4 @@
 11:03:23Z run 42965747833 · proving it through the gate with a real request
 11:03:33Z run 42965747833 · published https://purposes-widescreen-eds-soundtrack.trycloudflare.com
 22:18:38Z run 43060219788 · starting ollama on this runner
+22:19:15Z run 43060219788 · ollama is up behind the gate
