@@ -1,14 +1,14 @@
 {
   "service": "ollama",
-  "url": "https://purposes-widescreen-eds-soundtrack.trycloudflare.com",
-  "run_id": "42965747833",
-  "started_at": "2026-11-11T11:02:22Z",
-  "expires_at": "2026-11-11T17:02:22Z",
+  "url": "https://suit-boards-digit-customize.trycloudflare.com",
+  "run_id": "43008580081",
+  "started_at": "2026-11-11T16:38:02Z",
+  "expires_at": "2026-11-11T22:38:02Z",
   "gate_port": 9003,
   "upstream_port": 11434,
   "model": "qwen2.5:0.5b",
   "version": "ollama/qwen2.5:0.5b",
-  "published_at": "2026-11-11T11:03:31Z",
+  "published_at": "2026-11-11T16:40:20Z",
   "gated": true,
   "public": false
 }
