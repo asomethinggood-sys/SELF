@@ -1,6 +1,6 @@
 {
   "app": "havoc",
-  "created_at": "2026-11-11T09:39:29+00:00",
+  "created_at": "2026-11-11T11:19:31+00:00",
   "tables": {
     "aliases": [],
     "autoreplies": [],
@@ -121,10 +121,10 @@
     ],
     "language_prefs": [
       {
-        "language": "en",
+        "language": "fa",
         "scope": "global",
         "scope_id": "",
-        "updated_at": "2026-11-02T16:12:30+00:00"
+        "updated_at": "2026-11-11T11:17:52+00:00"
       }
     ],
     "notes": [],
@@ -344,13 +344,13 @@
       },
       {
         "key": "ai.usage",
-        "updated_at": "2026-11-08T18:25:52+00:00",
-        "value": "{\"2b9beacf67a2|google:gemini-3.5-flash-lite\":{\"day\":\"2026-11-08\",\"count\":5},\"e8bfd373256a|google:gemini-3.5-flash-lite\":{\"day\":\"2026-11-08\",\"count\":4}}"
+        "updated_at": "2026-11-11T11:18:18+00:00",
+        "value": "{\"2b9beacf67a2|google:gemini-3.5-flash-lite\":{\"day\":\"2026-11-11\",\"count\":1},\"e8bfd373256a|google:gemini-3.5-flash-lite\":{\"day\":\"2026-11-11\",\"count\":1}}"
       },
       {
         "key": "ai.health",
-        "updated_at": "2026-11-08T18:25:52+00:00",
-        "value": "{\"2b9beacf67a2\":{\"disabled\":false,\"cooldown_until\":\"2026-11-05T16:18:27.066192+00:00\",\"error\":\"\",\"successes\":426,\"failures\":24},\"e8bfd373256a\":{\"disabled\":false,\"cooldown_until\":\"2026-10-31T19:36:58.320628+00:00\",\"error\":\"\",\"successes\":415,\"failures\":22},\"90d9d7b7c27e\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":4,\"failures\":1},\"bcf26c2f3c33\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":2,\"failures\":0}}"
+        "updated_at": "2026-11-11T11:18:18+00:00",
+        "value": "{\"2b9beacf67a2\":{\"disabled\":false,\"cooldown_until\":\"2026-11-05T16:18:27.066192+00:00\",\"error\":\"\",\"successes\":427,\"failures\":24},\"e8bfd373256a\":{\"disabled\":false,\"cooldown_until\":\"2026-10-31T19:36:58.320628+00:00\",\"error\":\"\",\"successes\":416,\"failures\":22},\"90d9d7b7c27e\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":4,\"failures\":1},\"bcf26c2f3c33\":{\"disabled\":false,\"cooldown_until\":\"\",\"error\":\"\",\"successes\":2,\"failures\":0}}"
       },
       {
         "key": "clock.timezone",
@@ -646,6 +646,16 @@
         "key": "yura.said.8896395891",
         "updated_at": "2026-11-07T20:13:49+00:00",
         "value": "[\"⌘ 4 ◈ calc 2+2 ـــــــــ❖ـــــــــ ∑ Result 2+2 = 4 ✧ asked at 23:38\",\"⁙ Merlyyn feels unnecessarily heavy with the double 'y', making a classic name look cluttered. (¬‿¬ )\",\"✾ Marlin is a strong choice. It carries the clean sound of the ocean without the spelling weight of your earlier idea. ✮ ⤞ It is distinct, easy to spell, and ages well. (˶ᵔᗜᵔ˶)\",\"⋆ Specify who to block. ⌓ Tell me the name or handle and I will do it immediately. ⸎ ◈ block · this person ـــــــــ✦ـــــــــ who? .block @someone ◗ asked at 23:40\",\"meow i am the tiny voice saying do it, do the silly thing >_< ◈ whois · my good girl ـــــــــ✧ـــــــــ I can't find my good girl in your chats ⁘ asked at 23:41\",\"✭ here is your snake game, written clean and ready to run with pygame right away. ⸳ don't crash into the walls now, little reptile. ```python import pygame import random pygame.init() WIDTH, HEIGHT = 600, 600 GRID_SIZE = 20 GRID_WIDTH = WIDTH // GRID_SIZE GRID_HEIGHT = HEIGHT // GRID_SIZE BLACK = (18, 18, 24) WHITE = (240, 240, 255) GREEN = (120, 220, 140) RED = (255, 100, 100) screen = pygame.display.set_mode((WIDTH, HEIGHT)) pygame.display.set_caption(\\\"Yura's Snake\\\") clock = pygame.time.Clock() def reset_game(): return ( [(GRID_WIDTH // 2, GRID_HEIGHT // 2)], (1, 0), (random.randint(0, GRID_WIDTH - 1), random.randint(0, GRID_HEIGHT - 1)), 0 ) snake, direction, food, score = reset_game() running = True while running: for event in pygame.event.get(): if event.type == pygame.QUIT: running = False elif event.type == pygame.KEYDOWN: if event.key == pygame.K_UP and direction != (0, 1): direction = (0, -1) elif event.key == pygame.K_DOWN and direction != (0, -1): direction = (0, 1) elif event.key == pygame.K_LEFT and direction != (1, 0): direction = (-1, 0) elif event.key == pygame.K_RIGHT and direction != (-1, 0): direction = (1, 0) head_x, head_y = snake[0] dir_x, dir_y = direction new_head = ((head_x + dir_x) % GRID_WIDTH, (head_y + dir_y) % GRID_HEIGHT) if new_head in snake: snake, direction, food, score = reset_game() continue snake.insert(0, new_head) if new_head == food: score += 1 food = (random.randint(0, GRID_WIDTH - 1), random.randint(0, GRID_HEIGHT - 1)) else: snake.pop() screen.fill(BLACK) for segment in snake: rect = pygame.Rect(segment[0] * GRID_SIZE, segment[1] * GRID_SIZE, GRID_SIZE - 2, GRID_SIZE - 2) pygame.draw.rect(screen, GREEN, rect) food_rect = pygame.Rect(food[0] * GRID_SIZE, food_size := GRID_SIZE - 2, GRID_SIZE - 2, GRID_SIZE - 2) food_rect.topleft = (food[0] * GRID_SIZE, food[1] * GRID_SIZE) pygame.draw.rect(screen, RED, food_rect) pygame.display.flip() clock.tick(10) pygame.\"]"
+      },
+      {
+        "key": "yura.sent_ids.7960767816",
+        "updated_at": "2026-11-11T11:18:34+00:00",
+        "value": "[180457,180461,180464,180465,180466,180467,180477,180480,180482,180484,180487,180489]"
+      },
+      {
+        "key": "yura.said.7960767816",
+        "updated_at": "2026-11-11T11:18:18+00:00",
+        "value": "[\"⁂ اینجا بازش کردم ببینم چی توشه برمی‌گردم به این طرف، یه‌کم نگاهش می‌کنم تا بفهمم قضیه چیه و چطور باید باهاش تا کرد (¬‿¬) مثل اینکه بازم کار داره برامون تراشیده ᵕ̈\",\"☙ 突然の日本語のお願いですね。 ちゃんと意味のある文章を紡ぎますから、すこしだけ待っていてください。 言葉の端々まで心を込めて、静かな部屋の中で書くような気持ちで進めますね。 どんなテーマにしようか、今ちょっと考えています ᐧ ᴗ ᐧ 日本語の柔らかい響きを楽しんでもらえたら嬉しいです。 あなたのために、丁寧にノートをひろげていきます。 ⟡ ⋆ ⟡ 美しい季節の移り変わりや、日々の小さな瞬間に目を向けるような内容にしようと思います。 遠くの空を眺めるみたいに、心にすっと染み入る言葉を選びますね。 もう少しで書き上がりますから、楽しみに待っていてください。 そっと隣に座って、その様子を見守っていてね ⸜(ᵕᵕ)⸝\"]"
       }
     ],
     "templates": [],
