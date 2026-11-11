@@ -81,3 +81,4 @@
 00:16:13Z run 42877476188 · starting comfy on this runner
 00:19:21Z run 42877476188 · comfy is up behind the gate
 00:19:22Z run 42877476188 · proving it through the gate with a real request
+00:21:32Z run 42877476188 · published https://troops-constraints-topic-data.trycloudflare.com
