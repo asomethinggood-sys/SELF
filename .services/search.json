@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://glass-los-shanghai-plugins.trycloudflare.com",
-  "run_id": "43061196633",
-  "started_at": "2026-11-11T22:19:54Z",
-  "expires_at": "2026-11-12T04:19:54Z",
+  "url": "https://asks-readers-stand-bubble.trycloudflare.com",
+  "run_id": "43110812383",
+  "started_at": "2026-11-12T03:55:20Z",
+  "expires_at": "2026-11-12T09:55:20Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-11T22:20:12Z",
+  "published_at": "2026-11-12T03:55:36Z",
   "gated": true,
   "public": false
 }
