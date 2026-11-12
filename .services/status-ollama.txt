@@ -93,3 +93,4 @@
 03:54:08Z run 43110640474 · starting ollama on this runner
 03:55:37Z run 43110640474 · ollama is up behind the gate
 03:55:47Z run 43110640474 · proving it through the gate with a real request
+03:55:58Z run 43110640474 · published https://border-brings-serum-identical.trycloudflare.com
