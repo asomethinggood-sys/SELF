@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://asks-readers-stand-bubble.trycloudflare.com",
-  "run_id": "43110812383",
-  "started_at": "2026-11-12T03:55:20Z",
-  "expires_at": "2026-11-12T09:55:20Z",
+  "url": "https://goals-human-match-plc.trycloudflare.com",
+  "run_id": "43151353012",
+  "started_at": "2026-11-12T09:31:05Z",
+  "expires_at": "2026-11-12T15:31:05Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-12T03:55:36Z",
+  "published_at": "2026-11-12T09:31:20Z",
   "gated": true,
   "public": false
 }
