@@ -88,3 +88,4 @@
 22:20:13Z run 43061196633 · published https://glass-los-shanghai-plugins.trycloudflare.com
 09:31:05Z run 43151353012 · starting search on this runner
 09:31:10Z run 43151353012 · search is up behind the gate
+09:31:12Z run 43151353012 · proving it through the gate with a real request
