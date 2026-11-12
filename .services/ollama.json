@@ -1,14 +1,14 @@
 {
   "service": "ollama",
-  "url": "https://border-brings-serum-identical.trycloudflare.com",
-  "run_id": "43110640474",
-  "started_at": "2026-11-12T03:54:08Z",
-  "expires_at": "2026-11-12T09:54:08Z",
+  "url": "https://latina-underwear-customized-scanning.trycloudflare.com",
+  "run_id": "43151220130",
+  "started_at": "2026-11-12T09:29:47Z",
+  "expires_at": "2026-11-12T15:29:47Z",
   "gate_port": 9003,
   "upstream_port": 11434,
   "model": "qwen2.5:0.5b",
   "version": "ollama/qwen2.5:0.5b",
-  "published_at": "2026-11-12T03:55:56Z",
+  "published_at": "2026-11-12T09:31:34Z",
   "gated": true,
   "public": false
 }
