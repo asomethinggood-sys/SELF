@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-12T14:22:47Z",
+  "at": "2026-11-12T20:04:44Z",
   "checks": [
     {
       "name": "local · something is configured",
@@ -14,17 +14,17 @@
     {
       "name": "local · answered: In one sentence: what are you?",
       "ok": true,
-      "detail": "0.3s · I'm an artificial intelligence created by Alibaba Cloud."
+      "detail": "0.8s · As an artificial intelligence created by Alibaba Cloud, I'm a language model cap"
     },
     {
       "name": "local · answered: Write a single line of poetry abou",
       "ok": true,
-      "detail": "0.3s · Raindrops dance on the glass,  \nWhispering secrets to the wind."
+      "detail": "0.8s · In the rain, life is soft and sweet,\nNature whispers in the mist,\nAnd the world "
     },
     {
       "name": "local · answered: Answer with one word: two plus two",
       "ok": true,
-      "detail": "0.1s · four"
+      "detail": "0.2s · four"
     },
     {
       "name": "local · the router answers with zero keys",
@@ -50,11 +50,11 @@
   "answers": [
     {
       "question": "In one sentence: what are you?",
-      "reply": "I'm an artificial intelligence created by Alibaba Cloud."
+      "reply": "As an artificial intelligence created by Alibaba Cloud, I'm a language model capable of generating text based on the input provided."
     },
     {
       "question": "Write a single line of poetry about rain.",
-      "reply": "Raindrops dance on the glass,  \nWhispering secrets to the wind."
+      "reply": "In the rain, life is soft and sweet,\nNature whispers in the mist,\nAnd the world around us is bathed in a soft embrace,\nA beauty that we should cherish."
     },
     {
       "question": "Answer with one word: two plus two?",
