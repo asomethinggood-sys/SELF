@@ -92,3 +92,4 @@
 17:10:37Z run 43012244620 · published https://andreas-motherboard-burning-urgent.trycloudflare.com
 04:17:22Z run 43113780043 · starting comfy on this runner
 04:20:02Z run 43113780043 · comfy is up behind the gate
+04:20:04Z run 43113780043 · proving it through the gate with a real request
