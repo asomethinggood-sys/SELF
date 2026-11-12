@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://chances-princess-architectural-utility.trycloudflare.com",
-  "run_id": "43192123271",
-  "started_at": "2026-11-12T15:06:52Z",
-  "expires_at": "2026-11-12T21:06:52Z",
+  "url": "https://tribes-profession-gives-richmond.trycloudflare.com",
+  "run_id": "43244232634",
+  "started_at": "2026-11-12T20:42:30Z",
+  "expires_at": "2026-11-13T02:42:30Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-12T15:07:08Z",
+  "published_at": "2026-11-12T20:42:44Z",
   "gated": true,
   "public": false
 }
