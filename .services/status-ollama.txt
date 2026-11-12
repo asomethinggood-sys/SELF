@@ -100,3 +100,4 @@
 09:31:35Z run 43151220130 · published https://latina-underwear-customized-scanning.trycloudflare.com
 20:41:16Z run 43243980486 · starting ollama on this runner
 20:42:03Z run 43243980486 · ollama is up behind the gate
+20:42:05Z run 43243980486 · proving it through the gate with a real request
