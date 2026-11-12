@@ -97,3 +97,4 @@
 15:05:32Z run 43191933927 · starting ollama on this runner
 15:06:32Z run 43191933927 · ollama is up behind the gate
 15:06:34Z run 43191933927 · proving it through the gate with a real request
+15:06:44Z run 43191933927 · published https://jake-suburban-succeed-florence.trycloudflare.com
