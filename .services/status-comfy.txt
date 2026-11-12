@@ -92,3 +92,4 @@
 22:46:32Z run 43064568620 · published https://accompanied-prepaid-vacation-classic.trycloudflare.com
 09:53:37Z run 43153752027 · starting comfy on this runner
 09:55:56Z run 43153752027 · comfy is up behind the gate
+09:55:58Z run 43153752027 · proving it through the gate with a real request
