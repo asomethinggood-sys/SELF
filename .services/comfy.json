@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://walk-joyce-races-class.trycloudflare.com",
-  "run_id": "43195415229",
-  "started_at": "2026-11-12T15:29:50Z",
-  "expires_at": "2026-11-12T21:29:50Z",
+  "url": "https://trip-oak-tribunal-libraries.trycloudflare.com",
+  "run_id": "43248313932",
+  "started_at": "2026-11-12T21:06:10Z",
+  "expires_at": "2026-11-13T03:06:10Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-12T15:34:19Z",
+  "published_at": "2026-11-12T21:11:16Z",
   "gated": true,
   "public": false
 }
