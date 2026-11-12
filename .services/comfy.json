@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://appreciated-formed-courtesy-ruth.trycloudflare.com",
-  "run_id": "43153752027",
-  "started_at": "2026-11-12T09:53:37Z",
-  "expires_at": "2026-11-12T15:53:37Z",
+  "url": "https://walk-joyce-races-class.trycloudflare.com",
+  "run_id": "43195415229",
+  "started_at": "2026-11-12T15:29:50Z",
+  "expires_at": "2026-11-12T21:29:50Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-12T09:58:33Z",
+  "published_at": "2026-11-12T15:34:19Z",
   "gated": true,
   "public": false
 }
