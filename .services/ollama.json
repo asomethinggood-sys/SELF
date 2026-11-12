@@ -1,14 +1,14 @@
 {
   "service": "ollama",
-  "url": "https://jake-suburban-succeed-florence.trycloudflare.com",
-  "run_id": "43191933927",
-  "started_at": "2026-11-12T15:05:32Z",
-  "expires_at": "2026-11-12T21:05:32Z",
+  "url": "https://penguin-nsw-perfume-portal.trycloudflare.com",
+  "run_id": "43243980486",
+  "started_at": "2026-11-12T20:41:16Z",
+  "expires_at": "2026-11-13T02:41:16Z",
   "gate_port": 9003,
   "upstream_port": 11434,
   "model": "qwen2.5:0.5b",
   "version": "ollama/qwen2.5:0.5b",
-  "published_at": "2026-11-12T15:06:42Z",
+  "published_at": "2026-11-12T20:42:14Z",
   "gated": true,
   "public": false
 }
