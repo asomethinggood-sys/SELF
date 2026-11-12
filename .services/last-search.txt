@@ -1,13 +1,9 @@
-search · run 43151353012 · 2026-11-12T09:31:14Z
+search · run 43192123271 · 2026-11-12T15:07:01Z
 -----------------------------------------------
-ok   gate /healthz without a token — 200 {"ok": true, "service": "search", "run_id": "43151353012", "started_at": "2026-1
+ok   gate /healthz without a token — 200 {"ok": true, "service": "search", "run_id": "43192123271", "started_at": "2026-1
   ok   upstream /search?q=ping&format=json directly — 200
   ok   the same path through the gate without a token — 401 
   ok   a wrong token is refused — 401
   ok   /search through the gate with the real token — 200 {"query": "transformers", "results": [{"template": "default.html", "title": "Transformers (film series) - Wikipedia", "c
   ok   the answer is JSON with results — {"query": "transformers", "results": [{"template": "default.html", "title": "Transformers (film series) - Wikipedia", "content": "Transformers is a series of science fiction action films based on the 
 self-test: 6/6 checks passed
-
-public: https://goals-human-match-plc.trycloudflare.com
-reachable from the internet: yes — GET /healthz through the tunnel answered 200
-the bot needs no configuration: it reads .services/search.json
