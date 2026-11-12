@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://accompanied-prepaid-vacation-classic.trycloudflare.com",
-  "run_id": "43064568620",
-  "started_at": "2026-11-11T22:41:19Z",
-  "expires_at": "2026-11-12T04:41:19Z",
+  "url": "",
+  "run_id": "43113780043",
+  "started_at": "2026-11-12T04:17:22Z",
+  "expires_at": "2026-11-12T10:17:22Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-11T22:46:31Z",
+  "published_at": "2026-11-12T04:22:48Z",
   "gated": true,
   "public": false
 }
