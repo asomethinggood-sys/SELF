@@ -8,7 +8,7 @@
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-12T04:22:48Z",
+  "published_at": "2026-11-12T04:23:11Z",
   "gated": true,
   "public": false
 }
