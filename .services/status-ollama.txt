@@ -95,3 +95,5 @@
 22:19:17Z run 43060219788 · proving it through the gate with a real request
 22:19:27Z run 43060219788 · published https://same-papers-peers-mercy.trycloudflare.com
 09:29:47Z run 43151220130 · starting ollama on this runner
+09:31:11Z run 43151220130 · ollama is up behind the gate
+09:31:22Z run 43151220130 · proving it through the gate with a real request
