@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://api.trycloudflare.com",
-  "run_id": "43113780043",
-  "started_at": "2026-11-12T04:17:22Z",
-  "expires_at": "2026-11-12T10:17:22Z",
+  "url": "https://appreciated-formed-courtesy-ruth.trycloudflare.com",
+  "run_id": "43153752027",
+  "started_at": "2026-11-12T09:53:37Z",
+  "expires_at": "2026-11-12T15:53:37Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-12T04:24:11Z",
+  "published_at": "2026-11-12T09:58:33Z",
   "gated": true,
   "public": false
 }
