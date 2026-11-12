@@ -88,3 +88,4 @@
 16:44:30Z run 43009430215 · published https://gnu-pat-our-trustee.trycloudflare.com
 03:55:20Z run 43110812383 · starting search on this runner
 03:55:26Z run 43110812383 · search is up behind the gate
+03:55:28Z run 43110812383 · proving it through the gate with a real request
