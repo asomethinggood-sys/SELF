@@ -1,6 +1,6 @@
 {
   "service": "comfy",
-  "url": "",
+  "url": "https://api.trycloudflare.com",
   "run_id": "43113780043",
   "started_at": "2026-11-12T04:17:22Z",
   "expires_at": "2026-11-12T10:17:22Z",
@@ -8,7 +8,7 @@
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-12T04:23:34Z",
+  "published_at": "2026-11-12T04:24:11Z",
   "gated": true,
   "public": false
 }
