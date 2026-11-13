@@ -7,3 +7,7 @@ ok   gate /healthz without a token — 200 {"ok": true, "service": "search", "ru
   ok   /search through the gate with the real token — 200 {"query": "transformers", "results": [{"template": "default.html", "title": "Transformers (film series) - Wikipedia", "c
   ok   the answer is JSON with results — {"query": "transformers", "results": [{"template": "default.html", "title": "Transformers (film series) - Wikipedia", "content": "Transformers is a series of science fiction action films based on the 
 self-test: 6/6 checks passed
+
+public: https://nationally-prostate-stripes-heading.trycloudflare.com
+reachable from the internet: yes — GET /healthz through the tunnel answered 200
+the bot needs no configuration: it reads .services/search.json
