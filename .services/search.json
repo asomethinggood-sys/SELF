@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://sheriff-solar-made-zus.trycloudflare.com",
-  "run_id": "43302920563",
-  "started_at": "2026-11-13T02:18:00Z",
-  "expires_at": "2026-11-13T08:18:00Z",
+  "url": "https://inner-trace-portions-mailto.trycloudflare.com",
+  "run_id": "43351137713",
+  "started_at": "2026-11-13T07:53:43Z",
+  "expires_at": "2026-11-13T13:53:43Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-13T02:18:14Z",
+  "published_at": "2026-11-13T07:53:59Z",
   "gated": true,
   "public": false
 }
