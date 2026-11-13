@@ -105,3 +105,4 @@
 19:30:44Z run 43437674819 · starting comfy on this runner
 19:33:29Z run 43437674819 · comfy is up behind the gate
 19:33:32Z run 43437674819 · proving it through the gate with a real request
+19:35:45Z run 43437674819 · published https://cio-success-simulations-dial.trycloudflare.com
