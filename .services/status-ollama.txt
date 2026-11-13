@@ -107,3 +107,4 @@
 07:53:27Z run 43350996804 · proving it through the gate with a real request
 07:53:37Z run 43350996804 · published https://cylinder-tunnel-country-inquiry.trycloudflare.com
 19:03:44Z run 43433867561 · starting ollama on this runner
+19:04:46Z run 43433867561 · ollama is up behind the gate
