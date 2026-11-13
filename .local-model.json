@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-13T07:28:33Z",
+  "at": "2026-11-13T13:10:16Z",
   "checks": [
     {
       "name": "local · something is configured",
@@ -14,22 +14,22 @@
     {
       "name": "local · answered: In one sentence: what are you?",
       "ok": true,
-      "detail": "0.8s · I am a large language model created by Alibaba Cloud, designed to provide text-b"
+      "detail": "0.6s · I am a large language model created by Alibaba Cloud."
     },
     {
       "name": "local · answered: Write a single line of poetry abou",
       "ok": true,
-      "detail": "0.7s · Raindrops, falling from the sky,\nSoftly and gently, they caress the earth.\nA sym"
+      "detail": "0.7s · Rain falls on the earth,\nA gentle gift of nature,\nA symphony of life,\nWhispering"
     },
     {
       "name": "local · answered: Answer with one word: two plus two",
       "ok": true,
-      "detail": "0.1s · four"
+      "detail": "0.2s · four"
     },
     {
       "name": "local · the router answers with zero keys",
       "ok": true,
-      "detail": "Hello! It's me, Qwen. How can I help you today?"
+      "detail": "Hello! It's nice to meet you! How may I assist you today?"
     },
     {
       "name": "local · the router labels it local",
@@ -50,11 +50,11 @@
   "answers": [
     {
       "question": "In one sentence: what are you?",
-      "reply": "I am a large language model created by Alibaba Cloud, designed to provide text-based answers and assist with various tasks like writing essays, composing emails, and generating creative content."
+      "reply": "I am a large language model created by Alibaba Cloud."
     },
     {
       "question": "Write a single line of poetry about rain.",
-      "reply": "Raindrops, falling from the sky,\nSoftly and gently, they caress the earth.\nA symphony of nature's beauty,\nIn rain, we find a world so pure."
+      "reply": "Rain falls on the earth,\nA gentle gift of nature,\nA symphony of life,\nWhispering secrets of the earth."
     },
     {
       "question": "Answer with one word: two plus two?",
