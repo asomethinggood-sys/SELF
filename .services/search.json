@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://inner-trace-portions-mailto.trycloudflare.com",
-  "run_id": "43351137713",
-  "started_at": "2026-11-13T07:53:43Z",
-  "expires_at": "2026-11-13T13:53:43Z",
+  "url": "https://baths-chip-appear-grill.trycloudflare.com",
+  "run_id": "43388990462",
+  "started_at": "2026-11-13T13:29:28Z",
+  "expires_at": "2026-11-13T19:29:28Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-13T07:53:59Z",
+  "published_at": "2026-11-13T13:29:42Z",
   "gated": true,
   "public": false
 }
