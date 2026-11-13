@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-13T13:10:16Z",
+  "at": "2026-11-13T18:52:42Z",
   "checks": [
     {
       "name": "local · something is configured",
@@ -14,22 +14,22 @@
     {
       "name": "local · answered: In one sentence: what are you?",
       "ok": true,
-      "detail": "0.6s · I am a large language model created by Alibaba Cloud."
+      "detail": "0.6s · I am a large language model developed by Alibaba Cloud, capable of generating hu"
     },
     {
       "name": "local · answered: Write a single line of poetry abou",
       "ok": true,
-      "detail": "0.7s · Rain falls on the earth,\nA gentle gift of nature,\nA symphony of life,\nWhispering"
+      "detail": "0.6s · When the rain falls, a world awakens, and the earth showers its blessings, a rem"
     },
     {
       "name": "local · answered: Answer with one word: two plus two",
       "ok": true,
-      "detail": "0.2s · four"
+      "detail": "0.1s · four"
     },
     {
       "name": "local · the router answers with zero keys",
       "ok": true,
-      "detail": "Hello! It's nice to meet you! How may I assist you today?"
+      "detail": "Hello! How can I assist you today?"
     },
     {
       "name": "local · the router labels it local",
@@ -50,11 +50,11 @@
   "answers": [
     {
       "question": "In one sentence: what are you?",
-      "reply": "I am a large language model created by Alibaba Cloud."
+      "reply": "I am a large language model developed by Alibaba Cloud, capable of generating human-like text and answering questions."
     },
     {
       "question": "Write a single line of poetry about rain.",
-      "reply": "Rain falls on the earth,\nA gentle gift of nature,\nA symphony of life,\nWhispering secrets of the earth."
+      "reply": "When the rain falls, a world awakens, and the earth showers its blessings, a reminder of life's delicate balance and the beauty of nature's transient beauty."
     },
     {
       "question": "Answer with one word: two plus two?",
