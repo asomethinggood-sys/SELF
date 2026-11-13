@@ -1,14 +1,10 @@
-ollama · run 43302740880 · 2026-11-13T02:18:49Z
+ollama · run 43350996804 · 2026-11-13T07:53:30Z
 -----------------------------------------------
-ok   gate /healthz without a token — 200 {"ok": true, "service": "ollama", "run_id": "43302740880", "started_at": "2026-1
+ok   gate /healthz without a token — 200 {"ok": true, "service": "ollama", "run_id": "43350996804", "started_at": "2026-1
   ok   upstream /api/tags directly — 200
   ok   the same path through the gate without a token — 401 
   ok   a wrong token is refused — 401
-  ok   /api/tags through the gate with the real token — 200 {"models":[{"name":"qwen2.5:0.5b","model":"qwen2.5:0.5b","modified_at":"2026-11-13T02:18:44.455732516Z","size":397821319
-  ok   the model is listed — {"models":[{"name":"qwen2.5:0.5b","model":"qwen2.5:0.5b","modified_at":"2026-11-13T02:18:44.455732516Z","size":397821319,"digest":"a8b0c51577010a279d933d14c2a8ab4b268079d44c5c8830c0a93900f1827c67","de
-  ok   a real reply through the gate — A transformer is a type of neural network model that enhances the processing capabilities of traditional neural networks by incorporating a larger, more complex feature extractor.
+  ok   /api/tags through the gate with the real token — 200 {"models":[{"name":"qwen2.5:0.5b","model":"qwen2.5:0.5b","modified_at":"2026-11-13T07:53:25.012167556Z","size":397821319
+  ok   the model is listed — {"models":[{"name":"qwen2.5:0.5b","model":"qwen2.5:0.5b","modified_at":"2026-11-13T07:53:25.012167556Z","size":397821319,"digest":"a8b0c51577010a279d933d14c2a8ab4b268079d44c5c8830c0a93900f1827c67","de
+  ok   a real reply through the gate — A transformer is a type of neural network architecture used for tasks such as image generation, natural language processing, and speech recognition.
 self-test: 7/7 checks passed
-
-public: https://proposal-footage-deutsche-acids.trycloudflare.com
-reachable from the internet: yes — GET /healthz through the tunnel answered 200
-the bot needs no configuration: it reads .services/ollama.json
