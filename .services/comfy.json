@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://economy-detroit-commercial-aqua.trycloudflare.com",
-  "run_id": "43306739389",
-  "started_at": "2026-11-13T02:42:09Z",
-  "expires_at": "2026-11-13T08:42:09Z",
+  "url": "https://issue-used-tom-obtained.trycloudflare.com",
+  "run_id": "43353929365",
+  "started_at": "2026-11-13T08:18:18Z",
+  "expires_at": "2026-11-13T14:18:18Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-13T02:46:59Z",
+  "published_at": "2026-11-13T08:22:30Z",
   "gated": true,
   "public": false
 }
