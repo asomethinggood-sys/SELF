@@ -99,3 +99,4 @@
 21:08:38Z run 43248313932 · proving it through the gate with a real request
 21:11:18Z run 43248313932 · published https://trip-oak-tribunal-libraries.trycloudflare.com
 08:18:18Z run 43353929365 · starting comfy on this runner
+08:20:44Z run 43353929365 · comfy is up behind the gate
