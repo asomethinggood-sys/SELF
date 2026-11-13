@@ -101,3 +101,4 @@
 02:42:09Z run 43306739389 · starting comfy on this runner
 02:45:12Z run 43306739389 · comfy is up behind the gate
 02:45:14Z run 43306739389 · proving it through the gate with a real request
+02:47:00Z run 43306739389 · published https://economy-detroit-commercial-aqua.trycloudflare.com
