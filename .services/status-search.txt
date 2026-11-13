@@ -96,3 +96,4 @@
 15:07:09Z run 43192123271 · published https://chances-princess-architectural-utility.trycloudflare.com
 02:18:00Z run 43302920563 · starting search on this runner
 02:18:05Z run 43302920563 · search is up behind the gate
+02:18:07Z run 43302920563 · proving it through the gate with a real request
