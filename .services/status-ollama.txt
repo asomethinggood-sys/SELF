@@ -103,3 +103,4 @@
 02:18:46Z run 43302740880 · proving it through the gate with a real request
 02:18:58Z run 43302740880 · published https://proposal-footage-deutsche-acids.trycloudflare.com
 13:28:11Z run 43388854339 · starting ollama on this runner
+13:29:03Z run 43388854339 · ollama is up behind the gate
