@@ -104,3 +104,4 @@
 20:42:16Z run 43243980486 · published https://penguin-nsw-perfume-portal.trycloudflare.com
 07:52:31Z run 43350996804 · starting ollama on this runner
 07:53:25Z run 43350996804 · ollama is up behind the gate
+07:53:27Z run 43350996804 · proving it through the gate with a real request
