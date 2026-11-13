@@ -1,14 +1,14 @@
 {
   "service": "ollama",
-  "url": "https://performed-shuttle-laden-creations.trycloudflare.com",
-  "run_id": "43388854339",
-  "started_at": "2026-11-13T13:28:11Z",
-  "expires_at": "2026-11-13T19:28:11Z",
+  "url": "https://angel-lasting-pmid-stops.trycloudflare.com",
+  "run_id": "43433867561",
+  "started_at": "2026-11-13T19:03:44Z",
+  "expires_at": "2026-11-14T01:03:44Z",
   "gate_port": 9003,
   "upstream_port": 11434,
   "model": "qwen2.5:0.5b",
   "version": "ollama/qwen2.5:0.5b",
-  "published_at": "2026-11-13T13:29:14Z",
+  "published_at": "2026-11-13T19:04:56Z",
   "gated": true,
   "public": false
 }
