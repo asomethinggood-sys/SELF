@@ -103,3 +103,4 @@
 13:29:34Z run 43388990462 · proving it through the gate with a real request
 13:29:43Z run 43388990462 · published https://baths-chip-appear-grill.trycloudflare.com
 00:40:48Z run 43488776186 · starting search on this runner
+00:40:53Z run 43488776186 · search is up behind the gate
