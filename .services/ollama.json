@@ -1,14 +1,14 @@
 {
   "service": "ollama",
-  "url": "https://angel-lasting-pmid-stops.trycloudflare.com",
-  "run_id": "43433867561",
-  "started_at": "2026-11-13T19:03:44Z",
-  "expires_at": "2026-11-14T01:03:44Z",
+  "url": "https://realize-boom-agenda-applying.trycloudflare.com",
+  "run_id": "43488558361",
+  "started_at": "2026-11-14T00:39:23Z",
+  "expires_at": "2026-11-14T06:39:23Z",
   "gate_port": 9003,
   "upstream_port": 11434,
   "model": "qwen2.5:0.5b",
   "version": "ollama/qwen2.5:0.5b",
-  "published_at": "2026-11-13T19:04:56Z",
+  "published_at": "2026-11-14T00:40:36Z",
   "gated": true,
   "public": false
 }
