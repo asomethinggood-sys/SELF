@@ -107,3 +107,4 @@
 13:29:05Z run 43388854339 · proving it through the gate with a real request
 13:29:15Z run 43388854339 · published https://performed-shuttle-laden-creations.trycloudflare.com
 00:39:23Z run 43488558361 · starting ollama on this runner
+00:40:26Z run 43488558361 · ollama is up behind the gate
