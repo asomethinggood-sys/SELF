@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://calculated-desert-common-roof.trycloudflare.com",
-  "run_id": "43492762025",
-  "started_at": "2026-11-14T01:07:15Z",
-  "expires_at": "2026-11-14T07:07:15Z",
+  "url": "https://satisfactory-opt-spelling-teaches.trycloudflare.com",
+  "run_id": "43538570098",
+  "started_at": "2026-11-14T06:43:28Z",
+  "expires_at": "2026-11-14T12:43:28Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-14T01:16:46Z",
+  "published_at": "2026-11-14T06:48:51Z",
   "gated": true,
   "public": false
 }
