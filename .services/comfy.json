@@ -1,14 +1,14 @@
 {
   "service": "comfy",
-  "url": "https://cio-success-simulations-dial.trycloudflare.com",
-  "run_id": "43437674819",
-  "started_at": "2026-11-13T19:30:44Z",
-  "expires_at": "2026-11-14T01:30:44Z",
+  "url": "https://calculated-desert-common-roof.trycloudflare.com",
+  "run_id": "43492762025",
+  "started_at": "2026-11-14T01:07:15Z",
+  "expires_at": "2026-11-14T07:07:15Z",
   "gate_port": 9002,
   "upstream_port": 8188,
   "model": "sd-turbo.safetensors",
   "version": "comfyui/cpu/sd-turbo.safetensors",
-  "published_at": "2026-11-13T19:35:43Z",
+  "published_at": "2026-11-14T01:16:46Z",
   "gated": true,
   "public": false
 }
