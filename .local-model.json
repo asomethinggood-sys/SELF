@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-14T00:34:24Z",
+  "at": "2026-11-14T06:16:10Z",
   "checks": [
     {
       "name": "local · something is configured",
@@ -14,17 +14,17 @@
     {
       "name": "local · answered: In one sentence: what are you?",
       "ok": true,
-      "detail": "0.4s · I am a large language model created by Alibaba Cloud."
+      "detail": "0.5s · I am Qwen, a large language model created by Alibaba Cloud."
     },
     {
       "name": "local · answered: Write a single line of poetry abou",
       "ok": true,
-      "detail": "0.8s · Rain falls from the sky, a gentle touch to the earth, a soothing melody to the s"
+      "detail": "1.0s · Rain, with its gentle touch, whispers of life,  \nIn the quiet of the night, it d"
     },
     {
       "name": "local · answered: Answer with one word: two plus two",
       "ok": true,
-      "detail": "0.1s · Four"
+      "detail": "0.2s · Two plus two equals four."
     },
     {
       "name": "local · the router answers with zero keys",
@@ -50,15 +50,15 @@
   "answers": [
     {
       "question": "In one sentence: what are you?",
-      "reply": "I am a large language model created by Alibaba Cloud."
+      "reply": "I am Qwen, a large language model created by Alibaba Cloud."
     },
     {
       "question": "Write a single line of poetry about rain.",
-      "reply": "Rain falls from the sky, a gentle touch to the earth, a soothing melody to the soul, a season of renewal, a reminder that nature is ever-changing, a symbol of love and hope."
+      "reply": "Rain, with its gentle touch, whispers of life,  \nIn the quiet of the night, it dances with the stars,  \nA symphony of nature, a melody of grace,  \nThat washes away the cold, the pain, and the strife."
     },
     {
       "question": "Answer with one word: two plus two?",
-      "reply": "Four"
+      "reply": "Two plus two equals four."
     }
   ],
   "fetch": [
