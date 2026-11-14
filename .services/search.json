@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://minds-wizard-priest-vienna.trycloudflare.com",
-  "run_id": "43488776186",
-  "started_at": "2026-11-14T00:40:48Z",
-  "expires_at": "2026-11-14T06:40:48Z",
+  "url": "https://situations-delivered-obituaries-amended.trycloudflare.com",
+  "run_id": "43535773767",
+  "started_at": "2026-11-14T06:16:16Z",
+  "expires_at": "2026-11-14T12:16:16Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-14T00:41:02Z",
+  "published_at": "2026-11-14T06:16:31Z",
   "gated": true,
   "public": false
 }
