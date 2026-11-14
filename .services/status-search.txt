@@ -105,3 +105,4 @@
 00:40:48Z run 43488776186 · starting search on this runner
 00:40:53Z run 43488776186 · search is up behind the gate
 00:40:54Z run 43488776186 · proving it through the gate with a real request
+00:41:03Z run 43488776186 · published https://minds-wizard-priest-vienna.trycloudflare.com
