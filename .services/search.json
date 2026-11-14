@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://nationally-prostate-stripes-heading.trycloudflare.com",
-  "run_id": "43434037317",
-  "started_at": "2026-11-13T19:05:12Z",
-  "expires_at": "2026-11-14T01:05:12Z",
+  "url": "https://minds-wizard-priest-vienna.trycloudflare.com",
+  "run_id": "43488776186",
+  "started_at": "2026-11-14T00:40:48Z",
+  "expires_at": "2026-11-14T06:40:48Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-13T19:05:28Z",
+  "published_at": "2026-11-14T00:41:02Z",
   "gated": true,
   "public": false
 }
