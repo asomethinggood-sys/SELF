@@ -109,3 +109,4 @@
 01:07:15Z run 43492762025 · starting comfy on this runner
 01:15:21Z run 43492762025 · comfy is up behind the gate
 01:15:23Z run 43492762025 · proving it through the gate with a real request
+01:16:47Z run 43492762025 · published https://calculated-desert-common-roof.trycloudflare.com
