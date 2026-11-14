@@ -1,14 +1,14 @@
 {
   "service": "ollama",
-  "url": "https://realize-boom-agenda-applying.trycloudflare.com",
-  "run_id": "43488558361",
-  "started_at": "2026-11-14T00:39:23Z",
-  "expires_at": "2026-11-14T06:39:23Z",
+  "url": "https://suggest-total-discusses-periodically.trycloudflare.com",
+  "run_id": "43535614026",
+  "started_at": "2026-11-14T06:15:07Z",
+  "expires_at": "2026-11-14T12:15:07Z",
   "gate_port": 9003,
   "upstream_port": 11434,
   "model": "qwen2.5:0.5b",
   "version": "ollama/qwen2.5:0.5b",
-  "published_at": "2026-11-14T00:40:36Z",
+  "published_at": "2026-11-14T06:16:01Z",
   "gated": true,
   "public": false
 }
