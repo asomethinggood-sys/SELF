@@ -107,3 +107,4 @@
 13:57:02Z run 43392114601 · proving it through the gate with a real request
 13:59:15Z run 43392114601 · published https://enhancements-innovation-shows-promptly.trycloudflare.com
 01:07:15Z run 43492762025 · starting comfy on this runner
+01:15:21Z run 43492762025 · comfy is up behind the gate
