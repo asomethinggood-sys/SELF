@@ -1,14 +1,14 @@
 {
   "service": "search",
-  "url": "https://situations-delivered-obituaries-amended.trycloudflare.com",
-  "run_id": "43535773767",
-  "started_at": "2026-11-14T06:16:16Z",
-  "expires_at": "2026-11-14T12:16:16Z",
+  "url": "https://crucial-algorithms-cordless-realized.trycloudflare.com",
+  "run_id": "43565494578",
+  "started_at": "2026-11-14T11:52:03Z",
+  "expires_at": "2026-11-14T17:52:03Z",
   "gate_port": 9001,
   "upstream_port": 8080,
   "model": "searxng",
   "version": "searxng",
-  "published_at": "2026-11-14T06:16:31Z",
+  "published_at": "2026-11-14T11:52:17Z",
   "gated": true,
   "public": false
 }
