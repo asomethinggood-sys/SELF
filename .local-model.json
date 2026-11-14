@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-13T18:52:42Z",
+  "at": "2026-11-14T00:34:24Z",
   "checks": [
     {
       "name": "local · something is configured",
@@ -14,17 +14,17 @@
     {
       "name": "local · answered: In one sentence: what are you?",
       "ok": true,
-      "detail": "0.6s · I am a large language model developed by Alibaba Cloud, capable of generating hu"
+      "detail": "0.4s · I am a large language model created by Alibaba Cloud."
     },
     {
       "name": "local · answered: Write a single line of poetry abou",
       "ok": true,
-      "detail": "0.6s · When the rain falls, a world awakens, and the earth showers its blessings, a rem"
+      "detail": "0.8s · Rain falls from the sky, a gentle touch to the earth, a soothing melody to the s"
     },
     {
       "name": "local · answered: Answer with one word: two plus two",
       "ok": true,
-      "detail": "0.1s · four"
+      "detail": "0.1s · Four"
     },
     {
       "name": "local · the router answers with zero keys",
@@ -50,15 +50,15 @@
   "answers": [
     {
       "question": "In one sentence: what are you?",
-      "reply": "I am a large language model developed by Alibaba Cloud, capable of generating human-like text and answering questions."
+      "reply": "I am a large language model created by Alibaba Cloud."
     },
     {
       "question": "Write a single line of poetry about rain.",
-      "reply": "When the rain falls, a world awakens, and the earth showers its blessings, a reminder of life's delicate balance and the beauty of nature's transient beauty."
+      "reply": "Rain falls from the sky, a gentle touch to the earth, a soothing melody to the soul, a season of renewal, a reminder that nature is ever-changing, a symbol of love and hope."
     },
     {
       "question": "Answer with one word: two plus two?",
-      "reply": "four"
+      "reply": "Four"
     }
   ],
   "fetch": [
